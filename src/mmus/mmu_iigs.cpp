@@ -53,7 +53,8 @@ inline void bank_e1_write(void *context, uint32_t address, uint8_t value) {
     } else 
     {
         uint8_t *ram = mmu_iigs->megaii->get_memory_base();
-        ram[address & 0x1FFFF] = value;   
+        ram[address & 0x1FFFF] = value;
+        bus_trace_note(mmu_iigs->get_cycle_count(), address & 0x1FFFF, value); // direct $E1 write
     }
 }
 

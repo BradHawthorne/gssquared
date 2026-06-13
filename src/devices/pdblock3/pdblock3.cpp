@@ -53,6 +53,12 @@ private:
     std::unordered_map<storage_key_t, key_info_t> key_info;
 
 public:
+    // Emulated-clock-based disk timing (deterministic). Replaces host wall-clock
+    // (SDL_GetTicksNS) so a headless boot trace is reproducible: the disk "motor on"
+    // window GS/OS polls is now a fixed count of emulated cycles (~1s), not real time.
+    NClock *clock = nullptr;
+    static constexpr uint64_t PDB3_MOTOR_CYCLES = 1000000;
+
     PDBlock3(uint8_t slot, MMU *mmu) : _slot(slot), mmu(mmu) {
         for (int j = 0; j < PDB3_MAX_UNITS; j++) {
             drives[j].file = nullptr;
@@ -142,7 +148,7 @@ public:
             mmu->write(addr + i, block_buffer[i]); 
         }
         drives[drive].last_block_accessed = block;
-        drives[drive].last_block_access_time = SDL_GetTicksNS();
+        drives[drive].last_block_access_time = clock ? clock->get_cycles() : 0;
     }
 
     void write_block(uint8_t drive, uint32_t block, uint32_t addr) {
@@ -176,7 +182,7 @@ public:
         fseek(fp, media->data_offset + (block * media->block_size), SEEK_SET);
         fwrite(block_buffer, 1, media->block_size, fp);
         drives[drive].last_block_accessed = block;
-        drives[drive].last_block_access_time = SDL_GetTicksNS();
+        drives[drive].last_block_access_time = clock ? clock->get_cycles() : 0;
     }
 
     struct DriveInfo { uint8_t status; uint32_t blk_count; };
@@ -502,8 +508,8 @@ public:
 
         bool motor = false;
 
-        uint64_t curtime = SDL_GetTicksNS();
-        if (curtime - seldrive.last_block_access_time < 1000000000) {
+        uint64_t curtime = clock ? clock->get_cycles() : 0;
+        if (curtime - seldrive.last_block_access_time < PDB3_MOTOR_CYCLES) {
             motor = true;
         }
         // 3.5 drives turn off immediately.
@@ -533,8 +539,8 @@ public:
 
         bool motor = false;
 
-        uint64_t curtime = SDL_GetTicksNS();
-        if (curtime - seldrive.last_block_access_time < 1000000000) {
+        uint64_t curtime = clock ? clock->get_cycles() : 0;
+        if (curtime - seldrive.last_block_access_time < PDB3_MOTOR_CYCLES) {
             motor = true;
         }
         // 3.5 drives turn off immediately.
@@ -674,6 +680,7 @@ void init_pdblock3(computer_t *computer, SlotType_t slot)
     // register drives with mounts for status reporting
     PDBlock3 *pd3 = new PDBlock3(slot, pdblock_d->mmu);
     pdblock_d->pdb = pd3;
+    pd3->clock = computer->clock; // deterministic disk timing (see PDB3_MOTOR_CYCLES)
 
     storage_key_t key;
     key.slot = (uint16_t)slot;

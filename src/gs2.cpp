@@ -43,6 +43,7 @@
 #include "mmus/mmu_ii.hpp"
 #include "mmus/mmu_iie.hpp"
 #include "mmus/mmu_iigs.hpp"
+#include "bus_trace.hpp"
 #include "util/EventTimer.hpp"
 #include "ui/SelectSystem.hpp"
 #include "ui/MainAtlas.hpp"
@@ -810,12 +811,27 @@ static void run_headless_spike(GS2AppState *state) {
 
     computer->execution_mode = EXEC_NORMAL;
 
+    bus_trace_reset();            // arm the bus-trace oracle
+    g_bus_trace_enabled = true;
+
+    // Snapshot the $E1 SHR window at trace-arm time. Replaying the trace
+    // (init + every captured write) must byte-match the final $E1 below -> proves
+    // the two taps capture 100% of SHR-affecting writes (snoop-completeness test).
+    {
+        uint8_t *m2i = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+        if (m2i) {
+            FILE *fi = fopen("spike_e1_init.bin", "wb");
+            if (fi) { fwrite(m2i + 0x12000, 1, 0x8000, fi); fclose(fi); } // $E1:$2000-$9FFF
+        }
+    }
+
     for (int i = 0; i < state->spike_frames; i++) {
         if (!run_one_frame(computer)) {
             printf("SPIKE: emulation halted early at frame %d\n", i);
             break;
         }
     }
+    g_bus_trace_enabled = false;  // disarm before any teardown writes
 
     // ---- (1) renderer-free $E1 oracle ----
     uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
@@ -839,6 +855,18 @@ static void run_headless_spike(GS2AppState *state) {
                e1[0x9D04], e1[0x9D05], e1[0x9D06], e1[0x9D07]);
     } else {
         printf("SPIKE E1: mmu_iigs/megaii base is NULL -- FAILED\n");
+    }
+
+    // ---- (1.5) bus-trace oracle: ordered SHR-write golden ----
+    {
+        uint64_t n = 0;
+        uint64_t th = bus_trace_dump("spike_trace.bin", &n);
+        uint64_t c0 = g_bus_trace.empty() ? 0 : g_bus_trace.front().cycle;
+        uint64_t c1 = g_bus_trace.empty() ? 0 : g_bus_trace.back().cycle;
+        printf("SPIKE TRACE: wrote spike_trace.bin (%llu SHR writes) content-hash=%016llX\n",
+               (unsigned long long)n, (unsigned long long)th);
+        printf("SPIKE TRACE: cycle span [%llu .. %llu]\n",
+               (unsigned long long)c0, (unsigned long long)c1);
     }
 
     // ---- (2) backbuffer pixel-readback datum ----

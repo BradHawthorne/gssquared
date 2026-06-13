@@ -5,6 +5,7 @@
 #include "iigs_shadow_flags.hpp"
 #include "debug.hpp"
 #include "NClock.hpp"
+#include "bus_trace.hpp"
 #include "devices/languagecard/LanguageCardLogic.hpp"
 
 class MMU_IIgs : public MMU {
@@ -127,9 +128,11 @@ class MMU_IIgs : public MMU {
             else return megaii->read(address & 0xFFFF);
         } */
 
-        inline void megaiiWrite(uint32_t address, uint8_t value) { 
-            if ((address & 0x1'0000) && g_bank_latch)
-                megaii->get_memory_base()[address & 0x1'FFFF] = value; 
+        inline void megaiiWrite(uint32_t address, uint8_t value) {
+            if ((address & 0x1'0000) && g_bank_latch) {
+                megaii->get_memory_base()[address & 0x1'FFFF] = value;
+                bus_trace_note(get_cycle_count(), address & 0x1'FFFF, value); // shadowed SHR write
+            }
             else {
                 megaii->write(address & 0xFFFF, value);
             }
@@ -199,6 +202,7 @@ class MMU_IIgs : public MMU {
         virtual uint8_t *get_rom_base() { return main_rom; };
         virtual uint8_t *get_memory_base() { return main_ram; };
         inline uint8_t *get_megaii_memory_base() { return megaii ? megaii->get_memory_base() : nullptr; }
+        inline uint64_t get_cycle_count() { return clock ? clock->get_cycles() : 0; } // for the bus-trace oracle
         virtual void init_map();
         virtual void reset() override;
         void debug_dump(DebugFormatter *df);
