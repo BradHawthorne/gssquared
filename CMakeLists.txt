@@ -287,7 +287,6 @@ add_library(gs2_devices_scc8530 src/devices/scc8530/scc8530.cpp)
 
 add_library(gs2_devices_secondsight
     src/devices/secondsight/secondsight.cpp
-    src/devices/secondsight/ppu_render.cpp
     src/devices/secondsight/vga_render_8.cpp
     src/devices/secondsight/vga_render_16.cpp
     src/devices/secondsight/vga_render_24.cpp
@@ -301,6 +300,10 @@ add_library(gs2_devices_iwm src/devices/iwm/iwm_device.cpp)
 add_library(gs2_devices_cassette     src/devices/cassette/cassette.cpp )
 
 add_library(gs2_devices_vidhd     src/devices/vidhd/vidhd.cpp )
+
+add_library(gs2_devices_a2gspu    src/devices/a2gspu/a2gspu.cpp src/devices/a2gspu/a2gspu_emu.cpp src/devices/a2gspu/a2gspu_proto.cpp src/devices/a2gspu/vt100.c src/devices/a2gspu/utf8_decode.c )
+
+add_library(gs2_devices_uthernet2  src/devices/uthernet2/uthernet2.cpp src/devices/uthernet2/w5100.cpp src/devices/uthernet2/vnat.cpp )
 
 add_library(gs2_devices_adb     src/devices/adb/keygloo.cpp )
 
@@ -424,6 +427,8 @@ target_link_libraries(GSSquared
     gs2_devices_speaker
     gs2_devices_cassette
     gs2_devices_vidhd
+    gs2_devices_a2gspu
+    gs2_devices_uthernet2
     gs2_devices_game
     gs2_devices_memexp
     gs2_devices_parallel
@@ -464,8 +469,6 @@ add_subdirectory(apps/mbtest)
 #add_subdirectory(apps/nibblizer)
 #add_subdirectory(apps/denibblizer)
 add_subdirectory(apps/vgatext)
-
-add_subdirectory(apps/ssppu)
 
 add_subdirectory(apps/diskid)
 

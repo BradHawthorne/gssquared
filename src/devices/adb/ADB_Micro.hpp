@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include <cstdio>
+#include <functional>
 
 #include "device_reset_id.hpp"
 #include "util/ResourceFile.hpp"
@@ -150,6 +151,10 @@ class KeyGloo
         int keysdown = 0;
 
     public:
+        // Optional key interceptor (set by A2GSPU): return true to swallow a key
+        // before it reaches the ADB keyboard buffer (used for file-driven input).
+        std::function<bool(uint8_t keycode, uint8_t keymods)> key_intercept;
+
         KeyGloo(ResetController *reset_control) : reset_control(reset_control) {
             const char *rom_filename = (true /* is rom 01 */) ? "roms/cards/keyglu/rom01-adb-341s0345.bin" : "roms/cards/keyglu/rom03-adb-341s0632-2.bin";
 
@@ -512,6 +517,8 @@ class KeyGloo
         }
         
         void store_key_to_buffer(uint8_t keycode, uint8_t keymods) {
+            // A2GSPU key interceptor: swallow file-driven keys before the ADB buffer.
+            if (key_intercept && key_intercept(keycode, keymods)) return;
             if ((vars.outpt + 1) % 16 == vars.inpt) return;
             key_codes[vars.outpt] = keycode;
             key_mods[vars.outpt] = keymods;
@@ -760,6 +767,21 @@ class KeyGloo
                 update_interrupt_status();
                 return mouse_data[1];
             }
+        }
+
+        // File/automation-driven mouse injection (A2GSPU). Additive to the normal
+        // adb_host->talk poll: stages a pre-encoded {data0,data1} pair and marks it
+        // ready so the same read_mouse_data()/interrupt path delivers it to the IIgs.
+        void inject_mouse_data(uint8_t data0, uint8_t data1) {
+            mouse_data[0] = data0;
+            mouse_data[1] = data1;
+            mouse_data_full = true;
+            update_interrupt_status();
+        }
+
+        // A2GSPU: accessor for the ADB mouse device (keygloo SHR-cursor path).
+        ADB_Mouse *get_adb_mouse() {
+            return adb_host ? static_cast<ADB_Mouse *>(adb_host->get_device(0x03)) : nullptr;
         }
 
         void start_repeat() {

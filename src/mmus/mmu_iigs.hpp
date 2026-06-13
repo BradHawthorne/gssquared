@@ -156,6 +156,7 @@ class MMU_IIgs : public MMU {
         inline uint8_t shadow_register() { return reg_shadow; }
         inline uint8_t speed_register() { return reg_speed; }
         inline uint8_t state_register() { return reg_state; }
+        inline uint8_t new_video_register() { return reg_new_video; }
 
         void set_ram_shadow_banks();
         //void shadow_register(uint16_t address, bool rw); // track accesses to softswitches the FPI also tracks.
@@ -197,6 +198,7 @@ class MMU_IIgs : public MMU {
         
         virtual uint8_t *get_rom_base() { return main_rom; };
         virtual uint8_t *get_memory_base() { return main_ram; };
+        inline uint8_t *get_megaii_memory_base() { return megaii ? megaii->get_memory_base() : nullptr; }
         virtual void init_map();
         virtual void reset() override;
         void debug_dump(DebugFormatter *df);
@@ -205,4 +207,12 @@ class MMU_IIgs : public MMU {
         inline void set_clock_mode(clock_mode_t mode) { clock->set_clock_mode(mode); }
         inline void set_next_cycle_type(cycle_type_t type) { if (clock) ((NClockIIgs *)clock)->set_next_cycle_type(type); }
         inline void set_slow_mode(bool value) { ((NClockIIgs *)clock)->set_slow_mode(value); }
+
+        // Bus write observer — called on shadowed soft-switch writes. Used by A2GSPU.
+        typedef void (*write_observer_func)(void *context, uint32_t address, uint8_t value);
+        write_observer_func write_observer = nullptr;
+        void *write_observer_context = nullptr;
+        void set_write_observer(write_observer_func func, void *context) {
+            write_observer = func; write_observer_context = context;
+        }
 };

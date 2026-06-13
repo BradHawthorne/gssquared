@@ -354,6 +354,15 @@ void video_system_t::copy_screen() {
     SDL_DestroySurface(surface);
 }
 
+void video_system_t::save_screenshot(const char *path) {
+    SDL_Surface *surface = SDL_RenderReadPixels(renderer, nullptr);
+    if (surface) {
+        SDL_SaveBMP(surface, path);
+        SDL_DestroySurface(surface);
+        printf("A2GSPU: Screenshot saved to %s\n", path);
+    }
+}
+
 void video_system_t::register_frame_processor(int weight, FrameHandler handler) {
     frame_handlers.insert({weight, handler});
 }

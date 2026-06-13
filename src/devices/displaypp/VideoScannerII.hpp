@@ -12,6 +12,19 @@ class MMU_II;
 struct display_state_t;
 struct computer_t;
 
+// Per-scanline resolved state, populated at HSYNC by VideoScannerIIgs.
+// External consumers (e.g., A2GSPU card firmware) read this at frame time
+// via get_scanline_state() to detect split-screen modes where different
+// scanlines use different renderers (e.g., SHR desktop + TEXT status bar).
+// Why at HSYNC: this captures the video mode AFTER all mid-line changes
+// have been applied, giving the final resolved state for each scanline.
+struct scanline_state_t {
+    uint8_t video_mode;    // video_mode_t: which renderer to use (TEXT40, SHR, HIRES, etc.)
+    uint8_t border_color;  // IIgs color index (0-15) for border during this line
+    uint8_t mode_flags;    // VS_FL_* flags (80COL, MIXED, etc.) — renderer parameters
+    uint8_t scb;           // SHR Screen Control Byte (palette + 640/320 + fill mode). 0 if not SHR.
+};
+
 constexpr uint16_t SCANNER_LUT_SIZE = 65*262;
 
 #define F_SHR    0b1000'0000
@@ -163,6 +176,9 @@ protected:
     uint8_t current_scb = 0;
     uint16_t h_counter = 0;
 
+    // Per-scanline resolved state for external consumers (e.g. A2GSPU). Populated at HSYNC.
+    scanline_state_t scanline_state[262] = {};
+
 public:
 //uint32_t  hcount;       // use separate hcount and vcount in order
 //uint32_t  vcount;       // to simplify IIgs scanline interrupts
@@ -245,6 +261,8 @@ public:
     inline virtual void set_irq_handler(device_irq_handler_s irq_handler) { this->irq_handler = irq_handler; }
 
     ScanBuffer *get_frame_scan();
+
+    const scanline_state_t *get_scanline_state() const { return scanline_state; }
 };
 
 void init_mb_video_scanner(computer_t *computer, SlotType_t slot);

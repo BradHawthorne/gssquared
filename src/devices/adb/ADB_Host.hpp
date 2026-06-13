@@ -17,6 +17,13 @@ class ADB_Host
         devices.push_back(device);
     }
 
+    ADB_Device *get_device(uint8_t id) {
+        for (auto &device : devices) {
+            if (device->get_id() == id) return device;
+        }
+        return nullptr;
+    }
+
     bool reset(uint8_t addr, uint8_t cmd, uint8_t reg) {
         for (auto &device : devices) {
             device->reset(cmd, reg);

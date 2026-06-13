@@ -559,6 +559,12 @@ struct GS2AppState {
     MMU_II *mmu_ii = nullptr;
     MMU_IIe *mmu_iie = nullptr;
     MMU_IIgs *mmu_iigs = nullptr;
+
+    // a2gspu headless-boot spike (env-gated; no behaviour change unless
+    // A2GSPU_SPIKE_FRAMES is set). Runs N deterministic frames, dumps a
+    // renderer-free $E1 oracle + a backbuffer screenshot, then exits.
+    bool headless = false;
+    int  spike_frames = 0;
 };
 
 /*
@@ -788,6 +794,66 @@ void transition_to_shutdown(GS2AppState *state) {
 }
 
 /* ========================================================================
+   a2gspu headless-boot spike (local instrumentation harness)
+
+   Boots the IIgs via -p, runs `spike_frames` deterministic frames with no GUI,
+   then: (1) GREEN FLOOR - reads the Mega II bank-$E1 image directly
+   (get_megaii_memory_base()+0x10000), dumps it, and computes a non-blank metric
+   + FNV-1a hash over the SHR window ($2000-$9FFF); two runs at the same N must
+   match (determinism). (2) DATUM - renders the current frame to the backbuffer
+   and SDL_RenderReadPixels it to a BMP (save_screenshot), recording whether
+   headless pixel readback works at all. Throwaway-grade; GPL-local.
+   ======================================================================== */
+static void run_headless_spike(GS2AppState *state) {
+    computer_t *computer = state->computer;
+    printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
+
+    computer->execution_mode = EXEC_NORMAL;
+
+    for (int i = 0; i < state->spike_frames; i++) {
+        if (!run_one_frame(computer)) {
+            printf("SPIKE: emulation halted early at frame %d\n", i);
+            break;
+        }
+    }
+
+    // ---- (1) renderer-free $E1 oracle ----
+    uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+    if (m2) {
+        const uint8_t *e1 = m2 + 0x10000;          // Mega II bank $E1 (64 KB)
+        FILE *f = fopen("spike_e1.bin", "wb");
+        if (f) { fwrite(e1, 1, 0x10000, f); fclose(f); }
+        uint64_t hash = 1469598103934665603ULL;    // FNV-1a 64
+        int nonzero = 0; uint8_t seen[256] = {0}; int ndist = 0;
+        for (int a = 0x2000; a <= 0x9FFF; a++) {
+            uint8_t b = e1[a];
+            hash = (hash ^ b) * 1099511628211ULL;
+            if (b) nonzero++;
+            if (!seen[b]) { seen[b] = 1; ndist++; }
+        }
+        printf("SPIKE E1: wrote spike_e1.bin (64KB).\n");
+        printf("SPIKE E1: SHR-window $2000-$9FFF nonzero=%d/32768 distinct=%d hash=%016llX\n",
+               nonzero, ndist, (unsigned long long)hash);
+        printf("SPIKE E1: SCB[0..7]@$9D00 = %02X %02X %02X %02X %02X %02X %02X %02X\n",
+               e1[0x9D00], e1[0x9D01], e1[0x9D02], e1[0x9D03],
+               e1[0x9D04], e1[0x9D05], e1[0x9D06], e1[0x9D07]);
+    } else {
+        printf("SPIKE E1: mmu_iigs/megaii base is NULL -- FAILED\n");
+    }
+
+    // ---- (2) backbuffer pixel-readback datum ----
+    video_system_t *vs = computer->video_system;
+    vs->update_display(true);
+    SDL_ClearError();
+    vs->save_screenshot("spike_frame.bmp");
+    const char *err = SDL_GetError();
+    printf("SPIKE FRAMEBUF: save_screenshot('spike_frame.bmp') SDL_GetError='%s'\n",
+           (err && *err) ? err : "(none)");
+
+    printf("=== SPIKE COMPLETE ===\n");
+}
+
+/* ========================================================================
    SDL3 App Callback Entry Points
    ======================================================================== */
 
@@ -805,6 +871,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     
     int platform_id = PLATFORM_APPLE_II_PLUS;  // default to Apple II Plus
     bool platform_explicit = false;            // true when -p was given on CLI
+    int config_index = -1;                     // -c N: select builtin system config by index
     int opt;
     int slot, drive;
 
@@ -818,9 +885,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     gs2_app_values.pref_path = get_pref_path();
     printf("pref_path: %s\n", gs2_app_values.pref_path.c_str());
 
-    if (gs2_app_values.console_mode) {
-        // parse command line optionss
-        while ((opt = getopt(argc, argv, "sxp:d:")) != -1) {
+    { // always parse CLI args so headless/automation launches honor -p/-n (no TTY needed)
+        // parse command line options
+        while ((opt = getopt(argc, argv, "snxp:d:c:")) != -1) {
             switch (opt) {
                 case 'p':
                     platform_id = std::stoi(optarg);
@@ -850,6 +917,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
                 case 's':
                     gs2_app_values.sleep_mode = true;
                     break;
+                case 'n':
+                    gs2_app_values.no_input = true;
+                    break;
+                case 'c':
+                    config_index = std::stoi(optarg);
+                    platform_explicit = true;  // reuse the auto-launch path
+                    break;
                 default:
                     std::cerr << "Usage: " << argv[0] << " [-p platform] [-dsXdY=filename] [-s]\n";
                     std::cerr << "  -p N: skip the system-selector UI and auto-launch the\n";
@@ -871,6 +945,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     gs2_app_values.menu_event_type = SDL_RegisterEvents(1);
 
     state->platform_id = platform_id;
+
+    // a2gspu headless-boot spike: env-gated, leaves normal launch untouched.
+    {
+        const char *sf = SDL_getenv("A2GSPU_SPIKE_FRAMES");
+        if (sf) {
+            int n = SDL_atoi(sf);
+            if (n > 0) {
+                state->headless = true;
+                state->spike_frames = n;
+                printf("A2GSPU SPIKE: headless mode enabled, %d frames\n", n);
+            }
+        }
+    }
 
     // Debug print mounted media
     std::cout << "Mounted Media (" << state->disks_to_mount.size() << " disks):" << std::endl;
@@ -897,15 +984,17 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     // and jump straight into emulation using the first builtin system
     // whose platform_id matches.
     if (platform_explicit) {
-        const int system_id = find_first_system_for_platform(platform_id);
-        if (system_id >= 0) {
+        const int system_id = (config_index >= 0)
+                                  ? config_index
+                                  : find_first_system_for_platform(platform_id);
+        if (system_id >= 0 && system_id < NUM_SYSTEM_CONFIGS) {
             std::cout << "Auto-launching system_id=" << system_id
-                      << " for platform_id=" << platform_id << std::endl;
+                      << " (" << get_system_config(system_id)->name << ")" << std::endl;
             transition_to_emulation(state, system_id);
             state->auto_launched = true;
         } else {
-            std::cerr << "No system config matches platform_id=" << platform_id
-                      << ", staying in selector\n";
+            std::cerr << "No system config for index/platform "
+                      << system_id << ", staying in selector\n";
         }
     }
 
@@ -935,7 +1024,17 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
         computer_t *computer = state->computer;
         cpu_state *cpu = computer->cpu;
 
-        handle_single_event(computer, cpu, *event);
+        // In no-input mode (automation/headless), ignore keyboard/mouse; only
+        // handle quit + window events.
+        if (gs2_app_values.no_input) {
+            if (event->type == SDL_EVENT_QUIT) {
+                cpu->halt = HLT_USER;
+            } else if (event->type >= SDL_EVENT_WINDOW_FIRST && event->type <= SDL_EVENT_WINDOW_LAST) {
+                handle_single_event(computer, cpu, *event);
+            }
+        } else {
+            handle_single_event(computer, cpu, *event);
+        }
 
         // handled in computer now
         /* if (event->type == SDL_EVENT_QUIT) {
@@ -949,6 +1048,17 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
 SDL_AppResult SDL_AppIterate(void *appstate) {
     GS2AppState *state = (GS2AppState *)appstate;
+
+    // a2gspu headless-boot spike: run once then exit, bypassing the GUI loop.
+    if (state->headless) {
+        if (state->phase == PHASE_EMULATION) {
+            run_headless_spike(state);
+            return SDL_APP_SUCCESS;
+        }
+        printf("SPIKE: phase=%d not PHASE_EMULATION -- auto-launch (-p) failed\n",
+               (int)state->phase);
+        return SDL_APP_FAILURE;
+    }
 
     // Pump any pending GTK/GDK events (Linux menu). Called here rather than
     // in SDL_AppEvent to avoid blocking SDL's X11 connection (deadlock risk).

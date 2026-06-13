@@ -22,6 +22,12 @@ class ADB_Mouse : public ADB_Device
         bool has_data = false;
         uint8_t handler = 1; // default to low resolution mouse
 
+        // ── A2GSPU absolute-position layer (additive; passive derived view) ──
+        int   abs_x = 320, abs_y = 100;   // absolute cursor pos (Event Manager injection + clamp)
+        bool  shr_320_mode = false;       // SHR 320 mode -> halve X for abs tracking
+        float mouse_scale_x = 0.0f;       // dynamic scale from window dims (0 = use fixed)
+        float mouse_scale_y = 0.0f;
+
     public:
     ADB_Mouse(uint8_t id = 0x03) : ADB_Device(id) {
         registers[0].size = 2;
@@ -71,6 +77,21 @@ class ADB_Mouse : public ADB_Device
         registers[0].data[1] = button_0_down | (registers[0].data[1] & 0x7F);
     }
 
+    // ── A2GSPU absolute-position API (additive; used by keygloo SHR-cursor path) ──
+    void set_mouse_scale(float sx, float sy) { mouse_scale_x = sx; mouse_scale_y = sy; }
+    void set_shr_320(bool is_320) { shr_320_mode = is_320; }
+    void clamp_position(int x0, int y0, int x1, int y1) {
+        if (abs_x < x0) abs_x = x0;
+        if (abs_x > x1) abs_x = x1;
+        if (abs_y < y0) abs_y = y0;
+        if (abs_y > y1) abs_y = y1;
+    }
+    int  get_abs_x() const { return abs_x; }
+    int  get_abs_y() const { return abs_y; }
+    // Provided for API completeness; current's direct-talk frame_handler does NOT
+    // call this (no consume model), so it cannot double-count motion.
+    bool consume_pending() { return has_data; }
+
     bool process_event(SDL_Event &event) override {
         bool status = false;
         /* Track mouse button up and down events. In ADB Land, the button up/down status 
@@ -110,15 +131,23 @@ class ADB_Mouse : public ADB_Device
             // it's also possible we need to accumulate motion values 
             // until the register is actually read.
             // alternatively, to buffer them.
-            float scale = handler == 1 ? MOUSE_MOTION_SCALE_SLOW : MOUSE_MOTION_SCALE_FAST;
-            int xrel = (int)(event.motion.xrel * scale);
-            int yrel = (int)(event.motion.yrel * scale);
-            
+            float base = handler == 1 ? MOUSE_MOTION_SCALE_SLOW : MOUSE_MOTION_SCALE_FAST;
+            float sx = (mouse_scale_x > 0.0f) ? mouse_scale_x * (handler >= 2 ? 2.0f : 1.0f) : base;
+            float sy = (mouse_scale_y > 0.0f) ? mouse_scale_y * (handler >= 2 ? 2.0f : 1.0f) : base;
+            int xrel = (int)(event.motion.xrel * sx);
+            int yrel = (int)(event.motion.yrel * sy);
+
             // if there was any motion, minimum motion after scale is 1.
             if (xrel == 0 && event.motion.xrel > 0) xrel = 1;
             if (xrel == 0 && event.motion.xrel < 0) xrel = -1;
             if (yrel == 0 && event.motion.yrel > 0) yrel = 1;
             if (yrel == 0 && event.motion.yrel < 0) yrel = -1;
+
+            // A2GSPU: passively track absolute cursor pos from the SAME signed delta
+            // (derived view, not a second producer -> no double-count). X halved in
+            // SHR-320 mode to match the 320-pixel coordinate space.
+            abs_x += shr_320_mode ? (xrel / 2) : xrel;
+            abs_y += yrel;
 
             bool moved_right, moved_up;
 

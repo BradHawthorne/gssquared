@@ -209,6 +209,15 @@ void VideoScannerIIgs::video_cycle()
         scan.mainbyte = 0;
         scan.flags = mode_flags;
         frame_scan->push(scan);
+
+        // Record per-scanline resolved state for external consumers (e.g., A2GSPU)
+        uint16_t vc = scan_index / 65;
+        if (vc < 262) {
+            scanline_state[vc].video_mode   = static_cast<uint8_t>(video_mode);
+            scanline_state[vc].border_color = border_color & 0x0F;
+            scanline_state[vc].mode_flags   = mode_flags;
+            scanline_state[vc].scb          = current_scb;
+        }
     }
 
     // if in shr and this is cycle 64 of a scanline, and the SCB has bit 6 (interrupt) enabled, then assert scanline interrupt.

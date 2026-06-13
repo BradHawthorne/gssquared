@@ -572,6 +572,11 @@ void bank_shadow_write(void *context, uint32_t address, uint8_t value) {
         //mmu_iigs->megaiiWrite(address & 0x1'FFFF, value);
         mmu_iigs->set_next_cycle_type(CYCLE_TYPE_SYNC);
         mmu_iigs->megaii->write(address & 0xFFFF, value);
+
+        // Notify write observer for soft switch writes (C0XX only). Used by A2GSPU.
+        if (mmu_iigs->write_observer) {
+            mmu_iigs->write_observer(mmu_iigs->write_observer_context, address, value);
+        }
         return; // we delegated this to the MegaII
     }
     

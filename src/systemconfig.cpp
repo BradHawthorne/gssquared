@@ -326,6 +326,24 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         }
 
     },
+    {
+        "Apple IIgs + A2GSPU",
+        PLATFORM_APPLE_IIGS,
+        true,
+        CLOCK_SET_US,
+        Scanner_AppleIIgs,
+        "Apple IIgs 8MB RAM + A2GSPU video card in slot 3",
+        {
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_A2GSPU,      // slot 3 — video card slot
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_PD_BLOCK3,   // slot 7 — boot
+        }
+    },
 /*     {
         "Apple IIc",
         PLATFORM_APPLE_IIC,

@@ -40,6 +40,8 @@
 #include "devices/es5503/soundglu.hpp"
 #include "devices/scc8530/scc8530.hpp"
 #include "devices/iwm/iwm_device.hpp"
+#include "devices/a2gspu/a2gspu.hpp"
+#include "devices/uthernet2/uthernet2.hpp"
 #include "devices/secondsight/secondsight.hpp"
 
 #include "PlatformIDs.hpp"
@@ -278,6 +280,24 @@ Device_t Devices[NUM_DEVICE_IDS] = {
         0b11111110,
         PLATFLAG_ALL,
         init_pdblock3,
+        NULL
+    },
+    {
+        DEVICE_ID_A2GSPU,
+        "A2GSPU Video Card",
+        true,
+        0b11111110,  // slots 1-7
+        PLATFLAG_APPLE_IIGS,
+        init_slot_a2gspu,
+        NULL
+    },
+    {
+        DEVICE_ID_UTHERNET2,
+        "Uthernet II",
+        true,
+        0b11111110,  // slots 1-7
+        PLATFLAG_APPLE_IIGS | PLATFLAG_APPLE_IIE | PLATFLAG_APPLE_IIE_ENHANCED | PLATFLAG_APPLE_IIE_65816,
+        init_slot_uthernet2,
         NULL
     },
     {
