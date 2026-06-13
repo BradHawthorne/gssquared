@@ -6,6 +6,7 @@
 #include "debug.hpp"
 #include "NClock.hpp"
 #include "bus_trace.hpp"
+#include "devices/slot_bus/slot_bus.hpp"
 #include "devices/languagecard/LanguageCardLogic.hpp"
 
 class MMU_IIgs : public MMU {
@@ -84,13 +85,21 @@ class MMU_IIgs : public MMU {
         virtual uint8_t read(uint32_t address) override {
             if (address >= 0xFC0000) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
 
-            return MMU::read(address);
+            uint8_t value = MMU::read(address);
+            // $C0xx I/O is slot-visible; soft-switches toggle on READS too (per the IIe IOU 74LS259
+            // decode), so the slot must see read accesses. Video-memory writes are tapped at the
+            // resolved $E1 points, NOT here (no double-count).
+            if (g_slot_bus_enabled && (address & 0xFF00) == 0xC000)
+                slot_emit(address & 0xFFFF, value, true, (address >> 16) & 1);
+            return value;
         }
 
         virtual void write(uint32_t address, uint8_t value) override {
             if (address >= 0xFC0000) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
 
             MMU::write(address, value);
+            if (g_slot_bus_enabled && (address & 0xFF00) == 0xC000)
+                slot_emit(address & 0xFFFF, value, false, (address >> 16) & 1);
         }
 
         inline bool shadow_is_enabled(uint32_t address) {
@@ -132,9 +141,11 @@ class MMU_IIgs : public MMU {
             if ((address & 0x1'0000) && g_bank_latch) {
                 megaii->get_memory_base()[address & 0x1'FFFF] = value;
                 bus_trace_note(get_cycle_count(), address & 0x1'FFFF, value); // shadowed SHR write
+                slot_emit(address & 0xFFFF, value, false, true);             // Mega-II write to $E1/aux (M2B0=1)
             }
             else {
                 megaii->write(address & 0xFFFF, value);
+                slot_emit(address & 0xFFFF, value, false, (address & 0x1'0000) != 0);
             }
             set_next_cycle_type(CYCLE_TYPE_SYNC);
         }
@@ -143,6 +154,24 @@ class MMU_IIgs : public MMU {
 
         inline bool is_iolc_shadowed() { return !(reg_shadow & SHADOW_INH_IOLC); }
         inline bool is_bank_latch() { return g_bank_latch; }
+
+        // Faithful slot-3 signal decode for a Mega-II-side (slot-visible) cycle (the virtual slot).
+        inline uint8_t slot_ctl(uint16_t a, bool is_read, bool m2b0) {
+            uint8_t ctl = SLOT_CTL_M2SEL;                       // a valid Mega-II cycle
+            if (is_read) ctl |= SLOT_CTL_READ;
+            if (m2b0)    ctl |= SLOT_CTL_M2B0;
+            if (!is_iolc_shadowed()) ctl |= SLOT_CTL_INH;
+            if (a >= 0xC000 && a <= 0xCFFF) {                   // slot I/O strobes (this card's slot)
+                if ((a & 0xFFF0) == (uint16_t)(0xC080 + SLOT_BUS_SLOT * 0x10)) ctl |= SLOT_CTL_DEVSEL;
+                if ((a >> 8)     == (uint16_t)(0xC0   + SLOT_BUS_SLOT))        ctl |= SLOT_CTL_IOSEL;
+                if (a >= 0xC800)                                              ctl |= SLOT_CTL_IOSTRB;
+            }
+            return ctl;
+        }
+        inline void slot_emit(uint16_t a, uint8_t data, bool is_read, bool m2b0) {
+            if (!g_slot_bus_enabled) return;
+            slot_bus_note(get_cycle_count(), a, data, slot_ctl(a, is_read, m2b0));
+        }
 
         inline void set_shadow_register(uint8_t value) { if (DEBUG(DEBUG_MMUGS)) printf("setting shadow register: %02X\n", value); reg_shadow = value; }
         inline void set_speed_register(uint8_t value) { 
