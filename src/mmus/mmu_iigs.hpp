@@ -140,7 +140,7 @@ class MMU_IIgs : public MMU {
         inline void megaiiWrite(uint32_t address, uint8_t value) {
             if ((address & 0x1'0000) && g_bank_latch) {
                 megaii->get_memory_base()[address & 0x1'FFFF] = value;
-                bus_trace_note(get_cycle_count(), address & 0x1'FFFF, value); // shadowed SHR write
+                bus_trace_note(get_cycle_count(), address & 0x1'FFFF, value, 1); // shadowed SHR write (provenance 1)
                 slot_emit(address & 0xFFFF, value, false, true);             // Mega-II write to $E1/aux (M2B0=1)
             }
             else {

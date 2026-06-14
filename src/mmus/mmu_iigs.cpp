@@ -55,7 +55,7 @@ inline void bank_e1_write(void *context, uint32_t address, uint8_t value) {
     {
         uint8_t *ram = mmu_iigs->megaii->get_memory_base();
         ram[address & 0x1FFFF] = value;
-        bus_trace_note(mmu_iigs->get_cycle_count(), address & 0x1FFFF, value); // direct $E1 write
+        bus_trace_note(mmu_iigs->get_cycle_count(), address & 0x1FFFF, value, 0); // direct $E1 write (provenance 0)
         mmu_iigs->slot_emit(address & 0xFFFF, value, false, true);            // $E1/aux (M2B0=1)
     }
 }

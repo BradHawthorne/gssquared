@@ -871,6 +871,13 @@ static void run_headless_spike(GS2AppState *state) {
                (unsigned long long)n, (unsigned long long)th);
         printf("SPIKE TRACE: cycle span [%llu .. %llu]\n",
                (unsigned long long)c0, (unsigned long long)c1);
+        // Bracket the shadow-mirror slot-visibility outcome (provenance-tagged, before any hardware).
+        uint64_t ha = 0, hd = 0, nd = 0, ns = 0;
+        bus_trace_brackets(&ha, &hd, &nd, &ns);
+        printf("SPIKE BRACKET: shadow-VISIBLE   (naked M2B0 sees ALL)      hash=%016llX  writes=%llu  miss=0\n",
+               (unsigned long long)ha, (unsigned long long)(nd + ns));
+        printf("SPIKE BRACKET: shadow-INVISIBLE (naked M2B0, direct-$E1 only) hash=%016llX  writes=%llu  MISS=%llu shadowed\n",
+               (unsigned long long)hd, (unsigned long long)nd, (unsigned long long)ns);
     }
 
     // ---- (1.6) faithful slot-bus stream (the virtual slot; superset of the SHR oracle) ----
