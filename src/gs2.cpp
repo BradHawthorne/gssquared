@@ -44,6 +44,7 @@
 #include "mmus/mmu_iie.hpp"
 #include "mmus/mmu_iigs.hpp"
 #include "bus_trace.hpp"
+#include "mmu_state_trace.hpp"
 #include "devices/slot_bus/slot_bus.hpp"
 #include "util/EventTimer.hpp"
 #include "ui/SelectSystem.hpp"
@@ -816,6 +817,8 @@ static void run_headless_spike(GS2AppState *state) {
     g_bus_trace_enabled = true;
     slot_bus_reset();             // arm the faithful slot-bus model (the virtual slot)
     g_slot_bus_enabled = true;
+    mmu_state_trace_reset();      // arm the ground-truth MMU-state stream (cycle-aligned with the slot bus)
+    g_mmu_state_trace_enabled = true;
 
     // Snapshot the $E1 SHR window at trace-arm time. Replaying the trace
     // (init + every captured write) must byte-match the final $E1 below -> proves
@@ -836,6 +839,7 @@ static void run_headless_spike(GS2AppState *state) {
     }
     g_bus_trace_enabled = false;  // disarm before any teardown writes
     g_slot_bus_enabled = false;
+    g_mmu_state_trace_enabled = false;
 
     // ---- (1) renderer-free $E1 oracle ----
     uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
@@ -886,6 +890,14 @@ static void run_headless_spike(GS2AppState *state) {
         uint64_t sh = slot_bus_dump("spike_slot.bin", &n);
         printf("SPIKE SLOT: wrote spike_slot.bin (%llu Mega-II writes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)sh);
+    }
+
+    // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
+    {
+        uint64_t n = 0;
+        uint64_t mh = mmu_state_trace_dump("spike_mmu_truth.bin", &n);
+        printf("SPIKE MMU: wrote spike_mmu_truth.bin (%llu mapping-state changes) content-hash=%016llX\n",
+               (unsigned long long)n, (unsigned long long)mh);
     }
 
     // ---- (2) backbuffer pixel-readback datum ----

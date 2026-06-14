@@ -6,6 +6,7 @@
 #include "debug.hpp"
 #include "NClock.hpp"
 #include "bus_trace.hpp"
+#include "mmu_state_trace.hpp"
 #include "devices/slot_bus/slot_bus.hpp"
 #include "devices/languagecard/LanguageCardLogic.hpp"
 
@@ -171,6 +172,14 @@ class MMU_IIgs : public MMU {
         inline void slot_emit(uint16_t a, uint8_t data, bool is_read, bool m2b0) {
             if (!g_slot_bus_enabled) return;
             slot_bus_note(get_cycle_count(), a, data, slot_ctl(a, is_read, m2b0));
+            mmu_state_emit();   // cycle-aligned ground-truth mapping state (change-gated; for the bus-snoop comparator)
+        }
+        // Sample the live INTERNAL mapping state into the ground-truth stream (change-gated). Runs AFTER
+        // MMU::read/write has applied the soft-switch, so the bytes are the post-access state.
+        inline void mmu_state_emit() {
+            mmu_state_trace_note(get_cycle_count(), reg_state, reg_shadow, reg_new_video, reg_speed,
+                (uint8_t)((g_80store ? 1 : 0) | (g_hires ? 2 : 0) | (g_text ? 4 : 0) | (g_mixed ? 8 : 0)),
+                reg_slot);
         }
 
         inline void set_shadow_register(uint8_t value) { if (DEBUG(DEBUG_MMUGS)) printf("setting shadow register: %02X\n", value); reg_shadow = value; }
