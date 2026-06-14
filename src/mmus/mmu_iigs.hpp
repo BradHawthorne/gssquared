@@ -179,7 +179,7 @@ class MMU_IIgs : public MMU {
         inline void mmu_state_emit() {
             mmu_state_trace_note(get_cycle_count(), reg_state, reg_shadow, reg_new_video, reg_speed,
                 (uint8_t)((g_80store ? 1 : 0) | (g_hires ? 2 : 0) | (g_text ? 4 : 0) | (g_mixed ? 8 : 0)),
-                reg_slot);
+                reg_slot, g_disp_vmode, g_disp_mode);
         }
 
         inline void set_shadow_register(uint8_t value) { if (DEBUG(DEBUG_MMUGS)) printf("setting shadow register: %02X\n", value); reg_shadow = value; }

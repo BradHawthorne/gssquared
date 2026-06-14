@@ -24,29 +24,36 @@ struct MMUStateRecord {
     uint8_t  reg_speed;      // $C036 (speed + shadow-all)
     uint8_t  flags;          // bit0=80STORE bit1=HIRES bit2=TEXT bit3=MIXED
     uint8_t  reg_slot;       // $C02D slot register
-    uint8_t  _pad;
+    uint8_t  disp_vmode;     // the VideoScannerII display index: SHR|80STORE|GRAF|HIRES|PAGE2|80COL|DBLRES|MIXED
+    uint8_t  disp_mode;      // the COMPUTED video_mode_t (TEXT40/LORES/HIRES/TEXT80/DLORES/DHIRES/SHR/...)
+    uint8_t  _pad[7];        // -> 24-byte record (8-byte aligned)
 };
 
 inline bool                        g_mmu_state_trace_enabled = false;
 inline std::vector<MMUStateRecord> g_mmu_state_trace;
-inline uint32_t                    g_mmu_state_last = 0xFFFFFFFFu;  // change-gate: packed (state,shadow,newvideo,flags)
+inline uint64_t                    g_mmu_state_last = 0xFFFFFFFFFFFFFFFFull;  // change-gate
+// the live display state, written by VideoScannerII::set_video_mode(), read by mmu_state_emit():
+inline uint8_t                     g_disp_vmode = 0;   // the 8-switch display index (F_* layout)
+inline uint8_t                     g_disp_mode  = 0;   // the computed video_mode_t
 
 inline void mmu_state_trace_reset() {
     g_mmu_state_trace.clear();
-    g_mmu_state_last = 0xFFFFFFFFu;
+    g_mmu_state_last = 0xFFFFFFFFFFFFFFFFull;
 }
 
 // Change-gated push: the per-cycle slot_emit calls (~1.17M on a GS/OS boot) collapse to the
-// transition count, recording only the cycles where the mapping state actually moves. The
-// gate keys on the four mapping-relevant bytes (state/shadow/new-video/flags); reg_speed and
-// reg_slot ride along for reference but do not by themselves trigger a record.
+// transition count, recording only the cycles where the mapping OR the display mode actually
+// moves. The gate keys on the mapping bytes (state/shadow/new-video/flags) AND the display index
+// (disp_vmode); reg_speed/reg_slot and the computed disp_mode ride along.
 inline void mmu_state_trace_note(uint64_t cycle, uint8_t st, uint8_t sh, uint8_t nv,
-                                 uint8_t sp, uint8_t flags, uint8_t slot) {
+                                 uint8_t sp, uint8_t flags, uint8_t slot,
+                                 uint8_t dvmode, uint8_t dmode) {
     if (!g_mmu_state_trace_enabled) return;
-    uint32_t key = ((uint32_t)st << 24) | ((uint32_t)sh << 16) | ((uint32_t)nv << 8) | flags;
+    uint64_t key = ((uint64_t)st << 32) | ((uint64_t)sh << 24) | ((uint64_t)nv << 16)
+                 | ((uint64_t)flags << 8) | dvmode;
     if (key == g_mmu_state_last) return;
     g_mmu_state_last = key;
-    g_mmu_state_trace.push_back(MMUStateRecord{cycle, st, sh, nv, sp, flags, slot, 0});
+    g_mmu_state_trace.push_back(MMUStateRecord{cycle, st, sh, nv, sp, flags, slot, dvmode, dmode, {0}});
 }
 
 inline uint64_t mmu_state_trace_dump(const char *path, uint64_t *out_count) {

@@ -1,5 +1,6 @@
 
 #include "VideoScannerII.hpp"
+#include "mmu_state_trace.hpp"
 #include "cpu.hpp"
 #include "frame/Frames.hpp"
 #include "ScanBuffer.hpp"
@@ -203,6 +204,10 @@ void VideoScannerII::set_video_mode()
     if (mixed) flags |= VS_FL_MIXED;
     if (sw80col) flags |= VS_FL_80COL;
     mode_flags = flags;
+
+    // publish the live display state to the ground-truth MMU/display trace (the bus-snoop comparator)
+    g_disp_vmode = vmode;
+    g_disp_mode  = (uint8_t)video_mode;
 }
 
 void VideoScannerII::video_cycle()
