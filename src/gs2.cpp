@@ -831,10 +831,51 @@ static void run_headless_spike(GS2AppState *state) {
         }
     }
 
-    for (int i = 0; i < state->spike_frames; i++) {
-        if (!run_one_frame(computer)) {
-            printf("SPIKE: emulation halted early at frame %d\n", i);
-            break;
+    // Optional: inject + launch a flat Rosetta-built binary after some boot frames.
+    //   A2GSPU_RUN_BIN=path[@HEXADDR]   (default load/exec addr $7E0000)
+    //   A2GSPU_RUN_BOOT=N               (boot frames before injecting; default = spike_frames/2)
+    // The binary's bus effects are isolated by resetting the traces at injection time.
+    const char *runbin = getenv("A2GSPU_RUN_BIN");
+    if (runbin) {
+        char binpath[1024];
+        strncpy(binpath, runbin, sizeof(binpath) - 1);
+        binpath[sizeof(binpath) - 1] = 0;
+        uint32_t loadaddr = 0x7E0000;
+        char *at = strchr(binpath, '@');
+        if (at) { *at = 0; loadaddr = (uint32_t)strtoul(at + 1, nullptr, 16); }
+        int bootframes = state->spike_frames / 2;
+        const char *bf = getenv("A2GSPU_RUN_BOOT");
+        if (bf) bootframes = atoi(bf);
+        if (bootframes < 0) bootframes = 0;
+        if (bootframes > state->spike_frames) bootframes = state->spike_frames;
+
+        int i = 0;
+        for (; i < bootframes; i++) {
+            if (!run_one_frame(computer)) { printf("SPIKE: halted during boot at frame %d\n", i); break; }
+        }
+        FILE *rb = (state->mmu_iigs) ? fopen(binpath, "rb") : nullptr;
+        if (rb) {
+            int n = 0, c;
+            while ((c = fgetc(rb)) != EOF) { state->mmu_iigs->write(loadaddr + n, (uint8_t)c); n++; }
+            fclose(rb);
+            bus_trace_reset(); slot_bus_reset(); mmu_state_trace_reset();   // isolate the injected program
+            computer->cpu->full_pc = loadaddr;                              // jump to it (pb = addr>>16)
+            printf("A2GSPU RUN: injected %d bytes at $%06X after %d boot frames; PC set.\n",
+                   n, loadaddr, i);
+        } else if (!state->mmu_iigs) {
+            printf("A2GSPU RUN: no IIgs MMU on this platform -- skipped (use -p 5)\n");
+        } else {
+            printf("A2GSPU RUN: could not open binary '%s'\n", binpath);
+        }
+        for (; i < state->spike_frames; i++) {
+            if (!run_one_frame(computer)) { printf("SPIKE: emulation halted early at frame %d\n", i); break; }
+        }
+    } else {
+        for (int i = 0; i < state->spike_frames; i++) {
+            if (!run_one_frame(computer)) {
+                printf("SPIKE: emulation halted early at frame %d\n", i);
+                break;
+            }
         }
     }
     g_bus_trace_enabled = false;  // disarm before any teardown writes
