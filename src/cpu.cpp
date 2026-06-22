@@ -24,7 +24,11 @@
 cpu_state::cpu_state(processor_type cpu_type) {
     full_db = 0;
     full_pc = 0; // was 0x400 from original tests, ha!
-    sp = rand() & 0xFF; // simulate a random stack pointer
+    // Closed-loop determinism: A2GSPU_SEED fixes the cold-boot SP entropy so a
+    // from-scratch spike is byte-reproducible. (A warm-snapshot restore over-
+    // writes sp anyway, so this only matters for cold runs.)
+    { const char *s = getenv("A2GSPU_SEED"); if (s) srand((unsigned)strtoul(s, nullptr, 10)); }
+    sp = rand() & 0xFF; // simulate a random stack pointer (seedable for CI)
     a = 0;
     x = 0;
     y = 0;

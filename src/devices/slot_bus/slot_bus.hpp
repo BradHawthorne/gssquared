@@ -17,6 +17,7 @@
 // ============================================================================
 #include <vector>
 #include <cstdint>
+#include "../../house_fnv.hpp"
 #include <cstdio>
 
 // One slot-visible bus cycle, as a slot-3 card's pins latch it.
@@ -63,10 +64,10 @@ inline uint64_t slot_bus_dump(const char *path, uint64_t *out_count) {
             fwrite(g_slot_bus.data(), sizeof(slot_bus_cycle_t), g_slot_bus.size(), f);
         fclose(f);
     }
-    uint64_t h = 1469598103934665603ULL;
+    uint64_t h = HOUSE_FNV_BASIS;
     for (const slot_bus_cycle_t &c : g_slot_bus) {
         uint8_t b[5] = { (uint8_t)(c.addr & 0xFF), (uint8_t)(c.addr >> 8), c.data, c.ctl, 0 };
-        for (uint8_t x : b) h = (h ^ x) * 1099511628211ULL;
+        for (uint8_t x : b) h = (h ^ x) * HOUSE_FNV_PRIME;
     }
     if (out_count) *out_count = (uint64_t)g_slot_bus.size();
     return h;

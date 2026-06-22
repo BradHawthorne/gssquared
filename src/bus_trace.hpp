@@ -16,6 +16,7 @@
 // ============================================================================
 #include <vector>
 #include <cstdint>
+#include "house_fnv.hpp"
 #include <cstdio>
 
 struct BusTraceRecord {
@@ -58,7 +59,7 @@ inline uint64_t bus_trace_dump(const char *path, uint64_t *out_count) {
             fwrite(g_bus_trace.data(), sizeof(BusTraceRecord), g_bus_trace.size(), f);
         fclose(f);
     }
-    uint64_t hash = 1469598103934665603ULL; // FNV-1a 64 offset basis
+    uint64_t hash = HOUSE_FNV_BASIS; // FNV-1a 64 offset basis
     for (const BusTraceRecord &r : g_bus_trace) {
         uint8_t b[5] = {
             (uint8_t)(r.addr17 & 0xFF),
@@ -67,7 +68,7 @@ inline uint64_t bus_trace_dump(const char *path, uint64_t *out_count) {
             r.data,
             r.rw,
         };
-        for (uint8_t x : b) hash = (hash ^ x) * 1099511628211ULL;
+        for (uint8_t x : b) hash = (hash ^ x) * HOUSE_FNV_PRIME;
     }
     if (out_count) *out_count = (uint64_t)g_bus_trace.size();
     return hash;
@@ -84,13 +85,13 @@ inline uint64_t bus_trace_dump(const char *path, uint64_t *out_count) {
 // defensive snoop that reconstructs the shadowed writes is correct regardless of which.
 inline void bus_trace_brackets(uint64_t *all_hash, uint64_t *direct_hash,
                                uint64_t *direct_count, uint64_t *shadowed_count) {
-    uint64_t ha = 1469598103934665603ULL, hd = 1469598103934665603ULL, nd = 0, ns = 0;
+    uint64_t ha = HOUSE_FNV_BASIS, hd = HOUSE_FNV_BASIS, nd = 0, ns = 0;
     for (const BusTraceRecord &r : g_bus_trace) {
         uint8_t b[5] = { (uint8_t)(r.addr17 & 0xFF), (uint8_t)((r.addr17 >> 8) & 0xFF),
                          (uint8_t)((r.addr17 >> 16) & 0xFF), r.data, r.rw };
-        for (uint8_t x : b) ha = (ha ^ x) * 1099511628211ULL;        // bracket A: all writes
+        for (uint8_t x : b) ha = (ha ^ x) * HOUSE_FNV_PRIME;        // bracket A: all writes
         if (r.src == 0) {                                            // bracket B: direct $E1 only
-            for (uint8_t x : b) hd = (hd ^ x) * 1099511628211ULL;
+            for (uint8_t x : b) hd = (hd ^ x) * HOUSE_FNV_PRIME;
             nd++;
         } else ns++;
     }

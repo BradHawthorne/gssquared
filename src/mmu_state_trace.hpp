@@ -13,6 +13,7 @@
 // slot-bus / bus-trace streams and their goldens are entirely untouched.
 // ============================================================================
 #include <cstdint>
+#include "house_fnv.hpp"
 #include <vector>
 #include <cstdio>
 
@@ -63,10 +64,10 @@ inline uint64_t mmu_state_trace_dump(const char *path, uint64_t *out_count) {
             fwrite(g_mmu_state_trace.data(), sizeof(MMUStateRecord), g_mmu_state_trace.size(), f);
         fclose(f);
     }
-    uint64_t h = 1469598103934665603ULL;   // FNV-1a 64 over the changed-state bytes (a determinism check)
+    uint64_t h = HOUSE_FNV_BASIS;   // FNV-1a 64 over the changed-state bytes (a determinism check)
     for (auto &r : g_mmu_state_trace) {
         uint8_t b[5] = { r.reg_state, r.reg_shadow, r.reg_new_video, r.reg_speed, r.flags };
-        for (int i = 0; i < 5; i++) h = (h ^ b[i]) * 1099511628211ULL;
+        for (int i = 0; i < 5; i++) h = (h ^ b[i]) * HOUSE_FNV_PRIME;
     }
     if (out_count) *out_count = (uint64_t)g_mmu_state_trace.size();
     return h;

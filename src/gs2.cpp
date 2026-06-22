@@ -43,8 +43,12 @@
 #include "mmus/mmu_ii.hpp"
 #include "mmus/mmu_iie.hpp"
 #include "mmus/mmu_iigs.hpp"
+#include "house_fnv.hpp"
 #include "bus_trace.hpp"
 #include "mmu_state_trace.hpp"
+#include "iigs_video_summary.hpp"
+#include "iigs_toolbox.hpp"
+#include "iigs_diag.hpp"
 #include "devices/slot_bus/slot_bus.hpp"
 #include "util/EventTimer.hpp"
 #include "ui/SelectSystem.hpp"
@@ -606,7 +610,7 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
     computer->set_system_id(system_id);
     
     // TODO: load platform roms - this info should get stored in the 'computer'
-    rom_data *rd = load_platform_roms(platform);
+    rom_data *rd = load_platform_roms(platform, system_config->rom_dir);
     if (!rd) {
         system_failure("Failed to load platform roms, exiting.");
         return;
@@ -633,9 +637,14 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
             computer->set_mmu(state->mmu_iie);
             computer->debug_window->set_mmu(state->mmu_iie);
             break;
-        case MMU_MMU_IIGS:
-            state->mmu_iie = new MMU_IIe(256, 128*1024, /* (uint8_t *) */rd->main_rom_data + 0x1'C000);
-            state->mmu_iigs = new MMU_IIgs(256, 8*1024*1024, 128*1024, /* (uint8_t *) */rd->main_rom_data, state->mmu_iie);
+        case MMU_MMU_IIGS: {
+            // ROM size is data-driven, not hardcoded: 0x20000 (128KB ROM01) or
+            // 0x40000 (256KB ROM03/ROM04). The //e-compat ROM window ($C000-$FFFF)
+            // is always the last 16KB of the image, i.e. base = (romsize - 0x4000).
+            // For a 128KB image this computes the original 0x1C000 (zero ROM01 change).
+            size_t romsize = (size_t) rd->main_rom_file->size();
+            state->mmu_iie = new MMU_IIe(256, 128*1024, /* (uint8_t *) */rd->main_rom_data + (romsize - 0x4000));
+            state->mmu_iigs = new MMU_IIgs(256, 8*1024*1024, (uint32_t) romsize, /* (uint8_t *) */rd->main_rom_data, state->mmu_iie);
             state->mmu_iigs->init_map();
             computer->cpu->set_mmu(state->mmu_iigs); // cpu gets FPI
             computer->set_mmu(state->mmu_iie); // everything else gets the Mega II
@@ -643,6 +652,7 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
             state->mmu_iigs->set_clock((NClockII *)nclock);
 
             break;
+        }
         default:
             printf("Unknown MMU type: %d\n", platform->mmu_type);
             break;
@@ -807,6 +817,57 @@ void transition_to_shutdown(GS2AppState *state) {
    and SDL_RenderReadPixels it to a BMP (save_screenshot), recording whether
    headless pixel readback works at all. Throwaway-grade; GPL-local.
    ======================================================================== */
+
+// ---- A2GSPU warm-boot snapshot: file magic + cpu_state value-field (de)serialize ----
+// Magic + version guard the on-disk layout: a stale snap.bin from an older binary is
+// rejected loudly instead of mis-read. cpu serialize touches ONLY value fields. It NEVER
+// touches the owned/plumbing pointers (mmu/cpun/core/trace_buffer) — a blanket copy would
+// double-free the unique_ptr cpun. cpu_type is construction-fixed (set by the same -p 5
+// platform across both runs) and intentionally excluded.
+static const uint32_t A2GSPU_SNAP_MAGIC = 0x47535053;  // 'GSPS'
+static const uint32_t A2GSPU_SNAP_VER   = 1;
+static void a2gspu_cpu_save(FILE *f, cpu_state *cpu) {
+    uint32_t magic = A2GSPU_SNAP_MAGIC, ver = A2GSPU_SNAP_VER;
+    fwrite(&magic, 4, 1, f); fwrite(&ver, 4, 1, f);
+    fwrite(&cpu->full_pc, 4, 1, f);     // union: pc+pb (the field the inject path sets)
+    fwrite(&cpu->full_db, 4, 1, f);     // union: data bank in byte 2
+    fwrite(&cpu->sp, 2, 1, f);
+    fwrite(&cpu->a, 2, 1, f);
+    fwrite(&cpu->x, 2, 1, f);
+    fwrite(&cpu->y, 2, 1, f);
+    fwrite(&cpu->d, 2, 1, f);
+    fwrite(&cpu->p, 1, 1, f);           // union byte: all flag bitfields alias this
+    uint8_t e = cpu->E;       fwrite(&e, 1, 1, f);       // 1-bit bitfield -> temp
+    uint8_t cs = cpu->clock_stopped ? 1 : 0; fwrite(&cs, 1, 1, f);
+    fwrite(&cpu->halt, 1, 1, f);
+    uint8_t ia = cpu->irq_asserted ? 1 : 0;  fwrite(&ia, 1, 1, f);
+    fwrite(&cpu->irq_pipe, 1, 1, f);
+    fwrite(&cpu->reset_asserted, 8, 1, f);   // uint64_t bitmask (NOT a bool)
+    uint8_t rd = cpu->rdy ? 1 : 0;     fwrite(&rd, 1, 1, f);
+}
+// Returns false (without consuming the cpu block) on a bad magic/version.
+static bool a2gspu_cpu_load(FILE *f, cpu_state *cpu) {
+    uint32_t magic = 0, ver = 0;
+    fread(&magic, 4, 1, f); fread(&ver, 4, 1, f);
+    if (magic != A2GSPU_SNAP_MAGIC || ver != A2GSPU_SNAP_VER) return false;
+    fread(&cpu->full_pc, 4, 1, f);
+    fread(&cpu->full_db, 4, 1, f);
+    fread(&cpu->sp, 2, 1, f);
+    fread(&cpu->a, 2, 1, f);
+    fread(&cpu->x, 2, 1, f);
+    fread(&cpu->y, 2, 1, f);
+    fread(&cpu->d, 2, 1, f);
+    fread(&cpu->p, 1, 1, f);
+    uint8_t e = 0;  fread(&e, 1, 1, f);  cpu->E = e & 1;
+    uint8_t cs = 0; fread(&cs, 1, 1, f); cpu->clock_stopped = (cs != 0);
+    fread(&cpu->halt, 1, 1, f);
+    uint8_t ia = 0; fread(&ia, 1, 1, f); cpu->irq_asserted = (ia != 0);
+    fread(&cpu->irq_pipe, 1, 1, f);
+    fread(&cpu->reset_asserted, 8, 1, f);
+    uint8_t rd = 0; fread(&rd, 1, 1, f); cpu->rdy = (rd != 0);
+    return true;
+}
+
 static void run_headless_spike(GS2AppState *state) {
     computer_t *computer = state->computer;
     printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
@@ -819,6 +880,30 @@ static void run_headless_spike(GS2AppState *state) {
     g_slot_bus_enabled = true;
     mmu_state_trace_reset();      // arm the ground-truth MMU-state stream (cycle-aligned with the slot bus)
     g_mmu_state_trace_enabled = true;
+
+    // Arm the headless GS/OS app-bringup diagnostics (env-gated, stdout-only).
+    g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
+    g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
+    g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);
+    g_iigs_stop_on_fault   = (SDL_getenv("A2GSPU_STOP_ON_FAULT") != nullptr);
+    if (const char *bp = SDL_getenv("A2GSPU_BREAK")) {
+        g_iigs_break_enabled = true;
+        g_iigs_break_addr = (uint32_t)strtoul(bp, nullptr, 16) & 0xFFFFFF;
+    }
+    if (const char *bk = SDL_getenv("A2GSPU_TBTRACE_BANK"))
+        g_iigs_tbtrace_bank = (int)strtoul(bk, nullptr, 16);
+    g_iigs_trace_from = 0; g_iigs_trace_armed = false;
+    if (const char *tf = SDL_getenv("A2GSPU_TRACE_FROM"))
+        g_iigs_trace_from = (uint32_t)strtoul(tf, nullptr, 16) & 0xFFFFFF;
+    g_iigs_sym_base = 0; g_iigs_sym_base_locked = false;
+    if (const char *sb = SDL_getenv("A2GSPU_SYM_BASE")) {
+        g_iigs_sym_base = (uint32_t)strtoul(sb, nullptr, 16) & 0xFFFFFF;
+        g_iigs_sym_base_locked = true;   // pinned -> no auto-inference
+    }
+    if (const char *sp = SDL_getenv("A2GSPU_SYMBOLS")) iigs_symbols_load(sp);
+    g_iigs_pending.clear();
+    g_iigs_last_result.clear();
+    g_iigs_last_gsos_err = 0;
 
     // Snapshot the $E1 SHR window at trace-arm time. Replaying the trace
     // (init + every captured write) must byte-match the final $E1 below -> proves
@@ -835,7 +920,34 @@ static void run_headless_spike(GS2AppState *state) {
     //   A2GSPU_RUN_BIN=path[@HEXADDR]   (default load/exec addr $7E0000)
     //   A2GSPU_RUN_BOOT=N               (boot frames before injecting; default = spike_frames/2)
     // The binary's bus effects are isolated by resetting the traces at injection time.
+    const char *snap_save = SDL_getenv("A2GSPU_SNAP_SAVE");
+    const char *snap_load = SDL_getenv("A2GSPU_SNAP_LOAD");
     const char *runbin = getenv("A2GSPU_RUN_BIN");
+
+    // SNAP_LOAD: short-circuit the ~1200-frame boot by restoring a prior desktop snapshot.
+    // Runs BEFORE the boot loops below; the existing post-restore frame loops then self-heal
+    // the (intentionally excluded) scanner/clock/device state before $E1 is read.
+    if (snap_load) {
+        FILE *sf = fopen(snap_load, "rb");
+        if (!sf) { printf("A2GSPU SNAP: could not open '%s' for load\n", snap_load); }
+        else {
+            bool cpu_ok = a2gspu_cpu_load(sf, computer->cpu);
+            bool mmu_ok = (cpu_ok && state->mmu_iigs) ? state->mmu_iigs->A2GSPU_restore(sf) : false;
+            fclose(sf);
+            if (!cpu_ok || !mmu_ok) {
+                printf("A2GSPU SNAP: restore FAILED from '%s' (cpu=%s mmu=%s) -- bad/stale magic or "
+                       "geometry mismatch; aborting.\n", snap_load,
+                       cpu_ok ? "ok" : "BAD-MAGIC", mmu_ok ? "ok" : "BAD");
+                exit(2);
+            }
+            computer->cpu->halt = 0;          // force-run (HLT would no-op run_one_frame)
+            // re-arm the trace window so it covers ONLY the post-restore run (mirror of
+            // the inject re-arm on the runbin path)
+            bus_trace_reset(); slot_bus_reset(); mmu_state_trace_reset();
+            printf("A2GSPU SNAP: restored from '%s'; skipping boot.\n", snap_load);
+        }
+    }
+
     if (runbin) {
         char binpath[1024];
         strncpy(binpath, runbin, sizeof(binpath) - 1);
@@ -850,8 +962,10 @@ static void run_headless_spike(GS2AppState *state) {
         if (bootframes > state->spike_frames) bootframes = state->spike_frames;
 
         int i = 0;
-        for (; i < bootframes; i++) {
-            if (!run_one_frame(computer)) { printf("SPIKE: halted during boot at frame %d\n", i); break; }
+        if (!snap_load) {   // SNAP_LOAD already provided a booted desktop; skip the long boot
+            for (; i < bootframes; i++) {
+                if (!run_one_frame(computer)) { printf("SPIKE: halted during boot at frame %d\n", i); break; }
+            }
         }
         FILE *rb = (state->mmu_iigs) ? fopen(binpath, "rb") : nullptr;
         if (rb) {
@@ -870,6 +984,8 @@ static void run_headless_spike(GS2AppState *state) {
         for (; i < state->spike_frames; i++) {
             if (!run_one_frame(computer)) { printf("SPIKE: emulation halted early at frame %d\n", i); break; }
         }
+        printf("A2GSPU RUN: final CPU full_pc=$%06X (if ~= the inject addr, the injected code ran)\n",
+               (unsigned)computer->cpu->full_pc);
     } else {
         for (int i = 0; i < state->spike_frames; i++) {
             if (!run_one_frame(computer)) {
@@ -878,6 +994,20 @@ static void run_headless_spike(GS2AppState *state) {
             }
         }
     }
+    // SNAP_SAVE: after BOTH boot paths, post run_one_frame mutation, pre trace-disarm.
+    // The assert/golden gate further below still runs, so a SNAP_SAVE run can be golden-blessed.
+    if (snap_save) {
+        FILE *sf = fopen(snap_save, "wb");
+        if (!sf) { printf("A2GSPU SNAP: could not open '%s' for save\n", snap_save); }
+        else if (!state->mmu_iigs) { printf("A2GSPU SNAP: no IIgs MMU (use -p 5)\n"); fclose(sf); }
+        else {
+            a2gspu_cpu_save(sf, computer->cpu);
+            state->mmu_iigs->A2GSPU_snapshot(sf);
+            fclose(sf);
+            printf("A2GSPU SNAP: saved machine state to '%s'\n", snap_save);
+        }
+    }
+
     g_bus_trace_enabled = false;  // disarm before any teardown writes
     g_slot_bus_enabled = false;
     g_mmu_state_trace_enabled = false;
@@ -888,11 +1018,11 @@ static void run_headless_spike(GS2AppState *state) {
         const uint8_t *e1 = m2 + 0x10000;          // Mega II bank $E1 (64 KB)
         FILE *f = fopen("spike_e1.bin", "wb");
         if (f) { fwrite(e1, 1, 0x10000, f); fclose(f); }
-        uint64_t hash = 1469598103934665603ULL;    // FNV-1a 64
+        uint64_t hash = HOUSE_FNV_BASIS;    // FNV-1a 64
         int nonzero = 0; uint8_t seen[256] = {0}; int ndist = 0;
         for (int a = 0x2000; a <= 0x9FFF; a++) {
             uint8_t b = e1[a];
-            hash = (hash ^ b) * 1099511628211ULL;
+            hash = (hash ^ b) * HOUSE_FNV_PRIME;
             if (b) nonzero++;
             if (!seen[b]) { seen[b] = 1; ndist++; }
         }
@@ -902,6 +1032,10 @@ static void run_headless_spike(GS2AppState *state) {
         printf("SPIKE E1: SCB[0..7]@$9D00 = %02X %02X %02X %02X %02X %02X %02X %02X\n",
                e1[0x9D00], e1[0x9D01], e1[0x9D02], e1[0x9D03],
                e1[0x9D04], e1[0x9D05], e1[0x9D06], e1[0x9D07]);
+        // Headless SHR/video-state summary (mode/palette/pixel histogram).
+        if (SDL_getenv("A2GSPU_VIDEOSUM")) iigs_video_summary(e1);
+        // Downsampled ASCII map of the screen (SEE a rectangle/layout headless).
+        if (SDL_getenv("A2GSPU_VIDEOMAP")) iigs_video_map(e1);
     } else {
         printf("SPIKE E1: mmu_iigs/megaii base is NULL -- FAILED\n");
     }
@@ -949,6 +1083,53 @@ static void run_headless_spike(GS2AppState *state) {
     const char *err = SDL_GetError();
     printf("SPIKE FRAMEBUF: save_screenshot('spike_frame.bmp') SDL_GetError='%s'\n",
            (err && *err) ? err : "(none)");
+
+    // ---- (3) optional headless memory-range hexdump + final CPU state ----
+    if (const char *dg = SDL_getenv("A2GSPU_DUMP")) {
+        uint8_t *mb = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+        iigs_mem_range_dump(computer->cpu, mb, dg);
+    }
+    if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(computer->cpu, "SPIKE-END");
+
+    // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
+    {
+        uint8_t *m2a = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+        if (m2a) {
+            const uint8_t *e1a = m2a + 0x10000;
+            int nz = 0; uint8_t sn[256] = {0}; int nd = 0;
+            uint64_t h = HOUSE_FNV_BASIS;   // house FNV basis
+            for (int a = 0x2000; a <= 0x9FFF; a++) {
+                uint8_t b = e1a[a]; h = (h ^ b) * HOUSE_FNV_PRIME;
+                if (b) nz++; if (!sn[b]) { sn[b] = 1; nd++; }
+            }
+            int gate_rc = 0; bool any_gate = false;
+            if (const char *gf = SDL_getenv("A2GSPU_GOLDEN")) {
+                any_gate = true;
+                FILE *gp = fopen(gf, "r");
+                if (gp) {
+                    unsigned long long g = 0;
+                    if (fscanf(gp, "%llx", &g) == 1) {
+                        int match = (g == h);
+                        printf("IIGS GOLDEN: %s (cur=%016llX want=%016llX)\n",
+                               match ? "MATCH" : "DIFF", (unsigned long long)h, g);
+                        if (!match) gate_rc = 1;   // the SHR golden now GATES the exit
+                    }
+                    fclose(gp);
+                } else if ((gp = fopen(gf, "w"))) {
+                    fprintf(gp, "%016llX\n", (unsigned long long)h); fclose(gp);
+                    printf("IIGS GOLDEN: blessed %s = %016llX\n", gf, (unsigned long long)h);
+                }
+            }
+            if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
+                any_gate = true;
+                gate_rc |= iigs_eval_asserts(as, e1a, nz, nd);
+            }
+            if (any_gate) {
+                printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
+                exit(gate_rc);
+            }
+        }
+    }
 
     printf("=== SPIKE COMPLETE ===\n");
 }

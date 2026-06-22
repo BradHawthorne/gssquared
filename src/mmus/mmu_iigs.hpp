@@ -77,6 +77,7 @@ class MMU_IIgs : public MMU {
             ram_banks = ram_size / BANK_SIZE;
             main_ram = new uint8_t[ram_banks * BANK_SIZE];
             rom_banks = rom_size / BANK_SIZE;
+            is_rom03 = (rom_size > 0x20000); // 256KB image = ROM3/ROM4 memory controller (enables TEXT2 shadowing)
             main_rom = rom;
             map_initialized = false;
             reset();
@@ -238,6 +239,11 @@ class MMU_IIgs : public MMU {
         uint8_t read_c0xx(uint16_t address);
         
         virtual uint8_t *get_rom_base() { return main_rom; };
+        // Base of ROM bank $FF (the last 64KB) — the language-card / $D000-$FFFF ROM
+        // region. Bank $FF lives at the TOP of the image: offset (rom_banks-1)*64KB =
+        // 0x10000 for a 128KB ROM01, 0x30000 for a 256KB ROM03/ROM04. Use this instead
+        // of a hardcoded 0x10000 so the LC-ROM read path is size-agnostic.
+        inline uint8_t *get_lc_rom_base() { return main_rom + (rom_banks - 1) * BANK_SIZE; }
         virtual uint8_t *get_memory_base() { return main_ram; };
         inline uint8_t *get_megaii_memory_base() { return megaii ? megaii->get_memory_base() : nullptr; }
         inline uint64_t get_cycle_count() { return clock ? clock->get_cycles() : 0; } // for the bus-trace oracle
@@ -256,5 +262,85 @@ class MMU_IIgs : public MMU {
         void *write_observer_context = nullptr;
         void set_write_observer(write_observer_func func, void *context) {
             write_observer = func; write_observer_context = context;
+        }
+
+        // ===== A2GSPU warm-boot snapshot =====
+        // Serializes all FPI state that affects the page table or SHR. Construction-fixed
+        // surface intentionally EXCLUDED: main_rom (caller-owned), clock (NClock, self-heals),
+        // megaii pointer (recursed, not copied), write_observer/_context (re-wired by the host
+        // after restore), the I/O/shadow handlers (re-installed by THIS run's init_map ctor).
+        void A2GSPU_snapshot(FILE *f) {
+            // sizes/identity first (load validates main_ram blob + computes bases)
+            uint32_t rb = ram_banks, rmb = rom_banks;
+            fwrite(&rb, 4, 1, f);
+            fwrite(&rmb, 4, 1, f);
+            uint8_t b_rom03 = is_rom03 ? 1 : 0;           fwrite(&b_rom03, 1, 1, f);
+            uint8_t b_mapinit = map_initialized ? 1 : 0;  fwrite(&b_mapinit, 1, 1, f);
+            // value regs / soft-switches (unions written as their full byte)
+            fwrite(&reg_slot, 1, 1, f);
+            fwrite(&reg_shadow, 1, 1, f);
+            fwrite(&reg_speed, 1, 1, f);
+            fwrite(&reg_state, 1, 1, f);          // union byte: g_intcxrom..g_altzp ride along
+            fwrite(&g_80store, 1, 1, f);
+            fwrite(&g_hires, 1, 1, f);
+            uint8_t b_text = g_text ? 1 : 0;   fwrite(&b_text, 1, 1, f);
+            uint8_t b_mixed = g_mixed ? 1 : 0; fwrite(&b_mixed, 1, 1, f);
+            fwrite(&reg_new_video, 1, 1, f);      // union byte: g_shr_enabled/g_bank_latch ride along
+            // current-map-state (m_*) trackers (1 byte each)
+            uint8_t mflags[7] = {
+                (uint8_t)m_zp, (uint8_t)m_text1_r, (uint8_t)m_text1_w,
+                (uint8_t)m_hires1_r, (uint8_t)m_hires1_w, (uint8_t)m_all_r, (uint8_t)m_all_w };
+            fwrite(mflags, 1, 7, f);
+            // language-card logic POD (4x u16, no pointers)
+            fwrite(&ll, sizeof(ll), 1, f);
+            // FPI RAM contents (8MB)
+            fwrite(main_ram, 1, (size_t)ram_banks * BANK_SIZE, f);
+            // Page table, relocatable. The ONLY non-null IIgs read_p/write_p point into
+            // main_ram (bases[0]) or main_rom banks 0xFE/0xFF (bases[2]). $E0/$E1 are
+            // handler pages (read_p==write_p==nullptr -> serialize as -1); their SHR bytes
+            // live in megaii RAM, saved wholesale by megaii->A2GSPU_snapshot below. bases[1]
+            // (megaii RAM) is therefore unused by the IIgs table but kept defensively.
+            uint8_t *bases[3] = { get_memory_base(), get_megaii_memory_base(), get_rom_base() };
+            size_t   sizes[3] = { (size_t)ram_banks * BANK_SIZE, (size_t)0x20000,
+                                  (size_t)rom_banks * BANK_SIZE };
+            A2GSPU_save_pages(f, bases, sizes, 3);
+            // recurse into the embedded Mega-II
+            megaii->A2GSPU_snapshot(f);
+        }
+
+        bool A2GSPU_restore(FILE *f) {
+            uint32_t rb = 0, rmb = 0;
+            fread(&rb, 4, 1, f);
+            fread(&rmb, 4, 1, f);
+            if (rb != ram_banks || rmb != rom_banks) return false; // geometry mismatch -> bail hard
+            uint8_t b_rom03 = 0, b_mapinit = 0;
+            fread(&b_rom03, 1, 1, f);   is_rom03 = (b_rom03 != 0);
+            fread(&b_mapinit, 1, 1, f); map_initialized = (b_mapinit != 0);
+            fread(&reg_slot, 1, 1, f);
+            fread(&reg_shadow, 1, 1, f);
+            fread(&reg_speed, 1, 1, f);
+            fread(&reg_state, 1, 1, f);          // do NOT call set_state_register (would re-derive
+                                                 // only ll.FF_READ_ENABLE/FF_BANK_1 and leave
+                                                 // FF_PRE_WRITE/_FF_WRITE_ENABLE stale)
+            fread(&g_80store, 1, 1, f);
+            fread(&g_hires, 1, 1, f);
+            uint8_t b_text = 0, b_mixed = 0;
+            fread(&b_text, 1, 1, f);  g_text = (b_text != 0);
+            fread(&b_mixed, 1, 1, f); g_mixed = (b_mixed != 0);
+            fread(&reg_new_video, 1, 1, f);
+            uint8_t mflags[7] = {0};
+            fread(mflags, 1, 7, f);
+            m_zp = mflags[0]; m_text1_r = mflags[1]; m_text1_w = mflags[2];
+            m_hires1_r = mflags[3]; m_hires1_w = mflags[4]; m_all_r = mflags[5]; m_all_w = mflags[6];
+            fread(&ll, sizeof(ll), 1, f);        // restore ll verbatim (captured consistent w/ reg_state)
+            // RAM into the EXISTING constructor-allocated buffer (do NOT realloc)
+            fread(main_ram, 1, (size_t)ram_banks * BANK_SIZE, f);
+            // Page table: bases captured FRESH from this run's live objects (ROM heap ptr differs!)
+            uint8_t *bases[3] = { get_memory_base(), get_megaii_memory_base(), get_rom_base() };
+            bool ok = A2GSPU_load_pages(f, bases, 3);
+            if (!ok) return false;               // page geometry mismatch -> FILE* unusable; do NOT
+                                                 // recurse into megaii (would read from a desynced cursor)
+            // recurse into the embedded Mega-II
+            return megaii->A2GSPU_restore(f);
         }
 };

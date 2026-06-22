@@ -36,3 +36,24 @@ cfg/*
 src/devices/es5503/es5503.hpp
 src/devices/es5503/mame5503.cpp
 src/devices/es5503/comparison_report.md
+
+# IIgs ROM 4 "Mark Twain" personality (apple2gs4): Apple ROM binaries are NOT
+# redistributed in this fork — fetch them per assets/roms/apple2gs4/roms.json
+# (Asimov / Apple II Documentation Project mirror). The roms.json manifest IS tracked.
+assets/roms/apple2gs4/main.rom
+assets/roms/apple2gs4/char.rom
+assets/roms/apple2gs3/main.rom
+assets/roms/apple2gs3/char.rom
+# Apple ROM/character binaries are never redistributed (fetch from Asimov per roms.json)
+roms/apple2gs/*.rom
+
+# headless-spike + build scratch (not source)
+spike_*
+build.log
+build-cfg.log
+run.log
+gs2-bram.bin
+# test disk images (not redistributed)
+*.po
+*.dsk
+*.woz

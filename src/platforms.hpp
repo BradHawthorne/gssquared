@@ -55,6 +55,6 @@ struct rom_data {
 extern  int num_platforms;
 platform_info* get_platform(int index);
 platform_info* find_platform_by_dir(const char* dir);
-rom_data* load_platform_roms(platform_info *platform);
+rom_data* load_platform_roms(platform_info *platform, const char *rom_dir_override = nullptr);
 void free_platform_roms(rom_data* roms); 
 void print_platform_info(platform_info *platform);

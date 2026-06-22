@@ -20,6 +20,7 @@
 #include <cstdio>
 
 #include "cpu.hpp"
+#include "iigs_toolbox.hpp"
 
 #include "opcodes.hpp"
 
@@ -2209,6 +2210,12 @@ int execute_next(cpu_state *cpu) override {
     } */
 
     //opcode_t opcode = read_byte_from_pc(cpu);
+    // Headless IIgs Tool Locator / GS-OS call trace + breakpoint: fires at the
+    // instruction about to execute (cpu->full_pc is the landing address), before
+    // fetch. The breakpoint needs this per-instruction hook even with no trace.
+    if constexpr (CPUTraits::has_65816_ops) {
+        if (g_iigs_tbtrace_enabled || g_iigs_break_enabled) iigs_tb_on_landing(cpu);
+    }
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;
 
@@ -3700,7 +3707,14 @@ int execute_next(cpu_state *cpu) override {
 
         /* BRK --------------------------------- */
         case OP_BRK_IMP: /* BRK */
-            {     
+            {
+                if constexpr (CPUTraits::has_65816_ops) {
+                    if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(cpu, "BRK");
+                    // Stop-on-fault: a BRK is almost always a crash/SysFail under
+                    // GS/OS. Halt so the spike exits via run_one_frame's guard
+                    // instead of burning the remaining frames.
+                    if (g_iigs_stop_on_fault) cpu->halt = HLT_USER;
+                }
                 if constexpr ((CPUTraits::has_65816_ops) && (!CPUTraits::e_mode)) {
                     brk_cop(cpu, N_BRK_VECTOR);
                 } else {

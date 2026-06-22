@@ -165,17 +165,22 @@ int num_platforms = sizeof(platforms) / sizeof(platforms[0]);
     return nullptr;
 }
 
-rom_data* load_platform_roms(platform_info *platform) {
+rom_data* load_platform_roms(platform_info *platform, const char *rom_dir_override) {
     if (!platform) return nullptr;
 
-    fprintf(stderr, "Platform: %s   folder name: %s\n", platform->name, platform->rom_dir);
+    // A SystemConfig may override the ROM folder (e.g. a IIgs "personality" that
+    // shares PLATFORM_APPLE_IIGS but loads a ROM03/ROM04 image). Fall back to the
+    // platform's default rom_dir when no override is given.
+    const char *rom_dir = (rom_dir_override && rom_dir_override[0]) ? rom_dir_override : platform->rom_dir;
+
+    fprintf(stderr, "Platform: %s   folder name: %s\n", platform->name, rom_dir);
 
     rom_data* roms = new rom_data();
     char filepath[256];
     struct stat st;
 
     // Load main ROM
-    snprintf(filepath, sizeof(filepath), "roms/%s/main.rom", platform->rom_dir);
+    snprintf(filepath, sizeof(filepath), "roms/%s/main.rom", rom_dir);
     roms->main_rom_file = new ResourceFile(filepath, READ_ONLY);
     if (!roms->main_rom_file->exists()) {
         char *debugstr = new char[512];
@@ -187,7 +192,7 @@ rom_data* load_platform_roms(platform_info *platform) {
     roms->main_rom_data = roms->main_rom_file->load();
 
     // Load character ROM
-    snprintf(filepath, sizeof(filepath), "roms/%s/char.rom", platform->rom_dir);
+    snprintf(filepath, sizeof(filepath), "roms/%s/char.rom", rom_dir);
     roms->char_rom_file = new ResourceFile(filepath, READ_ONLY);
     if (!roms->char_rom_file->exists()) {
         char *debugstr = new char[512];

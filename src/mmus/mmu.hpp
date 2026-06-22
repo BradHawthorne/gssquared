@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include <assert.h>
 
 #include "util/DebugFormatter.hpp"
@@ -302,6 +303,60 @@ class MMU {
 
         void set_page_table_entry(page_t page, page_table_entry_t *pte) {
             page_table[page] = *pte;
+        }
+
+        // ---- A2GSPU warm-boot snapshot: relocatable page-table (de)serialize ----
+        // Serialize read_p/write_p of `n` entries as (region_id, offset) against the
+        // caller's bases[]/sizes[]. rg=-1 nullptr, rg=-2 non-null/not-in-any-base (left
+        // on load), rg>=0 -> bases[rg]+off. Handlers/descriptors are construction-fixed
+        // and NOT saved (re-installed by this run's init_map ctor). These live in the base
+        // class because page_table/num_pages are protected and reused by both MMUs.
+        void A2GSPU_save_pages_arr(FILE *f, page_table_entry_t *pt, int n,
+                                   uint8_t *const *bases, const size_t *sizes, int nb) {
+            for (int i = 0; i < n; i++) {
+                for (int w = 0; w < 2; w++) {
+                    uint8_t *p = w ? pt[i].write_p : pt[i].read_p;
+                    int8_t rg = -1; uint32_t off = 0;       // -1 = nullptr
+                    if (p) {
+                        rg = -2;                            // -2 = non-null/unknown
+                        for (int b = 0; b < nb; b++) {
+                            if (p >= bases[b] && p < bases[b] + sizes[b]) {
+                                rg = (int8_t)b; off = (uint32_t)(p - bases[b]); break;
+                            }
+                        }
+                    }
+                    fwrite(&rg, 1, 1, f); fwrite(&off, 4, 1, f);
+                }
+            }
+        }
+        void A2GSPU_load_pages_arr(FILE *f, page_table_entry_t *pt, int n,
+                                   uint8_t *const *bases, int nb) {
+            for (int i = 0; i < n; i++) {
+                for (int w = 0; w < 2; w++) {
+                    int8_t rg; uint32_t off;
+                    fread(&rg, 1, 1, f); fread(&off, 4, 1, f);
+                    uint8_t **d = w ? &pt[i].write_p : &pt[i].read_p;
+                    if (rg == -1) *d = nullptr;
+                    else if (rg >= 0 && rg < nb) *d = bases[rg] + off;
+                    // rg == -2: leave the construction-time pointer in place
+                }
+            }
+        }
+        // Main page_table convenience wrappers (prefix the entry count for validation).
+        void A2GSPU_save_pages(FILE *f, uint8_t *const *bases, const size_t *sizes, int nb) {
+            uint32_t np = (uint32_t)num_pages; fwrite(&np, sizeof(np), 1, f);
+            A2GSPU_save_pages_arr(f, page_table, num_pages, bases, sizes, nb);
+        }
+        // Returns false on a page-geometry mismatch. On mismatch the per-entry bytes ARE
+        // consumed (fseek past them) so the FILE* stays aligned for the caller's bail logic.
+        bool A2GSPU_load_pages(FILE *f, uint8_t *const *bases, int nb) {
+            uint32_t np = 0; fread(&np, sizeof(np), 1, f);
+            if (np != (uint32_t)num_pages) {           // page geometry mismatch -> skip the block, bail
+                fseek(f, (long)np * 2 * 5, SEEK_CUR);  // each entry = 1-byte rg + 4-byte off, x2 (read/write)
+                return false;
+            }
+            A2GSPU_load_pages_arr(f, page_table, num_pages, bases, nb);
+            return true;
         }
 
 };

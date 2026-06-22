@@ -35,6 +35,11 @@ struct SystemConfig_t {
     video_scanner_t scanner_type;
     const char *description;
     device_id slot_devices[NUM_SLOTS];
+    // Optional ROM-folder override (roms/<rom_dir>/). When null, the platform's
+    // default rom_dir is used. Lets several IIgs ROM "personalities" (ROM01 /
+    // ROM03 / ROM04) share one PLATFORM_APPLE_IIGS — and thus byte-identical IIgs
+    // behavior — while each loads a different ROM image.
+    const char *rom_dir = nullptr;
 };
 
 extern SystemConfig_t BuiltinSystemConfigs[];

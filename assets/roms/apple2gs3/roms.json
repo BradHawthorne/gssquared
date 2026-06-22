@@ -1,0 +1,25 @@
+{
+    "name": "Apple IIgs (ROM 3)",
+    "comment": "Apple IIgs ROM 3 (256KB / banks $FC-$FF) — the production enhanced ROM most IIgs machines shipped with. This image is the 'Tenspeed' late-1988/early-1989 ROM 3 variant (a full 256KB contiguous dump). Apple ROM images are NOT redistributed in this fork — fetch from the Asimov / Apple II Documentation Project mirror, then drop them here (main.rom + char.rom). NOTE: the standard ROM 3 also ships as two 128KB chip dumps (FC-FD 341-0728/0737 + FF-FE 341-0748/0749); those can be assembled into a 256KB FC/FD/FE/FF image instead. Selected in gssquared as 'Apple IIgs (ROM 3)' (rom_dir override = apple2gs3, platform stays PLATFORM_APPLE_IIGS).",
+    "roms": [
+        {
+            "type": "main",
+            "output": "main.rom",
+            "size": 262144,
+            "parts": [
+                {
+                    "url": "https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Computers/Apple%20II/Apple%20IIGS/ROM%20Images/Apple%20IIGS%20ROM%203%20Tenspeed%20Late%201988%20Early%201989.bin",
+                    "filename": "Apple IIGS ROM 3 Tenspeed Late 1988 Early 1989.bin",
+                    "size": 262144
+                }
+            ]
+        },
+        {
+            "type": "character",
+            "output": "char.rom",
+            "size": 16384,
+            "comment": "IIgs Mega II video/character ROM — identical across IIgs ROM revisions. Same file as roms/apple2gs/char.rom.",
+            "parts": []
+        }
+    ]
+}

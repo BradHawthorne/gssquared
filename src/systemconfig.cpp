@@ -344,6 +344,44 @@ SystemConfig_t BuiltinSystemConfigs[] = {
             DEVICE_ID_PD_BLOCK3,   // slot 7 — boot
         }
     },
+    {
+        "Apple IIgs (ROM 4 Mark Twain)",
+        PLATFORM_APPLE_IIGS,
+        true,
+        CLOCK_SET_US,
+        Scanner_AppleIIgs,
+        "Apple IIgs ROM 4 Mark Twain prototype (1992 dump) — 256KB, GS/OS-in-ROM",
+        {
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_SECOND_SIGHT,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_PD_BLOCK3,
+        },
+        "apple2gs4",   // ROM-folder override -> roms/apple2gs4/ (Mark Twain 256KB)
+    },
+    {
+        "Apple IIgs (ROM 3)",
+        PLATFORM_APPLE_IIGS,
+        true,
+        CLOCK_SET_US,
+        Scanner_AppleIIgs,
+        "Apple IIgs ROM 3 (256KB) — Tenspeed late-1988 variant",
+        {
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_SECOND_SIGHT,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_PD_BLOCK3,
+        },
+        "apple2gs3",   // ROM-folder override -> roms/apple2gs3/ (ROM3 Tenspeed 256KB)
+    },
 /*     {
         "Apple IIc",
         PLATFORM_APPLE_IIC,
