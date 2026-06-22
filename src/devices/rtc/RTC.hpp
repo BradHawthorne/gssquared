@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <ctime>
+#include <cstdlib>
 #include <cassert>
 
 #include "util/DebugFormatter.hpp"
@@ -26,6 +27,28 @@
 #define RTC_WR_BRAM            0b00111000
 
 #define UNIX_EPOCH_DELTA       2'082'844'800
+
+// A2GSPU_FAKETIME — harness-only determinism knob (observe-don't-disturb at the
+// HARNESS level, NOT a hook the emulated OS can see). When set to a decimal unix
+// epoch-seconds value, the RTC reports that instant FROZEN: every seconds-register
+// read returns identical bytes across runs, exactly as a real RTC stopped at that
+// time would. It seeds the differential accumulator AND bypasses time()/localtime()
+// /timezone entirely (freezing time() alone is insufficient — tm_gmtoff / _timezone
+// still vary by host and would defeat determinism). The emulated OS must run
+// IDENTICALLY against a real RTC; a frozen value is one a real clock could show.
+inline bool     g_rtc_faketime_active = false;
+inline uint32_t g_rtc_faketime_1904   = 0;
+inline bool     g_rtc_faketime_probed = false;
+inline void rtc_faketime_probe_env() {
+    if (g_rtc_faketime_probed) return;
+    g_rtc_faketime_probed = true;
+    const char *e = std::getenv("A2GSPU_FAKETIME");
+    if (e && *e) {
+        long long uxt = std::strtoll(e, nullptr, 10);
+        g_rtc_faketime_1904   = (uint32_t)(uxt + (long long)UNIX_EPOCH_DELTA);
+        g_rtc_faketime_active = true;
+    }
+}
 
 struct RTC_Control_Reg {
     bool clock_enable_assert : 1;
@@ -182,6 +205,16 @@ public:
     };
 
     void update_seconds() {
+        // A2GSPU_FAKETIME: frozen deterministic clock (see the header note). Seeds
+        // the accumulator AND skips time()/localtime()/timezone, so the seconds
+        // registers read identically every run — as a real RTC stopped at the
+        // seeded instant would. Orchard MUST NOT depend on this knob.
+        rtc_faketime_probe_env();
+        if (g_rtc_faketime_active) {
+            seconds      = g_rtc_faketime_1904;
+            last_seconds = g_rtc_faketime_1904;
+            return;
+        }
         // Get current UTC time
         time_t now;
         time(&now);

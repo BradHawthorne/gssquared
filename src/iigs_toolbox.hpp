@@ -28,6 +28,7 @@ inline uint32_t g_iigs_break_addr  = 0;       // 24-bit full-PC breakpoint
 inline int  g_iigs_tbtrace_bank    = -1;      // only trace calls from this bank (-1 = all)
 inline uint32_t g_iigs_trace_from  = 0;       // start tracing when PC first hits this (0 = always)
 inline bool g_iigs_trace_armed     = false;   // trace_from has fired
+inline int  g_iigs_brk_count       = 0;       // BRK/crash count (exit-taxonomy canary)
 
 inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why);  // fwd
 

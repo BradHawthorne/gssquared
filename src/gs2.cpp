@@ -1122,8 +1122,17 @@ static void run_headless_spike(GS2AppState *state) {
             }
             if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
                 any_gate = true;
-                gate_rc |= iigs_eval_asserts(as, e1a, nz, nd);
+                gate_rc |= iigs_eval_asserts(as, computer->cpu, e1a, nz, nd);
             }
+            // machine-readable status line for the corpus harness (exit code stays
+            // gate-driven for harness compat; the status NAME is the richer category)
+            long scb = (e1a[0x9D00] & 0x80) ? 640 : 320;
+            const char *st = (any_gate && gate_rc) ? "GATE_FAIL"
+                           : g_iigs_brk_count       ? "CRASH_BRK"
+                           : g_iigs_last_gsos_err    ? "GSOS_ERROR" : "OK";
+            iigs_emit_status(st, any_gate ? gate_rc : 0,
+                             any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
+                             g_iigs_last_gsos_err, g_iigs_brk_count, scb, h);
             if (any_gate) {
                 printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
                 exit(gate_rc);

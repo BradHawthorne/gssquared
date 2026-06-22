@@ -3709,6 +3709,7 @@ int execute_next(cpu_state *cpu) override {
         case OP_BRK_IMP: /* BRK */
             {
                 if constexpr (CPUTraits::has_65816_ops) {
+                    g_iigs_brk_count++;   // exit-taxonomy: count crashes (observation only)
                     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(cpu, "BRK");
                     // Stop-on-fault: a BRK is almost always a crash/SysFail under
                     // GS/OS. Halt so the spike exits via run_one_frame's guard

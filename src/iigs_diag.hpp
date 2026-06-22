@@ -55,13 +55,21 @@ inline void iigs_mem_range_dump(cpu_state *cpu, const uint8_t *megaii_base,
 //   idxN  (N=0..15: mode-correct pixel count of palette index N;
 //          e.g. idx6==28800 = a 240x120 colour-6 PaintRect rectangle)
 // Grammar: "name OP value [; name OP value ...]", OP in == != <= >= < >.
-inline long iigs_assert_value(const char *name, const uint8_t *e1,
+inline long iigs_assert_value(const char *name, cpu_state *cpu, const uint8_t *e1,
                               int nonzero, int distinct) {
     auto tf = [](uint16_t tw, int which) -> long {
         auto it = g_iigs_last_result.find(tw);
         if (it == g_iigs_last_result.end()) return -1;
         return which == 0 ? (it->second.first ? 1 : 0) : it->second.second;
     };
+    // peek:HHHHHH -> observation-free byte at the 24-bit address (bank<<16|addr),
+    // e.g. peek:E11E00 (a command-ring byte) or peek:0003FC (a bank-0 work-area
+    // pointer byte). Via MMU::probe_peek (no soft-switch/slot/clock side effect) —
+    // the introspection floor's structural-assert primitive.
+    if (!strncmp(name, "peek:", 5)) {
+        uint32_t a = (uint32_t)strtoul(name + 5, nullptr, 16) & 0xFFFFFF;
+        return (cpu && cpu->mmu) ? cpu->mmu->probe_peek(a) : -1;
+    }
     if (!strcmp(name, "scb_mode")) return (e1[0x9D00] & 0x80) ? 640 : 320;
     if (!strcmp(name, "qd_carry")) return tf(0x0204, 0);
     if (!strcmp(name, "qd_err"))   return tf(0x0204, 1);
@@ -81,7 +89,7 @@ inline long iigs_assert_value(const char *name, const uint8_t *e1,
     return -999999;
 }
 
-inline int iigs_eval_asserts(const char *spec, const uint8_t *e1,
+inline int iigs_eval_asserts(const char *spec, cpu_state *cpu, const uint8_t *e1,
                              int nonzero, int distinct) {
     int allpass = 1, nchk = 0;
     char buf[512];
@@ -100,7 +108,7 @@ inline int iigs_eval_asserts(const char *spec, const uint8_t *e1,
         char ops[3] = {0}; memcpy(ops, op, oplen);
         char *vs = op + oplen; while (*vs == ' ') vs++;
         long val = (vs[0] == '$') ? strtol(vs+1, nullptr, 16) : strtol(vs, nullptr, 0);
-        long actual = iigs_assert_value(name, e1, nonzero, distinct);
+        long actual = iigs_assert_value(name, cpu, e1, nonzero, distinct);
         int pass = 0;
         if (!strcmp(ops,"==")) pass = (actual==val);
         else if (!strcmp(ops,"!=")) pass = (actual!=val);
@@ -114,4 +122,14 @@ inline int iigs_eval_asserts(const char *spec, const uint8_t *e1,
     }
     printf("IIGS ASSERT: %d checks -> %s\n", nchk, allpass ? "ALL PASS" : "FAILED");
     return allpass ? 0 : 1;
+}
+
+// One machine-readable status line for the corpus harness (#79) to parse. The exit
+// CODE stays gate-driven (0/1) for harness compat; this adds the richer category
+// (OK / GATE_FAIL / CRASH_BRK / GSOS_ERROR / SNAP_FAIL / HALTED_EARLY).
+inline void iigs_emit_status(const char *status, int rc, const char *gate,
+                             long gsos_err, int brk, long scb, uint64_t hash) {
+    printf("GSDIAG: status=%s rc=%d gate=%s gsos_err=$%04lX brk=%d scb=%ld hash=%016llX\n",
+           status, rc, gate, (unsigned long)(gsos_err & 0xFFFF), brk, scb,
+           (unsigned long long)hash);
 }

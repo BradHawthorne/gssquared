@@ -246,6 +246,18 @@ class MMU_IIgs : public MMU {
         inline uint8_t *get_lc_rom_base() { return main_rom + (rom_banks - 1) * BANK_SIZE; }
         virtual uint8_t *get_memory_base() { return main_ram; };
         inline uint8_t *get_megaii_memory_base() { return megaii ? megaii->get_memory_base() : nullptr; }
+        // Observation-free 24-bit peek for the introspection floor: NO soft-switch
+        // dispatch, NO slot-bus emit, NO clock tick — an external probe, never a hook
+        // the emulated OS can see. $E0/$E1 read the Mega II image directly (SHR window
+        // + toolbox work areas); all else via MMU::read_raw (never the IO handler path).
+        uint8_t probe_peek(uint32_t addr24) override {
+            uint32_t bank = (addr24 >> 16) & 0xFF;
+            if ((bank | 1) == 0xE1) {
+                uint8_t *mb = get_megaii_memory_base();
+                if (mb) return mb[((bank & 1) << 16) | (addr24 & 0xFFFF)];
+            }
+            return read_raw(addr24);
+        }
         inline uint64_t get_cycle_count() { return clock ? clock->get_cycles() : 0; } // for the bus-trace oracle
         virtual void init_map();
         virtual void reset() override;
