@@ -1,120 +1,84 @@
 # gssquared — `a2gspu` development fork
 
-A working fork of **[gssquared](https://github.com/jawaidbazyar2/gssquared)** — Jawaid Bazyar's
-cross-platform Apple II / Apple IIgs emulator. The upstream emulator is excellent and complete;
-this fork keeps all of that and adds a layer of **headless development + automated-test tooling**
-used to build and validate Apple IIgs / GS/OS software with an external cross-development toolchain.
+A fork of **[gssquared](https://github.com/jawaidbazyar2/gssquared)** (Jawaid Bazyar's Apple II / IIgs
+emulator) carrying one thing upstream doesn't: a **headless, machine-drivable development + test layer**
+for building and validating Apple IIgs / GS/OS software with an external cross-toolchain. Everything
+lives on one branch, **`a2gspu`** (the default).
 
-Everything here lives on a single branch, **`a2gspu`** (also this fork's default branch).
+> **This fork is one-way.** We pull upstream *in*, never push *out* — no PRs, no path to pollute
+> upstream `main`. It's just a public branch; upstream is welcome to cherry-pick anything useful on
+> their own terms. For the canonical emulator, use
+> **[upstream](https://github.com/jawaidbazyar2/gssquared)**.
 
----
-
-## Relationship to upstream
-
-This fork is deliberately one-way and self-contained:
-
-- **It never pushes to, or opens pull requests against, upstream.** We pull upstream changes *in*;
-  we never push *out*. There is no path by which this fork can pollute upstream `main` — that is the
-  whole reason it is pared down to a single branch.
-- **Upstream is welcome to cherry-pick.** This is just a public branch. If any fix or feature here is
-  useful to upstream gssquared, the maintainer is welcome to take it on their own terms — no
-  expectation and no obligation, in either direction.
-- **For the canonical emulator, use [upstream](https://github.com/jawaidbazyar2/gssquared).** This fork
-  optimizes for one specific automated-development workflow rather than general interactive use.
+Everything below is **what this fork adds.** It is all additive and env-gated — with the features off,
+the emulator is stock.
 
 ---
 
-## How this fork deviates from upstream
+## The development layer — what makes this fork different
 
-The core emulator is upstream's. Our additions are **additive and, wherever possible,
-environment-variable–gated**, so with the extra features off the emulator behaves as stock. They exist
-to turn gssquared from an interactive emulator into a **machine-drivable CI / development rig** for
-Apple IIgs software.
+**Headless GS/OS bring-up diagnostics.** An env-gated, stdout-only suite (`A2GSPU_*`): toolbox +
+GS/OS-dispatch + error-code traces, a per-scanline SCB video-mode / palette / pixel-index summary and
+an ASCII screen map, memory-range hexdump, BRK CPU-state dump, headless breakpoints, and symbol
+resolution. Debug a GS/OS app with no window open.
 
-### Headless GS/OS bring-up diagnostics
-An env-gated, stdout-only diagnostic suite (the `A2GSPU_*` family) that makes headless GS/OS app
-development debuggable without a window:
-- Toolbox-call trace, GS/OS dispatch trace, and a GS/OS error-code hook
-- Per-scanline SCB video-mode + palette + pixel-index summary, plus an ASCII screen map
-- Memory-range hexdump, BRK CPU-state dump, headless breakpoints, and symbol resolution
+**A closed-loop assertion gate.** `A2GSPU_ASSERT="scb_mode==320;qd_carry==0;idx6==28800"` is evaluated
+against the final machine + video state at the end of a headless run and sets the process **exit code
+(0 / 1)**. With `A2GSPU_SEED` (pinned determinism) and `A2GSPU_GOLDEN` (SHR-render compare), the
+emulator becomes a deterministic pass/fail oracle a build system drives unattended.
 
-### Closed-loop assertion harness
-A declarative **assertion gate** — e.g. `A2GSPU_ASSERT="scb_mode==320;qd_carry==0;idx6==28800"` —
-evaluated against the final machine + video state at the end of a headless run, which sets the
-process **exit code (0 / 1)**. With a pinned RNG seed (`A2GSPU_SEED`) and an SHR-render golden compare
-(`A2GSPU_GOLDEN`), gssquared becomes a deterministic pass/fail oracle that an external build system
-can drive unattended.
+**Deterministic golden + behavioral-differential testing.** SHR-render goldens that catch any
+boot/render drift, plus a differential model that validates toolchain-produced binaries against real
+GS/OS behavior on the actual ROM.
 
-### Deterministic golden / differential testing
-SHR-render goldens plus a behavioral-differential model that verify emulator changes do not drift the
-boot/render baseline, and that validate toolchain-produced binaries against real GS/OS behavior on the
-actual ROM.
+**Warm-boot snapshot.** Save/restore the post-boot machine state for a fast edit→run loop that skips
+the cold boot.
 
-### Other additions
-- A **warm-boot snapshot** (save/restore the post-boot machine state) for a fast edit→run loop that
-  skips the cold boot.
-- Expanded, size-agnostic Apple IIgs ROM personalities (ROM 01 / 03 / 04).
-- An experimental coprocessor/peripheral device model — the `a2gspu` device the fork is named after —
-  used for instrumentation and protocol experiments.
+**Expanded ROM personalities.** Size-agnostic Apple IIgs ROM 01 / 03 / 04.
+
+**The `a2gspu` device.** An experimental coprocessor/peripheral device model — the fork's namesake —
+used for instrumentation and protocol experiments.
 
 ---
 
 ## Toolchain integration
 
-This fork is the **emulator half of a closed development loop** with an external Apple IIgs
-cross-development toolchain (assembler, linker, C compiler, resource compiler, and disk-image tools).
-One iteration looks like:
+This fork is the **emulator half of a closed loop** with an external Apple IIgs cross-toolchain
+(assembler, linker, C compiler, resource compiler, disk-image tools):
 
 ```
-edit .s / .c
-  → assemble + link             (the toolchain)
-  → mint a bootable disk image  (the toolchain)
-  → boot headless in this fork  (-n)
-  → A2GSPU_ASSERT gate          → exit 0 / 1
+edit .s/.c → assemble + link → mint a bootable disk → boot headless (-n) → A2GSPU_ASSERT → exit 0/1
 ```
 
-The toolchain produces IIgs binaries; this fork **runs and verifies** them against real GS/OS and
-reports precise diagnostics (toolbox returns, render state, error codes) back to the build system — so
-a toolchain bug surfaces immediately as a failed assertion instead of a silent wrong-pixel or a
-corrupted object file. The emulator is, in effect, the toolchain's regression oracle.
+The toolchain emits IIgs binaries; this fork **runs and verifies** them against real GS/OS and reports
+precise diagnostics (toolbox returns, render state, error codes) back to the build system — so a
+toolchain bug shows up immediately as a failed assertion instead of a silent wrong-pixel or a corrupt
+object file. The emulator is the toolchain's regression oracle.
 
-> **Automation is headless-only.** The standalone CPU/MMU test programs under `apps/` open a GUI dialog
-> when their (external) test ROMs are absent, so they are **not** used in automated runs. All automation
-> drives the main emulator headless (`-n`) through the harness; CPU/MMU behavior is checked with small
-> headless micro-tests instead.
+> Automation is **headless-only**: the `apps/` CPU/MMU test programs pop a GUI dialog when their
+> external test ROMs are absent, so they are never used in automation — the loop drives the main
+> emulator headless (`-n`), and CPU/MMU behavior is checked with small headless micro-tests instead.
 
 ---
 
 ## Developed with Claude Code
 
-This fork is developed with **[Claude Code](https://claude.com/claude-code)** (Anthropic's agentic CLI).
-The closed loop above is wired so the agent and its **hooks** can, on every change:
-
-1. edit → `cmake --build` → boot headless → read the `A2GSPU_ASSERT` / golden verdict, fully
-   unattended; and
-2. gate the change on the SHR / boot golden, so the differential oracle the rest of the work relies on
-   cannot silently drift.
-
-That is why the diagnostics are stdout-only and validation collapses to a single exit code: the entire
-develop → build → test loop is designed to be driven by an automated agent, not a human at a window.
-Hooks enforce the headless-only and golden-gate rules so an automated run cannot wedge on a GUI prompt
-or land a baseline-moving change unnoticed.
+The loop is built to be driven by **[Claude Code](https://claude.com/claude-code)** (Anthropic's
+agentic CLI) and its **hooks**. Every change runs edit → `cmake --build` → headless boot → read the
+`A2GSPU_ASSERT` / golden verdict, fully unattended, and is gated on the SHR / boot golden so the oracle
+the rest of the work relies on can't silently drift. That is why the diagnostics are stdout-only and
+validation collapses to a single exit code — and why hooks enforce the headless-only and golden-gate
+rules, so an automated run can't wedge on a GUI prompt or land a baseline-moving change unnoticed.
 
 ---
 
-## Building
+## Build & credits
 
-For the base build, prerequisites, and packaged binaries, see
+Base build, prerequisites, and packaged binaries: see
 **[upstream's README](https://github.com/jawaidbazyar2/gssquared)** and the
-[User Documentation](Docs/index.md). Our additions are header-mostly and env-gated: a standard
-`cmake --build build` produces the emulator, and the `A2GSPU_*` environment variables turn on the
-development features at runtime — nothing changes for ordinary interactive use.
+[User Documentation](Docs/index.md). Our additions are header-mostly and env-gated — `cmake --build build`
+produces the emulator, unchanged for ordinary interactive use.
 
----
-
-## License & credits
-
-The Apple II / IIgs emulator core, models, and UI are **Jawaid Bazyar's** work — see
-[upstream](https://github.com/jawaidbazyar2/gssquared). This fork inherits upstream's license, and our
-additions are offered under the same terms. Sincere thanks to the upstream project for a clean,
-hackable IIgs emulator to build on.
+The emulator core, models, and UI are **Jawaid Bazyar's** work. This fork inherits upstream's license;
+our additions are offered under the same terms. Thanks to the upstream project for a clean, hackable
+IIgs emulator to build on.
