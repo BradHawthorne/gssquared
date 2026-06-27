@@ -39,8 +39,8 @@ enum {
     // bit 7 reserved for a future PHI0-phase / DMA field
 };
 
-// The card's slot in a real IIgs (slot 3 on ROM 0/1, where M2B0 is wired — see TN#68 /
-// the A2Fusion jumper). Drives the /DEVSEL//IOSEL//IOSTRB decode.
+// Slot 3 on ROM 0/1 — the IIgs slot wired for the Mega-II video bus (M2B0, per TN#68),
+// used for the slot-visible bus tap. Drives the /DEVSEL//IOSEL//IOSTRB decode.
 static constexpr int SLOT_BUS_SLOT = 3;
 
 inline bool                          g_slot_bus_enabled = false;
