@@ -74,9 +74,15 @@ uint8_t memexp_read_C0x2(void *context, uint32_t addr) {
 uint8_t memexp_read_C0x3(void *context, uint32_t addr) {
     memexp_data * memexp_d = (memexp_data *)context;
 
-    uint8_t data = memexp_d->data[memexp_d->addr];
+    // Mask the 24-bit guest pointer to the card's data buffer size. A guest can set
+    // addr_high to any 8-bit value (read_C0x2 only advertises 1MB via the |0xF0 OR,
+    // but write_C0x2 stores it verbatim), so addr can reach 0xFFFFFF and walk far
+    // past the 1MB allocation. Mask makes the index always in-bounds (the real card
+    // wraps within its installed RAM). MEMEXP_SIZE is a power of two so &(SIZE-1) wraps.
+    uint32_t idx = memexp_d->addr & (MEMEXP_SIZE - 1);
+    uint8_t data = memexp_d->data[idx];
     if (DEBUG(DEBUG_MEMEXP)) {
-        printf("memexp_read_C0x3 %x => %x\n", memexp_d->addr, data);
+        printf("memexp_read_C0x3 %x => %x\n", idx, data);
     }
     memexp_d->addr++;
     return data;
@@ -84,9 +90,10 @@ uint8_t memexp_read_C0x3(void *context, uint32_t addr) {
 
 void memexp_write_C0x3(void *context, uint32_t addr, uint8_t data) {
     memexp_data * memexp_d = (memexp_data *)context;
-    memexp_d->data[memexp_d->addr] = data;
+    uint32_t idx = memexp_d->addr & (MEMEXP_SIZE - 1);   // see read_C0x3: keep guest index in-bounds
+    memexp_d->data[idx] = data;
     if (DEBUG(DEBUG_MEMEXP)) {
-        printf("memexp_write_C0x3 %x => %x\n", data, memexp_d->addr);
+        printf("memexp_write_C0x3 %x => %x\n", data, idx);
     }
     memexp_d->addr++;
 }

@@ -18,6 +18,7 @@
 #include <utility>
 #include "cpu.hpp"
 #include "iigs_symbols.hpp"
+#include "debugger/trace_opcodes.hpp"
 
 inline bool g_iigs_tbtrace_enabled = false;   // toolbox call/return trace
 inline bool g_iigs_errhook_enabled = false;   // also trace GS/OS dispatch returns
@@ -29,8 +30,122 @@ inline int  g_iigs_tbtrace_bank    = -1;      // only trace calls from this bank
 inline uint32_t g_iigs_trace_from  = 0;       // start tracing when PC first hits this (0 = always)
 inline bool g_iigs_trace_armed     = false;   // trace_from has fired
 inline int  g_iigs_brk_count       = 0;       // BRK/crash count (exit-taxonomy canary)
+inline bool g_brkmem_on            = false;   // A2GSPU_BRKMEM: crash-path mem/PC ring dump
+inline uint32_t g_pchist[64]       = {0};     // ring of last bank-2 PCs
+inline int  g_pchist_i             = 0;
+
+// ---- A2GSPU_ITRACE: additive, env-gated, per-instruction execution trace ----
+// A standalone full-instruction trace (distinct from the toolbox-scoped trace
+// above): logs PC(bank:addr), opcode byte, decoded mnemonic+operand, and the
+// full register file, for a bounded window, so a far-RTL-into-garbage crash can
+// be pinned to the exact faulting routine. Two arm modes (OR'd):
+//   A2GSPU_ITRACE_FROM=<hexPC> : arm when full_pc first equals this 24-bit PC.
+//   A2GSPU_ITRACE_FRAME=<N>    : arm at the start of headless frame N.
+// A2GSPU_ITRACE_N=<count> caps the number of logged instructions (default 256).
+// OFF by default (g_iigs_itrace_enabled gates the per-instruction call site to a
+// single cheap branch when off; mirrors the BRKDUMP gating). Logs to stderr so
+// it does not corrupt the SHR/golden stdout stream the gates parse.
+inline bool     g_iigs_itrace_enabled = false; // master gate (any arm mode set)
+inline uint32_t g_iigs_itrace_from    = 0;     // PC arm address (0 = no PC arm)
+inline bool     g_iigs_itrace_use_pc  = false; // FROM was supplied
+inline int      g_iigs_itrace_frame   = -1;    // frame arm (-1 = no frame arm)
+inline bool     g_iigs_itrace_armed   = false; // window is open
+inline int      g_iigs_itrace_n       = 256;   // max instructions to log
+inline int      g_iigs_itrace_logged  = 0;     // logged so far
+inline int      g_iigs_cur_frame      = 0;     // updated by the headless spike loop
 
 inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why);  // fwd
+
+// Per-instruction trace step. Called at the landing PC (cpu->full_pc), BEFORE
+// fetch, identically to iigs_tb_on_landing. Reads the 3 operand bytes straight
+// off the MMU so the decode reflects the live image (catches a corrupted byte).
+// The operand width of IMM/REP/SEP-affected ops is approximated from the disasm
+// table's fixed size (this is a crash post-mortem, not a cycle model).
+inline void iigs_itrace_step(cpu_state *cpu) {
+    // Arm on PC match (one-shot) — independent of the frame arm.
+    if (!g_iigs_itrace_armed && g_iigs_itrace_use_pc &&
+        cpu->full_pc == g_iigs_itrace_from) {
+        g_iigs_itrace_armed = true;
+        fprintf(stderr, "IIGS ITRACE: armed at PC=%02X/%04X (frame %d)\n",
+                cpu->pb, cpu->pc, g_iigs_cur_frame);
+    }
+    if (!g_iigs_itrace_armed) return;
+    if (g_iigs_itrace_logged >= g_iigs_itrace_n) return;
+
+    uint32_t pc = cpu->full_pc;
+    uint8_t  op = cpu->mmu->read(pc);
+    uint8_t  b1 = cpu->mmu->read((pc & 0xFF0000) | ((pc + 1) & 0xFFFF));
+    uint8_t  b2 = cpu->mmu->read((pc & 0xFF0000) | ((pc + 2) & 0xFFFF));
+    uint8_t  b3 = cpu->mmu->read((pc & 0xFF0000) | ((pc + 3) & 0xFFFF));
+
+    const disasm_entry       *de = &disasm_table[op];
+    const address_mode_entry *am = &address_mode_formats[de->mode];
+
+    // Build the operand string from the format + the live bytes. REL/REL_L
+    // also show the resolved branch target.
+    char operand[48]; operand[0] = '\0';
+    char extra[40];   extra[0] = '\0';
+    switch (de->mode) {
+        case IMP: case ACC:
+            break;
+        case IMM: case REL: case ZP: case ZP_X: case ZP_Y:
+        case INDEX_INDIR: case INDIR_INDEX: case ZP_IND:
+        case REL_S: case REL_S_Y: case IND_LONG: case IND_Y_LONG:
+            snprintf(operand, sizeof(operand), am->format, b1);
+            if (de->mode == REL) {
+                int8_t d = (int8_t)b1;
+                uint16_t tgt = (uint16_t)((pc & 0xFFFF) + 2 + d);
+                snprintf(extra, sizeof(extra), " ->%02X/%04X",
+                         (unsigned)(pc >> 16), tgt);
+            }
+            break;
+        case ABS: case ABS_X: case ABS_Y: case INDIR: case ABS_IND_X:
+        case REL_L: case ABS_IND_LONG: case IMM_S:
+            snprintf(operand, sizeof(operand), am->format,
+                     (unsigned)(b1 | (b2 << 8)));
+            if (de->mode == REL_L) {
+                int16_t d = (int16_t)(b1 | (b2 << 8));
+                uint16_t tgt = (uint16_t)((pc & 0xFFFF) + 3 + d);
+                snprintf(extra, sizeof(extra), " ->%02X/%04X",
+                         (unsigned)(pc >> 16), tgt);
+            }
+            break;
+        case ABSL: case ABSL_X:
+            snprintf(operand, sizeof(operand), am->format,
+                     (unsigned)(b1 | (b2 << 8) | (b3 << 16)));
+            break;
+        case MOVE:
+            snprintf(operand, sizeof(operand), am->format, b1, b2);
+            break;
+        default:
+            snprintf(operand, sizeof(operand), "?%02X", b1);
+            break;
+    }
+
+    char sym[80]; iigs_sym_resolve(pc, sym, sizeof(sym));
+    fprintf(stderr,
+        "ITRACE %02X/%04X: %02X %-4s %-12s%s "
+        "A=%04X X=%04X Y=%04X S=%04X D=%04X DBR=%02X P=%02X e=%d%s%s\n",
+        cpu->pb, cpu->pc, op, de->opcode, operand, extra,
+        cpu->a, cpu->x, cpu->y, cpu->sp, cpu->d, cpu->db, cpu->p, (int)cpu->E,
+        sym[0] ? "  " : "", sym);
+    g_iigs_itrace_logged++;
+    if (g_iigs_itrace_logged == g_iigs_itrace_n)
+        fprintf(stderr, "IIGS ITRACE: window full (%d instrs)\n",
+                g_iigs_itrace_n);
+}
+
+// Frame-arm hook: called from the headless spike loop once per frame so an
+// A2GSPU_ITRACE_FRAME=N arm opens the window at the right frame even when no
+// single PC is known. Idempotent; only opens, never closes.
+inline void iigs_itrace_frame_tick(int frame) {
+    g_iigs_cur_frame = frame;
+    if (!g_iigs_itrace_armed && g_iigs_itrace_frame >= 0 &&
+        frame >= g_iigs_itrace_frame) {
+        g_iigs_itrace_armed = true;
+        fprintf(stderr, "IIGS ITRACE: armed at frame %d\n", frame);
+    }
+}
 
 struct IigsPendingCall {
     uint32_t ret_addr;    // full 24-bit address the matching RTL returns to

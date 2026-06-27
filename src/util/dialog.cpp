@@ -17,12 +17,25 @@
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
+#include "../gs2.hpp"
+
+// Headless/CI safety: when running with -n (no_input / automation), a missing
+// input file or any failure must FAIL to stderr with no GUI. A modal message
+// box has no owner to dismiss it in a headless run and hangs the process
+// forever. Gate every modal on no_input; always emit the message to stderr so
+// CI/log capture sees it regardless of mode.
 void system_failure(const char *message) {
-    printf("Error: %s\n", message);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", message, NULL);
+    fprintf(stderr, "Error: %s\n", message);
+    fflush(stderr);
+    if (!gs2_app_values.no_input) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", message, NULL);
+    }
 }
 
 void system_diag(char *message) {
-    printf("Information: %s\n", message);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Information", message, NULL);
+    fprintf(stderr, "Information: %s\n", message);
+    fflush(stderr);
+    if (!gs2_app_values.no_input) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Information", message, NULL);
+    }
 }

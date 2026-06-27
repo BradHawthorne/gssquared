@@ -322,31 +322,31 @@ class MMU_IIgs : public MMU {
 
         bool A2GSPU_restore(FILE *f) {
             uint32_t rb = 0, rmb = 0;
-            fread(&rb, 4, 1, f);
-            fread(&rmb, 4, 1, f);
+            if (fread(&rb, 4, 1, f) != 1) return false;
+            if (fread(&rmb, 4, 1, f) != 1) return false;
             if (rb != ram_banks || rmb != rom_banks) return false; // geometry mismatch -> bail hard
             uint8_t b_rom03 = 0, b_mapinit = 0;
-            fread(&b_rom03, 1, 1, f);   is_rom03 = (b_rom03 != 0);
-            fread(&b_mapinit, 1, 1, f); map_initialized = (b_mapinit != 0);
-            fread(&reg_slot, 1, 1, f);
-            fread(&reg_shadow, 1, 1, f);
-            fread(&reg_speed, 1, 1, f);
-            fread(&reg_state, 1, 1, f);          // do NOT call set_state_register (would re-derive
+            if (fread(&b_rom03, 1, 1, f) != 1) return false;   is_rom03 = (b_rom03 != 0);
+            if (fread(&b_mapinit, 1, 1, f) != 1) return false; map_initialized = (b_mapinit != 0);
+            if (fread(&reg_slot, 1, 1, f) != 1) return false;
+            if (fread(&reg_shadow, 1, 1, f) != 1) return false;
+            if (fread(&reg_speed, 1, 1, f) != 1) return false;
+            if (fread(&reg_state, 1, 1, f) != 1) return false;   // do NOT call set_state_register (would re-derive
                                                  // only ll.FF_READ_ENABLE/FF_BANK_1 and leave
                                                  // FF_PRE_WRITE/_FF_WRITE_ENABLE stale)
-            fread(&g_80store, 1, 1, f);
-            fread(&g_hires, 1, 1, f);
+            if (fread(&g_80store, 1, 1, f) != 1) return false;
+            if (fread(&g_hires, 1, 1, f) != 1) return false;
             uint8_t b_text = 0, b_mixed = 0;
-            fread(&b_text, 1, 1, f);  g_text = (b_text != 0);
-            fread(&b_mixed, 1, 1, f); g_mixed = (b_mixed != 0);
-            fread(&reg_new_video, 1, 1, f);
+            if (fread(&b_text, 1, 1, f) != 1) return false;  g_text = (b_text != 0);
+            if (fread(&b_mixed, 1, 1, f) != 1) return false; g_mixed = (b_mixed != 0);
+            if (fread(&reg_new_video, 1, 1, f) != 1) return false;
             uint8_t mflags[7] = {0};
-            fread(mflags, 1, 7, f);
+            if (fread(mflags, 1, 7, f) != 7) return false;
             m_zp = mflags[0]; m_text1_r = mflags[1]; m_text1_w = mflags[2];
             m_hires1_r = mflags[3]; m_hires1_w = mflags[4]; m_all_r = mflags[5]; m_all_w = mflags[6];
-            fread(&ll, sizeof(ll), 1, f);        // restore ll verbatim (captured consistent w/ reg_state)
+            if (fread(&ll, sizeof(ll), 1, f) != 1) return false; // restore ll verbatim (captured consistent w/ reg_state)
             // RAM into the EXISTING constructor-allocated buffer (do NOT realloc)
-            fread(main_ram, 1, (size_t)ram_banks * BANK_SIZE, f);
+            if (fread(main_ram, 1, (size_t)ram_banks * BANK_SIZE, f) != (size_t)ram_banks * BANK_SIZE) return false;
             // Page table: bases captured FRESH from this run's live objects (ROM heap ptr differs!)
             uint8_t *bases[3] = { get_memory_base(), get_megaii_memory_base(), get_rom_base() };
             bool ok = A2GSPU_load_pages(f, bases, 3);

@@ -48,17 +48,17 @@ class MMU_IIe : public MMU_II {
         }
 
         bool A2GSPU_restore(FILE *f) {
-            fread(&reg_slot, 1, 1, f);
             uint8_t b_int = 0, b_s3 = 0; int8_t c8s = 0;
-            fread(&b_int, 1, 1, f); f_intcxrom = (b_int != 0);
-            fread(&b_s3, 1, 1, f);  f_slotc3rom = (b_s3 != 0);
-            fread(&c8s, 1, 1, f);   C8xx_slot = c8s;
-            fread(get_memory_base(), 1, (size_t)0x20000, f);
+            if (fread(&reg_slot, 1, 1, f) != 1) return false;
+            if (fread(&b_int, 1, 1, f) != 1) return false; f_intcxrom = (b_int != 0);
+            if (fread(&b_s3, 1, 1, f) != 1) return false;  f_slotc3rom = (b_s3 != 0);
+            if (fread(&c8s, 1, 1, f) != 1) return false;   C8xx_slot = c8s;
+            if (fread(get_memory_base(), 1, (size_t)0x20000, f) != (size_t)0x20000) return false;
             uint8_t *bases[2] = { get_memory_base(), get_rom_base() };  // FRESH ROM ptr this run
             bool ok = A2GSPU_load_pages(f, bases, 2);                   // main page_table
-            if (!ok) return false;               // geometry mismatch -> stop (FILE* unusable)
-            A2GSPU_load_pages_arr(f, int_rom_ptable, 15, bases, 2);
-            A2GSPU_load_pages_arr(f, slot_rom_ptable, 15, bases, 2);
+            if (!ok) return false;               // geometry mismatch / truncation -> stop (FILE* unusable)
+            if (!A2GSPU_load_pages_arr(f, int_rom_ptable, 15, bases, 2)) return false;
+            if (!A2GSPU_load_pages_arr(f, slot_rom_ptable, 15, bases, 2)) return false;
             return true;
         }
 };

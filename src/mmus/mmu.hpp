@@ -333,34 +333,38 @@ class MMU {
                 }
             }
         }
-        void A2GSPU_load_pages_arr(FILE *f, page_table_entry_t *pt, int n,
+        // Returns false on a truncated read (so a partial snapshot fails loud instead of
+        // restoring half-initialized page pointers and reporting success).
+        bool A2GSPU_load_pages_arr(FILE *f, page_table_entry_t *pt, int n,
                                    uint8_t *const *bases, int nb) {
             for (int i = 0; i < n; i++) {
                 for (int w = 0; w < 2; w++) {
                     int8_t rg; uint32_t off;
-                    fread(&rg, 1, 1, f); fread(&off, 4, 1, f);
+                    if (fread(&rg, 1, 1, f) != 1 || fread(&off, 4, 1, f) != 1) return false;
                     uint8_t **d = w ? &pt[i].write_p : &pt[i].read_p;
                     if (rg == -1) *d = nullptr;
                     else if (rg >= 0 && rg < nb) *d = bases[rg] + off;
                     // rg == -2: leave the construction-time pointer in place
                 }
             }
+            return true;
         }
         // Main page_table convenience wrappers (prefix the entry count for validation).
         void A2GSPU_save_pages(FILE *f, uint8_t *const *bases, const size_t *sizes, int nb) {
             uint32_t np = (uint32_t)num_pages; fwrite(&np, sizeof(np), 1, f);
             A2GSPU_save_pages_arr(f, page_table, num_pages, bases, sizes, nb);
         }
-        // Returns false on a page-geometry mismatch. On mismatch the per-entry bytes ARE
-        // consumed (fseek past them) so the FILE* stays aligned for the caller's bail logic.
+        // Returns false on a page-geometry mismatch OR a truncated read. On a geometry
+        // mismatch the per-entry bytes ARE consumed (fseek past them) so the FILE* stays
+        // aligned for the caller's bail logic.
         bool A2GSPU_load_pages(FILE *f, uint8_t *const *bases, int nb) {
-            uint32_t np = 0; fread(&np, sizeof(np), 1, f);
+            uint32_t np = 0;
+            if (fread(&np, sizeof(np), 1, f) != 1) return false;
             if (np != (uint32_t)num_pages) {           // page geometry mismatch -> skip the block, bail
                 fseek(f, (long)np * 2 * 5, SEEK_CUR);  // each entry = 1-byte rg + 4-byte off, x2 (read/write)
                 return false;
             }
-            A2GSPU_load_pages_arr(f, page_table, num_pages, bases, nb);
-            return true;
+            return A2GSPU_load_pages_arr(f, page_table, num_pages, bases, nb);
         }
 
 };

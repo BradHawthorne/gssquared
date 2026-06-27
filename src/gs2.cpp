@@ -845,28 +845,38 @@ static void a2gspu_cpu_save(FILE *f, cpu_state *cpu) {
     fwrite(&cpu->reset_asserted, 8, 1, f);   // uint64_t bitmask (NOT a bool)
     uint8_t rd = cpu->rdy ? 1 : 0;     fwrite(&rd, 1, 1, f);
 }
-// Returns false (without consuming the cpu block) on a bad magic/version.
+// Checked fread: read exactly `cnt` elements of `sz` bytes; on a short/failed read,
+// `return false` out of the enclosing function. A truncated snapshot (interrupted
+// save / partial copy) thus fails loud instead of restoring a half-initialized
+// machine and reporting success.
+#define A2GSPU_FREAD(ptr, sz, cnt, f) do { \
+        if (fread((ptr), (sz), (cnt), (f)) != (size_t)(cnt)) return false; \
+    } while (0)
+
+// Returns false (without consuming the cpu block) on a bad magic/version, or on any
+// truncated read of the cpu block.
 static bool a2gspu_cpu_load(FILE *f, cpu_state *cpu) {
     uint32_t magic = 0, ver = 0;
-    fread(&magic, 4, 1, f); fread(&ver, 4, 1, f);
+    if (fread(&magic, 4, 1, f) != 1 || fread(&ver, 4, 1, f) != 1) return false;
     if (magic != A2GSPU_SNAP_MAGIC || ver != A2GSPU_SNAP_VER) return false;
-    fread(&cpu->full_pc, 4, 1, f);
-    fread(&cpu->full_db, 4, 1, f);
-    fread(&cpu->sp, 2, 1, f);
-    fread(&cpu->a, 2, 1, f);
-    fread(&cpu->x, 2, 1, f);
-    fread(&cpu->y, 2, 1, f);
-    fread(&cpu->d, 2, 1, f);
-    fread(&cpu->p, 1, 1, f);
-    uint8_t e = 0;  fread(&e, 1, 1, f);  cpu->E = e & 1;
-    uint8_t cs = 0; fread(&cs, 1, 1, f); cpu->clock_stopped = (cs != 0);
-    fread(&cpu->halt, 1, 1, f);
-    uint8_t ia = 0; fread(&ia, 1, 1, f); cpu->irq_asserted = (ia != 0);
-    fread(&cpu->irq_pipe, 1, 1, f);
-    fread(&cpu->reset_asserted, 8, 1, f);
-    uint8_t rd = 0; fread(&rd, 1, 1, f); cpu->rdy = (rd != 0);
+    A2GSPU_FREAD(&cpu->full_pc, 4, 1, f);
+    A2GSPU_FREAD(&cpu->full_db, 4, 1, f);
+    A2GSPU_FREAD(&cpu->sp, 2, 1, f);
+    A2GSPU_FREAD(&cpu->a, 2, 1, f);
+    A2GSPU_FREAD(&cpu->x, 2, 1, f);
+    A2GSPU_FREAD(&cpu->y, 2, 1, f);
+    A2GSPU_FREAD(&cpu->d, 2, 1, f);
+    A2GSPU_FREAD(&cpu->p, 1, 1, f);
+    uint8_t e = 0;  A2GSPU_FREAD(&e, 1, 1, f);  cpu->E = e & 1;
+    uint8_t cs = 0; A2GSPU_FREAD(&cs, 1, 1, f); cpu->clock_stopped = (cs != 0);
+    A2GSPU_FREAD(&cpu->halt, 1, 1, f);
+    uint8_t ia = 0; A2GSPU_FREAD(&ia, 1, 1, f); cpu->irq_asserted = (ia != 0);
+    A2GSPU_FREAD(&cpu->irq_pipe, 1, 1, f);
+    A2GSPU_FREAD(&cpu->reset_asserted, 8, 1, f);
+    uint8_t rd = 0; A2GSPU_FREAD(&rd, 1, 1, f); cpu->rdy = (rd != 0);
     return true;
 }
+#undef A2GSPU_FREAD
 
 static void run_headless_spike(GS2AppState *state) {
     computer_t *computer = state->computer;
@@ -886,6 +896,7 @@ static void run_headless_spike(GS2AppState *state) {
     g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);
     g_iigs_stop_on_fault   = (SDL_getenv("A2GSPU_STOP_ON_FAULT") != nullptr);
+    g_brkmem_on = (SDL_getenv("A2GSPU_BRKMEM") != nullptr);
     if (const char *bp = SDL_getenv("A2GSPU_BREAK")) {
         g_iigs_break_enabled = true;
         g_iigs_break_addr = (uint32_t)strtoul(bp, nullptr, 16) & 0xFFFFFF;
@@ -895,6 +906,33 @@ static void run_headless_spike(GS2AppState *state) {
     g_iigs_trace_from = 0; g_iigs_trace_armed = false;
     if (const char *tf = SDL_getenv("A2GSPU_TRACE_FROM"))
         g_iigs_trace_from = (uint32_t)strtoul(tf, nullptr, 16) & 0xFFFFFF;
+
+    // ---- A2GSPU_ITRACE: additive, env-gated, per-instruction execution trace ----
+    // Two arm modes (OR'd): A2GSPU_ITRACE_FROM=<hexPC> arms when full_pc first
+    // hits that 24-bit PC; A2GSPU_ITRACE_FRAME=<N> arms at the start of headless
+    // frame N. A2GSPU_ITRACE_N caps logged instructions (default 256). The master
+    // gate g_iigs_itrace_enabled is set iff at least one arm mode is supplied, so
+    // a normal run/golden (no ITRACE_* set) pays only one untaken branch.
+    g_iigs_itrace_enabled = false; g_iigs_itrace_armed = false;
+    g_iigs_itrace_logged = 0; g_iigs_cur_frame = 0;
+    g_iigs_itrace_use_pc = false; g_iigs_itrace_from = 0; g_iigs_itrace_frame = -1;
+    g_iigs_itrace_n = 256;
+    if (const char *itf = SDL_getenv("A2GSPU_ITRACE_FROM")) {
+        g_iigs_itrace_from = (uint32_t)strtoul(itf, nullptr, 16) & 0xFFFFFF;
+        g_iigs_itrace_use_pc = true; g_iigs_itrace_enabled = true;
+    }
+    if (const char *itfr = SDL_getenv("A2GSPU_ITRACE_FRAME")) {
+        g_iigs_itrace_frame = (int)strtol(itfr, nullptr, 10);
+        g_iigs_itrace_enabled = true;
+    }
+    if (const char *itn = SDL_getenv("A2GSPU_ITRACE_N")) {
+        int v = (int)strtol(itn, nullptr, 10);
+        if (v > 0) g_iigs_itrace_n = v;
+    }
+    if (g_iigs_itrace_enabled)
+        fprintf(stderr, "IIGS ITRACE: enabled (from=%s$%06X frame=%d n=%d)\n",
+                g_iigs_itrace_use_pc ? "" : "(none)",
+                (unsigned)g_iigs_itrace_from, g_iigs_itrace_frame, g_iigs_itrace_n);
     g_iigs_sym_base = 0; g_iigs_sym_base_locked = false;
     if (const char *sb = SDL_getenv("A2GSPU_SYM_BASE")) {
         g_iigs_sym_base = (uint32_t)strtoul(sb, nullptr, 16) & 0xFFFFFF;
@@ -964,6 +1002,7 @@ static void run_headless_spike(GS2AppState *state) {
         int i = 0;
         if (!snap_load) {   // SNAP_LOAD already provided a booted desktop; skip the long boot
             for (; i < bootframes; i++) {
+                iigs_itrace_frame_tick(i);
                 if (!run_one_frame(computer)) { printf("SPIKE: halted during boot at frame %d\n", i); break; }
             }
         }
@@ -982,12 +1021,14 @@ static void run_headless_spike(GS2AppState *state) {
             printf("A2GSPU RUN: could not open binary '%s'\n", binpath);
         }
         for (; i < state->spike_frames; i++) {
+            iigs_itrace_frame_tick(i);
             if (!run_one_frame(computer)) { printf("SPIKE: emulation halted early at frame %d\n", i); break; }
         }
         printf("A2GSPU RUN: final CPU full_pc=$%06X (if ~= the inject addr, the injected code ran)\n",
                (unsigned)computer->cpu->full_pc);
     } else {
         for (int i = 0; i < state->spike_frames; i++) {
+            iigs_itrace_frame_tick(i);
             if (!run_one_frame(computer)) {
                 printf("SPIKE: emulation halted early at frame %d\n", i);
                 break;
@@ -1113,6 +1154,15 @@ static void run_headless_spike(GS2AppState *state) {
                         printf("IIGS GOLDEN: %s (cur=%016llX want=%016llX)\n",
                                match ? "MATCH" : "DIFF", (unsigned long long)h, g);
                         if (!match) gate_rc = 1;   // the SHR golden now GATES the exit
+                    } else {
+                        // The golden file exists/opens but its first token is not hex
+                        // (empty/blank/corrupt). Treat that as a HARD gate failure, not a
+                        // silent PASS — a corrupt golden must never disable the gate. This
+                        // is distinct from "file absent -> bless" (the fopen("w") branch).
+                        printf("IIGS GOLDEN: ERROR — golden file '%s' exists but contains no "
+                               "parseable hash (cur=%016llX); failing gate.\n",
+                               gf, (unsigned long long)h);
+                        gate_rc = 1;
                     }
                     fclose(gp);
                 } else if ((gp = fopen(gf, "w"))) {

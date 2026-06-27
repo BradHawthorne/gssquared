@@ -441,23 +441,25 @@ static void execute_with_data(a2gspu_data *ad, uint16_t data16) {
             if (w == 0 || h == 0) break;
             int16_t x = ps->cursor_x, y = ps->cursor_y;
             uint8_t col = ps->draw_color;
-            // Top edge
+            // Top edge — guard the lower bound (x+i >= 0) too. cursor_x is set from a raw
+            // 16-bit guest value (SET_DRAW_POS), so x can be negative once read as int16_t;
+            // without the >= 0 guard a negative x+i indexes far below uhr_fb (heap OOB write).
             for (int16_t i = 0; i < w && x+i < A2GSPU_UHR_W; i++)
-                if (y >= 0 && y < A2GSPU_UHR_H)
+                if (x+i >= 0 && y >= 0 && y < A2GSPU_UHR_H)
                     ad->emu.uhr_fb[y * A2GSPU_UHR_PITCH + x + i] = col;
             // Bottom edge
             int16_t yb = y + h - 1;
             for (int16_t i = 0; i < w && x+i < A2GSPU_UHR_W; i++)
-                if (yb >= 0 && yb < A2GSPU_UHR_H)
+                if (x+i >= 0 && yb >= 0 && yb < A2GSPU_UHR_H)
                     ad->emu.uhr_fb[yb * A2GSPU_UHR_PITCH + x + i] = col;
-            // Left edge
+            // Left edge — guard y+i >= 0 (cursor_y may read back negative as int16_t)
             for (int16_t i = 0; i < h && y+i < A2GSPU_UHR_H; i++)
-                if (x >= 0 && x < A2GSPU_UHR_W)
+                if (y+i >= 0 && x >= 0 && x < A2GSPU_UHR_W)
                     ad->emu.uhr_fb[(y+i) * A2GSPU_UHR_PITCH + x] = col;
             // Right edge
             int16_t xr = x + w - 1;
             for (int16_t i = 0; i < h && y+i < A2GSPU_UHR_H; i++)
-                if (xr >= 0 && xr < A2GSPU_UHR_W)
+                if (y+i >= 0 && xr >= 0 && xr < A2GSPU_UHR_W)
                     ad->emu.uhr_fb[(y+i) * A2GSPU_UHR_PITCH + xr] = col;
             ad->emu.frame_dirty = true;
             break;

@@ -95,8 +95,19 @@ int read_2mg_header(format_2mg_t &hdr_out, const std::string& filename) {
     
     // Verify magic number "2IMG"
     if (memcmp(raw.id, "2IMG", 4) != 0) {
+        fclose(fp);              // G17: don't leak the descriptor on magic mismatch
         return -1;
     }
+
+    // Determine the real file size so the variable-length comment/creator blobs below
+    // can be validated against it (prevents a huge/wrapped length from over-reading or
+    // over-allocating). On stat failure fall back to 0 -> the blobs are treated as absent.
+    long file_size_l = 0;
+    if (fseek(fp, 0, SEEK_END) == 0) {
+        long pos = ftell(fp);
+        if (pos > 0) file_size_l = pos;
+    }
+    uint32_t file_size = (file_size_l > 0) ? (uint32_t)file_size_l : 0;
     
     // Copy fixed-size fields
     memcpy(hdr_out.id, raw.id, 4);
@@ -116,19 +127,33 @@ int read_2mg_header(format_2mg_t &hdr_out, const std::string& filename) {
     hdr_out.creator_data_length = le32_to_cpu(raw.creator_data_length);
     hdr_out.image_format = le32_to_cpu(raw.image_format);
 
-    if (hdr_out.comment_offset != 0 && hdr_out.comment_length > 0) {
-        fseek(fp, hdr_out.comment_offset, SEEK_SET);
-        hdr_out.comment_content = new char[hdr_out.comment_length + 1];
-        fread(hdr_out.comment_content, 1, hdr_out.comment_length, fp);
-        hdr_out.comment_content[hdr_out.comment_length] = 0;
-    } else hdr_out.comment_content = nullptr;
+    // Validate variable-length blobs against the file size before allocating.
+    // comment_length == 0xFFFFFFFF would make `new char[len + 1]` wrap to new char[0]
+    // and then fread/terminator write far past it (heap corruption from a parseable
+    // file). Compute the bound in 64-bit and require offset+length to lie within file.
+    hdr_out.comment_content = nullptr;
+    if (hdr_out.comment_offset != 0 && hdr_out.comment_length > 0 && file_size != 0) {
+        uint64_t end = (uint64_t)hdr_out.comment_offset + (uint64_t)hdr_out.comment_length;
+        if (hdr_out.comment_offset < file_size && end <= (uint64_t)file_size) {
+            size_t n = (size_t)hdr_out.comment_length;
+            fseek(fp, hdr_out.comment_offset, SEEK_SET);
+            hdr_out.comment_content = new char[n + 1];
+            size_t got = fread(hdr_out.comment_content, 1, n, fp);
+            hdr_out.comment_content[got] = 0;   // terminate at what we actually read
+        }
+    }
 
-    if (hdr_out.creator_data != 0 && hdr_out.creator_data_length > 0) {
-        fseek(fp, hdr_out.creator_data, SEEK_SET);
-        hdr_out.creator_data_content = new char[hdr_out.creator_data_length + 1];
-        fread(hdr_out.creator_data_content, 1, hdr_out.creator_data_length, fp);
-        hdr_out.creator_data_content[hdr_out.creator_data_length] = 0;
-    } else hdr_out.creator_data_content = nullptr;
+    hdr_out.creator_data_content = nullptr;
+    if (hdr_out.creator_data != 0 && hdr_out.creator_data_length > 0 && file_size != 0) {
+        uint64_t end = (uint64_t)hdr_out.creator_data + (uint64_t)hdr_out.creator_data_length;
+        if (hdr_out.creator_data < file_size && end <= (uint64_t)file_size) {
+            size_t n = (size_t)hdr_out.creator_data_length;
+            fseek(fp, hdr_out.creator_data, SEEK_SET);
+            hdr_out.creator_data_content = new char[n + 1];
+            size_t got = fread(hdr_out.creator_data_content, 1, n, fp);
+            hdr_out.creator_data_content[got] = 0;
+        }
+    }
 
     fclose(fp);
 
@@ -315,6 +340,10 @@ int identify_media(media_descriptor& md) {
             md.media_type = MEDIA_PRENYBBLE;
         } else {
             std::cerr << "Unknown image format: " << hdr.image_format << std::endl;
+            return -1;
+        }
+        if (hdr.block_count == 0) {   // G16: a block_count of 0 would SIGFPE on the divide below
+            std::cerr << "2MG block_count is zero (malformed): " << md.filename << std::endl;
             return -1;
         }
         md.file_size = get_file_size(md.filename);

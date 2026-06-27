@@ -968,8 +968,21 @@ inline void write_direct_x_ind(cpu_state *cpu, T &reg, U &index ) {
 uint32_t address_direct_indirect(cpu_state *cpu) {
     uint16_t eaddr_16 = address_direct(cpu); // cycle 2
 
+    uint16_t hi_addr;
+    if constexpr (CPUTraits::has_65816_ops && CPUTraits::e_mode) {
+        // Emulation-mode DL=0 quirk: the +1 for the pointer high byte wraps
+        // inside the page (like (d,X)) instead of across the bank boundary.
+        if ((cpu->d & 0x00FF) == 0) {
+            hi_addr = (uint16_t)(eaddr_16 & 0xFF00) | (uint8_t)((eaddr_16 & 0x00FF) + 1);
+        } else {
+            hi_addr = (uint16_t)(eaddr_16 + 1);
+        }
+    } else {
+        hi_addr = (uint16_t)(eaddr_16 + 1);
+    }
+
     uint32_t eaddr = bus_read(cpu, (uint16_t)(eaddr_16)); // cycle 3
-    eaddr |= bus_read(cpu, (uint16_t)(eaddr_16+1)) << 8; // cycle 4
+    eaddr |= bus_read(cpu, hi_addr) << 8; // cycle 4
     if constexpr (CPUTraits::has_65816_ops) eaddr |= cpu->full_db; // cycle 5
     TRACE(cpu->trace_entry.eaddr = eaddr;)
     return eaddr;
@@ -1385,7 +1398,8 @@ inline void add_and_set_flags(cpu_state *cpu, word_t N) {
 }
 
 inline void add_bcd_8_set_flags(cpu_state *cpu, uint8_t &a, uint8_t b) {
-    int16_t binary_sum=a+b;
+    // NMOS 6502 decimal-mode Z reflects the BINARY result A+M+C (carry included).
+    int16_t binary_sum=a+b+cpu->C;
 
     uint16_t AL = (a & 0x0F) + (b & 0x0F) + cpu->C;
 
@@ -1423,7 +1437,8 @@ inline void add_bcd_16_set_flags(cpu_state *cpu, word_t b) {
 }
 
 inline void sub_bcd_8_set_flags( cpu_state *cpu, uint8_t &a, uint8_t b) {
-    int16_t binary_sum=a-b+cpu->C;
+    // NMOS 6502 decimal-mode Z reflects the BINARY result A-M-1+C (i.e. A+(M^$FF)+C).
+    int16_t binary_sum=a-b-1+cpu->C;
 
     uint8_t N1 = b ^ 0xFF;
 
@@ -1599,10 +1614,13 @@ inline void branch_if(cpu_state *cpu, uint8_t N, bool condition) {
     if (condition) {
         cpu->pc = cpu->pc + (int8_t) N;
         // branch taken uses another clock to update the PC
-        incr_cycles(cpu); 
-        /* If a branch is taken and the target is on a different page, this adds another CPU cycle (4 in total). */
-        if ((oaddr & 0xFF00) != (taddr & 0xFF00)) {
-            incr_cycles(cpu);
+        incr_cycles(cpu);
+        /* If a branch is taken and the target is on a different page, this adds another CPU cycle (4 in total).
+           65816 native mode (E=0) taken branches are a flat 3 cycles with no page-cross penalty. */
+        if constexpr (!(CPUTraits::has_65816_ops && !CPUTraits::e_mode)) {
+            if ((oaddr & 0xFF00) != (taddr & 0xFF00)) {
+                incr_cycles(cpu);
+            }
         }
     }
 }
@@ -2215,6 +2233,13 @@ int execute_next(cpu_state *cpu) override {
     // fetch. The breakpoint needs this per-instruction hook even with no trace.
     if constexpr (CPUTraits::has_65816_ops) {
         if (g_iigs_tbtrace_enabled || g_iigs_break_enabled) iigs_tb_on_landing(cpu);
+        // A2GSPU_ITRACE: additive per-instruction crash post-mortem trace (off by
+        // default; one cheap branch when off). Mirrors the BRKDUMP gating.
+        if (g_iigs_itrace_enabled) iigs_itrace_step(cpu);
+        // BRKMEM PC-history ring (bank-2 only): capture the path into the fault.
+        if (g_brkmem_on && ((cpu->full_pc >> 16) & 0xFF) == 0x02) {
+            g_pchist[g_pchist_i & 63] = cpu->full_pc; g_pchist_i++;
+        }
     }
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;
@@ -3294,7 +3319,12 @@ int execute_next(cpu_state *cpu) override {
                 //cpu->EFFI = cpu->I;
                 if constexpr (CPUTraits::has_65816_ops && !CPUTraits::e_mode) {
                     stack_pull(cpu, cpu->p);
-                    // TODO: perform x/m mode switch check here.
+                    // When the pulled P sets the X flag (8-bit index), the real
+                    // 65816 forces the index high bytes to $00 (mirror SEP/XCE).
+                    if (cpu->_X == 1) {
+                        cpu->x_hi = 0;
+                        cpu->y_hi = 0;
+                    }
                 } else if constexpr (CPUTraits::has_65816_ops && CPUTraits::e_mode) {
                     // when e flag=1, m/x are forced to 1, so after plp, both flags will still be 1 no matter what is pulled from stack.
                     stack_pull(cpu, cpu->p);
@@ -3711,6 +3741,36 @@ int execute_next(cpu_state *cpu) override {
                 if constexpr (CPUTraits::has_65816_ops) {
                     g_iigs_brk_count++;   // exit-taxonomy: count crashes (observation only)
                     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(cpu, "BRK");
+                    // BRKMEM: dump bytes around the crash PC (and the stacked return
+                    // bank/addr) so a corrupted/misplaced code byte can be read off
+                    // the live image at the fault. Env-gated, observation only.
+                    if (getenv("A2GSPU_BRKMEM")) {
+                        printf("IIGS BRKHIST (last bank-2 PCs):");
+                        int hstart = (g_pchist_i > 48) ? g_pchist_i - 48 : 0;
+                        for (int k = hstart; k < g_pchist_i; k++)
+                            printf(" %04X", g_pchist[k & 63] & 0xFFFF);
+                        printf("\n");
+                        uint32_t fp = cpu->full_pc;
+                        uint8_t bank = (fp >> 16) & 0xFF;
+                        uint32_t lo = (fp & 0xFFFF);
+                        uint32_t start = (lo >= 0x40) ? (lo - 0x40) : 0;
+                        printf("IIGS BRKMEM: $%02X around $%04X\n", bank, lo);
+                        for (uint32_t a = start; a <= (lo + 0x10) && a <= 0xFFFF; a += 16) {
+                            printf("  %02X/%04X:", bank, a);
+                            for (uint32_t i = 0; i < 16 && (a + i) <= 0xFFFF; i++)
+                                printf(" %02X", cpu->mmu->read(((uint32_t)bank << 16) | ((a + i) & 0xFFFF)));
+                            printf("\n");
+                        }
+                        // Stack dump: the return chain that led here (bank 0).
+                        uint32_t sp = cpu->sp;
+                        printf("IIGS BRKSTK: S=$%04X\n", sp);
+                        for (uint32_t s = sp + 1; s <= sp + 0x18 && s <= 0xFFFF; s += 8) {
+                            printf("  00/%04X:", s);
+                            for (uint32_t i = 0; i < 8 && (s + i) <= 0xFFFF; i++)
+                                printf(" %02X", cpu->mmu->read((s + i) & 0xFFFF));
+                            printf("\n");
+                        }
+                    }
                     // Stop-on-fault: a BRK is almost always a crash/SysFail under
                     // GS/OS. Halt so the spike exits via run_one_frame's guard
                     // instead of burning the remaining frames.
@@ -3749,8 +3809,16 @@ int execute_next(cpu_state *cpu) override {
                 // 2. get 0,AA and 0,AA+1 -> PC
                 uint16_t aa = fetch_pc(cpu);
                 aa |= fetch_pc(cpu) << 8;
+                uint16_t hi_addr;
+                if constexpr (CPUTraits::has_indirect_bug) {
+                    // NMOS 6502 JMP ($xxFF) page-boundary bug: the high byte is
+                    // fetched from the same page, not the next one.
+                    hi_addr = (uint16_t)(aa & 0xFF00) | (uint8_t)((aa & 0x00FF) + 1);
+                } else {
+                    hi_addr = (uint16_t)(aa + 1);
+                }
                 uint16_t eaddr = bus_read(cpu, aa);
-                eaddr |= bus_read(cpu, (uint16_t)(aa + 1)) << 8 ;
+                eaddr |= bus_read(cpu, hi_addr) << 8 ;
 
                 //absaddr_t addr = get_operand_address_absolute_indirect(cpu);
                 cpu->pc = eaddr;
@@ -3791,6 +3859,12 @@ int execute_next(cpu_state *cpu) override {
                     byte_t p = pop_byte(cpu);
                     if constexpr (!CPUTraits::e_mode) {
                         cpu->p = p;
+                        // Pulled P with X flag set (8-bit index) forces the index
+                        // high bytes to $00 on the real 65816 (mirror SEP/XCE/PLP).
+                        if (cpu->_X == 1) {
+                            cpu->x_hi = 0;
+                            cpu->y_hi = 0;
+                        }
                     } else {
                         p = p & ~(FLAG_B | FLAG_UNUSED);
                         cpu->p = p | oldp;

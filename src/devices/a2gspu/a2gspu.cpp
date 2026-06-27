@@ -23,10 +23,55 @@
 #include <SDL3_net/SDL_net.h>
 
 #include <string>
+#include <cstdlib>
+#include <cstdio>
+#include "devices/slot_bus/slot_bus.hpp"  // faithful all-writes slot-bus stream (g_slot_bus)
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
+
+// ── "~BUS" raw-cycle emitter (Option B: feed PB's proven INGRESS_SOURCE=0) ──
+// When A2GSPU_BUS_DUMP=<path> is set, at shutdown we emit g_slot_bus (the faithful
+// per-Mega-II-cycle slot-bus stream — the all-writes superset that carries the
+// $C0xx mode/border + text context PB needs to render, not just the SHR window)
+// as a "~BUS" frame (SYNC + u32 count + 5-byte {addr_lo,addr_hi,data,ctl,seq}).
+// slot_bus_cycle_t.ctl is ALREADY the pb_cycle_t SLOT_CTL_* byte -> copy verbatim.
+// (The SHR-write subset of g_slot_bus byte-matches the #44 oracle 731974F652A05619;
+//  the a2gspu write-observer is a render/dirty hook, NOT a complete write log.)
+static const char *g_bus_path = nullptr;   // dump target (null = disabled)
+
+// --- live "~BUS" CDC streaming (A2GSPU_BUS_STREAM=1): feed PB's INGRESS_SOURCE=0 live ---
+// One-time "~BUS" SYNC + open-ended count (PB resets once, then streams continuously);
+// each frame we ship the slot-bus writes accumulated since the last frame and clear them
+// (PB_FORWARD sub-frame ships render at ~FWD_USB_FRAME_CYCLES granularity).
+static bool g_bus_stream = false;          // stream g_slot_bus over CDC each frame
+static bool g_bus_synced = false;          // sent the one-time "~BUS" SYNC + open count
+
+// RENDER-WHITELIST DISTILL (the lossless compression for the CDC choke). The raw slot_bus
+// is ~78% non-render traffic: ADB/clock/speed/paddle $C0xx polling (e.g. $C03D/$C0EE/$C036)
+// + zp/stack/non-video RAM writes that pb_render_cycle never consumes. We forward ONLY what
+// PB's render path acts on: (1) the $C0xx low bytes pb_mmu_observe() reacts to (pb_scope/
+// pb_mmu.h), and (2) WRITES to video memory ($0400-$0BFF text, $2000-$9FFF SHR/HGR). PROVEN
+// lossless on the bus-trace dump: fb8_fnv 4DF99D8021729BFE + shr_writes 112916 unchanged
+// (test_pb_forward), at a 3.36x reduction (5.87 MB -> 1.75 MB/boot -> well under CDC).
+static inline bool bus_render_relevant(uint16_t a, uint8_t ctl) {
+    if ((a & 0xFF00u) == 0xC000u) {                 // soft-switch / slot I/O: keep only what PB decodes
+        uint8_t lo = (uint8_t)a;
+        // ADR-0008: the slot-3 $C0nF command-register WRITE -> forward so PB's pbf_cmd_capture
+        // assembles the host->card command frame ($C0BF for slot 3).
+        if (lo == (uint8_t)(0x80u + SLOT_BUS_SLOT * 0x10u + 0x0Fu) && !(ctl & SLOT_CTL_READ)) return true;
+        return lo == 0x68 || lo == 0x35 || lo == 0x29 || lo == 0x21 || lo == 0x22 || lo == 0x34
+            || (lo >= 0x02 && lo <= 0x09)            // RAMRD/RAMWRT/INTCXROM/ALTZP
+            || lo == 0x00 || lo == 0x01              // 80STORE
+            || lo == 0x0C || lo == 0x0D || lo == 0x0E || lo == 0x0F   // 80COL/ALTCHAR
+            || (lo >= 0x50 && lo <= 0x57)            // TEXT/MIX/PAGE2/HIRES
+            || lo == 0x5E || lo == 0x5F              // DGR/AN3
+            || (lo >= 0x80 && lo <= 0x8F);           // language card
+    }
+    if (ctl & SLOT_CTL_READ) return false;           // PB shadows writes only
+    return (a >= 0x0400u && a <= 0x0BFFu) || (a >= 0x2000u && a <= 0x9FFFu);  // video memory
+}
 
 // ── Serial port helpers ────────────────────────────────────────────
 
@@ -41,6 +86,10 @@ static void *serial_open(const char *port) {
     HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL,
                            OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
     if (h == INVALID_HANDLE_VALUE) {
+        if (getenv("A2GSPU_SERIAL_DEBUG")) {
+            printf("A2GSPU: serial_open(%s) FAILED, GetLastError=%lu\n", path, (unsigned long)GetLastError());
+            fflush(stdout);
+        }
         return nullptr;  // silent — reconnect loop would spam console otherwise
     }
     // Configure: 115200 baud (ignored by CDC, but required by API)
@@ -77,6 +126,38 @@ static void *serial_open(const char *port) {
 }
 
 // Async serial write using Windows overlapped I/O.
+// Lossless BLOCKING write — waits for every byte to drain before returning.
+// The raw-cycle "~BUS" stream needs EVERY record (a dropped cycle desyncs PB's
+// decode -> gappy IPL -> PV loses lock = the stutter). serial_write_async's
+// skip-on-busy is correct for the idempotent "~A2G" snapshot but LOSES data for
+// "~BUS". Blocking stalls the emulation thread under CDC saturation — acceptable
+// for a dev loop (slower boot, correct render); the caller clears its buffer only
+// on a true return.
+static bool serial_write_blocking(void *handle, const uint8_t *data, uint32_t len) {
+#ifdef _WIN32
+    if (!handle || len == 0) return false;
+    HANDLE h = (HANDLE)handle;
+    OVERLAPPED ov = {}; ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    uint32_t off = 0; bool ok = true;
+    while (off < len) {
+        DWORD wrote = 0; ResetEvent(ov.hEvent);
+        if (!WriteFile(h, data + off, len - off, &wrote, &ov)) {
+            if (GetLastError() != ERROR_IO_PENDING) { ok = false; break; }
+            // 250ms cap: if PB isn't draining the CDC, never stall the emulation thread
+            // for seconds. A draining PB clears 16 KB in ~16 ms, far under this.
+            if (WaitForSingleObject(ov.hEvent, 250) != WAIT_OBJECT_0) { CancelIoEx(h, &ov); ok = false; break; }
+            if (!GetOverlappedResult(h, &ov, &wrote, FALSE)) { ok = false; break; }
+        }
+        if (wrote == 0) { ok = false; break; }
+        off += wrote;
+    }
+    CloseHandle(ov.hEvent);
+    return ok;
+#else
+    (void)handle; (void)data; (void)len; return false;
+#endif
+}
+
 // Returns: 1=sent/queued, 0=skipped (busy), -1=error (caller should close handle).
 //
 // Why tri-state instead of bool: returning false for both "busy" and "error"
@@ -413,14 +494,23 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
         static bool ever_connected = false;
         if (++reconnect_counter >= reconnect_interval) {
             reconnect_counter = 0;
-            const char *ports[] = { "COM7", "COM6", "COM8", "COM5", nullptr };
+            // A2GSPU_SERIAL_PORT overrides the probe; default tries PB=COM10 first
+            // (the card's bus-processor CDC port), then the legacy fallback list.
+            const char *env_port = getenv("A2GSPU_SERIAL_PORT");
+            const char *ports[] = {
+                env_port ? env_port : "COM10",
+                "COM10", "COM9", "COM7", "COM6", "COM8", "COM5", nullptr
+            };
+            if (getenv("A2GSPU_SERIAL_DEBUG")) {
+                printf("A2GSPU: reconnect attempt (env=%s)\n", env_port ? env_port : "(null)"); fflush(stdout);
+            }
             for (int i = 0; ports[i]; i++) {
                 ad->serial_handle = serial_open(ports[i]);
                 if (ad->serial_handle) {
                     ad->prev_valid = false;  // force full resend
                     ever_connected = true;
                     reconnect_interval = 60;  // reset to fast reconnect
-                    printf("A2GSPU: Connected via %s\n", ports[i]);
+                    printf("A2GSPU: Connected via %s\n", ports[i]); fflush(stdout);
                     break;
                 }
             }
@@ -439,6 +529,61 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
             }
         }
         if (!ad->serial_handle) return;
+    }
+
+    // --- LIVE "~BUS" streaming: forward the slot-bus writes to PB's INGRESS_SOURCE=0 ---
+    if (g_bus_stream) {
+        static uint8_t live_seq = 0;
+        static int sdbg = -1; if (sdbg < 0) sdbg = getenv("A2GSPU_SERIAL_DEBUG") ? 1 : 0;
+        if (sdbg) { static uint64_t cf = 0; if ((++cf % 90) == 0) {
+            printf("A2GSPU: cb f=%llu synced=%d slotbus=%zu handle=%d\n", (unsigned long long)cf,
+                   g_bus_synced ? 1 : 0, g_slot_bus.size(), ad->serial_handle ? 1 : 0); fflush(stdout); } }
+        if (!g_bus_synced) {                                  // one-time SYNC + open count
+            uint8_t open[8] = { 0x7E, 0x42, 0x55, 0x53, 0xFF, 0xFF, 0xFF, 0x7F }; // "~BUS", 0x7FFFFFFF
+            bool os = serial_write_blocking(ad->serial_handle, open, 8);
+            if (os) g_bus_synced = true;
+            if (sdbg) { printf("A2GSPU: SYNC open send ok=%d -> synced=%d\n", os?1:0, g_bus_synced?1:0); fflush(stdout); }
+        }
+        if (g_bus_synced) {
+            // PERSISTENT PENDING QUEUE — decouples the emulator's bursty production from
+            // the CDC's steady drain. Blocking-writing a whole frame's backlog stalls the
+            // emulation thread for seconds (the boot backlog ~1.75 MB) and the callback
+            // stops firing. Instead: distill into a pending byte queue, then drain a BOUNDED
+            // chunk per frame (~16 ms max stall). Lossless: cursor advances only on a true
+            // send; bursts buffer and drain over the following frames.
+            static std::vector<uint8_t> txq;   // distilled "~BUS" records awaiting the wire
+            static size_t txoff = 0;            // read cursor into txq
+            for (const slot_bus_cycle_t &c : g_slot_bus) {
+                if (!bus_render_relevant(c.addr, c.ctl)) continue;   // RENDER-WHITELIST DISTILL
+                txq.push_back((uint8_t)(c.addr & 0xFF));
+                txq.push_back((uint8_t)((c.addr >> 8) & 0xFF));
+                txq.push_back(c.data);
+                txq.push_back(c.ctl);                                // pb_cycle_t SLOT_CTL_* verbatim
+                txq.push_back(live_seq++);
+            }
+            g_slot_bus.clear();
+            // runaway guard: if PB ever stops draining, don't grow the queue without bound.
+            if (txq.size() - txoff > (16u << 20)) { txq.clear(); txoff = 0; }
+            static uint64_t sok = 0, sfail = 0;
+            size_t avail = txq.size() - txoff;
+            if (avail > 0) {
+                const size_t MAXCHUNK = 16380;   // 3276 records (5B each); ~16 ms @ ~1 MB/s CDC
+                size_t chunk = avail < MAXCHUNK ? avail : MAXCHUNK;
+                if (serial_write_blocking(ad->serial_handle, txq.data() + txoff, (uint32_t)chunk)) {
+                    sok++;
+                    txoff += chunk;
+                    if (txoff >= txq.size())        { txq.clear(); txoff = 0; }                 // fully drained
+                    else if (txoff > (1u << 20))    { txq.erase(txq.begin(), txq.begin() + txoff); txoff = 0; }  // compact consumed prefix
+                } else {
+                    sfail++;   // PB not draining CDC -> chunk timed out
+                }
+            }
+            if (sdbg) { static uint64_t f = 0; if ((++f % 60) == 0) {
+                printf("A2GSPU: drain f=%llu pending=%zuB off=%zu sends_ok=%llu sends_fail=%llu\n",
+                       (unsigned long long)f, txq.size(), txoff,
+                       (unsigned long long)sok, (unsigned long long)sfail); fflush(stdout); } }
+        }
+        return;  // skip the "~A2G" snapshot pack (PB consumes "~BUS")
     }
 
     // Send every frame (60fps). Dirty tracking keeps most frames small.
@@ -846,6 +991,17 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
     ad->cpu = computer->cpu;
     ad->_slot = slot;
 
+    // "~BUS" cycle-dump for the gssquared->card host gate (A2GSPU_BUS_DUMP=path).
+    g_bus_path = getenv("A2GSPU_BUS_DUMP");
+    if (g_bus_path) {
+        printf("A2GSPU: ~BUS cycle dump enabled (source = slot_bus) -> %s\n", g_bus_path);
+    }
+    if (getenv("A2GSPU_BUS_STREAM")) {
+        g_bus_stream = true;
+        g_slot_bus_enabled = true;   // capture the slot-bus stream for live CDC forwarding
+        printf("A2GSPU: live ~BUS CDC streaming enabled (slot_bus -> PB INGRESS_SOURCE=0)\n");
+    }
+
     // Cache pointers for frame callback (avoids dynamic_cast per frame)
     ad->mmu_gs = dynamic_cast<MMU_IIgs *>(computer->cpu->mmu);
     ad->ds = (display_state_t *)computer->cached_display_state;
@@ -907,6 +1063,28 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
 
     // Register shutdown handler
     computer->register_shutdown_handler([ad]() -> bool {
+        if (g_bus_path && !g_slot_bus.empty()) {
+            FILE *f = fopen(g_bus_path, "wb");
+            if (f) {
+                uint32_t count = (uint32_t)g_slot_bus.size();
+                uint8_t hdr[8] = { 0x7E, 0x42, 0x55, 0x53,
+                    (uint8_t)count, (uint8_t)(count >> 8),
+                    (uint8_t)(count >> 16), (uint8_t)(count >> 24) };
+                fwrite(hdr, 1, 8, f);
+                uint8_t seq = 0;
+                for (const slot_bus_cycle_t &c : g_slot_bus) {
+                    uint8_t rec[5] = {
+                        (uint8_t)(c.addr & 0xFF),         // addr_lo (A0-A7)
+                        (uint8_t)((c.addr >> 8) & 0xFF),  // addr_hi (A8-A15)
+                        c.data,                           // data
+                        c.ctl,                            // ctl = pb_cycle_t SLOT_CTL_* verbatim
+                        seq++ };                          // seq
+                    fwrite(rec, 1, 5, f);
+                }
+                fclose(f);
+                printf("A2GSPU: wrote %u \"~BUS\" records (slot_bus) -> %s\n", count, g_bus_path);
+            }
+        }
         a2gspu_emu_shutdown(&ad->emu);
         if (ad->serial_handle) {
             serial_close(ad->serial_handle);
