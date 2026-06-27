@@ -895,8 +895,121 @@ static bool a2gspu_snap_check_sentinel(FILE *f) {
     return end == A2GSPU_SNAP_END;
 }
 
+// ---------------------------------------------------------------------------
+// Env-gated headless CPU micro-test (A2GSPU_CPUTEST). Runs the real instruction
+// stepper (cpun->execute_next) against a hand-built scenario in bank-0 RAM, then
+// exits with a pass/fail code. No GUI, no test ROM, no device dependency — it is
+// the same headless exit-code contract the boot/assert gate uses, applied to a
+// single CPU corner case. Currently one case:
+//
+//   "wai_wake": a 65xx WAI with a pending interrupt that is MASKED by I=1.
+//     The part must WAKE (clear RDY) on the pending interrupt regardless of the
+//     I flag — I gates servicing (the vector dispatch), not the wake. So the CPU
+//     must resume and execute the instruction AFTER WAI, and must NOT take the
+//     IRQ vector (the masked interrupt is not serviced). Before the fix the
+//     stepper spun in RDY forever with I=1 + interrupt asserted; the step cap
+//     below converts that hang into a clean FAIL rather than a wedge.
+//
+// Program injected at bank-0 $2000 (8-bit emulation mode, the cold-boot state):
+//     2000  CB        WAI
+//     2001  EE 10 20  INC $2010      ; "resumed past WAI" marker -> $2010 = 1
+//     2004  DB        STP            ; halt the part cleanly so the loop ends
+//   $2010 is pre-zeroed; the IRQ vector $FFFE/$FFFF is pointed at a TRAP page so
+//   that, if the masked IRQ were wrongly serviced, the PC would land in $FF00..
+//   and the marker would never be written (caught as a FAIL).
+static int run_cpu_microtest(GS2AppState *state, const char *which) {
+    computer_t *computer = state->computer;
+    cpu_state  *cpu = computer->cpu;
+    if (!cpu || !cpu->mmu || !cpu->cpun) {
+        printf("CPUTEST: machine not initialized -- FAIL\n");
+        return 1;
+    }
+    MMU *mmu = cpu->mmu;
+
+    if (strcmp(which, "wai_wake") != 0) {
+        printf("CPUTEST: unknown case '%s' -- FAIL\n", which);
+        return 1;
+    }
+
+    // --- build the scenario in RAM (write_raw bypasses IO/shadow side effects) ---
+    // $1000 is bank-0 main RAM outside every IIgs shadow window ($0400-$07FF text,
+    // $2000-$5FFF hires) so the injected bytes are not mirrored into $E1.
+    const uint32_t PROG = 0x001000;
+    const uint32_t MARK = 0x001010;
+    // Use the same bus write()/read() path the stepper's fetch uses, so the
+    // injected bytes are guaranteed visible at the program counter (write_raw and
+    // the fetch can resolve to different page buffers depending on bank state).
+    mmu->write(PROG + 0, 0xCB);              // WAI
+    mmu->write(PROG + 1, 0xEE);              // INC abs
+    mmu->write(PROG + 2, 0x10);
+    mmu->write(PROG + 3, 0x10);              // -> $1010 (the marker)
+    mmu->write(PROG + 4, 0xDB);              // STP
+    mmu->write(MARK, 0x00);                  // marker starts at 0
+    // Sanity: confirm the injected WAI opcode is visible to the CPU at PROG.
+    uint8_t fetched = mmu->read(PROG);
+    // Point the emulation-mode IRQ vector ($FFFE/$FFFF) at $FF00 and lay a STP
+    // there: if the masked IRQ were (wrongly) serviced, the PC diverts into the
+    // $FFxx trap instead of running INC $2010 -> the marker stays 0 -> FAIL.
+    mmu->write(0x00FFFE, 0x00);
+    mmu->write(0x00FFFF, 0xFF);
+    mmu->write(0x00FF00, 0xDB);              // STP at the trap
+
+    // --- set the CPU into the exact corner state ---
+    cpu->halt = 0;
+    cpu->clock_stopped = false;
+    cpu->reset_asserted = 0;
+    cpu->rdy = false;
+    cpu->E = 1;                 // emulation mode (the cold-boot default)
+    cpu->pb = 0x00;
+    cpu->db = 0x00;
+    cpu->pc = (uint16_t)PROG;
+    cpu->I = 1;                 // interrupt SERVICING masked
+    cpu->irq_asserted = true;   // ... but an interrupt IS pending (the wake source)
+    cpu->irq_pipe = 0;          // with I=1 the pipe never latches -> no servicing
+
+    bool saw_rdy = false;       // WAI must set RDY at least once
+    bool resumed = false;       // ... then RDY must clear and execution continue
+    const int STEP_CAP = 64;    // bounded: a never-waking part can't hang the test
+    int steps = 0;
+    for (; steps < STEP_CAP; steps++) {
+        (cpu->cpun->execute_next)(cpu);
+        if (cpu->rdy) saw_rdy = true;
+        else if (saw_rdy) resumed = true;   // first clear after a set = the wake
+        if (cpu->clock_stopped) break;      // STP reached -> program finished
+    }
+
+    uint8_t  marker = mmu->read(MARK);
+    uint32_t pc24   = ((uint32_t)cpu->pb << 16) | cpu->pc;
+    bool took_vector = (cpu->pc >= 0xFF00 && cpu->pc <= 0xFFFF && cpu->pb == 0);
+
+    // PASS criteria (all must hold):
+    //  - WAI raised RDY (the part actually entered the wait)         saw_rdy
+    //  - RDY then cleared (it WOKE on the pending, masked interrupt)  resumed
+    //  - the instruction after WAI ran (INC $2010)                    marker==1
+    //  - the masked IRQ was NOT serviced (no divert to the vector)    !took_vector
+    //  - the part halted within the step cap (no RDY spin)            clock_stopped
+    int ok = saw_rdy && resumed && (marker == 0x01) && !took_vector && cpu->clock_stopped;
+
+    printf("CPUTEST wai_wake: fetched=%02X saw_rdy=%d resumed=%d marker=%02X "
+           "took_vector=%d stopped=%d steps=%d pc=%06X -- %s\n",
+           fetched, saw_rdy, resumed, marker, took_vector, cpu->clock_stopped,
+           steps, (unsigned)pc24, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
 static void run_headless_spike(GS2AppState *state) {
     computer_t *computer = state->computer;
+
+    // Env-gated CPU micro-test short-circuit: when A2GSPU_CPUTEST names a case,
+    // run only that case and exit with its verdict (the normal frame spike, the
+    // GS/OS round-trip, and the boot golden are all bypassed). Keeps the CPU
+    // corner-case proof on the same headless exit-code rail as the boot gate.
+    if (const char *ct = SDL_getenv("A2GSPU_CPUTEST")) {
+        int rc = run_cpu_microtest(state, ct);
+        printf("=== CPUTEST COMPLETE (%s) ===\n", rc == 0 ? "PASS" : "FAIL");
+        exit(rc);
+    }
+
     printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
 
     computer->execution_mode = EXEC_NORMAL;
