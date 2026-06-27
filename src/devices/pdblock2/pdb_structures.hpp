@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <vector>
 #include "util/media.hpp"
 #include "SlotData.hpp"
 #include "util/StorageDevice.hpp"
@@ -34,6 +35,12 @@ struct media_t {
     storage_key_t key;
     int last_block_accessed;
     uint64_t last_block_access_time;
+    // Optional in-RAM copy-on-write backing (opt-in, default empty).
+    // When ram.size() != 0 the block device serves reads/writes from this buffer
+    // instead of the host file: writes stay in RAM (the host image is never
+    // modified -> COW), and per-block fseek/fread/fwrite are eliminated. This is
+    // the in-memory disk lever that lets a dev loop skip the slow re-mint/re-read.
+    std::vector<uint8_t> ram;
 };
 
 struct pdblock_cmd_v1 {

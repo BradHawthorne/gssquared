@@ -118,6 +118,26 @@ public:
     * slot and drive here might be virtual as one physical slot can map drives
     * to a different virtual slot.
     */
+    // Opt-in in-memory disk: if A2GSPU_RAMDISK is set in the environment, load the
+    // entire image (header + data) into a RAM buffer once. read_block/write_block
+    // then serve from RAM; writes never touch the host file (copy-on-write base).
+    // Leaves drv.ram empty (== OFF) on any failure so the host-file path is kept.
+    void maybe_load_ramdisk(media_t &drv) {
+        if (getenv("A2GSPU_RAMDISK") == nullptr) return;
+        media_descriptor *media = drv.media;
+        if (media == nullptr || drv.file == nullptr) return;
+        uint64_t want = media->data_offset + (uint64_t)media->block_count * media->block_size;
+        if (want == 0 || want > (256ull * 1024 * 1024)) return; // sanity cap (256MB)
+        std::vector<uint8_t> buf(want, 0);
+        if (fseek(drv.file, 0, SEEK_SET) != 0) return;
+        size_t got = fread(buf.data(), 1, (size_t)want, drv.file);
+        // A short read is fine (image may be exactly data-sized); zero-fill the rest.
+        if (got == 0) return;
+        drv.ram = std::move(buf);
+        if (DEBUG(DEBUG_PD_BLOCK))
+            std::cout << "PDB3 RAMDISK: loaded " << got << " bytes for " << media->filestub << std::endl;
+    }
+
     // drive is unit 0-based
     void read_block(uint8_t drive, uint32_t block, uint32_t addr) {
         uint8_t block_buffer[512];
@@ -137,15 +157,24 @@ public:
             cmd_buffer.error = PD_ERROR_IO;
             return;
         }
-        if (fseek(fp, media->data_offset + (block * media->block_size), SEEK_SET) < 0) {
-            cmd_buffer.error = PD_ERROR_IO;
-        }
-        size_t bytes_read = fread(block_buffer, 1, media->block_size, fp);
-        if (bytes_read != media->block_size) {
-            cmd_buffer.error = PD_ERROR_IO;
-        }
-        for (int i = 0; i < media->block_size; i++) {
-            mmu->write(addr + i, block_buffer[i]); 
+        uint64_t off = media->data_offset + (uint64_t)block * media->block_size;
+        std::vector<uint8_t> &ram = drives[drive].ram;
+        if (!ram.empty()) {
+            // In-RAM path: no fseek/fread. Bounds already checked above.
+            for (int i = 0; i < media->block_size; i++) {
+                mmu->write(addr + i, (off + i < ram.size()) ? ram[off + i] : 0);
+            }
+        } else {
+            if (fseek(fp, off, SEEK_SET) < 0) {
+                cmd_buffer.error = PD_ERROR_IO;
+            }
+            size_t bytes_read = fread(block_buffer, 1, media->block_size, fp);
+            if (bytes_read != media->block_size) {
+                cmd_buffer.error = PD_ERROR_IO;
+            }
+            for (int i = 0; i < media->block_size; i++) {
+                mmu->write(addr + i, block_buffer[i]);
+            }
         }
         drives[drive].last_block_accessed = block;
         drives[drive].last_block_access_time = clock ? clock->get_cycles() : 0;
@@ -176,11 +205,20 @@ public:
             return;
         }
 
-        for (int i = 0; i < media->block_size; i++) {
-            block_buffer[i] = mmu->read(addr + i); 
+        uint64_t off = media->data_offset + (uint64_t)block * media->block_size;
+        std::vector<uint8_t> &ram = drives[drive].ram;
+        if (!ram.empty()) {
+            // In-RAM COW path: write stays in RAM, host file is never modified.
+            for (int i = 0; i < media->block_size; i++) {
+                if (off + i < ram.size()) ram[off + i] = mmu->read(addr + i);
+            }
+        } else {
+            for (int i = 0; i < media->block_size; i++) {
+                block_buffer[i] = mmu->read(addr + i);
+            }
+            fseek(fp, off, SEEK_SET);
+            fwrite(block_buffer, 1, media->block_size, fp);
         }
-        fseek(fp, media->data_offset + (block * media->block_size), SEEK_SET);
-        fwrite(block_buffer, 1, media->block_size, fp);
         drives[drive].last_block_accessed = block;
         drives[drive].last_block_access_time = clock ? clock->get_cycles() : 0;
     }
@@ -452,6 +490,13 @@ public:
             drives[unused_unit].media = media;
             drives[unused_unit].key = key;  // mark this as being mounted on this key
             disk_switched[unused_unit] = true;
+
+            // In-memory COW lever (opt-in via A2GSPU_RAMDISK): slurp the whole
+            // image into RAM once at mount. Reads/writes then hit RAM, never the
+            // host file -> zero per-block disk I/O and a non-persistent (COW) base.
+            // Default-OFF: when the env is unset, ram stays empty and the original
+            // fseek/fread/fwrite host-file path is used unchanged.
+            maybe_load_ramdisk(drives[unused_unit]);
 
             if (first_mounted_unit == -1) first_mounted_unit = unused_unit;
         }
