@@ -54,6 +54,8 @@
 #include "ui/SelectSystem.hpp"
 #include "ui/MainAtlas.hpp"
 #include "cpus/cpu_implementations.hpp"
+#include "NClock.hpp"
+#include "opcodes.hpp"
 #include "version.h"
 #include "util/Metrics.hpp"
 #include "util/DebugHandlerIDs.hpp"
@@ -895,41 +897,323 @@ static bool a2gspu_snap_check_sentinel(FILE *f) {
     return end == A2GSPU_SNAP_END;
 }
 
-// ---------------------------------------------------------------------------
-// Env-gated headless CPU micro-test (A2GSPU_CPUTEST). Runs the real instruction
-// stepper (cpun->execute_next) against a hand-built scenario in bank-0 RAM, then
-// exits with a pass/fail code. No GUI, no test ROM, no device dependency — it is
-// the same headless exit-code contract the boot/assert gate uses, applied to a
-// single CPU corner case. Currently one case:
+// ===========================================================================
+// Env-gated headless CPU micro-test suite (A2GSPU_CPUTEST=<name>).
 //
-//   "wai_wake": a 65xx WAI with a pending interrupt that is MASKED by I=1.
-//     The part must WAKE (clear RDY) on the pending interrupt regardless of the
-//     I flag — I gates servicing (the vector dispatch), not the wake. So the CPU
-//     must resume and execute the instruction AFTER WAI, and must NOT take the
-//     IRQ vector (the masked interrupt is not serviced). Before the fix the
-//     stepper spun in RDY forever with I=1 + interrupt asserted; the step cap
-//     below converts that hang into a clean FAIL rather than a wedge.
+// Each case runs the REAL instruction stepper (cpu->cpun->execute_next, the
+// 65816 mode-dispatcher) against a hand-built scenario in bank-0 RAM, then
+// exits with a pass/fail code. No GUI, no test ROM, no device dependency — the
+// same headless exit-code contract the boot/assert gate uses, applied to a
+// single CPU corner case. Scenarios are driven with REAL opcodes injected in
+// RAM (XCE/REP/SEP/etc.) so the dispatcher selects the correct width core just
+// as it does in normal execution; this is what gives the tests their teeth.
 //
-// Program injected at bank-0 $2000 (8-bit emulation mode, the cold-boot state):
-//     2000  CB        WAI
-//     2001  EE 10 20  INC $2010      ; "resumed past WAI" marker -> $2010 = 1
-//     2004  DB        STP            ; halt the part cleanly so the loop ends
-//   $2010 is pre-zeroed; the IRQ vector $FFFE/$FFFF is pointed at a TRAP page so
+// This suite is the regression net for the CPU-accuracy contracts the project's
+// behavioral oracle (and every golden derived from it) silently depends on. A
+// future edit that breaks one of these corners flips the named test to FAIL
+// instead of corrupting goldens undetected. Each case below is teeth-proven:
+// it PASSES with the accuracy fix in place and FAILS if the fix is reverted.
+//
+// Cases (each a separate A2GSPU_CPUTEST value):
+//   wai_wake        WAI wakes on a MASKED pending IRQ (I gates servicing,
+//                   not the wake); the masked IRQ is not serviced.
+//   plp_native_x    PLP in native mode with the pulled X(index-8) bit set
+//                   forces the index high bytes to $00.
+//   rti_native_x    same contract via RTI's pull path.
+//   dp_wrap_dl0     emulation-mode (d) indirect with DL==0 wraps the pointer
+//                   high-byte fetch inside the zero page ($00FF -> $0000).
+//   dec_z_816       65816 decimal-mode ADC sets Z from the BCD result (A==0).
+//   dec_z_nmos      NMOS 6502 decimal-mode ADC sets Z from the BINARY sum
+//                   A+M+C (the M4 +C fix); contrasts the 65816 contract.
+//   branch_cyc      native-mode taken branch across a page = flat 3 cycles
+//                   (no NMOS page-cross +1 penalty).
+//   jmp_ind_816     65816 JMP ($xxFF) reads the vector high byte from the NEXT
+//                   page (no page-boundary bug).
+//   jmp_ind_nmos    NMOS 6502 JMP ($xxFF) DOES wrap inside the page (the bug).
+// ===========================================================================
+
+// Drive the dispatched 65816 from cold emulation state into native mode with
+// 16-bit index registers (E=0, X=0). Returns with the machine parked so the
+// caller can inject and run its own opcodes from PROG.
+//
+// Program at PROG (emulation cold state):  18 FB        CLC ; XCE  -> native
+//                                          C2 10        REP #$10  -> X=0 (16b idx)
+static void microtest_go_native_x16(cpu_state *cpu, MMU *mmu, uint32_t PROG) {
+    mmu->write(PROG + 0, 0x18);   // CLC
+    mmu->write(PROG + 1, 0xFB);   // XCE  -> E=C=0 : native mode
+    mmu->write(PROG + 2, 0xC2);   // REP #imm
+    mmu->write(PROG + 3, 0x10);   //  #$10 -> clear X flag (16-bit index)
+    // Full cold-state reset so a prior case cannot contaminate this one when the
+    // suite is run back-to-back via A2GSPU_CPUTEST=all (each case is independent).
+    cpu->p = 0x00; cpu->d = 0x0000; cpu->a = 0x0000; cpu->sp = 0x01FF;
+    cpu->E = 1; cpu->_M = 1; cpu->_X = 1;     // cold emulation defaults (after p=0)
+    cpu->pb = 0x00; cpu->db = 0x00; cpu->full_db = 0;
+    cpu->pc = (uint16_t)PROG;
+    cpu->I = 1; cpu->irq_asserted = false; cpu->irq_pipe = 0;
+    cpu->clock_stopped = false; cpu->halt = 0; cpu->reset_asserted = 0; cpu->rdy = false;
+    // Exactly three instructions: CLC, XCE, REP #$10. (Running a 4th step here
+    // would prematurely execute the caller's first real opcode at PROG+4.)
+    for (int i = 0; i < 3; i++) (cpu->cpun->execute_next)(cpu);  // CLC, XCE, REP
+}
+
+// --- PLP / RTI native-mode index-high clear (contract 1) -------------------
+// In native mode with 16-bit index (X=0) and non-zero index high bytes, pulling
+// a P with the X(index-8) bit SET must force x_hi/y_hi to $00 (the real 65816
+// mirrors the SEP/XCE width-narrowing). Reverting the fix leaves x_hi/y_hi at
+// their pre-set values -> FAIL. via_rti selects RTI's pull path vs PLP's.
+static int microtest_native_x_pull(cpu_state *cpu, MMU *mmu, bool via_rti) {
+    const uint32_t PROG = 0x001000;
+    microtest_go_native_x16(cpu, mmu, PROG);    // native, M=8bit (A_lo), X=16bit
+    bool native16 = (cpu->E == 0 && cpu->_X == 0);
+
+    // The bytes to be pulled are pushed with REAL stack instructions (PHA) so the
+    // push and the later pull use the identical SP-relative mapping regardless of
+    // the alt-ZP / language-card soft-switch state a prior case may have left set.
+    // P value to be pulled: the X index-width bit (bit 4, $10) set => narrow the
+    // index registers to 8-bit. (In native P, bit 4 is the X flag.)
+    const uint8_t pulled_p = 0x10;       // X=1, everything else clear
+
+    const char *opname;
+    uint32_t at = PROG + 4;
+    if (!via_rti) {
+        // LDA #pulled_p ; PHA ; (dirty x/y hi) ; PLP
+        mmu->write(at++, OP_LDA_IMM); mmu->write(at++, pulled_p);
+        mmu->write(at++, OP_PHA_IMP);
+        mmu->write(at++, OP_PLP_IMP);
+        cpu->pc = (uint16_t)(PROG + 4);
+        (cpu->cpun->execute_next)(cpu);  // LDA
+        (cpu->cpun->execute_next)(cpu);  // PHA  (push P onto the real stack)
+        cpu->x_hi = 0xAA; cpu->y_hi = 0xBB;   // dirty AFTER the push, before the pull
+        (cpu->cpun->execute_next)(cpu);  // PLP  (pulls the byte we just pushed)
+        opname = "plp_native_x";
+    } else {
+        // Push the RTI frame with PHA in reverse pull order: PB, PCH, PCL, P.
+        // RTI pulls P (top), then PCL, PCH, then PB.
+        const uint8_t frame[4] = { 0x00, 0x20, 0x00, pulled_p }; // PB, PCH, PCL, P
+        for (int i = 0; i < 4; i++) {
+            mmu->write(at++, OP_LDA_IMM); mmu->write(at++, frame[i]);
+            mmu->write(at++, OP_PHA_IMP);
+        }
+        uint32_t rti_at = at;
+        mmu->write(at++, OP_RTI_IMP);
+        cpu->pc = (uint16_t)(PROG + 4);
+        for (int i = 0; i < 8; i++) (cpu->cpun->execute_next)(cpu);  // 4x (LDA;PHA)
+        cpu->x_hi = 0xAA; cpu->y_hi = 0xBB;   // dirty before the RTI pull
+        cpu->pc = (uint16_t)rti_at;
+        (cpu->cpun->execute_next)(cpu);  // RTI
+        opname = "rti_native_x";
+    }
+
+    bool x_narrowed = (cpu->_X == 1);     // the pulled P actually set X
+    int ok = native16 && x_narrowed && (cpu->x_hi == 0x00) && (cpu->y_hi == 0x00);
+    printf("CPUTEST %s: native16=%d x_set=%d x_hi=%02X y_hi=%02X -- %s\n",
+           opname, native16, x_narrowed, cpu->x_hi, cpu->y_hi, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- emulation-mode (d) indirect DL=0 page wrap (contract 2) ----------------
+// In emulation mode with the Direct-page low byte == 0, the (d) indirect
+// pointer's high-byte fetch wraps INSIDE the zero page ($00FF -> $0000), not
+// across into $0100. We build a pointer whose low byte is at $00FF: wrap-correct
+// reads the high byte from $0000, the (reverted) bug reads it from $0100. The
+// two candidate pointers address two different bytes; A distinguishes them.
+static int microtest_dp_wrap_dl0(cpu_state *cpu, MMU *mmu) {
+    const uint32_t PROG = 0x001000;
+    // pointer low at $00FF; wrap-correct high at $0000 -> ptr=$1234
+    //                       buggy        high at $0100 -> ptr=$9934
+    mmu->write(0x0000FF, 0x34);          // pointer low byte
+    mmu->write(0x000000, 0x12);          // wrap-correct high byte
+    mmu->write(0x000100, 0x99);          // buggy (cross-page) high byte
+    mmu->write(0x001234, 0x42);          // value at the wrap-correct target
+    mmu->write(0x009934, 0x77);          // value at the buggy target
+    // LDA (d) with d-operand $FF, in emulation mode, D(irect)=$0000.
+    mmu->write(PROG + 0, OP_LDA_IND);    // B2  LDA (d)
+    mmu->write(PROG + 1, 0xFF);          //  (d)=$FF
+    mmu->write(PROG + 2, OP_STP_IMP);    // DB  STP
+
+    cpu->E = 1; cpu->_M = 1; cpu->_X = 1;   // emulation mode (cold)
+    cpu->d = 0x0000;                        // DL == 0 (the quirk condition)
+    cpu->pb = 0x00; cpu->db = 0x00; cpu->full_db = 0;
+    cpu->a = 0x0000; cpu->pc = (uint16_t)PROG;
+    cpu->I = 1; cpu->irq_asserted = false; cpu->irq_pipe = 0;
+    cpu->clock_stopped = false; cpu->halt = 0; cpu->reset_asserted = 0; cpu->rdy = false;
+
+    (cpu->cpun->execute_next)(cpu);      // LDA (d)
+    uint8_t a = cpu->a_lo;
+    int ok = (a == 0x42);                // wrap-correct value loaded
+    printf("CPUTEST dp_wrap_dl0: a=%02X (want 42 wrap / 77 buggy) -- %s\n",
+           a, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- decimal-mode Z flag (contract 3) ---------------------------------------
+// The 65816 sets the decimal-mode Z from the BCD result (A==0). The NMOS 6502
+// sets it from the raw BINARY sum A+M+C (carry included — the M4 fix added the
+// +C). We pick operands where the two disagree: A=$99, M=$01, C=0, decimal.
+//   BCD:    $99 + $01 = $00 with carry  -> 65816 Z=1 (result A is $00)
+//   binary: $99 + $01 + 0 = $9A != 0    -> NMOS   Z=0
+// Without the M4 +C the NMOS binary sum can still differ; we additionally drive
+// a carry-in case below to pin the +C specifically.
+//
+// 65816 path runs on the live dispatched core. NMOS path runs on a transient
+// 6502 core (the project's oracle never uses NMOS, but the fix's +C lives on
+// that path, so the teeth require it). The transient core shares this CPU's
+// mmu/clock and is destroyed on return; it does not perturb the machine state
+// that boot/golden depend on (this test is env-gated off the boot path).
+static int microtest_dec_z_816(cpu_state *cpu, MMU *mmu) {
+    const uint32_t PROG = 0x001000;
+    microtest_go_native_x16(cpu, mmu, PROG);    // native; M still 8-bit (REP #$10 only)
+    // SED ; LDA #$99 ; ADC #$01   (8-bit A, decimal)
+    mmu->write(PROG + 4, OP_SED_IMP);   // F8 SED
+    mmu->write(PROG + 5, OP_LDA_IMM);   // A9
+    mmu->write(PROG + 6, 0x99);
+    mmu->write(PROG + 7, OP_ADC_IMM);   // 69
+    mmu->write(PROG + 8, 0x01);
+    mmu->write(PROG + 9, OP_STP_IMP);   // DB
+    cpu->C = 0; cpu->pc = (uint16_t)(PROG + 4);
+    for (int i = 0; i < 4 && !cpu->clock_stopped; i++) (cpu->cpun->execute_next)(cpu);
+    // BCD: $99 + $01 = $00, carry out. 65816: A==$00 -> Z=1.
+    int ok = (cpu->a_lo == 0x00) && (cpu->Z == 1) && (cpu->C == 1);
+    printf("CPUTEST dec_z_816: a=%02X Z=%d C=%d (want a=00 Z=1 C=1) -- %s\n",
+           cpu->a_lo, cpu->Z, cpu->C, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+static int microtest_dec_z_nmos(cpu_state *cpu, MMU *mmu, NClock *clk) {
+    const uint32_t PROG = 0x001000;
+    // Build a transient NMOS 6502 core that shares this machine's clock.
+    std::unique_ptr<BaseCPU> nmos = createCPU(PROCESSOR_6502, clk);
+    if (!nmos) { printf("CPUTEST dec_z_nmos: no NMOS core -- FAIL\n"); return 1; }
+    BaseCPU *saved = cpu->cpun.release();   // park the live dispatcher
+    cpu->cpun.reset(nmos.release());
+    BaseCPU *saved_core = cpu->core;
+    cpu->core = cpu->cpun.get();
+
+    // SED ; SEC ; LDA #$98 ; ADC #$01   (binary A+M+C = $98+$01+1 = $9A != 0)
+    //   The M4 fix counts the carry-in: without +C the binary sum is $99 ->
+    //   still != 0 here, so we also assert the carry-included branch via a
+    //   second operand set that is zero ONLY with the +C: A=$98 M=$01 C=0 ...
+    // We instead use the cleanest discriminator of the +C term:
+    //   A=$99 M=$00 C=1, decimal:
+    //     binary A+M+C = $99+$00+1 = $9A  -> Z=0  (correct, carry counted)
+    //     WITHOUT +C   = $99+$00   = $99  -> Z=0  (same here)
+    // That does not discriminate. Use A=$FF M=$00 C=1:
+    //     with +C: $FF+$00+1 = $100 -> low byte $00 -> Z=1
+    //     no  +C : $FF+$00   = $FF  -> Z=0
+    // BCD result of $FF+$00+1 in decimal is implementation noise; we assert
+    // ONLY Z, which the fix derives from the binary low byte being $00.
+    mmu->write(PROG + 0, OP_SED_IMP);   // F8 SED
+    mmu->write(PROG + 1, OP_SEC_IMP);   // 38 SEC (C=1, the carry-in)
+    mmu->write(PROG + 2, OP_LDA_IMM);   // A9
+    mmu->write(PROG + 3, 0xFF);
+    mmu->write(PROG + 4, OP_ADC_IMM);   // 69
+    mmu->write(PROG + 5, 0x00);
+    mmu->write(PROG + 6, OP_NOP_IMP);   // EA (NMOS has no STP; park on NOP)
+
+    cpu->E = 1; cpu->_M = 1; cpu->_X = 1;
+    cpu->pb = 0; cpu->db = 0; cpu->full_db = 0;
+    cpu->p = 0; cpu->a = 0; cpu->pc = (uint16_t)PROG;
+    cpu->I = 1; cpu->irq_asserted = false; cpu->irq_pipe = 0;
+    cpu->clock_stopped = false; cpu->halt = 0; cpu->reset_asserted = 0; cpu->rdy = false;
+    for (int i = 0; i < 5; i++) (cpu->cpun->execute_next)(cpu);  // SED SEC LDA ADC NOP
+
+    // binary A+M+C = $FF+$00+1 = $100 -> low byte $00 -> NMOS decimal Z = 1.
+    int ok = (cpu->Z == 1);
+    printf("CPUTEST dec_z_nmos: Z=%d (want Z=1 from binary A+M+C carry) -- %s\n",
+           cpu->Z, ok ? "PASS" : "FAIL");
+
+    // restore the live dispatched core; drop the transient.
+    cpu->cpun.reset(saved);
+    cpu->core = saved_core;
+    return ok ? 0 : 1;
+}
+
+// --- native-mode taken-branch cycle count (contract 4) ----------------------
+// On the 65816 in native mode (E=0) a taken branch is a flat 3 cycles with NO
+// page-cross penalty (the NMOS/emulation +1 for crossing a page does not apply).
+// We place a BNE that is taken and crosses a page boundary, then measure the
+// clock delta across exactly that one instruction. Native = 3; the reverted
+// (penalty-applied) path would charge 4.
+static int microtest_branch_cyc(cpu_state *cpu, MMU *mmu, NClock *clk) {
+    const uint32_t PROG = 0x001000;
+    microtest_go_native_x16(cpu, mmu, PROG);
+    // Put the BNE so its NEXT instruction byte sits near a page end and the
+    // target is on a different page. BNE at $10FE: PC after operand = $1100;
+    // rel = +$10 (forward) -> target $1110, crossing from page $11 ... we need
+    // the cross to be from the post-fetch PC's page. Place BNE at $10FC:
+    //   opcode $10FC, operand $10FD, PC after fetch = $10FE; target = $10FE +
+    //   (int8)$7F = $117D -> page $10 -> $11 cross. Z must be 0 (taken).
+    const uint32_t BR = 0x0010FC;
+    mmu->write(BR + 0, 0xD0);            // BNE
+    mmu->write(BR + 1, 0x7F);            //  rel +$7F (forward, page-crossing)
+    cpu->_Z = 0;                         // not-equal => BNE taken
+    cpu->pc = (uint16_t)BR;
+    uint64_t c0 = clk->get_cycles();
+    (cpu->cpun->execute_next)(cpu);      // the BNE
+    uint64_t c1 = clk->get_cycles();
+    uint64_t cyc = c1 - c0;
+    uint16_t pc = cpu->pc;
+    bool crossed = ((BR + 2) & 0xFF00) != (pc & 0xFF00);
+    int ok = (cyc == 3) && crossed && (pc == 0x117D);
+    printf("CPUTEST branch_cyc: cycles=%llu pc=%04X crossed=%d (want 3, no +1) -- %s\n",
+           (unsigned long long)cyc, pc, crossed, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- JMP (indirect) page-boundary behavior (contract 5) ---------------------
+// 65816: JMP ($xxFF) fetches the vector high byte from the NEXT page (correct).
+// NMOS 6502: it WRAPS inside the page (the classic bug). We lay a vector whose
+// low byte is at $20FF; correct high comes from $2100, the bug reads $2000.
+static int microtest_jmp_ind(cpu_state *cpu, MMU *mmu, bool nmos, NClock *clk) {
+    const uint32_t PROG = 0x001000;
+    const uint32_t VECLO = 0x0020FF;     // pointer low byte
+    mmu->write(VECLO, 0xCD);             // vector low = $CD
+    mmu->write(0x002100, 0xAB);          // NEXT-page high  -> $ABCD (816 correct)
+    mmu->write(0x002000, 0x12);          // SAME-page high  -> $12CD (NMOS bug)
+    mmu->write(PROG + 0, OP_JMP_IND);    // 6C  JMP ($20FF)
+    mmu->write(PROG + 1, 0xFF);
+    mmu->write(PROG + 2, 0x20);
+
+    BaseCPU *saved = nullptr, *saved_core = nullptr;
+    std::unique_ptr<BaseCPU> nmoscore;
+    if (nmos) {
+        nmoscore = createCPU(PROCESSOR_6502, clk);
+        if (!nmoscore) { printf("CPUTEST jmp_ind_nmos: no NMOS core -- FAIL\n"); return 1; }
+        saved = cpu->cpun.release();
+        cpu->cpun.reset(nmoscore.release());
+        saved_core = cpu->core; cpu->core = cpu->cpun.get();
+    }
+    cpu->E = 1; cpu->_M = 1; cpu->_X = 1;
+    cpu->pb = 0; cpu->db = 0; cpu->full_db = 0;
+    cpu->pc = (uint16_t)PROG;
+    cpu->I = 1; cpu->irq_asserted = false; cpu->irq_pipe = 0;
+    cpu->clock_stopped = false; cpu->halt = 0; cpu->reset_asserted = 0; cpu->rdy = false;
+
+    (cpu->cpun->execute_next)(cpu);      // the JMP (Indirect)
+    uint16_t pc = cpu->pc;
+    int ok;
+    if (nmos) {
+        ok = (pc == 0x12CD);             // page-wrapped (the bug present)
+        printf("CPUTEST jmp_ind_nmos: pc=%04X (want 12CD wrapped/bug) -- %s\n",
+               pc, ok ? "PASS" : "FAIL");
+        cpu->cpun.reset(saved);          // restore live dispatcher
+        cpu->core = saved_core;
+    } else {
+        ok = (pc == 0xABCD);             // next-page high (no bug)
+        printf("CPUTEST jmp_ind_816: pc=%04X (want ABCD next-page/no-bug) -- %s\n",
+               pc, ok ? "PASS" : "FAIL");
+    }
+    return ok ? 0 : 1;
+}
+
+// Program injected at bank-0 $1000 (8-bit emulation mode, the cold-boot state):
+//     1000  CB        WAI
+//     1001  EE 10 10  INC $1010      ; "resumed past WAI" marker -> $1010 = 1
+//     1004  DB        STP            ; halt the part cleanly so the loop ends
+//   $1010 is pre-zeroed; the IRQ vector $FFFE/$FFFF is pointed at a TRAP page so
 //   that, if the masked IRQ were wrongly serviced, the PC would land in $FF00..
 //   and the marker would never be written (caught as a FAIL).
-static int run_cpu_microtest(GS2AppState *state, const char *which) {
-    computer_t *computer = state->computer;
-    cpu_state  *cpu = computer->cpu;
-    if (!cpu || !cpu->mmu || !cpu->cpun) {
-        printf("CPUTEST: machine not initialized -- FAIL\n");
-        return 1;
-    }
-    MMU *mmu = cpu->mmu;
-
-    if (strcmp(which, "wai_wake") != 0) {
-        printf("CPUTEST: unknown case '%s' -- FAIL\n", which);
-        return 1;
-    }
+static int microtest_wai_wake(cpu_state *cpu, MMU *mmu) {
 
     // --- build the scenario in RAM (write_raw bypasses IO/shadow side effects) ---
     // $1000 is bank-0 main RAM outside every IIgs shadow window ($0400-$07FF text,
@@ -995,6 +1279,47 @@ static int run_cpu_microtest(GS2AppState *state, const char *which) {
            fetched, saw_rdy, resumed, marker, took_vector, cpu->clock_stopped,
            steps, (unsigned)pc24, ok ? "PASS" : "FAIL");
     return ok ? 0 : 1;
+}
+
+// Dispatcher: A2GSPU_CPUTEST=<name> selects one case. "all" runs every case and
+// fails if any one fails (the CI entry point). Unknown name -> FAIL.
+static int run_cpu_microtest(GS2AppState *state, const char *which) {
+    computer_t *computer = state->computer;
+    cpu_state  *cpu = computer->cpu;
+    if (!cpu || !cpu->mmu || !cpu->cpun || !computer->clock) {
+        printf("CPUTEST: machine not initialized -- FAIL\n");
+        return 1;
+    }
+    MMU    *mmu = cpu->mmu;
+    NClock *clk = (NClock *)computer->clock;   // NClockII is-a NClock
+
+    if (strcmp(which, "wai_wake")     == 0) return microtest_wai_wake(cpu, mmu);
+    if (strcmp(which, "dp_wrap_dl0")  == 0) return microtest_dp_wrap_dl0(cpu, mmu);
+    if (strcmp(which, "dec_z_816")    == 0) return microtest_dec_z_816(cpu, mmu);
+    if (strcmp(which, "dec_z_nmos")   == 0) return microtest_dec_z_nmos(cpu, mmu, clk);
+    if (strcmp(which, "branch_cyc")   == 0) return microtest_branch_cyc(cpu, mmu, clk);
+    if (strcmp(which, "plp_native_x") == 0) return microtest_native_x_pull(cpu, mmu, false);
+    if (strcmp(which, "rti_native_x") == 0) return microtest_native_x_pull(cpu, mmu, true);
+    if (strcmp(which, "jmp_ind_816")  == 0) return microtest_jmp_ind(cpu, mmu, false, clk);
+    if (strcmp(which, "jmp_ind_nmos") == 0) return microtest_jmp_ind(cpu, mmu, true,  clk);
+
+    if (strcmp(which, "all") == 0) {
+        int fails = 0;
+        fails += (microtest_wai_wake(cpu, mmu) != 0);
+        fails += (microtest_native_x_pull(cpu, mmu, false) != 0);
+        fails += (microtest_native_x_pull(cpu, mmu, true)  != 0);
+        fails += (microtest_dp_wrap_dl0(cpu, mmu) != 0);
+        fails += (microtest_dec_z_816(cpu, mmu) != 0);
+        fails += (microtest_dec_z_nmos(cpu, mmu, clk) != 0);
+        fails += (microtest_branch_cyc(cpu, mmu, clk) != 0);
+        fails += (microtest_jmp_ind(cpu, mmu, false, clk) != 0);
+        fails += (microtest_jmp_ind(cpu, mmu, true,  clk) != 0);
+        printf("CPUTEST all: %d failure(s)\n", fails);
+        return fails == 0 ? 0 : 1;
+    }
+
+    printf("CPUTEST: unknown case '%s' -- FAIL\n", which);
+    return 1;
 }
 
 static void run_headless_spike(GS2AppState *state) {
