@@ -878,6 +878,23 @@ static bool a2gspu_cpu_load(FILE *f, cpu_state *cpu) {
 }
 #undef A2GSPU_FREAD
 
+// Trailing snapshot sentinel: a magic word written LAST (after the cpu + mmu blocks)
+// on save, and required to read back exactly on load. The per-field checked-fread above
+// catches a truncation that lands inside a known field; the sentinel additionally catches
+// a snapshot truncated at/after the final field (e.g. the mmu block cut short, or a save
+// interrupted right before its last bytes) — the load would otherwise hit EOF only after
+// every field happened to read, and restore a silently-incomplete machine as success.
+static const uint32_t A2GSPU_SNAP_END = 0x444E4553;  // 'SEND'
+static void a2gspu_snap_write_sentinel(FILE *f) {
+    uint32_t end = A2GSPU_SNAP_END;
+    fwrite(&end, 4, 1, f);
+}
+static bool a2gspu_snap_check_sentinel(FILE *f) {
+    uint32_t end = 0;
+    if (fread(&end, 4, 1, f) != 1) return false;
+    return end == A2GSPU_SNAP_END;
+}
+
 static void run_headless_spike(GS2AppState *state) {
     computer_t *computer = state->computer;
     printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
@@ -971,11 +988,13 @@ static void run_headless_spike(GS2AppState *state) {
         else {
             bool cpu_ok = a2gspu_cpu_load(sf, computer->cpu);
             bool mmu_ok = (cpu_ok && state->mmu_iigs) ? state->mmu_iigs->A2GSPU_restore(sf) : false;
+            bool end_ok = (cpu_ok && mmu_ok) ? a2gspu_snap_check_sentinel(sf) : false;
             fclose(sf);
-            if (!cpu_ok || !mmu_ok) {
-                printf("A2GSPU SNAP: restore FAILED from '%s' (cpu=%s mmu=%s) -- bad/stale magic or "
-                       "geometry mismatch; aborting.\n", snap_load,
-                       cpu_ok ? "ok" : "BAD-MAGIC", mmu_ok ? "ok" : "BAD");
+            if (!cpu_ok || !mmu_ok || !end_ok) {
+                printf("A2GSPU SNAP: restore FAILED from '%s' (cpu=%s mmu=%s end=%s) -- bad/stale magic, "
+                       "geometry mismatch, or truncated snapshot; aborting.\n", snap_load,
+                       cpu_ok ? "ok" : "BAD-MAGIC", mmu_ok ? "ok" : "BAD",
+                       end_ok ? "ok" : "TRUNC");
                 exit(2);
             }
             computer->cpu->halt = 0;          // force-run (HLT would no-op run_one_frame)
@@ -1044,6 +1063,7 @@ static void run_headless_spike(GS2AppState *state) {
         else {
             a2gspu_cpu_save(sf, computer->cpu);
             state->mmu_iigs->A2GSPU_snapshot(sf);
+            a2gspu_snap_write_sentinel(sf);   // trailing magic -> truncation is detectable on load
             fclose(sf);
             printf("A2GSPU SNAP: saved machine state to '%s'\n", snap_save);
         }

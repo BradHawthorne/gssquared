@@ -1207,6 +1207,8 @@ void a2gspu_emu_telnet_connect(a2gspu_emu_state *emu, const char *host, int port
     printf("A2GSPU TELNET: connected to %s:%d\n", host, port);
     emu->telnet_socket = sock;
     emu->telnet_connected = true;
+    // Start the per-connection IAC parser from a clean state.
+    emu->iac_state = 0; emu->iac_verb = 0; emu->iac_sb_option = 0; emu->iac_sb_len = 0;
 
     /* Send initial telnet negotiation immediately so the server knows
      * we're a telnet client before it decides our terminal type.
@@ -1268,26 +1270,16 @@ void a2gspu_emu_telnet_poll(a2gspu_emu_state *emu) {
             // ── Telnet IAC negotiation state machine ──────────────────────
             // Handles WILL/WONT/DO/DONT (3-byte), SB...SE (variable), and
             // responds to key options so the BBS enables ANSI mode.
-            // WARNING: these static locals persist across connections.  If a
-            // connection closes mid-negotiation and a new one opens, iac_state
-            // could be non-zero, causing the first bytes of the new session to be
-            // misinterpreted as continuation of a previous IAC sequence.  The reset
-            // below (at the disconnect point) clears this on clean closure, but an
-            // abrupt drop (got < 0 without a prior got==0 drain) could still leave
-            // stale state.  A future fix should promote these to emu fields and zero
-            // them unconditionally on disconnect.
-            static int iac_state = 0;  // 0=normal, 1=got IAC, 2=verb+opt, 3=SB data, 4=SB got IAC, 5=SB option
-            static uint8_t iac_verb = 0;  // the verb byte (WILL/WONT/DO/DONT)
-            static uint8_t sb_option = 0; // option byte for current SB
-            static uint8_t sb_buf[64];    // SB data accumulator
-            static int sb_len = 0;
-            static void *last_socket = nullptr; // detect reconnect to reset state
-            if (sock != last_socket) {
-                // New connection — reset IAC state to avoid stale mid-negotiation state
-                // from a previous session corrupting the first bytes of this one.
-                iac_state = 0; iac_verb = 0; sb_option = 0; sb_len = 0;
-                last_socket = sock;
-            }
+            // IAC negotiation state lives in per-connection emu fields (reset on
+            // connect AND disconnect), so a session that drops mid-IAC cannot
+            // bleed stale state into the next session's first bytes. Bind local
+            // references to the emu fields so the parser below reads naturally.
+            int     &iac_state = emu->iac_state;
+            uint8_t &iac_verb  = emu->iac_verb;
+            uint8_t &sb_option = emu->iac_sb_option;
+            uint8_t *sb_buf    = emu->iac_sb_buf;
+            const int sb_buf_cap = (int)sizeof(emu->iac_sb_buf);
+            int     &sb_len    = emu->iac_sb_len;
 
             // O13: fast path — state 0 (normal data) is by far the most common.
             // Check it first with __builtin_expect so the branch predictor trains on
@@ -1311,7 +1303,7 @@ void a2gspu_emu_telnet_poll(a2gspu_emu_state *emu) {
             if (iac_state == 3) {
                 // Inside subnegotiation data
                 if (b == IAC) { iac_state = 4; }
-                else if (sb_len < (int)sizeof(sb_buf)) { sb_buf[sb_len++] = b; }
+                else if (sb_len < sb_buf_cap) { sb_buf[sb_len++] = b; }
                 continue;
             }
             if (iac_state == 4) {
@@ -1332,7 +1324,7 @@ void a2gspu_emu_telnet_poll(a2gspu_emu_state *emu) {
                     iac_state = 0;
                 } else if (b == IAC) {
                     // IAC IAC inside SB = literal 0xFF
-                    if (sb_len < (int)sizeof(sb_buf)) sb_buf[sb_len++] = 0xFF;
+                    if (sb_len < sb_buf_cap) sb_buf[sb_len++] = 0xFF;
                     iac_state = 3;
                 } else {
                     iac_state = 3;  // unexpected, stay in SB
@@ -1399,14 +1391,10 @@ void a2gspu_emu_telnet_poll(a2gspu_emu_state *emu) {
         emu->telnet_connected = false;
         delete (vt100_state_t *)emu->telnet_vt100;
         emu->telnet_vt100 = nullptr;
-        // Reset IAC static state on clean disconnect.  The static variables
-        // (iac_state etc.) are declared inside the per-byte loop above; they
-        // cannot be reset from this outer scope without promoting them to emu
-        // fields.  Until that refactor happens, the WARNING above stands: an
-        // abrupt drop mid-negotiation leaves iac_state non-zero for the next
-        // connection.  Mitigation: telnet_poll() returns immediately when
-        // !telnet_connected, so no bytes are processed until reconnect — giving
-        // a full frame gap in which iac_state is effectively ignored.
+        // Reset the per-connection IAC negotiation state unconditionally on
+        // disconnect (clean or abrupt), so no stale mid-IAC state can carry into
+        // the next session.
+        emu->iac_state = 0; emu->iac_verb = 0; emu->iac_sb_option = 0; emu->iac_sb_len = 0;
 
         // Re-show address prompt (both EMU + HW paths).
         // We cannot call a2gspu_emu_set_mode(TERM) here to reuse the prompt

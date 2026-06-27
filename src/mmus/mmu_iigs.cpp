@@ -46,7 +46,7 @@ inline void bank_e1_write(void *context, uint32_t address, uint8_t value) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
     mmu_iigs->set_next_cycle_type(CYCLE_TYPE_SYNC);
 
-    if ((address & 0xF000) == 0xC000) mmu_iigs->megaii->write(address & 0xFFFF, value); // mmu_iigs->write_c0xx(address, value);
+    if ((address & 0xF000) == 0xC000) { mmu_iigs->megaii->write(address & 0xFFFF, value); return; } // mmu_iigs->write_c0xx(address, value); -- return so we don't fall through into the RAM/slot path below (the read path already returns)
 
     if (!mmu_iigs->is_bank_latch()) {
         mmu_iigs->megaii->write(address & 0xFFFF, value);

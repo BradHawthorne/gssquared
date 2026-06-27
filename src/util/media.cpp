@@ -346,6 +346,14 @@ int identify_media(media_descriptor& md) {
             std::cerr << "2MG block_count is zero (malformed): " << md.filename << std::endl;
             return -1;
         }
+        // Sanity-check bytes_count before dividing: it must be a whole multiple of the
+        // block count (else block_size truncates and data_size disagrees with the geometry).
+        if (hdr.bytes_count == 0 || (hdr.bytes_count % hdr.block_count) != 0) {
+            std::cerr << "2MG bytes_count " << hdr.bytes_count
+                      << " inconsistent with block_count " << hdr.block_count
+                      << " (malformed): " << md.filename << std::endl;
+            return -1;
+        }
         md.file_size = get_file_size(md.filename);
         md.block_count = hdr.block_count;
         md.block_size = hdr.bytes_count / hdr.block_count;

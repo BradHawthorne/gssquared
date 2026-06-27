@@ -2216,8 +2216,18 @@ int execute_next(cpu_state *cpu) override {
     }
 
     if (cpu->rdy) { // RDY test occurs after IRQ.
-        incr_cycles(cpu);
-        return 0;
+        // WAI sets rdy; the part wakes (clears rdy) on ANY pending interrupt,
+        // independent of the I flag. The I flag gates IRQ *servicing* (the
+        // vector dispatch above, fed by irq_pipe which is &-ed with !I), not the
+        // wake. With I=1 the irq_pipe bit never sets, so without this the part
+        // would spin in RDY forever instead of resuming after WAI. Resume only;
+        // the masked IRQ is not serviced (execution continues past WAI).
+        if (cpu->irq_asserted) {
+            cpu->rdy = false;
+        } else {
+            incr_cycles(cpu);
+            return 0;
+        }
     }
 
     // we're into the next instruction, so catch this up now.

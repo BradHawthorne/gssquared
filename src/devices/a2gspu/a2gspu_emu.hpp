@@ -251,6 +251,17 @@ struct a2gspu_emu_state {
     void *telnet_vt100;         // vt100_state_t* (allocated on connect)
     bool  telnet_connected;
 
+    // Telnet IAC negotiation state — per-connection, reset on connect AND
+    // disconnect so a session that drops mid-IAC cannot bleed stale state into
+    // the first bytes of the next session. (Formerly function-static locals
+    // keyed on a pointer-compare, which failed when a new socket reused the
+    // previous allocation's address.)
+    int     iac_state = 0;      // 0=normal 1=IAC 2=verb+opt 3=SB 4=SB+IAC 5=SB option
+    uint8_t iac_verb = 0;       // verb byte (WILL/WONT/DO/DONT)
+    uint8_t iac_sb_option = 0;  // option byte for current SB
+    uint8_t iac_sb_buf[64] = {0};
+    int     iac_sb_len = 0;
+
     // UTF-8 decoder state for multi-byte characters arriving via PUTCHAR
     // (mirrors the utf8_state_t used in card/terminal.c)
     utf8_state_t term_utf8_st;

@@ -44,13 +44,15 @@ inline void mmu_state_trace_reset() {
 
 // Change-gated push: the per-cycle slot_emit calls (~1.17M on a GS/OS boot) collapse to the
 // transition count, recording only the cycles where the mapping OR the display mode actually
-// moves. The gate keys on the mapping bytes (state/shadow/new-video/flags) AND the display index
-// (disp_vmode); reg_speed/reg_slot and the computed disp_mode ride along.
+// moves. The gate keys on the mapping bytes (state/shadow/new-video/flags), the display index
+// (disp_vmode), AND the speed/slot registers, so a standalone $C036 (speed) or $C02D (slot)
+// transition is recorded rather than dropped. The computed disp_mode rides along.
 inline void mmu_state_trace_note(uint64_t cycle, uint8_t st, uint8_t sh, uint8_t nv,
                                  uint8_t sp, uint8_t flags, uint8_t slot,
                                  uint8_t dvmode, uint8_t dmode) {
     if (!g_mmu_state_trace_enabled) return;
-    uint64_t key = ((uint64_t)st << 32) | ((uint64_t)sh << 24) | ((uint64_t)nv << 16)
+    uint64_t key = ((uint64_t)slot << 48) | ((uint64_t)sp << 40) | ((uint64_t)st << 32)
+                 | ((uint64_t)sh << 24) | ((uint64_t)nv << 16)
                  | ((uint64_t)flags << 8) | dvmode;
     if (key == g_mmu_state_last) return;
     g_mmu_state_last = key;
