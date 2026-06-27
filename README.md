@@ -1,255 +1,120 @@
-# GSSquared - A Complete Apple II Series Emulator.
+# gssquared — `a2gspu` development fork
 
-GSSquared is a complete emulator for the Apple II series of computers.
+A working fork of **[gssquared](https://github.com/jawaidbazyar2/gssquared)** — Jawaid Bazyar's
+cross-platform Apple II / Apple IIgs emulator. The upstream emulator is excellent and complete;
+this fork keeps all of that and adds a layer of **headless development + automated-test tooling**
+used to build and validate Apple IIgs / GS/OS software with an external cross-development toolchain.
 
-GSSquared has three primary design goals: support both 8- and 16-bit Apple IIs; be cross-platform; have a simple, intuitive user interface and be packaged 100% ready to go.
+Everything here lives on a single branch, **`a2gspu`** (also this fork's default branch).
 
-To my knowledge, it is the only emulator besides MAME that models (most of) the 8-bit Apple II as well as the 16-bit Apple IIgs:
+---
 
-* Apple ][
-* Apple ][+
-* Apple //e
-* Apple //e Enhanced
-* Apple //e Enhanced with 65816 CPU
-* Apple IIgs
+## Relationship to upstream
 
-It is written in C++ and runs on:
-* Windows
-* Linux
-* macOS
+This fork is deliberately one-way and self-contained:
 
-It has an intuitive user interface and is 100% ready to run without any other downloads.
+- **It never pushes to, or opens pull requests against, upstream.** We pull upstream changes *in*;
+  we never push *out*. There is no path by which this fork can pollute upstream `main` — that is the
+  whole reason it is pared down to a single branch.
+- **Upstream is welcome to cherry-pick.** This is just a public branch. If any fix or feature here is
+  useful to upstream gssquared, the maintainer is welcome to take it on their own terms — no
+  expectation and no obligation, in either direction.
+- **For the canonical emulator, use [upstream](https://github.com/jawaidbazyar2/gssquared).** This fork
+  optimizes for one specific automated-development workflow rather than general interactive use.
 
-I think these characteristics make GSSquared unique among Apple II emulators.
+---
 
-It uses the SDL3 library for graphics, sound, and I/O. This is a video game-oriented library and suits an emulator well. It's what made building across three (very different) platforms work.
+## How this fork deviates from upstream
 
+The core emulator is upstream's. Our additions are **additive and, wherever possible,
+environment-variable–gated**, so with the extra features off the emulator behaves as stock. They exist
+to turn gssquared from an interactive emulator into a **machine-drivable CI / development rig** for
+Apple IIgs software.
 
-# Documentation
+### Headless GS/OS bring-up diagnostics
+An env-gated, stdout-only diagnostic suite (the `A2GSPU_*` family) that makes headless GS/OS app
+development debuggable without a window:
+- Toolbox-call trace, GS/OS dispatch trace, and a GS/OS error-code hook
+- Per-scanline SCB video-mode + palette + pixel-index summary, plus an ASCII screen map
+- Memory-range hexdump, BRK CPU-state dump, headless breakpoints, and symbol resolution
 
-Check out the [User Documentation](Docs/index.md) for detailed instructions on how to use GSSquared.
+### Closed-loop assertion harness
+A declarative **assertion gate** — e.g. `A2GSPU_ASSERT="scb_mode==320;qd_carry==0;idx6==28800"` —
+evaluated against the final machine + video state at the end of a headless run, which sets the
+process **exit code (0 / 1)**. With a pinned RNG seed (`A2GSPU_SEED`) and an SHR-render golden compare
+(`A2GSPU_GOLDEN`), gssquared becomes a deterministic pass/fail oracle that an external build system
+can drive unattended.
 
-# Pre-compiled Packages
+### Deterministic golden / differential testing
+SHR-render goldens plus a behavioral-differential model that verify emulator changes do not drift the
+boot/render baseline, and that validate toolchain-produced binaries against real GS/OS behavior on the
+actual ROM.
 
-A binary release is available at [https://github.com/jawaidbazyar2/gssquared/releases](https://github.com/jawaidbazyar2/gssquared/releases).
+### Other additions
+- A **warm-boot snapshot** (save/restore the post-boot machine state) for a fast edit→run loop that
+  skips the cold boot.
+- Expanded, size-agnostic Apple IIgs ROM personalities (ROM 01 / 03 / 04).
+- An experimental coprocessor/peripheral device model — the `a2gspu` device the fork is named after —
+  used for instrumentation and protocol experiments.
 
-For the Mac, after downloading you will need to tell MacOS the software is A-OK even though it's from the Internet.
+---
 
-```
-% xattr -d com.apple.quarantine gssquared.dmg 
-```
+## Toolchain integration
 
-or
-```
-xattr -d com.apple.quarantine /Applications/gssquared.app
-```
-
-# Building
-
-The code base builds and has been tested on:
-* MacBook Pro M1
-* Mac Intel
-* Mac Mini M4
-* Ubuntu Linux 22.04 (x64 AMD)
-
-General Build Instructions:
-
-To build GSSquared, you will need the following:
-* clang C compiler or GCC
-* SDL3 downloaded and built from the SDL web site. (Specific steps for this are below.)
-* git
-
-I use vscode as my IDE, but, this isn't required to build.
-
-Note that GSSquared tries to force-select Clang as the compiler. If you want to override that you can edit the top of the CMakeLists and remove the clang-selection logic.
-
-NOTE: the build process has been updated so that builds are done in and to the build/ directory, as opposed to prior versions of GS2 where builds were done into the project root directory.
-
-GSSquared should also build with GCC on Ubuntu 22.04 or later, but this hasn't been tested.
-
-
-## Build for Production
-
-Production builds are optimized for performance.
+This fork is the **emulator half of a closed development loop** with an external Apple IIgs
+cross-development toolchain (assembler, linker, C compiler, resource compiler, and disk-image tools).
+One iteration looks like:
 
 ```
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
+edit .s / .c
+  → assemble + link             (the toolchain)
+  → mint a bootable disk image  (the toolchain)
+  → boot headless in this fork  (-n)
+  → A2GSPU_ASSERT gate          → exit 0 / 1
 ```
 
-## Build for Debug
+The toolchain produces IIgs binaries; this fork **runs and verifies** them against real GS/OS and
+reports precise diagnostics (toolbox returns, render state, error codes) back to the build system — so
+a toolchain bug surfaces immediately as a failed assertion instead of a silent wrong-pixel or a
+corrupted object file. The emulator is, in effect, the toolchain's regression oracle.
 
-Debug enables a variety of assertions, turns off optimizations, and enables memory leak and buffer overrun checking.
+> **Automation is headless-only.** The standalone CPU/MMU test programs under `apps/` open a GUI dialog
+> when their (external) test ROMs are absent, so they are **not** used in automated runs. All automation
+> drives the main emulator headless (`-n`) through the harness; CPU/MMU behavior is checked with small
+> headless micro-tests instead.
 
-```
-cmake -DCMAKE_BUILD_TYPE=Debug -S . -B build
-```
+---
 
-## macOS
+## Developed with Claude Code
 
-GSSquared will build on both Intel and Apple Silicon Macs.
+This fork is developed with **[Claude Code](https://claude.com/claude-code)** (Anthropic's agentic CLI).
+The closed loop above is wired so the agent and its **hooks** can, on every change:
 
-You will need:
-* Mac OSX 12 SDK, either Command-line or full Xcode.
+1. edit → `cmake --build` → boot headless → read the `A2GSPU_ASSERT` / golden verdict, fully
+   unattended; and
+2. gate the change on the SHR / boot golden, so the differential oracle the rest of the work relies on
+   cannot silently drift.
 
-```
-git clone --recurse-submodules https://github.com/jawaidbazyar2/gssquared.git
-cd gssquared
-```
+That is why the diagnostics are stdout-only and validation collapses to a single exit code: the entire
+develop → build → test loop is designed to be driven by an automated agent, not a human at a window.
+Hooks enforce the headless-only and golden-gate rules so an automated run cannot wedge on a GUI prompt
+or land a baseline-moving change unnoticed.
 
-If you just want to do a standard build that will result in a Mac App Bundle,
+---
 
-```
-cmake -DGS2_PROGRAM_FILES=OFF  -DCMAKE_BUILD_TYPE=Release -S . -B build
-cmake --build build
-cmake --install build
-```
+## Building
 
-This will "install" an App Bundle into the build/ directory, named GSSquared.app. (Or in Finder, just GSSquared)
+For the base build, prerequisites, and packaged binaries, see
+**[upstream's README](https://github.com/jawaidbazyar2/gssquared)** and the
+[User Documentation](Docs/index.md). Our additions are header-mostly and env-gated: a standard
+`cmake --build build` produces the emulator, and the `A2GSPU_*` environment variables turn on the
+development features at runtime — nothing changes for ordinary interactive use.
 
-### Mac DMG Disk Image
+---
 
-To go further and build a Mac Disk Image (.dmg file), do this from project root after doing the above build,
+## License & credits
 
-```
-cmake --build build --target package
-```
-
-The app bundle and .dmg file are built into the packages/ directory.
-
-### Mac PROGRAM FILES Mode
-
-PROGRAM FILES Mode will just build executable into build/ (named GSSquared) suitable for execution from the command-line.
-
-```
-cmake -DGS2_PROGRAM_FILES=ON  -DCMAKE_BUILD_TYPE=Release -S . -B build
-cmake --build build
-build/GSSquared
-```
-
-You may also use -DCMAKE\_BUILD\_TYPE=Debug , which will disable optimizations, and include debugger symbols in the result.
-
-### Mac Architecture
-
-By default, GSSquared builds as a "Fat Binary" or Dual-Architecture binary for both Apple Silicon and Intel CPUs.
-
-If for some reason you want to build only for your native architecture:
-
-```
-cmake -DBUILD_NATIVE=ON  -DCMAKE_BUILD_TYPE=Release -S . -B build
-```
-
-
-## Linux
-
-gs2 Linux build has been tested on:
-
-* Ubuntu 22.04
-* clang 14
-
-You need the following libraries installed:
-* libasound2-dev
-* libpulse-dev
-* libudev-dev
-* libimgui-dev
-
-```
-git clone --recurse-submodules https://github.com/jawaidbazyar2/gssquared.git
-cd gssquared
-```
-
-Then to build:
-
-```
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
-cmake --build build
-```
-
-Alternatively, build in the "GNU install directories" style:
-```
-cmake -DCMAKE_BUILD_TYPE=Release -DGS2_PROGRAM_FILES=OFF -S . -B build
-cmake --build build
-cmake --install build
-```
-Now you should be able to run gs2 at command line anywhere via a `GSSquared`
-command, and it should also be available as an application from your
-applications list.
-
-### Linux App Distribution
-
-After building, you can create a folder that contains a complete package for Linux:
-
-```
-cmake -DCMAKE_BUILD_TYPE=Release -DGS2_PROGRAM_FILES=OFF -S . -B build
-cmake --build build
-cmake --build build --target appimage
-```
-
-Creates a .appimage package in the build/ directory that contains all the pieces you need.
-
-## Windows
-
-We've successfully built for windows using the following environment:
-
-* git bash
-* mingw
-* clang
-* VS Code
-
-```
-git clone --recurse-submodules https://github.com/jawaidbazyar2/gssquared.git
-cd gssquared
-mkdir build
-cmake -G "MinGW Makefiles" -DGS2_PROGRAM_FILES=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -B build -S .
-cmake --build build --parallel
-```
-
-### Windows App Distribution
-
-After building, you can create a ZIP archive for distribution for Windows.
-
-```
-cmake -G "MinGW Makefiles" -DGS2_PROGRAM_FILES=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -B build -S .
-cmake --build build --parallel --target package
-```
-
-
-# Affiliated Programs
-
-If you build from source, you will also get a couple of other programs:
-
-## diskid
-
-Analyzes a disk image and prints information about it.
-
-## nibblizer
-
-Convert a disk image file (140K 5.25 .do, .po, .dsk) to nibblized format (e.g. .nib). For testing. 
-
-## gstrace
-
-
-
-# Acknowledgements
-
-## OpenEmulator
-
-I took the concept of the DisplayNG code from OpenEmulator, under GPL 3. 
-https://github.com/openemulator/openemulator/blob/master/AUTHORS
-
-I also shamelessly copied the Disk II sound files from OpenEmulator.
-
-## Mike Neil
-
-for the lookup table approach to the new DisplayNG code.
-
-## William Simms
-
-for cycle-accurate video!
-
-## Wyatt Wong
-
-for helping test in different build environments, and providing MacOS-Intel builds.
-
-## SDL
-
-All the amazing people in the SDL Discord, especially Sam!
+The Apple II / IIgs emulator core, models, and UI are **Jawaid Bazyar's** work — see
+[upstream](https://github.com/jawaidbazyar2/gssquared). This fork inherits upstream's license, and our
+additions are offered under the same terms. Sincere thanks to the upstream project for a clean,
+hackable IIgs emulator to build on.
