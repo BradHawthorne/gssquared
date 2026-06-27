@@ -1322,6 +1322,280 @@ static int run_cpu_microtest(GS2AppState *state, const char *which) {
     return 1;
 }
 
+// ===========================================================================
+// Env-gated headless MMU + VIDEO micro-test suite (A2GSPU_MMUTEST=<name>).
+//
+// Mirrors the CPU micro-test rail (A2GSPU_CPUTEST) for the two subsystems that
+// directly PRODUCE the SHR boot golden every render golden trusts: the IIgs FPI
+// memory controller (main/aux steering, the SHADOW register, the $E1 bank latch,
+// the language-card bank/read switches) and the Super Hi-Res pixel decode (per-
+// scanline SCB 320/640 mode, the 640 dot->palette-offset mapping, and the $0RGB
+// palette expansion). A silent regression in either subsystem would corrupt the
+// golden undetected; these cases flip the named test to FAIL instead. Each is
+// TEETH-PROVEN: it PASSES with the real mapping/decode and FAILS if the relevant
+// logic is reverted. Cases are env-gated off the boot path, so the boot/CPU/
+// GS-OS golden is unchanged.
+//
+// Cases (each a separate A2GSPU_MMUTEST value):
+//   mmu_aux_steer  main/aux read+write steering: RAMRD/RAMWRT are independent;
+//                  80STORE+PAGE2 steers the text page to aux regardless of RAMRD;
+//                  ALTZP steers the zero page to aux. (calc_aux_read/write.)
+//   mmu_shadow     the $C035 SHADOW register decode: each inhibit bit gates the
+//                  matching window (text1/hgr1/SHR) for shadow-to-$E1.
+//   mmu_e1_latch   the $E1 bank latch: with the latch set a bank-$E1 write lands
+//                  in the Mega-II aux image (the SHR window) and reads back; the
+//                  golden's SHR bytes flow through exactly this path.
+//   mmu_lc_bank    language-card $C08x bank-select + read-enable: the classic
+//                  double-read write-enable, bank1/bank2 select, ROM-read default.
+//   vid_scb_mode   per-scanline SCB mode decode: bit7 picks 640 vs 320, changing
+//                  how many palette-index pixels a line contributes to the hist.
+//   vid_640_offset the 640-mode dot->palette-offset map {dot0:+8,dot1:+12,
+//                  dot2:+0,dot3:+4} (the exact renderer contract).
+//   all            runs every case; nonzero exit if any one fails (the CI entry).
+// (The $0RGB->RGB888 palette expansion is intentionally NOT a case here — see the
+//  honesty note above run_mmu_microtest: it has no teeth as a standalone test.)
+// ===========================================================================
+
+// --- main/aux read+write steering (calc_aux_read / calc_aux_write) ----------
+// Drives the REAL $C00x soft-switches through the MMU's bus write path (the
+// faithful 74LS259 decode) and asserts the resolved aux offset for representative
+// pages. The contract has teeth on three independent axes: RAMRD vs RAMWRT must
+// steer reads and writes SEPARATELY; 80STORE+PAGE2 must override RAMRD for the
+// text page; ALTZP must steer the zero page. A revert that collapses any axis
+// (e.g. read/write sharing one flag, or dropping the 80STORE override) flips this.
+static int microtest_mmu_aux_steer(MMU_IIgs *m) {
+    const uint32_t AUX = 0x1'0000, MAIN = 0x0'0000;
+    auto sw = [&](uint16_t a){ m->write(a, 0x00); };   // touch a soft-switch ($C0xx)
+    // Cold baseline: all main. (RAMRD/RAMWRT/80STORE/PAGE2/ALTZP/HIRES off.)
+    sw(0xC000); sw(0xC002); sw(0xC004); sw(0xC008); sw(0xC054); sw(0xC056);
+    int ok = 1;
+    // Axis 1: RAMRD on, RAMWRT off -> a $40-page READ steers to aux, WRITE stays main.
+    sw(0xC003);                                   // RAMRD on
+    int a1r = (m->calc_aux_read (0x004000) == AUX);
+    int a1w = (m->calc_aux_write(0x004000) == MAIN);
+    sw(0xC005);                                   // RAMWRT on -> now WRITE steers too
+    int a1w2 = (m->calc_aux_write(0x004000) == AUX);
+    sw(0xC002); sw(0xC004);                        // both back off
+    ok &= a1r && a1w && a1w2;
+    // Axis 2: 80STORE + PAGE2 steers the TEXT page ($04xx) to aux even with RAMRD off.
+    sw(0xC001);                                   // 80STORE on
+    sw(0xC055);                                   // PAGE2 on
+    int a2on = (m->calc_aux_read(0x000400) == AUX) && (m->calc_aux_write(0x000400) == AUX);
+    sw(0xC054);                                   // PAGE2 off -> text page back to main
+    int a2off = (m->calc_aux_read(0x000400) == MAIN) && (m->calc_aux_write(0x000400) == MAIN);
+    sw(0xC000);                                   // 80STORE off
+    ok &= a2on && a2off;
+    // Axis 3: ALTZP steers the zero page ($00xx) both read and write.
+    sw(0xC009);                                   // ALTZP on
+    int a3on = (m->calc_aux_read(0x000000) == AUX) && (m->calc_aux_write(0x000000) == AUX);
+    sw(0xC008);                                   // ALTZP off
+    int a3off = (m->calc_aux_read(0x000000) == MAIN);
+    ok &= a3on && a3off;
+    printf("MMUTEST mmu_aux_steer: rd=%d wr=%d wr2=%d 80s2=%d 80soff=%d zp=%d zpoff=%d -- %s\n",
+           a1r, a1w, a1w2, a2on, a2off, a3on, a3off, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- $C035 SHADOW register window decode (shadow_is_enabled) -----------------
+// Each SHADOW inhibit bit gates shadow-to-$E1 for one display window. We set the
+// register via the real $C035 write and assert the per-window enable for the
+// text1 ($0400), hgr1 ($2000) and SHR (bank-1 $12000) windows. Two register
+// values pin the polarity: $00 (nothing inhibited) shadows ALL three; $0B
+// (TEXT1+HGR1+SHR inhibit bits set) shadows NONE of them. A revert that inverts a
+// bit, drops a window, or mis-ranges the SHR aux window flips this.
+static int microtest_mmu_shadow(MMU_IIgs *m) {
+    int ok = 1;
+    // SHR-only witness: $16000 is inside the SHR window ($12000-$19FFF) but ABOVE the
+    // overlapping AUXHGR window ($12000-$15FFF), so only the SHR inhibit bit gates it
+    // (a bank-1 $2000 address sits in both windows and would need both bits to inhibit).
+    const uint32_t SHR_ONLY = 0x016000;
+    m->write(0xC035, 0x00);                       // nothing inhibited
+    int all_on = m->shadow_is_enabled(0x000400)   // text1
+              && m->shadow_is_enabled(0x002000)   // hgr1
+              && m->shadow_is_enabled(SHR_ONLY);  // SHR
+    // bits: TEXT1=$01, HGR1=$02, SHR=$08  -> $0B inhibits all three windows.
+    m->write(0xC035, 0x01 | 0x02 | 0x08);
+    int all_off = !m->shadow_is_enabled(0x000400)
+               && !m->shadow_is_enabled(0x002000)
+               && !m->shadow_is_enabled(SHR_ONLY);
+    // selective: inhibit ONLY SHR ($08) -> text1 still shadowed, SHR not.
+    m->write(0xC035, 0x08);
+    int sel = m->shadow_is_enabled(0x000400) && !m->shadow_is_enabled(SHR_ONLY);
+    m->write(0xC035, 0x08);                        // restore the reset default
+    ok &= all_on && all_off && sel;
+    printf("MMUTEST mmu_shadow: all_on=%d all_off=%d sel=%d -- %s\n",
+           all_on, all_off, sel, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- $E1 bank-latch SHR visibility (bank_e1_write / bank_e1_read) ------------
+// The SHR pixels the golden hashes live in the Mega-II AUX image (bank $E1). With
+// the bank latch SET (reg_new_video bit0, the reset default), a write to a bank-
+// $E1 address lands at megaii_base[addr & 0x1FFFF] -- i.e. $E1:$2000 -> the SHR
+// window at Mega-II linear $12000 -- and reads back through the same latch. With
+// the latch CLEAR, the same $E1 access falls back to the Mega-II's own read/write
+// (bank-0 of the image), so the byte does NOT appear at the aux-image $12000.
+// This is the exact aux/main fork the golden's SHR bytes traverse.
+static int microtest_mmu_e1_latch(MMU_IIgs *m) {
+    uint8_t *m2 = m->get_megaii_memory_base();
+    if (!m2) { printf("MMUTEST mmu_e1_latch: no Mega-II image -- FAIL\n"); return 1; }
+    const uint32_t E1_PIX = 0xE12000;                 // $E1:$2000 (top of the SHR window)
+    const uint32_t AUXIDX = 0x12000;                  // its Mega-II aux linear index
+    // Latch SET (reset default = reg_new_video $01). Write+read through bank $E1.
+    m->write(0xC029, 0x01);                            // bank_latch = 1
+    m->write(E1_PIX, 0x5A);
+    int set_land = (m2[AUXIDX] == 0x5A);               // landed in the aux image
+    int set_read = (m->read(E1_PIX) == 0x5A);          // reads back through the latch
+    // Latch CLEAR: the SAME $E1 write must NOT update the aux-image $12000 slot.
+    m2[AUXIDX] = 0x00;                                 // clear the witness
+    m->write(0xC029, 0x00);                            // bank_latch = 0
+    m->write(E1_PIX, 0xA5);
+    int clr_miss = (m2[AUXIDX] != 0xA5);               // did NOT take the aux path
+    m->write(0xC029, 0x01);                            // restore the reset default
+    int ok = set_land && set_read && clr_miss;
+    printf("MMUTEST mmu_e1_latch: set_land=%d set_read=%d clr_miss=%d -- %s\n",
+           set_land, set_read, clr_miss, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- language-card $C08x bank-select + read/write-enable ---------------------
+// Drives the real LC soft-switch decode (the same LanguageCardLogic the boot ROM
+// hits) and asserts the bank-select, read-enable and the classic double-read
+// write-enable. Contract: a $C08x access with A3 set selects bank1; with A3 clear,
+// bank2. Read-enable follows the A0/A1 pattern (00/11 -> RAM read, 01/10 -> ROM).
+// Write-enable requires TWO consecutive odd reads (PRE_WRITE then WRITE); an even
+// read in between clears it. The write-enable is the load-bearing teeth surface:
+// we first CLEAR it with an even read, confirm a SINGLE odd read does NOT yet
+// enable (only arms PRE_WRITE), then confirm the SECOND odd read enables. A revert
+// that drops the double-read latch (enables on one read, or never) flips this.
+static int microtest_mmu_lc_bank(MMU_IIgs *m) {
+    int ok = 1;
+    // --- bank select + read-enable polarity ---
+    // $C08B = ...1011: A3=1 (bank1), A1A0=11 (read-enable RAM).
+    m->read(0xC08B);
+    int b1 = m->is_lc_bank1();                    // A3 set -> bank1
+    int re = m->is_lc_read_enable();              // 11 -> read-enable (RAM)
+    // $C083 = ...0011: A3=0 (bank2), A1A0=11 (read-enable).
+    m->read(0xC083);
+    int b2 = !m->is_lc_bank1();                   // A3 clear -> bank2
+    // $C089 = ...1001: A1A0=01 -> read-enable CLEARED (ROM read).
+    m->read(0xC089);
+    int ro = !m->is_lc_read_enable();             // 01 -> ROM read (read-enable off)
+    // --- the double-read write-enable latch (the teeth) ---
+    m->read(0xC088);                              // EVEN read -> write-enable CLEARED
+    int we_off = !m->is_lc_write_enable();        // now NOT write-enabled
+    m->read(0xC08B);                              // 1st ODD read -> arms PRE_WRITE only
+    int we_mid = !m->is_lc_write_enable();        // still NOT enabled after one odd read
+    m->read(0xC08B);                              // 2nd ODD read -> write-enable SET
+    int we_on = m->is_lc_write_enable();          // NOW write-enabled (the latch fired)
+    ok &= b1 && re && b2 && ro && we_off && we_mid && we_on;
+    // Leave the LC back in the reset-ish read-enabled bank2 state the boot path expects.
+    m->set_state_register(0x0C); m->bsr_map_memory();
+    printf("MMUTEST mmu_lc_bank: b1=%d re=%d b2=%d ro=%d we_off=%d we_mid=%d we_on=%d -- %s\n",
+           b1, re, b2, ro, we_off, we_mid, we_on, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- video: SCB per-scanline 320/640 mode decode (iigs_shr::histogram) -------
+// The shared SHR decode (the one the video summary AND any SHR render path use)
+// reads the per-line SCB to pick 320 vs 640. A 320-mode line decodes each byte as
+// two 4-bit indices (160 bytes -> 320 px); a 640-mode line decodes each byte as
+// four 2-bit dots (160 bytes -> 640 px). We build a buffer whose lines are split
+// half 320 / half 640 and assert the TOTAL pixel count the histogram accounts for
+// matches the mode-correct sum. A revert that ignores SCB bit7 (always-320 or
+// always-640) changes that total and flips this.
+static int microtest_vid_scb_mode(MMU_IIgs *m) {
+    uint8_t *m2 = m->get_megaii_memory_base();
+    if (!m2) { printf("MMUTEST vid_scb_mode: no Mega-II image -- FAIL\n"); return 1; }
+    uint8_t *e1 = m2 + iigs_shr::MEGAII_E1;          // bank $E1 base
+    // Zero the SCB + pixel window, then lay a deterministic pattern.
+    for (int i = 0; i < iigs_shr::LINES; i++) e1[iigs_shr::SCB + i] = 0;
+    for (int i = 0; i < iigs_shr::LINES * iigs_shr::BYTES_PER_LINE; i++)
+        e1[iigs_shr::PIX + i] = 0x11;                 // every nibble/dot non-zero & uniform
+    const int N640 = 100;                            // first 100 lines 640, rest 320
+    for (int vc = 0; vc < iigs_shr::LINES; vc++)
+        e1[iigs_shr::SCB + vc] = (vc < N640) ? 0x80 : 0x00;
+    long hist[16];
+    iigs_shr::histogram(e1, hist);
+    long total = 0; for (int i = 0; i < 16; i++) total += hist[i];
+    // 640-mode line = 160 bytes * 4 dots = 640 px; 320-mode line = 160*2 = 320 px.
+    long want = (long)N640 * 640 + (long)(iigs_shr::LINES - N640) * 320;
+    int ok = (total == want);
+    // teeth witness: an always-320 decode would total LINES*320 (= 64000), distinct.
+    printf("MMUTEST vid_scb_mode: total=%ld want=%ld (always320=%d) -- %s\n",
+           total, want, iigs_shr::LINES * 320, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// --- video: 640-mode dot->palette-offset map {8,12,0,4} ----------------------
+// In 640 mode each byte is 4 two-bit dots; the EFFECTIVE palette index is the
+// 2-bit value plus the per-dot color sub-bank offset dot0:+8 dot1:+12 dot2:+0
+// dot3:+4 (the exact renderer/HW contract). EVERY line is the same 640 byte $1B =
+// 00 01 10 11 -> dot0=0 dot1=1 dot2=2 dot3=3, so each dot carries a DISTINCT 2-bit
+// value and the per-dot OFFSET PAIRING is load-bearing (not just the offset SET):
+//   dot0:0+8=8  dot1:1+12=13  dot2:2+0=2  dot3:3+4=7  -> bins {2,7,8,13}.
+// Each = 160 bytes * 200 lines = 32000; all other bins 0. A revert that permutes
+// the offsets (e.g. {0,4,8,12}) lands a DIFFERENT bin set ({0,5,10,15}) and flips
+// this; the distinct dot values defeat the all-equal aliasing.
+static int microtest_vid_640_offset(MMU_IIgs *m) {
+    uint8_t *m2 = m->get_megaii_memory_base();
+    if (!m2) { printf("MMUTEST vid_640_offset: no Mega-II image -- FAIL\n"); return 1; }
+    uint8_t *e1 = m2 + iigs_shr::MEGAII_E1;
+    for (int i = 0; i < iigs_shr::LINES; i++) e1[iigs_shr::SCB + i] = 0x80;  // ALL 640 mode
+    // $1B = 00 01 10 11 -> dot0=0 dot1=1 dot2=2 dot3=3, on every pixel byte.
+    for (int i = 0; i < iigs_shr::LINES * iigs_shr::BYTES_PER_LINE; i++)
+        e1[iigs_shr::PIX + i] = 0x1B;
+    long hist[16];
+    iigs_shr::histogram(e1, hist);
+    // Expected occupied bins from the {8,12,0,4} pairing: {2,7,8,13}.
+    const long PER = (long)iigs_shr::BYTES_PER_LINE * iigs_shr::LINES;   // 160*200 = 32000
+    int idx_ok = (hist[8]==PER && hist[13]==PER && hist[2]==PER && hist[7]==PER);
+    long other = 0;
+    for (int i = 0; i < 16; i++) if (i!=2 && i!=7 && i!=8 && i!=13) other += hist[i];
+    int ok = idx_ok && (other == 0);
+    printf("MMUTEST vid_640_offset: h8=%ld h13=%ld h2=%ld h7=%ld other=%ld (per=%ld) -- %s\n",
+           hist[8], hist[13], hist[2], hist[7], other, PER, ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
+// NOTE on a deliberately-OMITTED video case (honesty): the $0RGB-palette-word ->
+// RGB888 (*0x11 nibble-replication) expansion is golden-relevant, but it lives
+// INLINE inside the printf-only iigs_video_summary() (no returnable function), so a
+// standalone test would have to re-derive the formula rather than call production
+// code — giving it NO teeth (a revert of the real *0x11 would not flip it). Rather
+// than ship a brittle self-referential check or refactor the summary just to test
+// it, that case is skipped here. The two video cases that ARE present (scb_mode,
+// 640_offset) drive the SHARED production decode iigs_shr::histogram(), so they DO
+// have teeth on the mode/offset contracts the golden actually depends on.
+
+// Dispatcher: A2GSPU_MMUTEST=<name>. "all" runs every case (the CI entry point).
+static int run_mmu_microtest(GS2AppState *state, const char *which) {
+    MMU_IIgs *m = state->mmu_iigs;
+    if (!m) { printf("MMUTEST: IIgs MMU not initialized (need -p 5) -- FAIL\n"); return 1; }
+
+    if (strcmp(which, "mmu_aux_steer")  == 0) return microtest_mmu_aux_steer(m);
+    if (strcmp(which, "mmu_shadow")     == 0) return microtest_mmu_shadow(m);
+    if (strcmp(which, "mmu_e1_latch")   == 0) return microtest_mmu_e1_latch(m);
+    if (strcmp(which, "mmu_lc_bank")    == 0) return microtest_mmu_lc_bank(m);
+    if (strcmp(which, "vid_scb_mode")   == 0) return microtest_vid_scb_mode(m);
+    if (strcmp(which, "vid_640_offset") == 0) return microtest_vid_640_offset(m);
+
+    if (strcmp(which, "all") == 0) {
+        int fails = 0;
+        fails += (microtest_mmu_aux_steer(m)  != 0);
+        fails += (microtest_mmu_shadow(m)     != 0);
+        fails += (microtest_mmu_e1_latch(m)   != 0);
+        fails += (microtest_mmu_lc_bank(m)    != 0);
+        fails += (microtest_vid_scb_mode(m)   != 0);
+        fails += (microtest_vid_640_offset(m) != 0);
+        printf("MMUTEST all: %d failure(s)\n", fails);
+        return fails == 0 ? 0 : 1;
+    }
+
+    printf("MMUTEST: unknown case '%s' -- FAIL\n", which);
+    return 1;
+}
+
 static void run_headless_spike(GS2AppState *state) {
     computer_t *computer = state->computer;
 
@@ -1332,6 +1606,15 @@ static void run_headless_spike(GS2AppState *state) {
     if (const char *ct = SDL_getenv("A2GSPU_CPUTEST")) {
         int rc = run_cpu_microtest(state, ct);
         printf("=== CPUTEST COMPLETE (%s) ===\n", rc == 0 ? "PASS" : "FAIL");
+        exit(rc);
+    }
+
+    // Env-gated MMU + VIDEO micro-test short-circuit (same rail as A2GSPU_CPUTEST):
+    // exercises the FPI mapping + SHR decode contracts the render golden trusts,
+    // then exits with the verdict. Bypasses the frame spike / boot golden entirely.
+    if (const char *mt = SDL_getenv("A2GSPU_MMUTEST")) {
+        int rc = run_mmu_microtest(state, mt);
+        printf("=== MMUTEST COMPLETE (%s) ===\n", rc == 0 ? "PASS" : "FAIL");
         exit(rc);
     }
 
