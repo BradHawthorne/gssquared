@@ -286,6 +286,15 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
             iigs_sym_resolve(ret - 1, sym, sizeof(sym));
             printf("IIGS TOOLBOX: call %s ($%04X)%s%s\n",
                    iigs_tool_name(callword), callword, sym[0] ? "  from " : "", sym);
+            // SysFailMgr ($1503) = fatal system-failure display. Dump the caller +
+            // the pushed params (error code + message ptr) so a boot that dies here
+            // reveals WHICH fatal condition fired (the stack words above the JSL RTA).
+            if (callword == 0x1503) {
+                auto rd16 = [&](uint16_t a){ return (uint16_t)(cpu->mmu->read(a) | (cpu->mmu->read((a+1)&0xFFFF)<<8)); };
+                printf("IIGS SYSFAIL: caller=$%06X stack +4=$%04X +6=$%04X +8=$%04X +10=$%04X A=$%04X\n",
+                       ret - 1, rd16((sp+4)&0xFFFF), rd16((sp+6)&0xFFFF), rd16((sp+8)&0xFFFF),
+                       rd16((sp+10)&0xFFFF), (cpu->E || (cpu->p & 0x20)) ? (uint16_t)(cpu->a & 0xFF) : cpu->a);
+            }
         }
     } else if (log_window && bank_ok && g_iigs_errhook_enabled) {
         printf("IIGS GSOS: call class-%d dispatch @ $%06X\n", kind == 1 ? 1 : 0, lpc);
