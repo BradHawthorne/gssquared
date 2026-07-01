@@ -1658,6 +1658,20 @@ static void run_headless_spike(GS2AppState *state) {
             printf("\n");
         }
     }
+    // A2GSPU_PCTRAP="bank:lo-hi" (hex) — one-shot dump of regs + PC ring on first entry.
+    if (const char *t = SDL_getenv("A2GSPU_PCTRAP")) {
+        const char *p = t;
+        uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
+        if (*p == ':') p++;
+        uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
+        if (*p == '-') p++;
+        uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
+        g_pctrap_lo = (bank << 16) | (lo & 0xFFFF);
+        g_pctrap_hi = (bank << 16) | (hi & 0xFFFF);
+        g_pctrap_active = true;
+        g_pctrap_fired = false;
+        printf("A2GSPU_PCTRAP: one-shot on first entry to %06X-%06X\n", g_pctrap_lo, g_pctrap_hi);
+    }
     if (const char *bp = SDL_getenv("A2GSPU_BREAK")) {
         g_iigs_break_enabled = true;
         g_iigs_break_addr = (uint32_t)strtoul(bp, nullptr, 16) & 0xFFFFFF;

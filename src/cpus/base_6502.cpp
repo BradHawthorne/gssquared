@@ -2253,6 +2253,30 @@ int execute_next(cpu_state *cpu) override {
         if (g_brkmem_on) {
             g_pchist[g_pchist_i & 255] = cpu->full_pc; g_pchist_i++;
         }
+        // A2GSPU_PCTRAP: one-shot — dump regs + the caller ring the instant execution
+        // first enters the trap range (the wild-jump source, before a garbage run
+        // scrolls it out of the ring).
+        if (g_pctrap_active && !g_pctrap_fired &&
+            cpu->full_pc >= g_pctrap_lo && cpu->full_pc <= g_pctrap_hi) {
+            g_pctrap_fired = true;
+            printf("IIGS PCTRAP: first entry to %02X/%04X\n",
+                   (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF));
+            iigs_cpu_state_dump_regs(cpu, "PCTRAP");
+            printf("IIGS PCTRAP caller ring (oldest->newest):\n ");
+            int hstart = (g_pchist_i > 240) ? g_pchist_i - 240 : 0;
+            for (int k = hstart; k < g_pchist_i; k++)
+                printf(" %02X/%04X", (g_pchist[k & 255] >> 16) & 0xFF,
+                                     g_pchist[k & 255] & 0xFFFF);
+            printf("\n");
+            printf("IIGS PCTRAP mem $E1/0000 read():");
+            for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
+                printf(" %02X", cpu->mmu->read(a));
+            printf("\n");
+            printf("IIGS PCTRAP mem $E1/0000 probe_peek(megaII):");
+            for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
+                printf(" %02X", cpu->mmu->probe_peek(a));
+            printf("\n");
+        }
     }
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;

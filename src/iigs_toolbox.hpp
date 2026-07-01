@@ -34,6 +34,16 @@ inline bool g_brkmem_on            = false;   // A2GSPU_BRKMEM: crash-path mem/P
 inline uint32_t g_pchist[256]      = {0};     // A1: ring of last PCs (ALL banks) into the fault
 inline int  g_pchist_i             = 0;
 
+// ---- A2GSPU_PCTRAP: one-shot execution trap on first entry to a PC range ----
+// Env A2GSPU_PCTRAP="bank:lo-hi" (hex). When execution FIRST fetches an instruction
+// whose full-PC is in the range, dump the register file + the recent PC ring (the
+// CALLER that jumped in) exactly once. Catches a wild jump into uninitialized memory
+// BEFORE the long garbage run scrolls the true caller out of the ring.
+inline bool     g_pctrap_active = false;
+inline uint32_t g_pctrap_lo     = 0;
+inline uint32_t g_pctrap_hi     = 0;
+inline bool     g_pctrap_fired  = false;
+
 // ---- A2GSPU_WATCH: address-range write-watchpoint --------------------------
 // Env A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) traps every CPU write into
 // a range and prints the faulting PC + value, so a wrong-bank / stray store that
