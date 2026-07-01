@@ -31,7 +31,7 @@ inline uint32_t g_iigs_trace_from  = 0;       // start tracing when PC first hit
 inline bool g_iigs_trace_armed     = false;   // trace_from has fired
 inline int  g_iigs_brk_count       = 0;       // BRK/crash count (exit-taxonomy canary)
 inline bool g_brkmem_on            = false;   // A2GSPU_BRKMEM: crash-path mem/PC ring dump
-inline uint32_t g_pchist[64]       = {0};     // A1: ring of last PCs (ALL banks) into the fault
+inline uint32_t g_pchist[256]      = {0};     // A1: ring of last PCs (ALL banks) into the fault
 inline int  g_pchist_i             = 0;
 
 // ---- A2GSPU_WATCH: address-range write-watchpoint --------------------------

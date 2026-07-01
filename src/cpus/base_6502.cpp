@@ -2251,7 +2251,7 @@ int execute_next(cpu_state *cpu) override {
         // into the fault so a wild jump/return into ANY bank is visible (the
         // bank-2-only gate hid bank-0/$E1/ROM crash paths -> empty ring).
         if (g_brkmem_on) {
-            g_pchist[g_pchist_i & 63] = cpu->full_pc; g_pchist_i++;
+            g_pchist[g_pchist_i & 255] = cpu->full_pc; g_pchist_i++;
         }
     }
     opcode_t opcode = fetch_pc(cpu);
@@ -3759,10 +3759,10 @@ int execute_next(cpu_state *cpu) override {
                     // the live image at the fault. Env-gated, observation only.
                     if (getenv("A2GSPU_BRKMEM")) {
                         printf("IIGS BRKHIST (last PCs bank/addr, oldest->newest):\n ");
-                        int hstart = (g_pchist_i > 48) ? g_pchist_i - 48 : 0;
+                        int hstart = (g_pchist_i > 220) ? g_pchist_i - 220 : 0;
                         for (int k = hstart; k < g_pchist_i; k++)
-                            printf(" %02X/%04X", (g_pchist[k & 63] >> 16) & 0xFF,
-                                                 g_pchist[k & 63] & 0xFFFF);
+                            printf(" %02X/%04X", (g_pchist[k & 255] >> 16) & 0xFF,
+                                                 g_pchist[k & 255] & 0xFFFF);
                         printf("\n");
                         uint32_t fp = cpu->full_pc;
                         uint8_t bank = (fp >> 16) & 0xFF;
