@@ -1672,6 +1672,29 @@ static void run_headless_spike(GS2AppState *state) {
         g_pctrap_fired = false;
         printf("A2GSPU_PCTRAP: one-shot on first entry to %06X-%06X\n", g_pctrap_lo, g_pctrap_hi);
     }
+    // A2GSPU_TRAPDUMP="base:len" (hex) — extra memory region dumped by PCTRAP.
+    if (const char *d = SDL_getenv("A2GSPU_TRAPDUMP")) {
+        const char *p = d;
+        g_trap_dump_base = (uint32_t)strtoul(p, (char**)&p, 16);
+        if (*p == ':') p++;
+        g_trap_dump_len = (uint32_t)strtoul(p, (char**)&p, 16);
+        if (g_trap_dump_len == 0 || g_trap_dump_len > 256) g_trap_dump_len = 48;
+        printf("A2GSPU_TRAPDUMP: dump $%06X..+%u at PCTRAP\n",
+               g_trap_dump_base, g_trap_dump_len);
+    }
+    // A2GSPU_STACKTRAP="lo-hi" (hex) — one-shot dump when S first enters the range.
+    if (const char *t = SDL_getenv("A2GSPU_STACKTRAP")) {
+        const char *p = t;
+        uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
+        if (*p == '-') p++;
+        uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
+        g_stacktrap_lo = (uint16_t)lo;
+        g_stacktrap_hi = (uint16_t)hi;
+        g_stacktrap_active = true;
+        g_stacktrap_fired = false;
+        printf("A2GSPU_STACKTRAP: one-shot when S first enters $%04X-$%04X\n",
+               g_stacktrap_lo, g_stacktrap_hi);
+    }
     if (const char *bp = SDL_getenv("A2GSPU_BREAK")) {
         g_iigs_break_enabled = true;
         g_iigs_break_addr = (uint32_t)strtoul(bp, nullptr, 16) & 0xFFFFFF;

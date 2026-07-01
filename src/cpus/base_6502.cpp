@@ -2276,6 +2276,29 @@ int execute_next(cpu_state *cpu) override {
             for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
                 printf(" %02X", cpu->mmu->probe_peek(a));
             printf("\n");
+            if (g_trap_dump_len) {
+                printf("IIGS PCTRAP dump $%02X/%04X probe_peek:",
+                       (g_trap_dump_base >> 16) & 0xFF, g_trap_dump_base & 0xFFFF);
+                for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
+                    printf(" %02X", cpu->mmu->probe_peek(a));
+                printf("\n");
+            }
+        }
+        // A2GSPU_STACKTRAP: one-shot — the instant the stack pointer S lands in the
+        // range, dump regs + the caller ring (catches a stray tcs / corrupted RTL
+        // that parks the stack over data or code).
+        if (g_stacktrap_active && !g_stacktrap_fired &&
+            (uint16_t)cpu->sp >= g_stacktrap_lo && (uint16_t)cpu->sp <= g_stacktrap_hi) {
+            g_stacktrap_fired = true;
+            printf("IIGS STACKTRAP: S=$%04X entered range at PC %02X/%04X\n",
+                   (unsigned)cpu->sp, (unsigned)((cpu->full_pc >> 16) & 0xFF),
+                   (unsigned)(cpu->full_pc & 0xFFFF));
+            iigs_cpu_state_dump_regs(cpu, "STACKTRAP");
+            printf("IIGS STACKTRAP caller ring (oldest->newest):\n ");
+            int hs = (g_pchist_i > 40) ? g_pchist_i - 40 : 0;
+            for (int k = hs; k < g_pchist_i; k++)
+                printf(" %02X/%04X", (g_pchist[k & 255] >> 16) & 0xFF, g_pchist[k & 255] & 0xFFFF);
+            printf("\n");
         }
     }
     opcode_t opcode = fetch_pc(cpu);

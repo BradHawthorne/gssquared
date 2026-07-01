@@ -43,6 +43,19 @@ inline bool     g_pctrap_active = false;
 inline uint32_t g_pctrap_lo     = 0;
 inline uint32_t g_pctrap_hi     = 0;
 inline bool     g_pctrap_fired  = false;
+// Optional extra memory region dumped by PCTRAP/STACKTRAP (full 24-bit base, N bytes).
+inline uint32_t g_trap_dump_base = 0;
+inline uint32_t g_trap_dump_len  = 0;
+
+// ---- A2GSPU_STACKTRAP: one-shot trap when the stack pointer S enters a range --
+// Env A2GSPU_STACKTRAP="lo-hi" (hex, 16-bit S). Fires once the instant S first
+// lands in [lo,hi], dumping the PC/regs + the PC ring. Catches a stray `tcs` or a
+// corrupted RTL/RTS that parks the stack over data/code (e.g. S=$74AA sitting on
+// the heartbeat taskheader at $74A3, whose pushes then clobber the task sig).
+inline bool     g_stacktrap_active = false;
+inline uint16_t g_stacktrap_lo     = 0;
+inline uint16_t g_stacktrap_hi     = 0;
+inline bool     g_stacktrap_fired  = false;
 
 // ---- A2GSPU_WATCH: address-range write-watchpoint --------------------------
 // Env A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) traps every CPU write into
@@ -58,9 +71,10 @@ inline void iigs_watch_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
     for (int i = 0; i < g_watch_count; i++) {
         if (addr >= g_watch_ranges[i].lo && addr <= g_watch_ranges[i].hi) {
             if (g_watch_hits < 256)
-                printf("IIGS WATCH: PC=%02X/%04X wrote $%02X -> %02X/%04X\n",
+                printf("IIGS WATCH: PC=%02X/%04X wrote $%02X -> %02X/%04X  S=$%04X D=$%04X DBR=$%02X\n",
                        (cpu->full_pc >> 16) & 0xFF, cpu->full_pc & 0xFFFF, data,
-                       (addr >> 16) & 0xFF, addr & 0xFFFF);
+                       (addr >> 16) & 0xFF, addr & 0xFFFF,
+                       (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db);
             else if (g_watch_hits == 256)
                 printf("IIGS WATCH: (further hits suppressed)\n");
             g_watch_hits++;
@@ -294,6 +308,21 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
                 printf("IIGS SYSFAIL: caller=$%06X stack +4=$%04X +6=$%04X +8=$%04X +10=$%04X A=$%04X\n",
                        ret - 1, rd16((sp+4)&0xFFFF), rd16((sp+6)&0xFFFF), rd16((sp+8)&0xFFFF),
                        rd16((sp+10)&0xFFFF), (cpu->E || (cpu->p & 0x20)) ? (uint16_t)(cpu->a & 0xFF) : cpu->a);
+                // The $FE98xx "caller" is just the ROM tool dispatcher; the true
+                // invoker is deeper — dump the PC ring so the real caller chain shows.
+                printf("IIGS SYSFAIL caller ring (oldest->newest):\n ");
+                int hs = (g_pchist_i > 48) ? g_pchist_i - 48 : 0;
+                for (int k = hs; k < g_pchist_i; k++)
+                    printf(" %02X/%04X", (g_pchist[k & 255] >> 16) & 0xFF, g_pchist[k & 255] & 0xFFFF);
+                printf("\n");
+                // A2GSPU_TRAPDUMP="base:len" — dump a memory region at the fatal death
+                // (observation-free probe_peek), e.g. the heartbeat taskheader.
+                if (g_trap_dump_len) {
+                    printf("IIGS SYSFAIL dump $%06X..+%u probe_peek:", g_trap_dump_base, g_trap_dump_len);
+                    for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
+                        printf(" %02X", cpu->mmu->probe_peek(a));
+                    printf("\n");
+                }
             }
         }
     } else if (log_window && bank_ok && g_iigs_errhook_enabled) {
