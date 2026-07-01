@@ -31,8 +31,33 @@ inline uint32_t g_iigs_trace_from  = 0;       // start tracing when PC first hit
 inline bool g_iigs_trace_armed     = false;   // trace_from has fired
 inline int  g_iigs_brk_count       = 0;       // BRK/crash count (exit-taxonomy canary)
 inline bool g_brkmem_on            = false;   // A2GSPU_BRKMEM: crash-path mem/PC ring dump
-inline uint32_t g_pchist[64]       = {0};     // ring of last bank-2 PCs
+inline uint32_t g_pchist[64]       = {0};     // A1: ring of last PCs (ALL banks) into the fault
 inline int  g_pchist_i             = 0;
+
+// ---- A2GSPU_WATCH: address-range write-watchpoint --------------------------
+// Env A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) traps every CPU write into
+// a range and prints the faulting PC + value, so a wrong-bank / stray store that
+// corrupts code or data is caught AT the instruction doing it. First 256 hits
+// then suppressed. One cheap branch on the write funnel when off.
+struct WatchRange { uint32_t lo, hi; };       // inclusive full 24-bit addresses
+inline bool       g_watch_on         = false;
+inline WatchRange g_watch_ranges[8]  = {};
+inline int        g_watch_count      = 0;
+inline int        g_watch_hits       = 0;
+inline void iigs_watch_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
+    for (int i = 0; i < g_watch_count; i++) {
+        if (addr >= g_watch_ranges[i].lo && addr <= g_watch_ranges[i].hi) {
+            if (g_watch_hits < 256)
+                printf("IIGS WATCH: PC=%02X/%04X wrote $%02X -> %02X/%04X\n",
+                       (cpu->full_pc >> 16) & 0xFF, cpu->full_pc & 0xFFFF, data,
+                       (addr >> 16) & 0xFF, addr & 0xFFFF);
+            else if (g_watch_hits == 256)
+                printf("IIGS WATCH: (further hits suppressed)\n");
+            g_watch_hits++;
+            return;
+        }
+    }
+}
 
 // ---- A2GSPU_ITRACE: additive, env-gated, per-instruction execution trace ----
 // A standalone full-instruction trace (distinct from the toolbox-scoped trace

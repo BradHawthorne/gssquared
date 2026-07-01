@@ -1635,6 +1635,29 @@ static void run_headless_spike(GS2AppState *state) {
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);
     g_iigs_stop_on_fault   = (SDL_getenv("A2GSPU_STOP_ON_FAULT") != nullptr);
     g_brkmem_on = (SDL_getenv("A2GSPU_BRKMEM") != nullptr);
+    // A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) — address-range write-watchpoint.
+    if (const char *w = SDL_getenv("A2GSPU_WATCH")) {
+        g_watch_count = 0;
+        const char *p = w;
+        while (*p && g_watch_count < 8) {
+            uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
+            if (*p == ':') p++;
+            uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
+            if (*p == '-') p++;
+            uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
+            g_watch_ranges[g_watch_count].lo = (bank << 16) | (lo & 0xFFFF);
+            g_watch_ranges[g_watch_count].hi = (bank << 16) | (hi & 0xFFFF);
+            g_watch_count++;
+            while (*p == ',' || *p == ' ') p++;
+        }
+        g_watch_on = (g_watch_count > 0);
+        if (g_watch_on) {
+            printf("A2GSPU_WATCH: %d range(s):", g_watch_count);
+            for (int i = 0; i < g_watch_count; i++)
+                printf(" %06X-%06X", g_watch_ranges[i].lo, g_watch_ranges[i].hi);
+            printf("\n");
+        }
+    }
     if (const char *bp = SDL_getenv("A2GSPU_BREAK")) {
         g_iigs_break_enabled = true;
         g_iigs_break_addr = (uint32_t)strtoul(bp, nullptr, 16) & 0xFFFFFF;

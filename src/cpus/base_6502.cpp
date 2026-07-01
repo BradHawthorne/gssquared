@@ -125,6 +125,7 @@ inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
 }
 inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     cpu->mmu->write(addr & 0xFFFFFF, data);
+    if (g_watch_on) iigs_watch_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH (off => 1 branch)
     incr_cycles(cpu);
 }
 
@@ -2246,8 +2247,10 @@ int execute_next(cpu_state *cpu) override {
         // A2GSPU_ITRACE: additive per-instruction crash post-mortem trace (off by
         // default; one cheap branch when off). Mirrors the BRKDUMP gating.
         if (g_iigs_itrace_enabled) iigs_itrace_step(cpu);
-        // BRKMEM PC-history ring (bank-2 only): capture the path into the fault.
-        if (g_brkmem_on && ((cpu->full_pc >> 16) & 0xFF) == 0x02) {
+        // BRKMEM PC-history ring (A1: ALL banks): capture the control-flow path
+        // into the fault so a wild jump/return into ANY bank is visible (the
+        // bank-2-only gate hid bank-0/$E1/ROM crash paths -> empty ring).
+        if (g_brkmem_on) {
             g_pchist[g_pchist_i & 63] = cpu->full_pc; g_pchist_i++;
         }
     }
@@ -3755,10 +3758,11 @@ int execute_next(cpu_state *cpu) override {
                     // bank/addr) so a corrupted/misplaced code byte can be read off
                     // the live image at the fault. Env-gated, observation only.
                     if (getenv("A2GSPU_BRKMEM")) {
-                        printf("IIGS BRKHIST (last bank-2 PCs):");
+                        printf("IIGS BRKHIST (last PCs bank/addr, oldest->newest):\n ");
                         int hstart = (g_pchist_i > 48) ? g_pchist_i - 48 : 0;
                         for (int k = hstart; k < g_pchist_i; k++)
-                            printf(" %04X", g_pchist[k & 63] & 0xFFFF);
+                            printf(" %02X/%04X", (g_pchist[k & 63] >> 16) & 0xFF,
+                                                 g_pchist[k & 63] & 0xFFFF);
                         printf("\n");
                         uint32_t fp = cpu->full_pc;
                         uint8_t bank = (fp >> 16) & 0xFF;
