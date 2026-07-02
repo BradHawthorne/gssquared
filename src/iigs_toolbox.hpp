@@ -105,6 +105,62 @@ inline void iigs_lc_trace(cpu_state *cpu, uint32_t addr, bool is_write) {
     g_lctrace_hits++;
 }
 
+// ---- kernel-vs-ROM region classifier (ends the "symbol lies in bank-0" confound) ----
+// Bank-0 $D000-$FFFF is the Language-Card region: it holds the GS/OS LC-RAM kernel OR the
+// IIgs ROM Monitor depending on LC read-state, and $C000-$CFFF is I/O + slot/expansion ROM,
+// and banks $F0-$FF are ROM — yet iigs_sym_resolve() blindly maps ANY bank-0 PC to the
+// nearest kernel symbol, so a trace of ROM/slot firmware reads as kernel (every confound
+// this session). This classifies a *live* PC definitively by comparing the byte the CPU
+// actually FETCHES (probe_peek) to the ROM image: a match in the LC/ROM region => executing
+// ROM, not kernel. Returns "" for a genuine kernel-RAM PC. Lazy-loads the ROM (A2GSPU_ROM).
+inline uint8_t *g_iigs_rom = nullptr; inline long g_iigs_rom_len = 0; inline bool g_iigs_rom_tried = false;
+inline void iigs_rom_load_once() {
+    if (g_iigs_rom_tried) return; g_iigs_rom_tried = true;
+    const char *p = SDL_getenv("A2GSPU_ROM");
+    const char *path = p ? p : "resources/roms/apple2gs/main.rom";   // relative to the run dir; A2GSPU_ROM overrides
+    FILE *f = fopen(path, "rb"); if (!f) return;
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    if (n > 0 && n <= 0x40000) { g_iigs_rom = (uint8_t *)malloc((size_t)n); if (g_iigs_rom) g_iigs_rom_len = (long)fread(g_iigs_rom, 1, (size_t)n, f); }
+    fclose(f);
+}
+inline const char *iigs_pc_region(cpu_state *cpu, uint32_t pc) {
+    uint8_t bank = (pc >> 16) & 0xFF; uint16_t lo = pc & 0xFFFF;
+    if (bank >= 0xF0) return "ROM";
+    if ((bank==0||bank==1||bank==0xE0||bank==0xE1) && lo>=0xC000 && lo<0xD000) return "IO/slot";
+    // During GS/OS BOOT the only valid code banks are $00/$01 (kernel/loader) and $E0/$E1
+    // (Mega-II). Execution elsewhere = a wild jump into uninitialized RAM (e.g. bank $B0 read
+    // as a sea of $B0=BCS). (Would need loosening once apps load code into higher banks, but
+    // the boot never gets there.)
+    if (!(bank==0||bank==1||bank==0xE0||bank==0xE1)) return "wild-RAM";
+    if ((bank==0||bank==1) && lo>=0xD000) {                 // LC region: RAM kernel or ROM Monitor?
+        iigs_rom_load_once();
+        if (g_iigs_rom && g_iigs_rom_len >= 0x20000) {
+            uint8_t e0 = cpu->mmu->probe_peek(pc);
+            uint8_t e1 = cpu->mmu->probe_peek((pc & 0xFF0000) | ((lo + 1) & 0xFFFF));
+            if (e0 == g_iigs_rom[0x10000 + lo] && e1 == g_iigs_rom[0x10000 + ((lo + 1) & 0xFFFF)])
+                return "LC-ROM";                            // CPU is fetching ROM Monitor, not the kernel
+        }
+    }
+    return "";
+}
+
+// One-shot wild-jump detector: fires the instant execution enters a non-code bank during
+// boot ($02-$DF), dumping regs + the symbolized caller ring — pinning the routine that
+// jumped/returned into garbage (e.g. a caller that mishandles an SCM carry-set error).
+inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why);  // fwd (defined below)
+inline void iigs_print_ring_symbolized(int count);                     // fwd (defined below)
+inline bool g_wildjump_fired = false;
+inline void iigs_wildjump_check(cpu_state *cpu) {
+    if (g_wildjump_fired) return;
+    uint8_t b = (cpu->full_pc >> 16) & 0xFF;
+    if (b==0 || b==1 || b==0xE0 || b==0xE1 || b>=0xF0) return;   // valid boot code bank
+    g_wildjump_fired = true;
+    printf("IIGS WILDPC: execution entered non-code bank $%02X at %02X/%04X (wild jump during boot)\n",
+           (unsigned)b, (unsigned)b, (unsigned)(cpu->full_pc & 0xFFFF));
+    iigs_cpu_state_dump_regs(cpu, "WILDPC");
+    iigs_print_ring_symbolized(80);
+}
+
 // ---- A2GSPU_ITRACE: additive, env-gated, per-instruction execution trace ----
 // A standalone full-instruction trace (distinct from the toolbox-scoped trace
 // above): logs PC(bank:addr), opcode byte, decoded mnemonic+operand, and the
@@ -434,7 +490,9 @@ inline void iigs_itrace_step(cpu_state *cpu) {
             break;
     }
 
-    char sym[80]; iigs_sym_resolve(pc, sym, sizeof(sym));
+    char sym[80]; const char *rgn = iigs_pc_region(cpu, pc);
+    if (rgn[0]) snprintf(sym, sizeof(sym), "<%s>", rgn);   // ROM/IO/LC-ROM: a kernel symbol would be a lie
+    else iigs_sym_resolve(pc, sym, sizeof(sym));
     fprintf(stderr,
         "ITRACE %02X/%04X: %02X %-4s %-12s%s "
         "A=%04X X=%04X Y=%04X S=%04X D=%04X DBR=%02X P=%02X e=%d%s%s\n",
@@ -598,7 +656,9 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
 // Regs-only CPU-state dump (no MMU/disassembler dependency) — safe from the
 // CPU core (BRK/break). Symbolizes the PC when a symbol table is loaded.
 inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why) {
-    char sym[80]; iigs_sym_resolve(cpu->full_pc, sym, sizeof(sym));
+    char sym[80]; const char *rgn = iigs_pc_region(cpu, cpu->full_pc);
+    if (rgn[0]) snprintf(sym, sizeof(sym), "<%s>", rgn);   // ROM/IO/LC-ROM, not a kernel symbol
+    else iigs_sym_resolve(cpu->full_pc, sym, sizeof(sym));
     printf("IIGS CPU [%s]: PC=%02X/%04X%s%s A=%04X X=%04X Y=%04X S=%04X D=%04X "
            "DBR=%02X P=%02X e=%d\n",
            why ? why : "", cpu->pb, cpu->pc, sym[0] ? " " : "", sym,

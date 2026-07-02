@@ -2259,7 +2259,8 @@ int execute_next(cpu_state *cpu) override {
         // bank-2-only gate hid bank-0/$E1/ROM crash paths -> empty ring).
         if (g_brkmem_on) {
             g_pchist[g_pchist_i & 255] = cpu->full_pc; g_pchist_i++;
-            iigs_hang_check(cpu);   // #2: catch a no-BRK degenerate-loop / wild-code hang
+            iigs_hang_check(cpu);       // #2: catch a no-BRK degenerate-loop / wild-code hang
+            iigs_wildjump_check(cpu);   // catch the FIRST wild jump into a non-code bank + its caller
         }
         // A2GSPU_PCTRAP: one-shot — dump regs + the caller ring the instant execution
         // first enters the trap range (the wild-jump source, before a garbage run
