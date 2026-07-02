@@ -1740,9 +1740,12 @@ static void run_headless_spike(GS2AppState *state) {
     if (const char *msp = SDL_getenv("A2GSPU_MILESTONES")) {
         iigs_milestones_load(msp);
     }
-    if (SDL_getenv("A2GSPU_RETGUARD")) {
+    if (const char *rg = SDL_getenv("A2GSPU_RETGUARD")) {
         g_retguard_on = true;
-        fprintf(stderr, "IIGS RETGUARD: enabled (RTS/RTL into $00/$01 padding)\n");
+        g_retguard_strict = (strcmp(rg, "strict") == 0);
+        fprintf(stderr, "IIGS RETGUARD: enabled (%s)\n",
+                g_retguard_strict ? "strict: BRK-target + symbol-gap"
+                                  : "BRK-target returns into $00/$01");
     }
     if (const char *itfr = SDL_getenv("A2GSPU_ITRACE_FRAME")) {
         g_iigs_itrace_frame = (int)strtol(itfr, nullptr, 10);

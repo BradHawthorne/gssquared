@@ -156,35 +156,42 @@ inline void iigs_milestones_report(void) {
 // by default. RTL reads a 3-byte bank+addr; RTS a 2-byte same-bank addr.
 // ============================================================================
 inline bool g_retguard_on = false;
+inline bool g_retguard_strict = false;   // A2GSPU_RETGUARD=strict: also flag symbol-gap returns
 inline int  g_retguard_hits = 0;
 inline void iigs_retguard_step(cpu_state *cpu) {
     if (g_retguard_hits >= 64) return;
     uint32_t pc = cpu->full_pc;
-    uint8_t op = cpu->mmu->probe_peek(pc);
+    uint8_t op = cpu->mmu->read(pc);   // live bus (probe_peek can miss relocated bank-0 RAM)
     if (op != 0x60 && op != 0x6B) return;            // RTS / RTL
     uint16_t s = (uint16_t)cpu->sp;
-    auto sp = [&](int n){ return cpu->mmu->probe_peek((uint16_t)(s + n)); };
+    auto sp = [&](int n){ return cpu->mmu->read((uint16_t)(s + n)); };
     uint32_t tgt;
     if (op == 0x60) tgt = ((pc & 0xFF0000) | (((sp(1) | (sp(2) << 8)) + 1) & 0xFFFF));
     else            tgt = (((uint32_t)sp(3) << 16) | (((sp(1) | (sp(2) << 8)) + 1) & 0xFFFF));
     uint32_t bank = (tgt >> 16) & 0xFF;
     if (bank != 0x00 && bank != 0x01) return;        // ROM/$E1 returns are fine
-    char sym[80]; iigs_sym_resolve(tgt, sym, sizeof(sym));
-    bool near_sym = sym[0] && !strstr(sym, "+$") ? true
-                    : (sym[0] && [&]{ const char *p = strstr(sym, "+$");
-                        return p && strtoul(p + 2, nullptr, 16) <= 0x400; }());
-    // A return LANDING ON A BRK byte ($00) is a padding/zeroed-region return even
-    // if it's within $400 of a (data) symbol — e.g. $8101 sits just past the
-    // 'startpath' data string in the gldr's zero pad. Flag those too.
-    uint8_t tbyte = cpu->mmu->probe_peek(tgt);
-    if (near_sym && tbyte != 0x00) return;
+    // ROBUST low-noise signal: a return LANDING ON A $00 (BRK) byte. Real code
+    // never RTS/RTL's into a BRK; a $00 target = zeroed padding / unloaded gap /
+    // wild return ($8101 gldr pad, $00BA zero-page). The prior "no nearby symbol"
+    // heuristic false-fired on valid returns in sparsely-symboled kernel regions
+    // (598 valid returns had target bytes 68/20/A9/... never $00), so it is dropped
+    // as the default. A2GSPU_RETGUARD=strict re-enables the symbol-gap heuristic
+    // for a thorough (noisy) sweep.
+    uint8_t tbyte = cpu->mmu->read(tgt);
+    bool bad = (tbyte == 0x00);
+    if (!bad && g_retguard_strict) {
+        char sym[80]; iigs_sym_resolve(tgt, sym, sizeof(sym));
+        const char *p = strstr(sym, "+$");
+        bad = !sym[0] || (p && strtoul(p + 2, nullptr, 16) > 0x400);
+    }
+    if (!bad) return;
     g_retguard_hits++;
     char here[80]; iigs_sym_resolve(pc, here, sizeof(here));
     char ts[80]; iigs_sym_resolve(tgt, ts, sizeof(ts));
     fprintf(stderr, "IIGS RETGUARD: %s @%02X/%04X %s -> %02X/%04X %s (%s)\n",
             op == 0x60 ? "RTS" : "RTL", (unsigned)(pc >> 16), (unsigned)(pc & 0xFFFF),
             here, (unsigned)bank, (unsigned)(tgt & 0xFFFF), ts,
-            tbyte == 0x00 ? "target=BRK/padding" : "no nearby code symbol");
+            tbyte == 0x00 ? "target=BRK/padding" : "return into unsymboled region");
 }
 
 // A2GSPU_CALLTRACE: call/return-flow trace. Logs JSR/JSL/RTS/RTL/RTI/BRK with a
