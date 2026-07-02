@@ -1737,6 +1737,13 @@ static void run_headless_spike(GS2AppState *state) {
         fprintf(stderr, "IIGS CALLTRACE: enabled (%s, n=%d)\n",
                 g_calltrace_use_pc ? "PC-armed" : "from frame 0", g_calltrace_n);
     }
+    if (const char *msp = SDL_getenv("A2GSPU_MILESTONES")) {
+        iigs_milestones_load(msp);
+    }
+    if (SDL_getenv("A2GSPU_RETGUARD")) {
+        g_retguard_on = true;
+        fprintf(stderr, "IIGS RETGUARD: enabled (RTS/RTL into $00/$01 padding)\n");
+    }
     if (const char *itfr = SDL_getenv("A2GSPU_ITRACE_FRAME")) {
         g_iigs_itrace_frame = (int)strtol(itfr, nullptr, 10);
         g_iigs_itrace_enabled = true;
@@ -1950,6 +1957,7 @@ static void run_headless_spike(GS2AppState *state) {
         iigs_mem_range_dump(computer->cpu, mb, dg);
     }
     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(computer->cpu, "SPIKE-END");
+    iigs_milestones_report();   // A2GSPU_MILESTONES: reached / NOT-REACHED table
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
     {

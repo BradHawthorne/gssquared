@@ -104,6 +104,88 @@ inline int      g_iigs_itrace_logged  = 0;     // logged so far
 inline int      g_iigs_cur_frame      = 0;     // updated by the headless spike loop
 
 inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why);  // fwd
+inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);  // fwd (also below)
+
+// ============================================================================
+// A2GSPU_MILESTONES=<path> — boot-progress ledger. The file lists "HHHHHH name"
+// (24-bit hex addr + label). Prints the FIRST time each milestone PC executes
+// (frame + name); at spike end prints a REACHED / *** NOT REACHED *** table.
+// Turns crash-driven debugging (probe one routine at a time) into progress-driven
+// ("here's how far the boot got"). Off by default; generic, public-safe.
+// ============================================================================
+struct IigsMilestone { uint32_t addr; std::string name; int frame; };
+inline std::vector<IigsMilestone> g_milestones;
+inline bool g_milestones_on = false;
+
+inline void iigs_milestones_load(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) { printf("IIGS MILESTONES: cannot open '%s'\n", path); return; }
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        char nm[128]; unsigned a;
+        if (sscanf(line, "%x %127s", &a, nm) == 2)
+            g_milestones.push_back({a & 0xFFFFFF, std::string(nm), -1});
+    }
+    fclose(f);
+    g_milestones_on = !g_milestones.empty();
+    printf("IIGS MILESTONES: %zu loaded from '%s'\n", g_milestones.size(), path);
+}
+inline void iigs_milestone_check(cpu_state *cpu, int frame) {
+    uint32_t pc = cpu->full_pc;
+    for (auto &m : g_milestones)
+        if (m.frame < 0 && m.addr == pc) {
+            m.frame = frame;
+            printf("IIGS MILESTONE: reached %s @%02X/%04X (frame %d)\n",
+                   m.name.c_str(), (unsigned)(pc >> 16), (unsigned)(pc & 0xFFFF), frame);
+        }
+}
+inline void iigs_milestones_report(void) {
+    if (!g_milestones_on) return;
+    int hit = 0; for (auto &m : g_milestones) if (m.frame >= 0) hit++;
+    printf("IIGS MILESTONES: %d/%zu reached\n", hit, g_milestones.size());
+    for (auto &m : g_milestones)
+        if (m.frame < 0) printf("  *** NOT REACHED: %s ($%06X)\n", m.name.c_str(), m.addr);
+}
+
+// ============================================================================
+// A2GSPU_RETGUARD — flag an RTS/RTL whose return target lands in a KNOWN kernel
+// code bank ($00/$01) but resolves to NO nearby symbol (>$400 gap) — i.e. a
+// return into padding / data / unloaded space. THREE walls this session were
+// exactly this ($8101 gldr padding, $01C4FF Loader gap, $00BA zero-page). Uses
+// the loaded symbol table (A2GSPU_SYMBOLS); observation-free (probe_peek). Off
+// by default. RTL reads a 3-byte bank+addr; RTS a 2-byte same-bank addr.
+// ============================================================================
+inline bool g_retguard_on = false;
+inline int  g_retguard_hits = 0;
+inline void iigs_retguard_step(cpu_state *cpu) {
+    if (g_retguard_hits >= 64) return;
+    uint32_t pc = cpu->full_pc;
+    uint8_t op = cpu->mmu->probe_peek(pc);
+    if (op != 0x60 && op != 0x6B) return;            // RTS / RTL
+    uint16_t s = (uint16_t)cpu->sp;
+    auto sp = [&](int n){ return cpu->mmu->probe_peek((uint16_t)(s + n)); };
+    uint32_t tgt;
+    if (op == 0x60) tgt = ((pc & 0xFF0000) | (((sp(1) | (sp(2) << 8)) + 1) & 0xFFFF));
+    else            tgt = (((uint32_t)sp(3) << 16) | (((sp(1) | (sp(2) << 8)) + 1) & 0xFFFF));
+    uint32_t bank = (tgt >> 16) & 0xFF;
+    if (bank != 0x00 && bank != 0x01) return;        // ROM/$E1 returns are fine
+    char sym[80]; iigs_sym_resolve(tgt, sym, sizeof(sym));
+    bool near_sym = sym[0] && !strstr(sym, "+$") ? true
+                    : (sym[0] && [&]{ const char *p = strstr(sym, "+$");
+                        return p && strtoul(p + 2, nullptr, 16) <= 0x400; }());
+    // A return LANDING ON A BRK byte ($00) is a padding/zeroed-region return even
+    // if it's within $400 of a (data) symbol — e.g. $8101 sits just past the
+    // 'startpath' data string in the gldr's zero pad. Flag those too.
+    uint8_t tbyte = cpu->mmu->probe_peek(tgt);
+    if (near_sym && tbyte != 0x00) return;
+    g_retguard_hits++;
+    char here[80]; iigs_sym_resolve(pc, here, sizeof(here));
+    char ts[80]; iigs_sym_resolve(tgt, ts, sizeof(ts));
+    fprintf(stderr, "IIGS RETGUARD: %s @%02X/%04X %s -> %02X/%04X %s (%s)\n",
+            op == 0x60 ? "RTS" : "RTL", (unsigned)(pc >> 16), (unsigned)(pc & 0xFFFF),
+            here, (unsigned)bank, (unsigned)(tgt & 0xFFFF), ts,
+            tbyte == 0x00 ? "target=BRK/padding" : "no nearby code symbol");
+}
 
 // A2GSPU_CALLTRACE: call/return-flow trace. Logs JSR/JSL/RTS/RTL/RTI/BRK with a
 // depth-indented, symbol-annotated line so the kernel's call tree is legible and
