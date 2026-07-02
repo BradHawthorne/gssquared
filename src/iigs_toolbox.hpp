@@ -118,11 +118,16 @@ inline bool     g_calltrace_armed   = false;
 inline int      g_calltrace_n       = 4000;
 inline int      g_calltrace_logged  = 0;
 inline int      g_calltrace_depth   = 0;
+inline int      g_calltrace_skip    = 0;    // A2GSPU_CALLTRACE_SKIP: ignore the first N hits of the arm PC
 inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);  // fwd
 
 inline void iigs_calltrace_step(cpu_state *cpu) {
     if (!g_calltrace_armed && g_calltrace_use_pc &&
         cpu->full_pc == g_calltrace_from) {
+        // A2GSPU_CALLTRACE_SKIP=N: wait for the (N+1)th hit of the arm PC, so a
+        // loop-resident PC (e.g. the crashing iteration of a boot retry loop)
+        // can be reached instead of the first benign pass.
+        if (g_calltrace_skip > 0) { g_calltrace_skip--; return; }
         g_calltrace_armed = true;
         fprintf(stderr, "IIGS CALLTRACE: armed at %02X/%04X (frame %d)\n",
                 cpu->pb, cpu->pc, g_iigs_cur_frame);

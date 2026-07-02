@@ -1731,6 +1731,9 @@ static void run_headless_spike(GS2AppState *state) {
         if (const char *ctn = SDL_getenv("A2GSPU_CALLTRACE_N")) {
             int v = (int)strtol(ctn, nullptr, 10); if (v > 0) g_calltrace_n = v;
         }
+        if (const char *cts = SDL_getenv("A2GSPU_CALLTRACE_SKIP")) {
+            int v = (int)strtol(cts, nullptr, 10); if (v > 0) g_calltrace_skip = v;
+        }
         fprintf(stderr, "IIGS CALLTRACE: enabled (%s, n=%d)\n",
                 g_calltrace_use_pc ? "PC-armed" : "from frame 0", g_calltrace_n);
     }
