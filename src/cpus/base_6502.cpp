@@ -2257,6 +2257,7 @@ int execute_next(cpu_state *cpu) override {
         // bank-2-only gate hid bank-0/$E1/ROM crash paths -> empty ring).
         if (g_brkmem_on) {
             g_pchist[g_pchist_i & 255] = cpu->full_pc; g_pchist_i++;
+            iigs_hang_check(cpu);   // #2: catch a no-BRK degenerate-loop / wild-code hang
         }
         // A2GSPU_PCTRAP: one-shot — dump regs + the caller ring the instant execution
         // first enters the trap range (the wild-jump source, before a garbage run
@@ -2273,6 +2274,7 @@ int execute_next(cpu_state *cpu) override {
                 printf(" %02X/%04X", (g_pchist[k & 255] >> 16) & 0xFF,
                                      g_pchist[k & 255] & 0xFFFF);
             printf("\n");
+            iigs_print_ring_symbolized(64);   // #1: NAME+off caller path
             printf("IIGS PCTRAP mem $E1/0000 read():");
             for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
                 printf(" %02X", cpu->mmu->read(a));
@@ -2304,6 +2306,7 @@ int execute_next(cpu_state *cpu) override {
             for (int k = hs; k < g_pchist_i; k++)
                 printf(" %02X/%04X", (g_pchist[k & 255] >> 16) & 0xFF, g_pchist[k & 255] & 0xFFFF);
             printf("\n");
+            iigs_print_ring_symbolized(64);   // #1: NAME+off caller path
         }
     }
     opcode_t opcode = fetch_pc(cpu);
@@ -3816,6 +3819,7 @@ int execute_next(cpu_state *cpu) override {
                             printf(" %02X/%04X", (g_pchist[k & 255] >> 16) & 0xFF,
                                                  g_pchist[k & 255] & 0xFFFF);
                         printf("\n");
+                        iigs_print_ring_symbolized(64);   // #1: NAME+off tail of the crash path
                         uint32_t fp = cpu->full_pc;
                         uint8_t bank = (fp >> 16) & 0xFF;
                         uint32_t lo = (fp & 0xFFFF);

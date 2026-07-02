@@ -152,6 +152,68 @@ inline void iigs_milestones_report(void) {
     for (auto &m : g_milestones)
         if (m.frame < 0) fprintf(stderr, "  *** NOT REACHED: %s ($%06X)\n", m.name.c_str(), m.addr);
 }
+// True when a milestone ledger is loaded but not every milestone was reached — i.e.
+// the boot did not run to completion. Feeds the honest GSDIAG verdict (STALLED).
+inline bool iigs_boot_incomplete(void) {
+    if (!g_milestones_on) return false;
+    for (auto &m : g_milestones) if (m.frame < 0) return true;
+    return false;
+}
+
+// ============================================================================
+// #1 symbolized PC-history ring  +  #2 no-BRK hang / wild-loop detector.
+// The raw hex BRKHIST/PCTRAP/STACKTRAP ring is only legible after hand-resolving
+// each PC against the symbol table; this prints a NAME+offset tail and COLLAPSES
+// consecutive identical resolutions, so a wild-jump crash path (or a garbage crawl
+// through unmapped memory) reads at a glance. The hang detector catches a degenerate
+// loop — the SAME opcode executed thousands of times in a row (e.g. a wild jump into
+// a bank of uninitialized $B0 bytes = BCS-with-carry-set crawling forever) — which
+// produces NO BRK, so the plain "no crash" check would otherwise call a silent hang
+// "OK". Both use the loaded A2GSPU_SYMBOLS table + the g_pchist ring above.
+// ============================================================================
+inline void iigs_print_ring_symbolized(int count) {
+    if (!g_iigs_syms_loaded || g_pchist_i == 0) return;
+    int start = (g_pchist_i > count) ? g_pchist_i - count : 0;
+    printf("IIGS BRKHIST (symbolized tail, oldest->newest; runs collapsed):\n ");
+    char sym[80], cur[112], last[112] = {0}; int rep = 0;
+    for (int k = start; k < g_pchist_i; k++) {
+        uint32_t pc = g_pchist[k & 255];
+        iigs_sym_resolve(pc, sym, sizeof(sym));
+        snprintf(cur, sizeof(cur), "%02X/%04X%s%s", (unsigned)((pc>>16)&0xFF),
+                 (unsigned)(pc&0xFFFF), sym[0] ? " " : "", sym[0] ? sym : "?");
+        if (strcmp(cur, last) == 0) { rep++; continue; }
+        if (rep > 0) { printf(" (x%d)", rep + 1); rep = 0; }
+        printf("  %s", cur);
+        snprintf(last, sizeof(last), "%s", cur);
+    }
+    if (rep > 0) printf(" (x%d)", rep + 1);
+    printf("\n");
+}
+
+inline bool     g_iigs_hang_detected  = false;
+inline uint32_t g_iigs_hang_pc        = 0;
+inline int      g_iigs_hang_last_op   = -1;
+inline int      g_iigs_hang_run       = 0;
+inline int      g_iigs_hang_threshold = 16384;   // same opcode N× in a row = degenerate loop
+inline void iigs_hang_check(cpu_state *cpu) {
+    if (g_iigs_hang_detected) return;
+    int op = cpu->mmu->probe_peek(cpu->full_pc);   // observation-free (shares page table)
+    // MVN($54)/MVP($44) block moves LEGITIMATELY re-execute at the same PC once per
+    // byte (up to 65536×) — they are not a hang. Excluding them avoids flagging a large
+    // (even a wrong-count/runaway, but terminating) block move as an infinite loop.
+    if (op == 0x54 || op == 0x44) { g_iigs_hang_last_op = op; g_iigs_hang_run = 0; return; }
+    if (op == g_iigs_hang_last_op) {
+        if (++g_iigs_hang_run >= g_iigs_hang_threshold) {
+            g_iigs_hang_detected = true;
+            g_iigs_hang_pc = cpu->full_pc;
+            printf("IIGS HANG: opcode $%02X executed %dx consecutively near %02X/%04X "
+                   "(degenerate loop / wild code, no BRK)\n", (unsigned)op, g_iigs_hang_run + 1,
+                   (unsigned)((cpu->full_pc>>16)&0xFF), (unsigned)(cpu->full_pc&0xFFFF));
+            iigs_cpu_state_dump_regs(cpu, "HANG");
+            iigs_print_ring_symbolized(80);
+        }
+    } else { g_iigs_hang_last_op = op; g_iigs_hang_run = 0; }
+}
 
 // ============================================================================
 // A2GSPU_RETGUARD — flag an RTS/RTL whose return target (bank $00/$01) lands on a

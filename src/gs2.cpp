@@ -1851,6 +1851,7 @@ static void run_headless_spike(GS2AppState *state) {
         for (; i < state->spike_frames; i++) {
             iigs_itrace_frame_tick(i);
             if (!run_one_frame(computer)) { printf("SPIKE: emulation halted early at frame %d\n", i); break; }
+            if (g_iigs_hang_detected) { printf("SPIKE: hang detected, halting at frame %d\n", i); break; }
         }
         printf("A2GSPU RUN: final CPU full_pc=$%06X (if ~= the inject addr, the injected code ran)\n",
                (unsigned)computer->cpu->full_pc);
@@ -1859,6 +1860,10 @@ static void run_headless_spike(GS2AppState *state) {
             iigs_itrace_frame_tick(i);
             if (!run_one_frame(computer)) {
                 printf("SPIKE: emulation halted early at frame %d\n", i);
+                break;
+            }
+            if (g_iigs_hang_detected) {   // #2: no-BRK degenerate-loop hang -> stop wasting frames
+                printf("SPIKE: hang detected, halting at frame %d\n", i);
                 break;
             }
         }
@@ -2007,9 +2012,14 @@ static void run_headless_spike(GS2AppState *state) {
             // machine-readable status line for the corpus harness (exit code stays
             // gate-driven for harness compat; the status NAME is the richer category)
             long scb = (e1a[0x9D00] & 0x80) ? 640 : 320;
+            // Honest verdict: a no-BRK degenerate-loop hang and a boot that never
+            // reached all milestones are NOT "OK" — distinguish them so a silent hang
+            // (e.g. a wild jump into garbage that never BRKs) stops reading as success.
             const char *st = (any_gate && gate_rc) ? "GATE_FAIL"
                            : g_iigs_brk_count       ? "CRASH_BRK"
-                           : g_iigs_last_gsos_err    ? "GSOS_ERROR" : "OK";
+                           : g_iigs_hang_detected    ? "HANG"
+                           : g_iigs_last_gsos_err    ? "GSOS_ERROR"
+                           : iigs_boot_incomplete()  ? "STALLED" : "OK";
             iigs_emit_status(st, any_gate ? gate_rc : 0,
                              any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
                              g_iigs_last_gsos_err, g_iigs_brk_count, scb, h);
