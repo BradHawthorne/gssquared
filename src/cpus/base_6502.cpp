@@ -120,12 +120,14 @@ inline word_t word(uint8_t lo, uint8_t hi) { return lo | (hi << 8); }
 */
 inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
     uint8_t data = cpu->mmu->read(addr & 0xFFFFFF);
+    if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, false);   // A2GSPU_LCTRACE (off => 1 branch)
     incr_cycles(cpu);
     return data;
 }
 inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     cpu->mmu->write(addr & 0xFFFFFF, data);
     if (g_watch_on) iigs_watch_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH (off => 1 branch)
+    if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, true);    // A2GSPU_LCTRACE
     incr_cycles(cpu);
 }
 

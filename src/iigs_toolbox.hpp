@@ -83,6 +83,28 @@ inline void iigs_watch_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
     }
 }
 
+// ---- A2GSPU_LCTRACE: Language-Card softswitch ($C080-$C08F, any bank) access log ----
+// LC read-state is READ-triggered (`lda $C081` -> read-ROM), so WATCH (write-only) misses
+// it. This logs every LC-switch access with the PC + decoded read-RAM/ROM + $D000 bank, to
+// find who leaves a bank's LC in read-ROM when its LC-RAM code must run. Off => 1 branch.
+inline bool g_lctrace_on   = false;
+inline int  g_lctrace_hits = 0;
+inline void iigs_lc_trace(cpu_state *cpu, uint32_t addr, bool is_write) {
+    if ((addr & 0xFFF0) != 0xC080) return;          // not an LC softswitch
+    int x = addr & 0x0F;
+    bool read_ram = ((x & 1) == ((x >> 1) & 1));     // low nibble 00/11 -> read RAM; 01/10 -> read ROM
+    int dbank = (x & 8) ? 1 : 2;                     // A3: $D000 bank 1 vs 2
+    if (g_lctrace_hits < 400) {
+        char sym[64]; iigs_sym_resolve(cpu->full_pc, sym, sizeof(sym));
+        printf("IIGS LC: %s $%06X -> bank$%02X %s (D000-b%d) from PC=%02X/%04X%s%s\n",
+               is_write ? "wr" : "rd", addr, (unsigned)((addr >> 16) & 0xFF),
+               read_ram ? "read-RAM" : "read-ROM", dbank,
+               (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF),
+               sym[0] ? " " : "", sym);
+    } else if (g_lctrace_hits == 400) printf("IIGS LC: (further hits suppressed)\n");
+    g_lctrace_hits++;
+}
+
 // ---- A2GSPU_ITRACE: additive, env-gated, per-instruction execution trace ----
 // A standalone full-instruction trace (distinct from the toolbox-scoped trace
 // above): logs PC(bank:addr), opcode byte, decoded mnemonic+operand, and the
@@ -194,7 +216,13 @@ inline bool     g_iigs_hang_detected  = false;
 inline uint32_t g_iigs_hang_pc        = 0;
 inline int      g_iigs_hang_last_op   = -1;
 inline int      g_iigs_hang_run       = 0;
-inline int      g_iigs_hang_threshold = 16384;   // same opcode N× in a row = degenerate loop
+// same opcode N× in a row = degenerate loop. Set ABOVE the largest legitimate bounded
+// crawl: a MVN/MVP block move is excluded below, but a bounded "wild crawl" through a
+// filled region (e.g. 49KB of $EE read as INC-abs) or a large clear loop can still hit
+// tens of thousands of same-opcode steps and TERMINATE — firing at 16K falsely halted the
+// boot mid-early-init and masked the real (later) hang. 1<<20 passes any bounded op
+// (<=64K bytes) yet still catches a truly unbounded/looping spin. A2GSPU_HANG_THRESHOLD overrides.
+inline int      g_iigs_hang_threshold = 1 << 20;
 inline void iigs_hang_check(cpu_state *cpu) {
     if (g_iigs_hang_detected) return;
     int op = cpu->mmu->probe_peek(cpu->full_pc);   // observation-free (shares page table)

@@ -1635,6 +1635,8 @@ static void run_headless_spike(GS2AppState *state) {
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);
     g_iigs_stop_on_fault   = (SDL_getenv("A2GSPU_STOP_ON_FAULT") != nullptr);
     g_brkmem_on = (SDL_getenv("A2GSPU_BRKMEM") != nullptr);
+    g_lctrace_on = (SDL_getenv("A2GSPU_LCTRACE") != nullptr);  // Language-Card softswitch access log
+    if (const char *ht = SDL_getenv("A2GSPU_HANG_THRESHOLD")) { int v = atoi(ht); if (v > 0) g_iigs_hang_threshold = v; }
     // A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) — address-range write-watchpoint.
     if (const char *w = SDL_getenv("A2GSPU_WATCH")) {
         g_watch_count = 0;
