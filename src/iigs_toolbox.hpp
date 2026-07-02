@@ -116,10 +116,14 @@ inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);  // 
 struct IigsMilestone { uint32_t addr; std::string name; int frame; };
 inline std::vector<IigsMilestone> g_milestones;
 inline bool g_milestones_on = false;
+inline int  g_milestones_unhit = 0;   // milestones not yet reached; enables an early-out
 
+// All milestone output goes to stderr (not stdout): iigs_milestones_report() is
+// called immediately before the golden-hash/SHR-assert gate parses stdout, so a
+// stray stdout line would corrupt the captured golden stream.
 inline void iigs_milestones_load(const char *path) {
     FILE *f = fopen(path, "rb");
-    if (!f) { printf("IIGS MILESTONES: cannot open '%s'\n", path); return; }
+    if (!f) { fprintf(stderr, "IIGS MILESTONES: cannot open '%s'\n", path); return; }
     char line[256];
     while (fgets(line, sizeof(line), f)) {
         char nm[128]; unsigned a;
@@ -128,32 +132,38 @@ inline void iigs_milestones_load(const char *path) {
     }
     fclose(f);
     g_milestones_on = !g_milestones.empty();
-    printf("IIGS MILESTONES: %zu loaded from '%s'\n", g_milestones.size(), path);
+    g_milestones_unhit = (int)g_milestones.size();
+    fprintf(stderr, "IIGS MILESTONES: %zu loaded from '%s'\n", g_milestones.size(), path);
 }
 inline void iigs_milestone_check(cpu_state *cpu, int frame) {
+    if (g_milestones_unhit <= 0) return;   // all reached — stop the per-instruction scan
     uint32_t pc = cpu->full_pc;
     for (auto &m : g_milestones)
         if (m.frame < 0 && m.addr == pc) {
-            m.frame = frame;
-            printf("IIGS MILESTONE: reached %s @%02X/%04X (frame %d)\n",
+            m.frame = frame; g_milestones_unhit--;
+            fprintf(stderr, "IIGS MILESTONE: reached %s @%02X/%04X (frame %d)\n",
                    m.name.c_str(), (unsigned)(pc >> 16), (unsigned)(pc & 0xFFFF), frame);
         }
 }
 inline void iigs_milestones_report(void) {
     if (!g_milestones_on) return;
     int hit = 0; for (auto &m : g_milestones) if (m.frame >= 0) hit++;
-    printf("IIGS MILESTONES: %d/%zu reached\n", hit, g_milestones.size());
+    fprintf(stderr, "IIGS MILESTONES: %d/%zu reached\n", hit, g_milestones.size());
     for (auto &m : g_milestones)
-        if (m.frame < 0) printf("  *** NOT REACHED: %s ($%06X)\n", m.name.c_str(), m.addr);
+        if (m.frame < 0) fprintf(stderr, "  *** NOT REACHED: %s ($%06X)\n", m.name.c_str(), m.addr);
 }
 
 // ============================================================================
-// A2GSPU_RETGUARD — flag an RTS/RTL whose return target lands in a KNOWN kernel
-// code bank ($00/$01) but resolves to NO nearby symbol (>$400 gap) — i.e. a
-// return into padding / data / unloaded space. THREE walls this session were
-// exactly this ($8101 gldr padding, $01C4FF Loader gap, $00BA zero-page). Uses
-// the loaded symbol table (A2GSPU_SYMBOLS); observation-free (probe_peek). Off
-// by default. RTL reads a 3-byte bank+addr; RTS a 2-byte same-bank addr.
+// A2GSPU_RETGUARD — flag an RTS/RTL whose return target (bank $00/$01) lands on a
+// $00 byte: real code never returns into a BRK, so a $00 target = zeroed padding /
+// unloaded gap / wild return. THREE walls this session were exactly this ($8101
+// gldr padding, $01C4FF Loader gap, $00BA zero-page). DEFAULT is intentionally the
+// narrow, zero-false-positive $00-target tripwire; it does NOT catch a bad return
+// into a live-but-wrong opcode, nor targets outside banks 0/1. A2GSPU_RETGUARD=
+// strict ADDS the noisier symbol-gap heuristic (>$400 gap = no nearby symbol) for a
+// thorough sweep. Uses the loaded symbol table (A2GSPU_SYMBOLS). Observation-free
+// (probe_peek — see below). Off by default. RTL reads a 3-byte bank+addr; RTS a
+// 2-byte same-bank addr.
 // ============================================================================
 inline bool g_retguard_on = false;
 inline bool g_retguard_strict = false;   // A2GSPU_RETGUARD=strict: also flag symbol-gap returns
@@ -161,10 +171,23 @@ inline int  g_retguard_hits = 0;
 inline void iigs_retguard_step(cpu_state *cpu) {
     if (g_retguard_hits >= 64) return;
     uint32_t pc = cpu->full_pc;
-    uint8_t op = cpu->mmu->read(pc);   // live bus (probe_peek can miss relocated bank-0 RAM)
+    // probe_peek is observation-free AND sees relocated bank-0 RAM: it shares the
+    // page_table with read(), so read_raw reflects soft-switched/relocated RAM; it
+    // diverges from read() ONLY on handler-served I/O pages, which are never $00
+    // BRK-padding. Using read() here would dispatch $C0xx side effects and inject a
+    // phantom bus-oracle event on the exact wild-return-into-I/O case we exist to
+    // catch — masking the bug and tainting the golden. So: probe_peek throughout.
+    uint8_t op = cpu->mmu->probe_peek(pc);
     if (op != 0x60 && op != 0x6B) return;            // RTS / RTL
     uint16_t s = (uint16_t)cpu->sp;
-    auto sp = [&](int n){ return cpu->mmu->read((uint16_t)(s + n)); };
+    // Native mode wraps the full 16-bit stack; emulation mode (E=1) confines pulls
+    // to page 1 ($01FF->$0100), so hold the high byte and wrap only the low byte.
+    // Early IIgs boot runs in E-mode, where a 16-bit wrap would read the wrong page.
+    auto sp = [&](int n){
+        uint16_t a = cpu->E ? (uint16_t)((s & 0xFF00) | ((s + n) & 0xFF))
+                            : (uint16_t)(s + n);
+        return cpu->mmu->probe_peek(a);
+    };
     uint32_t tgt;
     if (op == 0x60) tgt = ((pc & 0xFF0000) | (((sp(1) | (sp(2) << 8)) + 1) & 0xFFFF));
     else            tgt = (((uint32_t)sp(3) << 16) | (((sp(1) | (sp(2) << 8)) + 1) & 0xFFFF));
@@ -177,7 +200,7 @@ inline void iigs_retguard_step(cpu_state *cpu) {
     // (598 valid returns had target bytes 68/20/A9/... never $00), so it is dropped
     // as the default. A2GSPU_RETGUARD=strict re-enables the symbol-gap heuristic
     // for a thorough (noisy) sweep.
-    uint8_t tbyte = cpu->mmu->read(tgt);
+    uint8_t tbyte = cpu->mmu->probe_peek(tgt);
     bool bad = (tbyte == 0x00);
     if (!bad && g_retguard_strict) {
         char sym[80]; iigs_sym_resolve(tgt, sym, sizeof(sym));
@@ -248,7 +271,10 @@ inline void iigs_calltrace_step(cpu_state *cpu) {
     fprintf(stderr, "IIGS CALL: %*s%-6s @%02X/%04X %-22s%s%s\n",
             ind * 2, "", kind, (unsigned)(pc >> 16), (unsigned)(pc & 0xFFFF), here,
             tgt[0] ? " -> " : "", tgt);
-    if (op == 0x20 || op == 0x22) g_calltrace_depth++;
+    // JSR/JSL and JSR(abs,x) all push a return frame; count all three so the depth
+    // indent stays balanced against their RTS. (Interrupt-driven RTIs can still skew
+    // the indent — it is a legibility aid, not a verified nesting level.)
+    if (op == 0x20 || op == 0x22 || op == 0xFC) g_calltrace_depth++;
     g_calltrace_logged++;
 }
 
