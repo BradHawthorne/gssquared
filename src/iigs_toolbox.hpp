@@ -105,6 +105,59 @@ inline int      g_iigs_cur_frame      = 0;     // updated by the headless spike 
 
 inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why);  // fwd
 
+// A2GSPU_CALLTRACE: call/return-flow trace. Logs JSR/JSL/RTS/RTL/RTI/BRK with a
+// depth-indented, symbol-annotated line so the kernel's call tree is legible and
+// a bad return (rts to a stale/garbage address) is obvious vs a real dispatch.
+// Off by default; one cheap branch when off (mirrors ITRACE). Reads the opcode
+// via probe_peek (observation-free). Arm mode mirrors ITRACE: FROM=<hexPC> opens
+// the window at first hit; unset = armed from frame 0. stderr, symbol-annotated.
+inline bool     g_calltrace_enabled = false;
+inline uint32_t g_calltrace_from    = 0;
+inline bool     g_calltrace_use_pc  = false;
+inline bool     g_calltrace_armed   = false;
+inline int      g_calltrace_n       = 4000;
+inline int      g_calltrace_logged  = 0;
+inline int      g_calltrace_depth   = 0;
+inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);  // fwd
+
+inline void iigs_calltrace_step(cpu_state *cpu) {
+    if (!g_calltrace_armed && g_calltrace_use_pc &&
+        cpu->full_pc == g_calltrace_from) {
+        g_calltrace_armed = true;
+        fprintf(stderr, "IIGS CALLTRACE: armed at %02X/%04X (frame %d)\n",
+                cpu->pb, cpu->pc, g_iigs_cur_frame);
+    }
+    if (!g_calltrace_armed || g_calltrace_logged >= g_calltrace_n) return;
+    uint32_t pc = cpu->full_pc;
+    uint8_t  op = cpu->mmu->probe_peek(pc);
+    if (op != 0x20 && op != 0x22 && op != 0xFC && op != 0x60 &&
+        op != 0x6B && op != 0x40 && op != 0x00) return;
+    auto pk = [&](uint32_t o){ return cpu->mmu->probe_peek((pc & 0xFF0000) | ((pc + o) & 0xFFFF)); };
+    char here[80]; iigs_sym_resolve(pc, here, sizeof(here));
+    char tgt[80]; tgt[0] = 0;
+    const char *kind = "?";
+    int ddisp = g_calltrace_depth;
+    if (op == 0x20) {                       // JSR abs (same bank)
+        kind = "JSR"; uint32_t t = (pc & 0xFF0000) | (pk(1) | (pk(2) << 8));
+        char s[80]; iigs_sym_resolve(t, s, sizeof(s));
+        snprintf(tgt, sizeof(tgt), "%02X/%04X %s", (unsigned)(t >> 16), (unsigned)(t & 0xFFFF), s);
+    } else if (op == 0x22) {                // JSL long
+        kind = "JSL"; uint32_t t = pk(1) | (pk(2) << 8) | (pk(3) << 16);
+        char s[80]; iigs_sym_resolve(t, s, sizeof(s));
+        snprintf(tgt, sizeof(tgt), "%02X/%04X %s", (unsigned)(t >> 16), (unsigned)(t & 0xFFFF), s);
+    } else if (op == 0xFC) { kind = "JSR(x)"; }
+    else if (op == 0x60)   { kind = "RTS"; if (g_calltrace_depth > 0) g_calltrace_depth--; ddisp = g_calltrace_depth; }
+    else if (op == 0x6B)   { kind = "RTL"; if (g_calltrace_depth > 0) g_calltrace_depth--; ddisp = g_calltrace_depth; }
+    else if (op == 0x40)   { kind = "RTI"; if (g_calltrace_depth > 0) g_calltrace_depth--; ddisp = g_calltrace_depth; }
+    else if (op == 0x00)   { kind = "BRK"; }
+    int ind = ddisp; if (ind > 24) ind = 24;
+    fprintf(stderr, "IIGS CALL: %*s%-6s @%02X/%04X %-22s%s%s\n",
+            ind * 2, "", kind, (unsigned)(pc >> 16), (unsigned)(pc & 0xFFFF), here,
+            tgt[0] ? " -> " : "", tgt);
+    if (op == 0x20 || op == 0x22) g_calltrace_depth++;
+    g_calltrace_logged++;
+}
+
 // Per-instruction trace step. Called at the landing PC (cpu->full_pc), BEFORE
 // fetch, identically to iigs_tb_on_landing. Reads the 3 operand bytes straight
 // off the MMU so the decode reflects the live image (catches a corrupted byte).

@@ -1719,6 +1719,21 @@ static void run_headless_spike(GS2AppState *state) {
         g_iigs_itrace_from = (uint32_t)strtoul(itf, nullptr, 16) & 0xFFFFFF;
         g_iigs_itrace_use_pc = true; g_iigs_itrace_enabled = true;
     }
+    if (const char *ctf = SDL_getenv("A2GSPU_CALLTRACE")) {
+        g_calltrace_enabled = true;
+        // value forms: "1" = arm from frame 0; "<hexPC>" = arm at that PC
+        if (ctf[0] && !(ctf[0] == '1' && ctf[1] == '\0')) {
+            g_calltrace_from = (uint32_t)strtoul(ctf, nullptr, 16) & 0xFFFFFF;
+            g_calltrace_use_pc = true;
+        } else {
+            g_calltrace_armed = true;
+        }
+        if (const char *ctn = SDL_getenv("A2GSPU_CALLTRACE_N")) {
+            int v = (int)strtol(ctn, nullptr, 10); if (v > 0) g_calltrace_n = v;
+        }
+        fprintf(stderr, "IIGS CALLTRACE: enabled (%s, n=%d)\n",
+                g_calltrace_use_pc ? "PC-armed" : "from frame 0", g_calltrace_n);
+    }
     if (const char *itfr = SDL_getenv("A2GSPU_ITRACE_FRAME")) {
         g_iigs_itrace_frame = (int)strtol(itfr, nullptr, 10);
         g_iigs_itrace_enabled = true;

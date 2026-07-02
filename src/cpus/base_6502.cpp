@@ -2247,6 +2247,8 @@ int execute_next(cpu_state *cpu) override {
         // A2GSPU_ITRACE: additive per-instruction crash post-mortem trace (off by
         // default; one cheap branch when off). Mirrors the BRKDUMP gating.
         if (g_iigs_itrace_enabled) iigs_itrace_step(cpu);
+        // A2GSPU_CALLTRACE: call/return-flow trace (JSR/JSL/RTS/RTL/RTI/BRK).
+        if (g_calltrace_enabled) iigs_calltrace_step(cpu);
         // BRKMEM PC-history ring (A1: ALL banks): capture the control-flow path
         // into the fault so a wild jump/return into ANY bank is visible (the
         // bank-2-only gate hid bank-0/$E1/ROM crash paths -> empty ring).
