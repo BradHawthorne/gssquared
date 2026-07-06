@@ -70,3 +70,84 @@ inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n) {
     else snprintf(buf, n, "%s+$%X", g_iigs_syms[best].name.c_str(), off);
     return buf;
 }
+
+// ============================================================================
+// A2GSPU_ROM_SYMBOLS=<file> — name ROM-resident PCs (bank $Fx ROM + the firmware
+// dispatch vectors) in traces instead of the bare "<ROM>"/"<LC-ROM>" region tag.
+// Reuses the .final.dbg parser (same `symbol "NAME" type LABEL addr $XXXXXX`
+// lines) — and ALSO accepts a plain "HEXADDR name" line — into a SEPARATE table
+// (ROM is fixed, so no runtime relocation base is applied). When the env is set
+// but the file is absent/empty, a small built-in seed of documented Apple IIgs
+// firmware entry points is used so ROM PCs still get a name; the AUTHORITATIVE
+// source is a real ROM .dbg (the DATA DEPENDENCY this notes). Off by default
+// (env unset => table empty => iigs_rom_sym_resolve returns "" => no change).
+// ============================================================================
+inline std::vector<IigsSym> g_iigs_rom_syms;
+inline bool g_iigs_rom_syms_loaded = false;
+
+// Documented IIgs firmware / dispatch entry points (the seed used when no ROM
+// .dbg is supplied). Bank-$Fx ROM INTERIOR routines need a real ROM .dbg; these
+// cover the well-known vectors the boot passes through.
+inline void iigs_rom_symbols_seed() {
+    static const struct { uint32_t a; const char *n; } seed[] = {
+        { 0xE10000, "ToolDisp"      },   // Tool Locator dispatch
+        { 0xE10004, "UserToolDisp"  },   // user Tool Locator dispatch
+        { 0xE100A8, "GSOS_ProDOS16" },   // GS/OS class-1 (ProDOS 16) dispatch
+        { 0xE100B0, "GSOS_Disp"     },   // GS/OS class-0 dispatch
+        { 0xFF69,   "MonitorEntry"  },   // ROM Monitor entry (bank $FF)
+    };
+    for (auto &s : seed) g_iigs_rom_syms.push_back({ s.a & 0xFFFFFF, std::string(s.n) });
+}
+
+inline void iigs_rom_symbols_load(const char *path) {
+    FILE *f = path ? fopen(path, "rb") : nullptr;
+    if (f) {
+        char line[1024];
+        while (fgets(line, sizeof(line), f)) {
+            const char *s = strstr(line, "symbol \"");
+            const char *t = strstr(line, " type ");
+            const char *a = strstr(line, "addr $");
+            if (!s || !t || !a) {                       // accept a plain "HEXADDR name" seed line
+                unsigned aa; char nm[128];
+                if (sscanf(line, "%x %127s", &aa, nm) == 2)
+                    g_iigs_rom_syms.push_back({ aa & 0xFFFFFF, std::string(nm) });
+                continue;
+            }
+            if (!strstr(t, "LABEL") && !strstr(t, "ENTRY")) continue;
+            const char *nm = s + 8; const char *eq = strchr(nm, '"');
+            if (!eq) continue;
+            uint32_t addr = (uint32_t)strtoul(a + 6, nullptr, 16) & 0xFFFFFF;
+            g_iigs_rom_syms.push_back({ addr, std::string(nm, (size_t)(eq - nm)) });
+        }
+        fclose(f);
+    }
+    if (g_iigs_rom_syms.empty()) {
+        iigs_rom_symbols_seed();
+        printf("IIGS ROMSYM: '%s' absent/empty -> seeded %zu built-in ROM entry points "
+               "(authoritative source = a ROM .dbg)\n",
+               path ? path : "(none)", g_iigs_rom_syms.size());
+    }
+    std::sort(g_iigs_rom_syms.begin(), g_iigs_rom_syms.end(),
+              [](const IigsSym &a, const IigsSym &b) { return a.addr < b.addr; });
+    g_iigs_rom_syms_loaded = !g_iigs_rom_syms.empty();
+    printf("IIGS ROMSYM: %zu ROM symbols active\n", g_iigs_rom_syms.size());
+}
+
+// Resolve a ROM-resident PC to NAME+off (fixed ROM, no relocation base). "" when
+// no table is loaded or no symbol is within range.
+inline const char *iigs_rom_sym_resolve(uint32_t full_pc, char *buf, size_t n) {
+    buf[0] = 0;
+    if (!g_iigs_rom_syms_loaded) return buf;
+    uint32_t pc = full_pc & 0xFFFFFF;
+    int lo = 0, hi = (int)g_iigs_rom_syms.size() - 1, best = -1;
+    while (lo <= hi) {
+        int m = (lo + hi) / 2;
+        if (g_iigs_rom_syms[m].addr <= pc) { best = m; lo = m + 1; } else hi = m - 1;
+    }
+    if (best < 0) return buf;
+    uint32_t off = pc - g_iigs_rom_syms[best].addr;
+    if (off > 0x2000) return buf;              // too far from any ROM symbol
+    if (off == 0) snprintf(buf, n, "%s", g_iigs_rom_syms[best].name.c_str());
+    else snprintf(buf, n, "%s+$%X", g_iigs_rom_syms[best].name.c_str(), off);
+    return buf;
+}

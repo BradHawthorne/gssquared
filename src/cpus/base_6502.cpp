@@ -121,6 +121,7 @@ inline word_t word(uint8_t lo, uint8_t hi) { return lo | (hi << 8); }
 inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
     uint8_t data = cpu->mmu->read(addr & 0xFFFFFF);
     if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, false);   // A2GSPU_LCTRACE (off => 1 branch)
+    if (g_watch_read_on) iigs_watch_check_read(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH_READ (off => 1 branch)
     incr_cycles(cpu);
     return data;
 }
@@ -2076,6 +2077,13 @@ inline void stack_rtl(cpu_state *cpu) {
 
 /* 22j. Stack s - brk, cop */
 inline void brk_cop(cpu_state *cpu, uint16_t vector) {
+    // A2GSPU_INTLOG: interrupt-entry logger (BRK/COP). Reason decoded from the
+    // vector; logged before the signature-byte fetch so PC/P/S read at entry.
+    // Compiled out of the 6502/65C02 cores.
+    if constexpr (CPUTraits::has_65816_ops) {
+        if (g_intlog_on)
+            iigs_intlog(cpu, (vector == BRK_VECTOR || vector == N_BRK_VECTOR) ? "BRK" : "COP", vector);
+    }
     uint8_t sign = fetch_pc(cpu); // ignore this, we don't need it.
 
     if constexpr ((CPUTraits::has_65816_ops)) {
@@ -2184,6 +2192,9 @@ int execute_next(cpu_state *cpu) override {
     //if (!cpu->I && (cpu->irq_pipe & 0x02)) { // T1: look back 2 cycles for IRQ assertion
     if (cpu->irq_pipe & 0x02) { // T2: look back 2 cycles for IRQ assertion AND I
         if constexpr ((CPUTraits::has_65816_ops)) {
+            // A2GSPU_INTLOG: interrupt-entry logger (IRQ), before the pushes so
+            // PC/P/S read the interrupted state. Compiled out of the 6502 core.
+            if (g_intlog_on) iigs_intlog(cpu, "IRQ", CPUTraits::e_mode ? IRQ_VECTOR : N_IRQ_VECTOR);
             if constexpr (!CPUTraits::e_mode) push_byte(cpu, cpu->pb);
             push_word(cpu, cpu->pc); // push current PC
             
@@ -2245,7 +2256,7 @@ int execute_next(cpu_state *cpu) override {
     // instruction about to execute (cpu->full_pc is the landing address), before
     // fetch. The breakpoint needs this per-instruction hook even with no trace.
     if constexpr (CPUTraits::has_65816_ops) {
-        if (g_iigs_tbtrace_enabled || g_iigs_break_enabled) iigs_tb_on_landing(cpu);
+        if (g_iigs_tbtrace_enabled || g_iigs_break_enabled || g_save_at_enabled || g_poke_on) iigs_tb_on_landing(cpu);
         // A2GSPU_ITRACE: additive per-instruction crash post-mortem trace (off by
         // default; one cheap branch when off). Mirrors the BRKDUMP gating.
         if (g_iigs_itrace_enabled) iigs_itrace_step(cpu);
@@ -2254,6 +2265,9 @@ int execute_next(cpu_state *cpu) override {
         // A2GSPU_MILESTONES: boot-progress ledger.  A2GSPU_RETGUARD: bad-return detector.
         if (g_milestones_on) iigs_milestone_check(cpu, g_iigs_cur_frame);
         if (g_retguard_on)   iigs_retguard_step(cpu);
+        // A2GSPU_STACKWATCH: continuous stack tripwire.  A2GSPU_SNAP: region logger.
+        if (g_stackwatch_on) iigs_stackwatch_check(cpu);
+        if (g_snap_out)      iigs_snap_step(cpu);
         // BRKMEM PC-history ring (A1: ALL banks): capture the control-flow path
         // into the fault so a wild jump/return into ANY bank is visible (the
         // bank-2-only gate hid bank-0/$E1/ROM crash paths -> empty ring).
@@ -2292,7 +2306,15 @@ int execute_next(cpu_state *cpu) override {
                 for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
                     printf(" %02X", cpu->mmu->probe_peek(a));
                 printf("\n");
+                // read() path too: banks $00/$01 are handler pages -> probe_peek returns
+                // floating-bus $EE for them; read() invokes bank_shadow_read = TRUE content.
+                printf("IIGS PCTRAP dump $%02X/%04X read()    :",
+                       (g_trap_dump_base >> 16) & 0xFF, g_trap_dump_base & 0xFFFF);
+                for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
+                    printf(" %02X", cpu->mmu->read(a));
+                printf("\n");
             }
+            cpu->mmu->a2gspu_state_dump();   // soft-switch state + $00/$01 $A600 main/aux resolution
         }
         // A2GSPU_STACKTRAP: one-shot — the instant the stack pointer S lands in the
         // range, dump regs + the caller ring (catches a stray tcs / corrupted RTL
@@ -4162,6 +4184,7 @@ int execute_next(cpu_state *cpu) override {
         case OP_INOP_C2: /* INOP C2 */ /* OP_REP_IMP */
             if constexpr (CPUTraits::has_65816_ops) {
                 byte_t N;
+                uint8_t old_p = cpu->p;   // A2GSPU_MODETRACE: pre-REP width bits
                 read_imm(cpu, N);
                 cpu->p &= ~N;
                 if (cpu->E) {
@@ -4171,6 +4194,10 @@ int execute_next(cpu_state *cpu) override {
                     /*  */
                     // TODO: execute potential register width change.
                 }
+                // A2GSPU_MODETRACE: accumulator/index width change (REP).
+                if (g_modetrace_on && ((old_p ^ cpu->p) & 0x30))
+                    fprintf(stderr, "IIGS MODE: REP  P %02X->%02X (M=%d X=%d) at PC=%02X/%04X\n",
+                            old_p, cpu->p, (cpu->p >> 5) & 1, (cpu->p >> 4) & 1, cpu->pb, (uint16_t)(cpu->pc - 2));
                 phantom_read_ign(cpu, make_pc_long(cpu, cpu->pc)); // 2a
             } else if constexpr (CPUTraits::has_65c02_ops) {
                 invalid_nop(cpu, 2, 2);
@@ -4180,6 +4207,7 @@ int execute_next(cpu_state *cpu) override {
         case OP_INOP_E2: /* INOP E2 */ /* SEP */
             if constexpr (CPUTraits::has_65816_ops) {
                 byte_t N;
+                uint8_t old_p = cpu->p;   // A2GSPU_MODETRACE: pre-SEP width bits
                 read_imm(cpu, N);
 
                 cpu->p |= N;
@@ -4192,6 +4220,10 @@ int execute_next(cpu_state *cpu) override {
                         cpu->y_hi = 0;
                     }
                 }
+                // A2GSPU_MODETRACE: accumulator/index width change (SEP).
+                if (g_modetrace_on && ((old_p ^ cpu->p) & 0x30))
+                    fprintf(stderr, "IIGS MODE: SEP  P %02X->%02X (M=%d X=%d) at PC=%02X/%04X\n",
+                            old_p, cpu->p, (cpu->p >> 5) & 1, (cpu->p >> 4) & 1, cpu->pb, (uint16_t)(cpu->pc - 2));
                 phantom_read_ign(cpu, make_pc_long(cpu, cpu->pc)); // 2a
             } else if constexpr (CPUTraits::has_65c02_ops) {
                 invalid_nop(cpu, 2, 2);
@@ -4769,6 +4801,10 @@ int execute_next(cpu_state *cpu) override {
                 bool old_E = cpu->E;
                 cpu->E = cpu->C;
                 cpu->C = old_E;
+                // A2GSPU_MODETRACE: emulation-flag transition (XCE).
+                if (g_modetrace_on && old_E != cpu->E)
+                    fprintf(stderr, "IIGS MODE: XCE  e %d->%d at PC=%02X/%04X P=%02X\n",
+                            (int)old_E, (int)cpu->E, cpu->pb, (uint16_t)(cpu->pc - 1), cpu->p);
                 if (cpu->E) {
                     cpu->x_hi = 0;
                     cpu->y_hi = 0;

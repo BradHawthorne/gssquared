@@ -258,6 +258,28 @@ class MMU_IIgs : public MMU {
             }
             return read_raw(addr24);
         }
+
+        // A2GSPU diagnostic: print the master soft-switch state + how bank-$00/$01
+        // $A600 (the loader CallTable) actually resolves. Banks $00/$01 are handler
+        // pages (bank_shadow_read/write) so read_raw/probe_peek return floating-bus
+        // $EE for them; this replicates bank_shadow's calc_aux_read/write resolution
+        // (honouring g_ramrd/g_ramwrt/g_altzp) and reads the megaii RAM DIRECTLY, so
+        // it shows the TRUE content + whether a read vs a write of the same logical
+        // address land in MAIN vs AUX (the split we are hunting). Observation-free.
+        void a2gspu_state_dump() override {
+            printf("IIGS SWITCHES: state=$%02X ramrd=%d ramwrt=%d altzp=%d 80st=%d page2=%d lcbnk2=%d rdrom=%d shadow=$%02X\n",
+                   (unsigned)reg_state, g_ramrd, g_ramwrt, g_altzp, g_80store, g_page2, g_lcbnk2, g_rdrom, (unsigned)reg_shadow);
+            uint8_t *mb = get_memory_base();   // main_ram (FPI) -- where bank_shadow_read/write actually land
+            uint32_t probes[] = { 0x00A600, 0x01A600, 0x00A680, 0x01A680 };
+            for (uint32_t a : probes) {
+                uint32_t ridx = a + calc_aux_read(a);    // matches bank_shadow_read: get_memory_base()[addr + calc_aux_read]
+                uint32_t widx = a + calc_aux_write(a);   // matches bank_shadow_write
+                printf("  logical $%06X  read->main_ram[$%06X]  write->main_ram[$%06X]  @read:",
+                       a, ridx, widx);
+                if (mb) for (int i = 0; i < 8; i++) printf(" %02X", mb[ridx + i]);
+                printf("%s\n", (ridx != widx) ? "   <-- READ/WRITE SPLIT" : "");
+            }
+        }
         inline uint64_t get_cycle_count() { return clock ? clock->get_cycles() : 0; } // for the bus-trace oracle
         virtual void init_map();
         virtual void reset() override;

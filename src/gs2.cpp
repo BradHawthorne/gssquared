@@ -897,6 +897,23 @@ static bool a2gspu_snap_check_sentinel(FILE *f) {
     return end == A2GSPU_SNAP_END;
 }
 
+// A2GSPU_SAVE_AT host callback (registered into g_save_at_fn) — writes the SAME
+// snapshot the SNAP_SAVE path writes, but at the EXACT break instruction (invoked
+// from iigs_tb_on_landing). Reuses a2gspu_cpu_save + MMU_IIgs::A2GSPU_snapshot +
+// the trailing sentinel; the mmu handle + path are captured at parse time.
+static MMU_IIgs *g_saveat_mmu = nullptr;
+static char      g_saveat_path[512] = "snap_at.bin";
+static void a2gspu_save_at_cb(cpu_state *cpu) {
+    FILE *sf = fopen(g_saveat_path, "wb");
+    if (!sf) { printf("A2GSPU SAVE_AT: could not open '%s' for save\n", g_saveat_path); return; }
+    if (!g_saveat_mmu) { printf("A2GSPU SAVE_AT: no IIgs MMU (use -p 5) -- skipped\n"); fclose(sf); return; }
+    a2gspu_cpu_save(sf, cpu);
+    g_saveat_mmu->A2GSPU_snapshot(sf);
+    a2gspu_snap_write_sentinel(sf);
+    fclose(sf);
+    printf("A2GSPU SAVE_AT: snapshot at %02X/%04X -> '%s'\n", cpu->pb, cpu->pc, g_saveat_path);
+}
+
 // ===========================================================================
 // Env-gated headless CPU micro-test suite (A2GSPU_CPUTEST=<name>).
 //
@@ -1641,12 +1658,35 @@ static void run_headless_spike(GS2AppState *state) {
     if (const char *w = SDL_getenv("A2GSPU_WATCH")) {
         g_watch_count = 0;
         const char *p = w;
+        int watch_warns = 0;
         while (*p && g_watch_count < 8) {
+            const char *tok = p;
             uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
-            if (*p == ':') p++;
+            bool saw_colon = (*p == ':');
+            if (saw_colon) p++;
             uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
-            if (*p == '-') p++;
+            bool saw_dash = (*p == '-');
+            if (saw_dash) p++;
             uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
+            // WATCH-format self-check (the "WATCH didn't fire" trap, made loud). A spec
+            // wants bank:lo-hi. A BARE 24-bit address (e.g. E119A0, no ':') makes strtoul
+            // eat the whole value as `bank`; the armed range becomes ($bank<<16) which no
+            // real address ever hits -> the watch silently never fires and you wrongly
+            // conclude the write never happened (a false graveyard). Warn to STDERR so the
+            // golden STDOUT the CI gate parses is untouched.
+            if (!saw_colon || bank > 0xFF) {
+                fprintf(stderr, "A2GSPU_WATCH: ** FORMAT WARNING ** '%.*s' looks like a BARE "
+                        "24-bit address (bank=$%X). Use bank:lo-hi (e.g. E1:19A0-19A3); as-is "
+                        "it arms $%06X and will NEVER fire.\n",
+                        (int)(p - tok), tok, (unsigned)bank,
+                        (unsigned)(((bank << 16) | (lo & 0xFFFF)) & 0xFFFFFF));
+                watch_warns++;
+            } else if (saw_dash && lo > hi) {
+                fprintf(stderr, "A2GSPU_WATCH: ** FORMAT WARNING ** '%.*s' has lo>hi ($%X>$%X) "
+                        "-- inverted/empty range, will never fire.\n",
+                        (int)(p - tok), tok, (unsigned)lo, (unsigned)hi);
+                watch_warns++;
+            }
             g_watch_ranges[g_watch_count].lo = (bank << 16) | (lo & 0xFFFF);
             g_watch_ranges[g_watch_count].hi = (bank << 16) | (hi & 0xFFFF);
             g_watch_count++;
@@ -1657,9 +1697,20 @@ static void run_headless_spike(GS2AppState *state) {
             printf("A2GSPU_WATCH: %d range(s):", g_watch_count);
             for (int i = 0; i < g_watch_count; i++)
                 printf(" %06X-%06X", g_watch_ranges[i].lo, g_watch_ranges[i].hi);
-            printf("\n");
+            printf("%s\n", watch_warns ? "  [see A2GSPU_WATCH FORMAT WARNINGS on stderr]" : "");
         }
     }
+    // WATCH v2 (batch-2): cap / NDJSON file / change-only / also-watch-reads.
+    if (const char *wm = SDL_getenv("A2GSPU_WATCH_MAX")) { int v = atoi(wm); if (v >= 0) g_watch_max = v; }
+    g_watch_change_only = (SDL_getenv("A2GSPU_WATCH_CHANGE") != nullptr);
+    g_watch_read_on     = (SDL_getenv("A2GSPU_WATCH_READ")   != nullptr);
+    if (const char *wo = SDL_getenv("A2GSPU_WATCH_OUT")) {
+        g_watch_out = fopen(wo, "wb");
+        printf("A2GSPU_WATCH_OUT: %s -> '%s'\n", g_watch_out ? "NDJSON" : "OPEN-FAILED", wo);
+    }
+    if (g_watch_on && (g_watch_max != 256 || g_watch_change_only || g_watch_read_on || g_watch_out))
+        printf("A2GSPU_WATCH v2: max=%d change_only=%d read=%d out=%d\n",
+               g_watch_max, g_watch_change_only ? 1 : 0, g_watch_read_on ? 1 : 0, g_watch_out ? 1 : 0);
     // A2GSPU_PCTRAP="bank:lo-hi" (hex) — one-shot dump of regs + PC ring on first entry.
     if (const char *t = SDL_getenv("A2GSPU_PCTRAP")) {
         const char *p = t;
@@ -1697,10 +1748,94 @@ static void run_headless_spike(GS2AppState *state) {
         printf("A2GSPU_STACKTRAP: one-shot when S first enters $%04X-$%04X\n",
                g_stacktrap_lo, g_stacktrap_hi);
     }
+    // A2GSPU_STACKWATCH=1 (imbalance only) or ="lo-hi" (hex; + over/underflow window)
+    // — CONTINUOUS stack-pointer tripwire for the garbage-S crash class.
+    if (const char *sw = SDL_getenv("A2GSPU_STACKWATCH")) {
+        g_stackwatch_on = true;
+        g_stackwatch_hits = 0; g_stackwatch_last_s = -1; g_stackwatch_was_out = false;
+        if (strchr(sw, '-')) {
+            const char *p = sw;
+            uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
+            if (*p == '-') p++;
+            uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
+            g_stackwatch_lo = (uint16_t)lo; g_stackwatch_hi = (uint16_t)hi;
+            g_stackwatch_has_win = true;
+        }
+        if (const char *j = SDL_getenv("A2GSPU_STACKWATCH_JUMP")) {
+            int v = (int)strtoul(j, nullptr, 16); if (v > 0) g_stackwatch_jump = v;
+        }
+        printf("A2GSPU_STACKWATCH: continuous (imbalance>$%X%s)\n", g_stackwatch_jump,
+               g_stackwatch_has_win ? "" : "; no window");
+        if (g_stackwatch_has_win)
+            printf("A2GSPU_STACKWATCH: over/underflow window [$%04X,$%04X]\n",
+                   g_stackwatch_lo, g_stackwatch_hi);
+    }
     if (const char *bp = SDL_getenv("A2GSPU_BREAK")) {
         g_iigs_break_enabled = true;
         g_iigs_break_addr = (uint32_t)strtoul(bp, nullptr, 16) & 0xFFFFFF;
     }
+    // ======== Batch-1 instruments (each default-OFF; a flag-off run is a no-op) ========
+    // (1) A2GSPU_SAVE_AT=<hexPC>[@<file>]: snapshot + halt at an arbitrary breakpoint.
+    if (const char *sa = SDL_getenv("A2GSPU_SAVE_AT")) {
+        g_save_at_enabled = true; g_save_at_fired = false;
+        g_save_at_addr = (uint32_t)strtoul(sa, nullptr, 16) & 0xFFFFFF;
+        const char *at = strchr(sa, '@');
+        if (at && at[1]) { strncpy(g_saveat_path, at + 1, sizeof(g_saveat_path) - 1); g_saveat_path[sizeof(g_saveat_path) - 1] = 0; }
+        g_saveat_mmu = state->mmu_iigs;
+        g_save_at_fn = a2gspu_save_at_cb;
+        printf("A2GSPU SAVE_AT: snapshot+halt at first PC=$%06X -> '%s'\n", g_save_at_addr, g_saveat_path);
+    }
+    // (2) A2GSPU_POKE="<hexPC>:<act>[;<act>...]": one-shot DELIBERATE state injection.
+    //     acts: A/X/Y/S/D/P/DBR/PB=<hex> reg/flag; PC=<hex> force-branch;
+    //     M<hex24>=<hexbyte> poke mem; RTS/RTL force-return; SKIP=<n> skip bytes.
+    if (const char *pk = SDL_getenv("A2GSPU_POKE")) {
+        const char *colon = strchr(pk, ':');
+        if (colon) {
+            g_poke_pc = (uint32_t)strtoul(pk, nullptr, 16) & 0xFFFFFF;
+            g_poke_actions.clear();
+            char buf[512]; strncpy(buf, colon + 1, sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            for (char *tok = strtok(buf, ";"); tok; tok = strtok(nullptr, ";")) {
+                while (*tok == ' ') tok++;
+                IigsPokeAction a{0, 0, 0};
+                if (tok[0] == 'M') {                                  // M<hex24>=<hexbyte>
+                    char *eq = strchr(tok, '=');
+                    if (eq) { a.kind = 'M'; a.addr = (uint32_t)strtoul(tok + 1, nullptr, 16) & 0xFFFFFF; a.val = (uint32_t)strtoul(eq + 1, nullptr, 16); g_poke_actions.push_back(a); }
+                } else if (!strncmp(tok, "RTS", 3)) { a.kind = 'R'; g_poke_actions.push_back(a); }
+                else if (!strncmp(tok, "RTL", 3))   { a.kind = 'L'; g_poke_actions.push_back(a); }
+                else if (!strncmp(tok, "SKIP=", 5)) { a.kind = 'N'; a.val = (uint32_t)strtoul(tok + 5, nullptr, 10); g_poke_actions.push_back(a); }
+                else {
+                    char *eq = strchr(tok, '=');
+                    if (eq) {
+                        a.val = (uint32_t)strtoul(eq + 1, nullptr, 16);
+                        if      (!strncmp(tok, "DBR", 3)) a.kind = 'B';
+                        else if (!strncmp(tok, "PB", 2))  a.kind = 'K';
+                        else if (!strncmp(tok, "PC", 2))  a.kind = 'J';
+                        else switch (tok[0]) {
+                            case 'A': a.kind = 'A'; break;  case 'X': a.kind = 'X'; break;
+                            case 'Y': a.kind = 'Y'; break;  case 'S': a.kind = 'S'; break;
+                            case 'D': a.kind = 'D'; break;  case 'P': a.kind = 'P'; break;
+                            default:  a.kind = 0;   break;
+                        }
+                        if (a.kind) g_poke_actions.push_back(a);
+                    }
+                }
+            }
+            g_poke_on = !g_poke_actions.empty(); g_poke_fired = false; g_poke_hits = 0;
+            g_poke_nth = 1;
+            if (const char *pn = SDL_getenv("A2GSPU_POKE_NTH")) { int v = atoi(pn); if (v > 0) g_poke_nth = v; }
+            printf("A2GSPU POKE: %zu action(s) armed at PC=$%06X hit #%d (DELIBERATE splice)\n",
+                   g_poke_actions.size(), g_poke_pc, g_poke_nth);
+        }
+    }
+    // (3) A2GSPU_INTLOG: interrupt-entry logger (IRQ/BRK/COP).
+    if (SDL_getenv("A2GSPU_INTLOG")) { g_intlog_on = true; g_intlog_hits = 0;
+        fprintf(stderr, "IIGS INTLOG: enabled (IRQ/BRK/COP entry logging)\n"); }
+    // (4) A2GSPU_TRACE_EXT: append DBR/DP/cycle-delta/scanline to 65816 trace lines.
+    if (SDL_getenv("A2GSPU_TRACE_EXT")) { g_a2gspu_trace_ext = true;
+        fprintf(stderr, "IIGS TRACE_EXT: enabled (DBR/DP/dcyc/scanline columns)\n"); }
+    // (5) A2GSPU_MODETRACE: CPU mode-transition events (XCE / REP / SEP).
+    if (SDL_getenv("A2GSPU_MODETRACE")) { g_modetrace_on = true;
+        fprintf(stderr, "IIGS MODETRACE: enabled (e/M/X transitions)\n"); }
     if (const char *bk = SDL_getenv("A2GSPU_TBTRACE_BANK"))
         g_iigs_tbtrace_bank = (int)strtoul(bk, nullptr, 16);
     g_iigs_trace_from = 0; g_iigs_trace_armed = false;
@@ -1717,6 +1852,7 @@ static void run_headless_spike(GS2AppState *state) {
     g_iigs_itrace_logged = 0; g_iigs_cur_frame = 0;
     g_iigs_itrace_use_pc = false; g_iigs_itrace_from = 0; g_iigs_itrace_frame = -1;
     g_iigs_itrace_n = 256;
+    g_iigs_itrace_lo = 0; g_iigs_itrace_hi = 0; g_iigs_itrace_out = nullptr; g_iigs_itrace_rearm = 0;
     if (const char *itf = SDL_getenv("A2GSPU_ITRACE_FROM")) {
         g_iigs_itrace_from = (uint32_t)strtoul(itf, nullptr, 16) & 0xFFFFFF;
         g_iigs_itrace_use_pc = true; g_iigs_itrace_enabled = true;
@@ -1757,6 +1893,17 @@ static void run_headless_spike(GS2AppState *state) {
         int v = (int)strtol(itn, nullptr, 10);
         if (v > 0) g_iigs_itrace_n = v;
     }
+    // ITRACE v2 (batch-2): PC-RANGE window + per-instr EA/value + file sink + re-arm.
+    if (const char *lo = SDL_getenv("A2GSPU_ITRACE_LO"))
+        { g_iigs_itrace_lo = (uint32_t)strtoul(lo, nullptr, 16) & 0xFFFFFF; g_iigs_itrace_enabled = true; }
+    if (const char *hi = SDL_getenv("A2GSPU_ITRACE_HI"))
+        { g_iigs_itrace_hi = (uint32_t)strtoul(hi, nullptr, 16) & 0xFFFFFF; g_iigs_itrace_enabled = true; }
+    if (const char *rr = SDL_getenv("A2GSPU_ITRACE_REARM"))
+        { int v = (int)strtol(rr, nullptr, 10); if (v > 0) g_iigs_itrace_rearm = v; }
+    if (const char *io = SDL_getenv("A2GSPU_ITRACE_OUT")) {
+        g_iigs_itrace_out = fopen(io, "wb");
+        fprintf(stderr, "IIGS ITRACE_OUT: %s -> '%s'\n", g_iigs_itrace_out ? "file" : "OPEN-FAILED", io);
+    }
     if (g_iigs_itrace_enabled)
         fprintf(stderr, "IIGS ITRACE: enabled (from=%s$%06X frame=%d n=%d)\n",
                 g_iigs_itrace_use_pc ? "" : "(none)",
@@ -1767,6 +1914,28 @@ static void run_headless_spike(GS2AppState *state) {
         g_iigs_sym_base_locked = true;   // pinned -> no auto-inference
     }
     if (const char *sp = SDL_getenv("A2GSPU_SYMBOLS")) iigs_symbols_load(sp);
+    // A2GSPU_ROM_SYMBOLS=<file> (batch-2): name ROM-resident PCs (else "<ROM>").
+    if (const char *rs = SDL_getenv("A2GSPU_ROM_SYMBOLS")) iigs_rom_symbols_load(rs);
+    // A2GSPU_SNAP region-logger (batch-2): dump [LO,HI] at up to 8 trigger PCS -> OUT.
+    {
+        const char *slo  = SDL_getenv("A2GSPU_SNAP_LO");
+        const char *shi  = SDL_getenv("A2GSPU_SNAP_HI");
+        const char *spcs = SDL_getenv("A2GSPU_SNAP_PCS");
+        const char *sout = SDL_getenv("A2GSPU_SNAP_OUT");
+        g_snap_npc = 0; g_snap_count = 0; g_snap_out = nullptr;
+        if (slo) g_snap_lo = (uint32_t)strtoul(slo, nullptr, 16) & 0xFFFFFF;
+        if (shi) g_snap_hi = (uint32_t)strtoul(shi, nullptr, 16) & 0xFFFFFF;
+        if (spcs) {
+            char buf[256]; strncpy(buf, spcs, sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            for (char *t = strtok(buf, ",; "); t && g_snap_npc < 8; t = strtok(nullptr, ",; "))
+                g_snap_pcs[g_snap_npc++] = (uint32_t)strtoul(t, nullptr, 16) & 0xFFFF;
+        }
+        if (sout && g_snap_npc > 0 && g_snap_hi >= g_snap_lo) {
+            g_snap_out = fopen(sout, "wb");
+            printf("A2GSPU_SNAP: %s window $%06X-$%06X at %d PC(s) -> '%s'\n",
+                   g_snap_out ? "logging" : "OPEN-FAILED", g_snap_lo, g_snap_hi, g_snap_npc, sout);
+        }
+    }
     g_iigs_pending.clear();
     g_iigs_last_result.clear();
     g_iigs_last_gsos_err = 0;
@@ -1788,6 +1957,7 @@ static void run_headless_spike(GS2AppState *state) {
     // The binary's bus effects are isolated by resetting the traces at injection time.
     const char *snap_save = SDL_getenv("A2GSPU_SNAP_SAVE");
     const char *snap_load = SDL_getenv("A2GSPU_SNAP_LOAD");
+    if (!snap_load) snap_load = SDL_getenv("A2GSPU_RESTORE");  // A2GSPU_RESTORE: load-at-start alias (generalizes SNAP_LOAD)
     const char *runbin = getenv("A2GSPU_RUN_BIN");
 
     // SNAP_LOAD: short-circuit the ~1200-frame boot by restoring a prior desktop snapshot.
@@ -1913,6 +2083,8 @@ static void run_headless_spike(GS2AppState *state) {
         if (SDL_getenv("A2GSPU_VIDEOSUM")) iigs_video_summary(e1);
         // Downsampled ASCII map of the screen (SEE a rectangle/layout headless).
         if (SDL_getenv("A2GSPU_VIDEOMAP")) iigs_video_map(e1);
+        // 40-col text page ASCII decode (bank $E0:$0400-$07FF = megaii base m2).
+        if (SDL_getenv("A2GSPU_TEXT40")) iigs_text40(m2);
     } else {
         printf("SPIKE E1: mmu_iigs/megaii base is NULL -- FAILED\n");
     }

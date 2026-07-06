@@ -497,5 +497,23 @@ char *system_trace_buffer::decode_trace_entry(system_trace_entry_t *entry) {
                 break;
         }
 
+        // A2GSPU_TRACE_EXT: append DBR / DP / cycle-delta / (derived) scanline. All
+        // fields are already recorded in the entry (db/d/cycle); the scanline is a
+        // deterministic function of the recorded cycle using the IIgs 2.8MHz timing
+        // (47684 CPU cycles/frame, 182/scanline, 262 lines incl. VBL) — informational.
+        if (g_a2gspu_trace_ext) {
+            static uint64_t s_last_cycle = 0;
+            uint64_t dcyc = entry->cycle - s_last_cycle;
+            s_last_cycle = entry->cycle;
+            uint64_t line = (entry->cycle % 47684) / 182;   // 0..261
+            bool vbl = (line >= 200);
+            buffer.pos(88);
+            buffer.put("DBR=");  buffer.put((uint8_t) entry->db);
+            buffer.put(" DP=");  buffer.put((uint16_t) entry->d);
+            buffer.put(" dcy="); buffer.put((uint64_t) dcyc, 6);
+            buffer.put(" sl=");  buffer.put((uint64_t) line, 3);
+            if (vbl) buffer.put("V");
+        }
+
         return buffer.get();
     }

@@ -57,27 +57,134 @@ inline uint16_t g_stacktrap_lo     = 0;
 inline uint16_t g_stacktrap_hi     = 0;
 inline bool     g_stacktrap_fired  = false;
 
-// ---- A2GSPU_WATCH: address-range write-watchpoint --------------------------
-// Env A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) traps every CPU write into
-// a range and prints the faulting PC + value, so a wrong-bank / stray store that
-// corrupts code or data is caught AT the instruction doing it. First 256 hits
-// then suppressed. One cheap branch on the write funnel when off.
+// ---- A2GSPU_STACKWATCH: CONTINUOUS stack-pointer tripwire ------------------
+// Where STACKTRAP (above) is a ONE-SHOT trap when S first ENTERS a fixed range,
+// this is a per-instruction WINDOW monitor for the garbage-S crash class (a wild
+// `tcs`/`txs`, or executing garbage that parks S off its valid region — the
+// S=$2355 / $01D9 sightings). Two orthogonal signals, both capped + symbolized:
+//   (a) IMBALANCE — a single-instruction stack discontinuity (|dS| > threshold).
+//       Normal push/pull/JSR/JSL/RTS/RTL/interrupt move S by <=4; only a stack
+//       RELOCATION (txs/tcs) or a corrupted pull moves it far. The boot's few
+//       legitimate native-mode stack setups fire this a handful of times (each
+//       annotated + capped) — anything larger is the bug.
+//   (b) OVER/UNDERFLOW — S left the declared valid window [lo,hi], edge-triggered
+//       so one excursion is one event (not a flood). Zero-false-positive: the
+//       caller declares the window.
+// Env: A2GSPU_STACKWATCH=1 (imbalance only) or ="lo-hi" (hex; imbalance + window).
+//      A2GSPU_STACKWATCH_JUMP=<hex> overrides the imbalance threshold (default $40).
+// Off by default => one untaken branch. stderr (never touches the golden stdout).
+inline bool     g_stackwatch_on      = false;
+inline bool     g_stackwatch_has_win = false;
+inline uint16_t g_stackwatch_lo      = 0;
+inline uint16_t g_stackwatch_hi      = 0;
+inline int      g_stackwatch_jump    = 0x40;
+inline int      g_stackwatch_hits    = 0;
+inline int      g_stackwatch_last_s  = -1;
+inline bool     g_stackwatch_was_out = false;
+inline void iigs_stackwatch_check(cpu_state *cpu) {
+    if (g_stackwatch_hits >= 64) return;
+    uint16_t s = (uint16_t)cpu->sp;
+    if (g_stackwatch_last_s >= 0) {                          // (a) imbalance
+        int ds = (int)s - g_stackwatch_last_s;
+        int ads = ds < 0 ? -ds : ds;
+        if (ads > g_stackwatch_jump) {
+            g_stackwatch_hits++;
+            char sym[80]; iigs_sym_resolve(cpu->full_pc, sym, sizeof(sym));
+            fprintf(stderr, "IIGS STACKWATCH: S $%04X->$%04X (d=%+d) at %02X/%04X%s%s "
+                            "(imbalance / stack relocation)\n",
+                    (unsigned)g_stackwatch_last_s, (unsigned)s, ds,
+                    (unsigned)(cpu->full_pc >> 16), (unsigned)(cpu->full_pc & 0xFFFF),
+                    sym[0] ? " " : "", sym);
+        }
+    }
+    if (g_stackwatch_has_win) {                              // (b) over/underflow (edge)
+        bool out = (s < g_stackwatch_lo || s > g_stackwatch_hi);
+        if (out && !g_stackwatch_was_out) {
+            g_stackwatch_hits++;
+            char sym[80]; iigs_sym_resolve(cpu->full_pc, sym, sizeof(sym));
+            fprintf(stderr, "IIGS STACKWATCH: S=$%04X OUTSIDE window [$%04X,$%04X] at "
+                            "%02X/%04X%s%s (over/underflow)\n",
+                    (unsigned)s, (unsigned)g_stackwatch_lo, (unsigned)g_stackwatch_hi,
+                    (unsigned)(cpu->full_pc >> 16), (unsigned)(cpu->full_pc & 0xFFFF),
+                    sym[0] ? " " : "", sym);
+        }
+        g_stackwatch_was_out = out;
+    }
+    g_stackwatch_last_s = s;
+}
+
+// ---- A2GSPU_WATCH: address-range access-watchpoint (v2) --------------------
+// Env A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) traps CPU accesses into a
+// range and prints the faulting PC + value, so a wrong-bank / stray store that
+// corrupts code or data is caught AT the instruction doing it. One cheap branch
+// on the write funnel when off. Batch-2 v2 extends the batch-1 capped write-watch:
+//   A2GSPU_WATCH_MAX=<n>   hit cap (default 256; 0 = unlimited)
+//   A2GSPU_WATCH_OUT=<f>   NDJSON to a file instead of stdout lines
+//   A2GSPU_WATCH_CHANGE=1  log a write only when the value differs from last
+//   A2GSPU_WATCH_READ=1    ALSO watch READS of the ranges (the bus_read funnel)
+// With no v2 env the behaviour is byte-for-byte the batch-1 write-watch (stdout,
+// 256-hit cap, "wrote ... ->" line). NDJSON carries CPU-state fields only (no
+// host/interpreter residue).
 struct WatchRange { uint32_t lo, hi; };       // inclusive full 24-bit addresses
-inline bool       g_watch_on         = false;
-inline WatchRange g_watch_ranges[8]  = {};
-inline int        g_watch_count      = 0;
-inline int        g_watch_hits       = 0;
+inline bool       g_watch_on          = false;
+inline WatchRange g_watch_ranges[8]   = {};
+inline int        g_watch_count       = 0;
+inline int        g_watch_hits        = 0;
+inline FILE      *g_watch_out         = nullptr;
+inline int        g_watch_max         = 256;
+inline bool       g_watch_change_only = false;
+inline bool       g_watch_read_on     = false;
+inline int        g_watch_last[8]     = { -1, -1, -1, -1, -1, -1, -1, -1 };
+
+// probe_peek of banks $00/$01 can return floating-bus $EE for handler/relocated pages
+// that read_raw cannot see (see mmu.hpp). A sensor that trusts such a read lied ~6x in
+// the owned-GS/OS boot campaign. This flags a SUSPECT reading so a diagnostic surfaces
+// it ("suspect a liar") instead of silently trusting a floating-bus byte as memory
+// truth. Observation-only; RETGUARD's validated stack-context probe_peek is unaffected.
+inline bool iigs_probe_suspect(uint32_t addr, uint8_t val) {
+    return (((addr >> 16) & 0xFF) <= 0x01) && (val == 0xEE);
+}
+
+inline void iigs_watch_emit(cpu_state *cpu, uint32_t addr, uint8_t data, const char *kind) {
+    if (g_watch_max && g_watch_hits >= g_watch_max) {
+        if (g_watch_hits == g_watch_max) {
+            if (g_watch_out) fprintf(g_watch_out, "{\"event\":\"suppressed\"}\n");
+            else printf("IIGS WATCH: (further hits suppressed)\n");
+            g_watch_hits++;
+        }
+        return;
+    }
+    g_watch_hits++;
+    if (g_watch_out)
+        fprintf(g_watch_out,
+                "{\"event\":\"watch\",\"kind\":\"%s\",\"pc\":%u,\"addr\":%u,"
+                "\"data\":%u,\"s\":%u,\"d\":%u,\"dbr\":%u}\n",
+                kind, (unsigned)(cpu->full_pc & 0xFFFFFF), (unsigned)addr,
+                (unsigned)data, (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db);
+    else
+        printf("IIGS WATCH: PC=%02X/%04X %s $%02X %s %02X/%04X  S=$%04X D=$%04X DBR=$%02X\n",
+               (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF),
+               kind[0] == 'w' ? "wrote" : "read ", data,
+               kind[0] == 'w' ? "->" : "<-",
+               (unsigned)((addr >> 16) & 0xFF), (unsigned)(addr & 0xFFFF),
+               (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db);
+}
+
 inline void iigs_watch_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
     for (int i = 0; i < g_watch_count; i++) {
         if (addr >= g_watch_ranges[i].lo && addr <= g_watch_ranges[i].hi) {
-            if (g_watch_hits < 256)
-                printf("IIGS WATCH: PC=%02X/%04X wrote $%02X -> %02X/%04X  S=$%04X D=$%04X DBR=$%02X\n",
-                       (cpu->full_pc >> 16) & 0xFF, cpu->full_pc & 0xFFFF, data,
-                       (addr >> 16) & 0xFF, addr & 0xFFFF,
-                       (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db);
-            else if (g_watch_hits == 256)
-                printf("IIGS WATCH: (further hits suppressed)\n");
-            g_watch_hits++;
+            if (g_watch_change_only && (int)data == g_watch_last[i]) return;
+            g_watch_last[i] = data;
+            iigs_watch_emit(cpu, addr, data, "write");
+            return;
+        }
+    }
+}
+// A2GSPU_WATCH_READ=1: break-on-read on the bus_read funnel (same ranges).
+inline void iigs_watch_check_read(cpu_state *cpu, uint32_t addr, uint8_t data) {
+    for (int i = 0; i < g_watch_count; i++) {
+        if (addr >= g_watch_ranges[i].lo && addr <= g_watch_ranges[i].hi) {
+            iigs_watch_emit(cpu, addr, data, "read");
             return;
         }
     }
@@ -144,6 +251,17 @@ inline const char *iigs_pc_region(cpu_state *cpu, uint32_t pc) {
     return "";
 }
 
+// Region tag, ROM-symbolized (A2GSPU_ROM_SYMBOLS). Turns a bare "<ROM>"/"<LC-ROM>"
+// into "<ROM ToolDisp+$12>" when the ROM symbol table named the PC; only ROM/LC-ROM
+// regions consult the ROM table. No table loaded => unchanged (the default no-op).
+inline void iigs_region_tag(uint32_t pc, const char *rgn, char *buf, size_t n) {
+    char r[80];
+    if ((rgn[0] == 'R' || rgn[0] == 'L') && iigs_rom_sym_resolve(pc, r, sizeof(r))[0])
+        snprintf(buf, n, "<%s %s>", rgn, r);
+    else
+        snprintf(buf, n, "<%s>", rgn);
+}
+
 // One-shot wild-jump detector: fires the instant execution enters a non-code bank during
 // boot ($02-$DF), dumping regs + the symbolized caller ring — pinning the routine that
 // jumped/returned into garbage (e.g. a caller that mishandles an SCM carry-set error).
@@ -180,6 +298,15 @@ inline bool     g_iigs_itrace_armed   = false; // window is open
 inline int      g_iigs_itrace_n       = 256;   // max instructions to log
 inline int      g_iigs_itrace_logged  = 0;     // logged so far
 inline int      g_iigs_cur_frame      = 0;     // updated by the headless spike loop
+// ---- ITRACE v2 (batch-2 port): PC-RANGE gate + effective-address/mem logging +
+// file sink + window re-arm. When [lo,hi] is set the window is open whenever pc is
+// in range (traces a routine on EVERY entry — a hot loop / re-entered handler — not
+// just one window). The per-instruction "@<ea>=<val>" field names which byte a
+// load/store actually touches (a routine's data flow, in all 65816 modes).
+inline uint32_t g_iigs_itrace_lo      = 0;     // PC-range low (0/0 = disabled)
+inline uint32_t g_iigs_itrace_hi      = 0;     // PC-range high (inclusive)
+inline FILE    *g_iigs_itrace_out     = nullptr; // file sink (else stderr)
+inline int      g_iigs_itrace_rearm   = 0;     // PC-armed window re-open count
 
 inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why);  // fwd
 inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);  // fwd (also below)
@@ -428,14 +555,31 @@ inline void iigs_calltrace_step(cpu_state *cpu) {
 // fetch, identically to iigs_tb_on_landing. Reads the 3 operand bytes straight
 // off the MMU so the decode reflects the live image (catches a corrupted byte).
 // The operand width of IMM/REP/SEP-affected ops is approximated from the disasm
-// table's fixed size (this is a crash post-mortem, not a cycle model).
+// table's fixed size (this is a crash post-mortem, not a cycle model). v2 adds a
+// PC-RANGE window, a per-instruction effective-address/value column, a file sink,
+// and window RE-ARM (A2GSPU_ITRACE_REARM) so several windows come from one run.
 inline void iigs_itrace_step(cpu_state *cpu) {
-    // Arm on PC match (one-shot) — independent of the frame arm.
+    // Window exhausted: optionally re-arm on the NEXT hit of the arm PC.
+    if (g_iigs_itrace_armed && g_iigs_itrace_logged >= g_iigs_itrace_n &&
+        g_iigs_itrace_rearm > 0 && g_iigs_itrace_use_pc) {
+        g_iigs_itrace_armed = false;
+        g_iigs_itrace_logged = 0;
+        g_iigs_itrace_rearm--;
+        fprintf(stderr, "IIGS ITRACE: window closed; %d re-arm(s) remain\n",
+                g_iigs_itrace_rearm);
+    }
+    // Arm on PC match — independent of the frame arm.
     if (!g_iigs_itrace_armed && g_iigs_itrace_use_pc &&
         cpu->full_pc == g_iigs_itrace_from) {
         g_iigs_itrace_armed = true;
         fprintf(stderr, "IIGS ITRACE: armed at PC=%02X/%04X (frame %d)\n",
                 cpu->pb, cpu->pc, g_iigs_cur_frame);
+    }
+    // PC-RANGE mode: armed exactly while pc is in [lo,hi]. Re-evaluated every step,
+    // so a routine is traced on every entry (a hot loop / re-entered handler).
+    if (g_iigs_itrace_lo || g_iigs_itrace_hi) {
+        g_iigs_itrace_armed =
+            (cpu->full_pc >= g_iigs_itrace_lo && cpu->full_pc <= g_iigs_itrace_hi);
     }
     if (!g_iigs_itrace_armed) return;
     if (g_iigs_itrace_logged >= g_iigs_itrace_n) return;
@@ -490,19 +634,94 @@ inline void iigs_itrace_step(cpu_state *cpu) {
             break;
     }
 
+    // Effective address + memory byte for load/store modes (v2). This names WHICH
+    // byte the routine reads (a transform input) or stores to (an output), so a
+    // routine's data flow is read directly off the trace (all 65816 modes).
+    uint32_t ea = 0xFFFFFFFF; int mval = -1;
+    {
+        uint16_t dp = cpu->d; uint32_t dbr = (uint32_t)cpu->db << 16;
+        auto rd = [&](uint32_t a){ return cpu->mmu->read(a & 0xFFFFFF); };
+        switch (de->mode) {
+            case ZP:    ea = (uint16_t)(dp + b1); break;
+            case ZP_X:  ea = (uint16_t)(dp + b1 + cpu->x); break;
+            case ZP_Y:  ea = (uint16_t)(dp + b1 + cpu->y); break;
+            case ABS:   ea = dbr | (b1 | (b2 << 8)); break;
+            case ABS_X: ea = dbr + (b1 | (b2 << 8)) + cpu->x; break;
+            case ABS_Y: ea = dbr + (b1 | (b2 << 8)) + cpu->y; break;
+            case ABSL:  ea = b1 | (b2 << 8) | (b3 << 16); break;
+            case ABSL_X:ea = (b1 | (b2 << 8) | (b3 << 16)) + cpu->x; break;
+            case INDIR_INDEX: { uint16_t pa=(uint16_t)(dp+b1); uint16_t p=rd(pa)|(rd((uint16_t)(pa+1))<<8); ea=dbr+p+cpu->y; } break;
+            case INDEX_INDIR: { uint16_t pa=(uint16_t)(dp+b1+cpu->x); uint16_t p=rd(pa)|(rd((uint16_t)(pa+1))<<8); ea=dbr+p; } break;
+            case ZP_IND:      { uint16_t pa=(uint16_t)(dp+b1); uint16_t p=rd(pa)|(rd((uint16_t)(pa+1))<<8); ea=dbr+p; } break;
+            case IND_LONG:    { uint16_t pa=(uint16_t)(dp+b1); ea=rd(pa)|(rd((uint16_t)(pa+1))<<8)|(rd((uint16_t)(pa+2))<<16); } break;
+            case IND_Y_LONG:  { uint16_t pa=(uint16_t)(dp+b1); ea=(rd(pa)|(rd((uint16_t)(pa+1))<<8)|(rd((uint16_t)(pa+2))<<16))+cpu->y; } break;
+            default: break;
+        }
+        if (ea != 0xFFFFFFFF) {
+            uint16_t lo16 = ea & 0xFFFF;
+            if (!(lo16 >= 0xC000 && lo16 <= 0xC0FF)) mval = rd(ea);  // skip soft-switch I/O
+        }
+    }
+    char eabuf[24]; eabuf[0] = '\0';
+    if (ea != 0xFFFFFFFF) {
+        if (mval >= 0) snprintf(eabuf, sizeof(eabuf), " @%06X=%02X", ea & 0xFFFFFF, mval);
+        else           snprintf(eabuf, sizeof(eabuf), " @%06X", ea & 0xFFFFFF);
+    }
+
     char sym[80]; const char *rgn = iigs_pc_region(cpu, pc);
-    if (rgn[0]) snprintf(sym, sizeof(sym), "<%s>", rgn);   // ROM/IO/LC-ROM: a kernel symbol would be a lie
+    if (rgn[0]) iigs_region_tag(pc, rgn, sym, sizeof(sym));  // ROM/IO/LC-ROM (ROM-symbolized via A2GSPU_ROM_SYMBOLS)
     else iigs_sym_resolve(pc, sym, sizeof(sym));
-    fprintf(stderr,
+    FILE *out = g_iigs_itrace_out ? g_iigs_itrace_out : stderr;
+    fprintf(out,
         "ITRACE %02X/%04X: %02X %-4s %-12s%s "
-        "A=%04X X=%04X Y=%04X S=%04X D=%04X DBR=%02X P=%02X e=%d%s%s\n",
+        "A=%04X X=%04X Y=%04X S=%04X D=%04X DBR=%02X P=%02X e=%d%s%s%s\n",
         cpu->pb, cpu->pc, op, de->opcode, operand, extra,
         cpu->a, cpu->x, cpu->y, cpu->sp, cpu->d, cpu->db, cpu->p, (int)cpu->E,
-        sym[0] ? "  " : "", sym);
+        eabuf, sym[0] ? "  " : "", sym);
     g_iigs_itrace_logged++;
     if (g_iigs_itrace_logged == g_iigs_itrace_n)
         fprintf(stderr, "IIGS ITRACE: window full (%d instrs)\n",
                 g_iigs_itrace_n);
+}
+
+// ============================================================================
+// A2GSPU_SNAP region-logger (batch-2 port). On hitting any of up to 8 configured
+// SNAP_PCS (16-bit PC compare), dump the SNAP_LO..HI memory window as hex plus the
+// CPU registers, one NDJSON record per hit, to SNAP_OUT. Aim the PCs at a routine's
+// entry + exit and the window at its working buffer: consecutive records give the
+// (before, after) pair — how the routine transformed the buffer — with no PC-chasing.
+//   A2GSPU_SNAP_LO/HI=<hex24>   the window to dump (inclusive)
+//   A2GSPU_SNAP_PCS="p1,p2,..." up to 8 trigger PCs (16-bit, hex)
+//   A2GSPU_SNAP_OUT=<file>      NDJSON sink (its presence also arms the logger)
+// Off by default (g_snap_out null => one untaken branch). Reads via mmu->read(),
+// skipping the $C000-$C0FF soft-switch page (sensor-safe).
+// ============================================================================
+inline FILE    *g_snap_out    = nullptr;
+inline uint32_t g_snap_pcs[8] = {0};
+inline int      g_snap_npc    = 0;
+inline uint32_t g_snap_lo = 0, g_snap_hi = 0;
+inline int      g_snap_max = 8000, g_snap_count = 0;
+
+inline void iigs_snap_step(cpu_state *cpu) {
+    if (!g_snap_out || g_snap_count >= g_snap_max) return;
+    uint32_t pc = cpu->full_pc & 0xFFFF;
+    bool hit = false;
+    for (int i = 0; i < g_snap_npc; i++) if (g_snap_pcs[i] == pc) { hit = true; break; }
+    if (!hit) return;
+    auto rd = [&](uint32_t a){ return cpu->mmu->read(a & 0xFFFFFF); };
+    fprintf(g_snap_out,
+        "{\"seq\":%d,\"pc\":%u,\"a\":%u,\"x\":%u,\"y\":%u,\"s\":%u,\"d\":%u,"
+        "\"dbr\":%u,\"lo\":%u,\"data\":\"",
+        g_snap_count, (unsigned)pc, (unsigned)cpu->a, (unsigned)cpu->x,
+        (unsigned)cpu->y, (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db,
+        (unsigned)g_snap_lo);
+    for (uint32_t a = g_snap_lo; a <= g_snap_hi; a++) {
+        uint16_t lo16 = a & 0xFFFF;
+        uint8_t v = (lo16 >= 0xC000 && lo16 <= 0xC0FF) ? 0 : rd(a);  // skip soft-switch I/O
+        fprintf(g_snap_out, "%02x", v);
+    }
+    fprintf(g_snap_out, "\"}\n");
+    g_snap_count++;
 }
 
 // Frame-arm hook: called from the headless spike loop once per frame so an
@@ -545,6 +764,114 @@ inline const char *iigs_tool_name(uint16_t w) {
     }
 }
 
+// ============================================================================
+// A2GSPU_SAVE_AT / A2GSPU_RESTORE — save/restore at an ARBITRARY breakpoint (the
+// run-to-a-point / modify / re-run primitive). A2GSPU_SAVE_AT=<hexPC> writes a full
+// machine snapshot (the SAME cpu_state + MMU_IIgs image the SNAP_SAVE path writes)
+// the FIRST time execution reaches that 24-bit PC, then halts the spike — so the
+// checkpoint is captured at the EXACT instruction (before its fetch), not at
+// end-of-frame. The heavy lift (a2gspu_cpu_save + MMU_IIgs::A2GSPU_snapshot, which
+// live in gs2.cpp with the mmu_iigs handle) is invoked through a host-registered
+// callback; when SAVE_AT is unset the callback stays null and this is one untaken
+// branch. A2GSPU_RESTORE=<file> is parsed in gs2.cpp as an alias of SNAP_LOAD (load
+// at start — the existing mechanism this generalizes). Off by default; public-safe.
+// ============================================================================
+inline bool     g_save_at_enabled = false;
+inline uint32_t g_save_at_addr    = 0;
+inline bool     g_save_at_fired   = false;
+inline void   (*g_save_at_fn)(cpu_state *cpu) = nullptr;   // set by the host (gs2.cpp)
+
+// ============================================================================
+// A2GSPU_POKE — mid-run state injection / splice at a PC (the control primitive).
+// A2GSPU_POKE="<hexPC>:<action>[;<action>...]" applies, the FIRST time execution
+// reaches <hexPC>, a list of DELIBERATE mutations: set a register/flag byte
+// (A/X/Y/S/D/P/DBR/PB), force-branch (PC=<hex>), poke memory (M<hex24>=<hexByte>),
+// force-return (RTS pops 2+1, RTL pops 3+1), or skip N bytes (SKIP=<n>). This is
+// NOT faithful hardware behaviour — it is a deliberate splice — so every applied
+// action is logged loudly ("IIGS POKE ...") and it is one-shot + fully gated, so it
+// can never be mistaken for real emulated behaviour. Parsed in gs2.cpp into
+// g_poke_actions; applied here. Off by default => one untaken branch.
+// ============================================================================
+struct IigsPokeAction { char kind; uint32_t addr; uint32_t val; };
+inline bool                        g_poke_on    = false;
+inline uint32_t                    g_poke_pc    = 0;
+inline bool                        g_poke_fired = false;
+inline int                         g_poke_nth   = 1;   // A2GSPU_POKE_NTH: fire on the Nth PC hit (default 1 = first)
+inline int                         g_poke_hits  = 0;   // occurrence counter for Nth-hit targeting
+inline std::vector<IigsPokeAction> g_poke_actions;
+
+inline void iigs_poke_apply(cpu_state *cpu) {
+    fprintf(stderr, "IIGS POKE: *** DELIBERATE state injection at PC=%02X/%04X "
+                    "(a splice, NOT faithful HW behaviour) ***\n", cpu->pb, cpu->pc);
+    for (auto &a : g_poke_actions) {
+        switch (a.kind) {
+            case 'A': cpu->a  = (uint16_t)a.val; fprintf(stderr, "IIGS POKE:   A=$%04X\n",   cpu->a);  break;
+            case 'X': cpu->x  = (uint16_t)a.val; fprintf(stderr, "IIGS POKE:   X=$%04X\n",   cpu->x);  break;
+            case 'Y': cpu->y  = (uint16_t)a.val; fprintf(stderr, "IIGS POKE:   Y=$%04X\n",   cpu->y);  break;
+            case 'S': cpu->sp = (uint16_t)a.val; fprintf(stderr, "IIGS POKE:   S=$%04X\n",   cpu->sp); break;
+            case 'D': cpu->d  = (uint16_t)a.val; fprintf(stderr, "IIGS POKE:   D=$%04X\n",   cpu->d);  break;
+            case 'P': cpu->p  = (uint8_t)a.val;  fprintf(stderr, "IIGS POKE:   P=$%02X\n",   cpu->p);  break;
+            case 'B': cpu->db = (uint8_t)a.val;  fprintf(stderr, "IIGS POKE:   DBR=$%02X\n", cpu->db); break;
+            case 'K': cpu->pb = (uint8_t)a.val;  fprintf(stderr, "IIGS POKE:   PB=$%02X\n",  cpu->pb); break;
+            case 'J': cpu->pc = (uint16_t)a.val; fprintf(stderr, "IIGS POKE:   force-branch PC=$%04X\n", cpu->pc); break;
+            case 'M': cpu->mmu->write(a.addr, (uint8_t)a.val);
+                      fprintf(stderr, "IIGS POKE:   M[$%06X]=$%02X\n", a.addr, (uint8_t)(a.val & 0xFF)); break;
+            case 'R': { // force-return RTS: pull 2 bytes off the stack, PC = addr+1 (same bank)
+                      uint16_t s = cpu->sp;
+                      uint8_t lo = cpu->mmu->read((s + 1) & 0xFFFF);
+                      uint8_t hi = cpu->mmu->read((s + 2) & 0xFFFF);
+                      cpu->sp = (uint16_t)(s + 2);
+                      cpu->pc = (uint16_t)(((hi << 8) | lo) + 1);
+                      fprintf(stderr, "IIGS POKE:   force-RTS -> %02X/%04X\n", cpu->pb, cpu->pc); break; }
+            case 'L': { // force-return RTL: pull 3 bytes off the stack, PC/PB = addr+1
+                      uint16_t s = cpu->sp;
+                      uint8_t lo = cpu->mmu->read((s + 1) & 0xFFFF);
+                      uint8_t hi = cpu->mmu->read((s + 2) & 0xFFFF);
+                      uint8_t bk = cpu->mmu->read((s + 3) & 0xFFFF);
+                      cpu->sp = (uint16_t)(s + 3);
+                      cpu->pc = (uint16_t)(((hi << 8) | lo) + 1);
+                      cpu->pb = bk;
+                      fprintf(stderr, "IIGS POKE:   force-RTL -> %02X/%04X\n", cpu->pb, cpu->pc); break; }
+            case 'N': cpu->pc = (uint16_t)(cpu->pc + a.val);
+                      fprintf(stderr, "IIGS POKE:   skip %u bytes -> PC=$%04X\n", a.val, cpu->pc); break;
+        }
+    }
+}
+
+// ============================================================================
+// A2GSPU_INTLOG — interrupt-entry logger. Logs the fired reason (IRQ / BRK / COP),
+// the vector location the handler address is read from, and the state at entry
+// (PC / P / S / e), at the IRQ dispatch (base_6502.cpp) and inside brk_cop for
+// BRK/COP. NMI and ABORT have DEFINED vectors (cpu.hpp NMI_VECTOR / ABORTB_VECTOR
+// and their native forms) but the 65816 core never DISPATCHES them, so there is no
+// entry site to hook — iigs_intlog_nmi_abort_stub() documents that gap; wiring it
+// is deferred until NMI/ABORT dispatch is actually implemented (past-DR
+// faithfulness). Off by default; call sites guard on g_intlog_on. stderr.
+// ============================================================================
+inline bool g_intlog_on   = false;
+inline int  g_intlog_hits = 0;
+inline void iigs_intlog(cpu_state *cpu, const char *reason, uint16_t vector) {
+    if (g_intlog_hits >= 512) return;
+    g_intlog_hits++;
+    fprintf(stderr, "IIGS INT: %-3s vector=$%04X  at PC=%02X/%04X P=%02X S=$%04X e=%d\n",
+            reason, vector, cpu->pb, cpu->pc, cpu->p, cpu->sp, (int)cpu->E);
+}
+// Log-only stub: NMI/ABORT are defined-but-never-dispatched by the core (see the
+// cpu.hpp vectors). No call site exists yet; full dispatch + logging is deferred.
+inline void iigs_intlog_nmi_abort_stub(cpu_state *cpu, const char *reason, uint16_t vector) {
+    if (!g_intlog_on) return;
+    iigs_intlog(cpu, reason, vector);
+}
+
+// ============================================================================
+// A2GSPU_MODETRACE — CPU mode-transition events. Logs emulation-flag changes via
+// XCE (e 0<->1) and accumulator/index width changes via REP/SEP (the M/X bits of
+// P), each with the PC of the causing instruction. Makes the E/M/X width-mode
+// timeline (a frequent 65816 confound) legible. Off by default; the opcode sites
+// guard on g_modetrace_on and are compiled out of the 6502/65C02 cores. stderr.
+// ============================================================================
+inline bool g_modetrace_on = false;
+
 inline void iigs_tb_on_landing(cpu_state *cpu) {
     uint32_t lpc = cpu->full_pc;
 
@@ -554,6 +881,24 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
     if (g_iigs_break_enabled && lpc == g_iigs_break_addr) {
         iigs_cpu_state_dump_regs(cpu, "BREAK");
         cpu->halt = 2 /* HLT_USER */;
+    }
+
+    // A2GSPU_SAVE_AT: snapshot the machine at the EXACT instruction the first time
+    // PC reaches the target, then halt (the arbitrary-breakpoint checkpoint). The
+    // save itself runs in the host callback (has the gs2.cpp save fns + mmu handle).
+    if (g_save_at_enabled && !g_save_at_fired && lpc == g_save_at_addr) {
+        g_save_at_fired = true;
+        if (g_save_at_fn) g_save_at_fn(cpu);
+        cpu->halt = 2 /* HLT_USER */;
+    }
+    // A2GSPU_POKE: one-shot DELIBERATE state injection/splice at the target PC. With
+    // A2GSPU_POKE_NTH=<n> the splice fires on the Nth time PC reaches poke_pc (default
+    // 1 = first hit) -- lets a scout target a "write-N" wall (e.g. the 24th queue write).
+    if (g_poke_on && !g_poke_fired && lpc == g_poke_pc) {
+        if (++g_poke_hits >= g_poke_nth) {
+            g_poke_fired = true;
+            iigs_poke_apply(cpu);
+        }
     }
 
     if (!g_iigs_tbtrace_enabled) return;
@@ -640,8 +985,15 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
                 // (observation-free probe_peek), e.g. the heartbeat taskheader.
                 if (g_trap_dump_len) {
                     printf("IIGS SYSFAIL dump $%06X..+%u probe_peek:", g_trap_dump_base, g_trap_dump_len);
-                    for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
-                        printf(" %02X", cpu->mmu->probe_peek(a));
+                    int suspects = 0;
+                    for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++) {
+                        uint8_t v = cpu->mmu->probe_peek(a);
+                        if (iigs_probe_suspect(a, v)) suspects++;
+                        printf(" %02X", v);
+                    }
+                    if (suspects)
+                        printf("  [** %d SUSPECT $EE: bank $00/$01 floating-bus, do NOT trust as memory truth **]",
+                               suspects);
                     printf("\n");
                 }
             }
@@ -657,7 +1009,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
 // CPU core (BRK/break). Symbolizes the PC when a symbol table is loaded.
 inline void iigs_cpu_state_dump_regs(cpu_state *cpu, const char *why) {
     char sym[80]; const char *rgn = iigs_pc_region(cpu, cpu->full_pc);
-    if (rgn[0]) snprintf(sym, sizeof(sym), "<%s>", rgn);   // ROM/IO/LC-ROM, not a kernel symbol
+    if (rgn[0]) iigs_region_tag(cpu->full_pc, rgn, sym, sizeof(sym));  // ROM/IO/LC-ROM (ROM-symbolized via A2GSPU_ROM_SYMBOLS)
     else iigs_sym_resolve(cpu->full_pc, sym, sizeof(sym));
     printf("IIGS CPU [%s]: PC=%02X/%04X%s%s A=%04X X=%04X Y=%04X S=%04X D=%04X "
            "DBR=%02X P=%02X e=%d\n",

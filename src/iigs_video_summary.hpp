@@ -110,3 +110,29 @@ inline void iigs_video_map(const uint8_t *e1) {
         printf("IIGS VIDEOMAP: |%s|\n", line);
     }
 }
+
+// ============================================================================
+// 40-column text page ASCII decode (audit gap #7 — the clean text read). Decodes
+// the Apple II 40-col text page (bank $E0, $0400-$07FF) — the standard interleaved
+// screen-hole layout — to 24 rows x 40 printable ASCII chars, so a headless run can
+// SEE text the program drew (a GS/OS text prompt, a Monitor screen) without a
+// framebuffer. Handles normal ($80-$FF), inverse ($00-$3F) and flash ($40-$7F)
+// encodings + lowercase; non-printable cells render as '.'. Caller gates on
+// getenv("A2GSPU_TEXT40") and passes the text bank base (bank $E0 = megaii base).
+// ============================================================================
+inline char iigs_a2_text_char(uint8_t b) {
+    uint8_t c = (uint8_t)(b & 0x7F);        // strip the normal-text high bit
+    if (c < 0x20) c = (uint8_t)(c + 0x40);  // inverse/flash control range -> @A.. printable
+    return (c >= 0x20 && c <= 0x7E) ? (char)c : '.';
+}
+inline void iigs_text40(const uint8_t *mem) {
+    printf("IIGS TEXT40: 40x24 text page ($E0:$0400-$07FF), decoded ASCII:\n");
+    for (int row = 0; row < 24; row++) {
+        // Apple II interleaved text base: row = 0x400 + 0x80*(row&7) + 0x28*(row>>3).
+        int base = 0x400 + 0x80 * (row & 7) + 0x28 * (row >> 3);
+        char line[41];
+        for (int col = 0; col < 40; col++) line[col] = iigs_a2_text_char(mem[base + col]);
+        line[40] = '\0';
+        printf("IIGS TEXT40: %02d |%s|\n", row, line);
+    }
+}

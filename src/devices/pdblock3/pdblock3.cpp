@@ -261,6 +261,27 @@ public:
         return true;
     }
 
+    // FAITHFULNESS FIX (SIG-023): number of devices to report from the SmartPort
+    // driver STATUS(unit 0) call. Real SmartPort firmware returns the count of
+    // ATTACHED devices on that controller (a IIgs boot volume = 1, occasionally
+    // 2) — NOT the controller's maximum unit capacity. Reporting PDB3_MAX_UNITS
+    // (32, an ARRAY-SIZE constant) made GS/OS's device dispatcher enumerate 32
+    // phantom units per SmartPort slot (ident_slot, Device.Dispatcher.Src:1832)
+    // × the slots that carry a pdblock3 card => hundreds of frames of dead
+    // enumeration before the desktop. mount() packs drives contiguously from
+    // unit 0, so a simple occupancy count == the real (contiguous) chain length.
+    // A2GSPU_SP_NDEV overrides the count (diagnostic A/B; e.g. =32 reproduces
+    // the pre-fix behavior). This makes the emulator MORE faithful to real HW.
+    uint8_t sp_num_devices() {
+        const char *ov = getenv("A2GSPU_SP_NDEV");
+        if (ov) return (uint8_t)atoi(ov);
+        uint8_t n = 0;
+        for (int j = 0; j < PDB3_MAX_UNITS; j++) {
+            if (drives[j].file != nullptr) n++;
+        }
+        return n;
+    }
+
     // Single implementation for both standard and extended SmartPort commands.
     // CmdStatus / CmdRW / CmdControl select the right command-list struct;
     // Stat00 / Stat03 select the right response struct (3-byte vs 4-byte blk_count).
@@ -276,7 +297,7 @@ public:
                     case 0x00: { // device status (pg 122)
                         if (cmdlist.unit == 0) { // SmartPort Driver Status (pg 125)
                             sp_cmd0_statcode_00_driver s;
-                            s.num_devices = PDB3_MAX_UNITS;
+                            s.num_devices = sp_num_devices(); // SIG-023: real attached count, not PDB3_MAX_UNITS(32)
                             memset(s.reserved, 0x00, sizeof(s.reserved));
                             write_to_memory(slptr, (uint8_t *)&s, sizeof(s));
                             cmd_buffer.status1 = sizeof(s);

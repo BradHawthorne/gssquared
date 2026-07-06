@@ -57,3 +57,13 @@ gs2-bram.bin
 *.po
 *.dsk
 *.woz
+
+# Python tool bytecode + a tiny run-time symbol stub (not source)
+__pycache__/
+*.pyc
+/Include.Symbols
+
+# GS/OS-derived object fixtures are NOT redistributed (same posture as the ROM/disk
+# rules above): regenerate locally from your own build. The synthetic IP-free overlay
+# selftest (tools/gdiff/selftest.py :: t_overlay_synth) covers the same logic without them.
+*.omf

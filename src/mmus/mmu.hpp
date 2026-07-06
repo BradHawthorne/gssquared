@@ -114,6 +114,11 @@ class MMU {
         // $E0/$E1 through the Mega II image). Never triggers IO/cycles/slot bus.
         virtual uint8_t probe_peek(uint32_t address) { return read_raw(address); }
 
+        // A2GSPU diagnostic: dump the IIgs main/aux soft-switch state + the resolved
+        // read/write physical mapping of bank-$00/$01 $A600 (handler pages that
+        // read_raw/probe_peek cannot see). Base = no-op; MMU_IIgs overrides.
+        virtual void a2gspu_state_dump() {}
+
         // no writable check here, do it higher up - this needs to be able to write to
         // memory block no matter what.
         void write_raw(uint32_t address, uint8_t value) {
