@@ -26,6 +26,7 @@
 
 #include "cpu_traits.hpp"
 #include "NClock.hpp"
+#include "obs_iigs.hpp"   // Observatory boot-fault-context view (obs_view_fault)
 
 
 /**
@@ -3835,6 +3836,7 @@ int execute_next(cpu_state *cpu) override {
                 if constexpr (CPUTraits::has_65816_ops) {
                     g_iigs_brk_count++;   // exit-taxonomy: count crashes (observation only)
                     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(cpu, "BRK");
+                    if (g_iigs_brkdump_enabled) obs_view_fault(cpu, "BRK");   // Observatory correlated fault-context view
                     // BRKMEM: dump bytes around the crash PC (and the stacked return
                     // bank/addr) so a corrupted/misplaced code byte can be read off
                     // the live image at the fault. Env-gated, observation only.

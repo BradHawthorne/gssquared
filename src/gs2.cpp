@@ -47,6 +47,7 @@
 #include "bus_trace.hpp"
 #include "mmu_state_trace.hpp"
 #include "obs_signal.hpp"    // the Observatory spine (default-OFF; wired in later seams)
+#include "obs_iigs.hpp"      // IIgs LEVEL bindings + the boot-fault-context view
 #include "iigs_video_summary.hpp"
 #include "iigs_toolbox.hpp"
 #include "iigs_diag.hpp"
@@ -1649,6 +1650,7 @@ static void run_headless_spike(GS2AppState *state) {
     obs_reset();                  // arm the Observatory spine + the NClock cost reclaim (the keystone proof)
     g_obs_enabled = true;
     g_obs_clock_cost_enabled = true;
+    obs_register_iigs_core(computer->cpu);   // register cpu.*/clock.* LEVEL signals (the fault-context view)
 
     // Arm the headless GS/OS app-bringup diagnostics (env-gated, stdout-only).
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
@@ -2157,6 +2159,7 @@ static void run_headless_spike(GS2AppState *state) {
         iigs_mem_range_dump(computer->cpu, mb, dg);
     }
     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(computer->cpu, "SPIKE-END");
+    if (!g_obs_registry.empty()) obs_view_fault(computer->cpu, "SPIKE-END");  // Observatory LEVEL-pull proof (post-golden, neutral)
     iigs_milestones_report();   // A2GSPU_MILESTONES: reached / NOT-REACHED table
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
