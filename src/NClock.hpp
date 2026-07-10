@@ -22,6 +22,7 @@
 #include "devices/displaypp/VideoScannerII.hpp"
 #include "PlatformIDs.hpp"
 #include "util/EventTimer.hpp"
+#include "obs_signal.hpp"   // Observatory: reclaim the discarded per-cycle 14M timing cost
 #include <functional>
 
 typedef enum {
@@ -331,9 +332,20 @@ protected:
                 ram_refresh_cycles -= 50;
                 c14m_this_cycle += 5; // a refresh cycle is 10 14M's long total.
             } 
-        } 
+        }
         c_14M += c14m_this_cycle;
-    
+
+        // KEYSTONE RECLAIM: c14m_this_cycle and cycle_type are the MEASURED true cost of
+        // this CPU cycle (SYNC ~14+, FAST/FAST_ROM 5, +5 on a refresh) — the machine's real
+        // floor/ceiling timing that this function otherwise discards (c14m_this_cycle is a
+        // local; cycle_type is reset to FAST below). Latch both into the Observatory so a bus
+        // transaction can carry the true cost of the cycle it rode. Gated + writes only the
+        // two obs globals (never cycles/c_14M/video), so the emulation stays bit-identical.
+        if (g_obs_clock_cost_enabled) {
+            g_obs_c14m_cost  = (uint32_t)c14m_this_cycle;
+            g_obs_cycle_type = (uint8_t)cycle_type;
+        }
+
         // if a slow cycle we can use 14-video_accum (or, 16-video_accum for h=64) to get the number of 14Ms to add to
         // c_14M to sync.
     
