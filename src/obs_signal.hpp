@@ -139,6 +139,8 @@ struct SigDesc {
     uint8_t     width;        // element size in bytes (SCALAR/ARRAY); 1 for a flag
     uint32_t    len;          // MEMWINDOW total byte length (0 for SCALAR/flag)
     const char* enum_tbl;     // optional enum-name table
+    uint16_t    owner_handle; // 0 = use the raw `owner`; else index into g_obs_owner_base
+                              // (a TRANSIENT owner resolved at pull time — never dangles)
 };
 enum obs_cls : uint8_t { OBS_C_SCALAR = 0, OBS_C_ARRAY, OBS_C_MEMWINDOW, OBS_C_EVENT };
 enum obs_vol : uint8_t { OBS_V_PER_CYCLE = 0, OBS_V_ON_CHANGE, OBS_V_ON_EVENT, OBS_V_ON_DEMAND };
@@ -155,6 +157,25 @@ inline uint16_t                g_obs_seq         = 0;               // per-cycle
 inline uint64_t                g_obs_seq_cycle   = ~0ull;           // cycle the seq counter belongs to
 inline uint64_t                g_obs_ring_head   = 0;               // cap-wrap write head (reset with the ring)
 inline std::vector<SigDesc>    g_obs_registry;                     // LEVEL/EVENT descriptors
+
+// --- Owner-handle indirection (plan §4.1). A TRANSIENT owner (e.g. VideoScannerIIgs,
+//     deleted + re-newed on every video-mode change) cannot be bound by a raw pointer —
+//     it would dangle. Such an owner registers its CURRENT base under a stable handle on
+//     (re)construction and releases it on destruction; a SigDesc bound to the handle
+//     resolves its base at pull time, and obs_read returns 'unavailable' (never touches
+//     freed memory) while the owner is gone. Stable owners keep using the raw `owner`. ---
+enum obs_owner_id : uint16_t { OBS_OWNER_NONE = 0, OBS_OWNER_VGC, OBS_OWNER__COUNT };
+inline const void* g_obs_owner_base[OBS_OWNER__COUNT] = { nullptr };
+
+inline void obs_owner_register(uint16_t handle, const void* base) {
+    if (handle && handle < OBS_OWNER__COUNT) g_obs_owner_base[handle] = base;
+}
+inline void obs_owner_release(uint16_t handle) {
+    if (handle && handle < OBS_OWNER__COUNT) g_obs_owner_base[handle] = nullptr;
+}
+inline const void* obs_resolve_owner(const SigDesc* d) {
+    return d->owner_handle ? g_obs_owner_base[d->owner_handle] : d->owner;
+}
 
 // --- THE KEYSTONE RECLAIM (plan §2.4 aux, §2.3 CYCLE_COST) ------------------
 // NClockIIgs::slow_incr_cycles() computes the TRUE 14M cost of each CPU cycle
@@ -238,6 +259,23 @@ inline void obs_add_memwindow(uint8_t sub, uint16_t sig, const char* path,
     obs_register(SigDesc{ obs_sigid(sub, sig, 0), path, OBS_T_BYTES, OBS_K_SAMPLE,
                           OBS_C_MEMWINDOW, OBS_V_ON_DEMAND, flags, base, 0, 0, 1, len, nullptr });
 }
+// Handle-bound variants for a TRANSIENT owner: the base is resolved from the owner
+// handle at pull time (owner=nullptr), so the descriptor survives owner rebuilds.
+inline void obs_add_scalar_h(uint8_t sub, uint16_t sig, uint16_t idx, const char* path,
+                             uint8_t type, uint16_t owner_handle, uint32_t off, uint8_t width,
+                             uint16_t flags = 0) {
+    SigDesc d{ obs_sigid(sub, sig, idx), path, type, OBS_K_SAMPLE, OBS_C_SCALAR,
+               OBS_V_ON_DEMAND, flags, nullptr, off, 0, width, 0, nullptr };
+    d.owner_handle = owner_handle;
+    obs_register(d);
+}
+inline void obs_add_memwindow_h(uint8_t sub, uint16_t sig, const char* path,
+                                uint16_t owner_handle, uint32_t off, uint32_t len, uint16_t flags = 0) {
+    SigDesc d{ obs_sigid(sub, sig, 0), path, OBS_T_BYTES, OBS_K_SAMPLE, OBS_C_MEMWINDOW,
+               OBS_V_ON_DEMAND, flags, nullptr, off, 0, 1, len, nullptr };
+    d.owner_handle = owner_handle;
+    obs_register(d);
+}
 
 // --- LEVEL pull: side-effect-free read of a registered HOST-memory signal.
 //     Resolves owner+off (+ idx*width for an ARRAY), loads little-endian by type,
@@ -248,8 +286,10 @@ inline void obs_add_memwindow(uint8_t sub, uint16_t sig, const char* path,
 //     through MMU::probe_peek at the call site, NOT here (this is host struct memory). ---
 inline bool obs_read(uint32_t sigid, uint64_t* out, uint32_t idx = 0) {
     const SigDesc* d = obs_find(sigid);
-    if (!d || !d->owner || (d->flags & OBS_F_EDGE_ONLY)) return false;
-    const uint8_t* p = (const uint8_t*)d->owner + d->off;
+    if (!d || (d->flags & OBS_F_EDGE_ONLY)) return false;
+    const void* owner = obs_resolve_owner(d);   // handle indirection: unavailable -> false
+    if (!owner) return false;
+    const uint8_t* p = (const uint8_t*)owner + d->off;
     if (d->cls == OBS_C_ARRAY) p += (size_t)idx * (d->width ? d->width : 1);
     uint64_t v = 0;
     switch (d->type) {
@@ -279,9 +319,11 @@ inline bool obs_read(uint32_t sigid, uint64_t* out, uint32_t idx = 0) {
 //     Returns bytes copied (<= maxlen); 0 if absent / edge-only / not a memwindow. ---
 inline uint32_t obs_read_window(uint32_t sigid, uint8_t* dst, uint32_t maxlen) {
     const SigDesc* d = obs_find(sigid);
-    if (!d || !d->owner || d->cls != OBS_C_MEMWINDOW || (d->flags & OBS_F_EDGE_ONLY)) return 0;
+    if (!d || d->cls != OBS_C_MEMWINDOW || (d->flags & OBS_F_EDGE_ONLY)) return 0;
+    const void* owner = obs_resolve_owner(d);
+    if (!owner) return 0;
     uint32_t n = (d->len < maxlen) ? d->len : maxlen;
-    memcpy(dst, (const uint8_t*)d->owner + d->off, n);
+    memcpy(dst, (const uint8_t*)owner + d->off, n);
     return n;
 }
 

@@ -2170,6 +2170,16 @@ static void run_headless_spike(GS2AppState *state) {
         printf("OBS IRQ: pending=%08llX  edges_recorded=%llu\n",
                (unsigned long long)irqp, (unsigned long long)nedge);
     }
+    {   // Observatory: OwnerHandle self-check (transient-owner indirection: bind, then stale-safe)
+        const void *saved = g_obs_owner_base[OBS_OWNER_VGC];
+        int scratch = 0;
+        obs_owner_register(OBS_OWNER_VGC, &scratch);
+        bool bound = (g_obs_owner_base[OBS_OWNER_VGC] == &scratch);
+        obs_owner_release(OBS_OWNER_VGC);
+        bool freed = (g_obs_owner_base[OBS_OWNER_VGC] == nullptr);
+        g_obs_owner_base[OBS_OWNER_VGC] = saved;   // restore (no-op today; safe once VGC binds it)
+        printf("OBS HANDLE: register->bound=%d release->freed=%d (expect 1/1)\n", bound, freed);
+    }
     iigs_milestones_report();   // A2GSPU_MILESTONES: reached / NOT-REACHED table
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
