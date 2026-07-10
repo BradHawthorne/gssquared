@@ -438,10 +438,13 @@ uint8_t gs_bsr_read_C01x(void *context, uint32_t address) {
         case 0xD: /* C01D */ fl = lc->is_hires() ? 0x80 : 0x00; break;
     }
     
-    /* KeyboardMessage *keymsg = (KeyboardMessage *)lc->mbus->read(MESSAGE_TYPE_KEYBOARD);
-    uint8_t kbv = (keymsg ? keymsg->mk->last_key_val : 0xEE) & 0x7F;
-    return kbv | fl; */
-    return fl;
+    // Fidelity (gate-level Apple IIe MMU_MD7 core + Sather, "Understanding the Apple IIe"):
+    // a $C011-$C01F status read drives ONLY data bit 7 (the switch state); bits 6-0 are
+    // the floating bus (the last video/DRAM byte), NOT forced to 0. Was 'return fl' (low
+    // 7 bits = 0), a real deviation. The EXACT IIgs floating byte (2.8MHz CPU async to the
+    // 1MHz Mega II fetch) differs from the IIe model -> silicon-refinement item (task #60
+    // snoop); the MECHANISM (floating-bus in the low 7 bits) is the authoritative fix.
+    return (lc->megaii->floating_bus_read() & 0x7F) | fl;
 }
 
 /*
