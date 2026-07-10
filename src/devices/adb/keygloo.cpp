@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 
 #include "computer.hpp"
+#include "obs_signal.hpp"   // Observatory: obs_add_memwindow for the ADB uC RAM window
 #include "videosystem.hpp"
 #include "mmus/mmu_iigs.hpp"
 
@@ -124,6 +125,8 @@ void init_slot_keygloo(computer_t *computer, SlotType_t slot) {
 
     KeyGloo *kg = new KeyGloo(kb_state->reset_control);
     kb_state->kg = kg;
+    // Observatory: register the ADB microcontroller RAM/vars image as a memory window.
+    obs_add_memwindow(OBS_SUB_ADB, 0, "adb.uc_ram", kg->obs_uc_window(), kg->obs_uc_len(), OBS_F_INTERNAL_ONLY);
 
     computer->dispatch->registerHandler(SDL_EVENT_KEY_DOWN, [kb_state](const SDL_Event &event) {
         return keygloo_process_event(kb_state, event);

@@ -1,5 +1,6 @@
 #include "scc8530.hpp"
 #include "computer.hpp"
+#include "obs_signal.hpp"   // Observatory: obs_add_memwindow for the SCC register file
 #include "Z85C30.hpp"
 
 #include "util/DebugHandlerIDs.hpp"
@@ -59,6 +60,8 @@ void init_scc8530_slot(computer_t *computer, SlotType_t slot) {
 
     Z85C30 *scc = new Z85C30(st->irq_control, computer->event_timer, computer->clock);
     st->scc = scc;
+    // Observatory: register the SCC per-channel RR/WR register file as a memory window.
+    obs_add_memwindow(OBS_SUB_SCC, 0, "scc.regs", scc->obs_reg_window(), scc->obs_reg_len(), OBS_F_INTERNAL_ONLY);
 
     for (uint32_t i = 0xC038; i <= 0xC03B; i++) {
         computer->mmu->set_C0XX_write_handler(i, { scc8530_write_C0xx, st });

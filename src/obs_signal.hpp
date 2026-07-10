@@ -293,6 +293,20 @@ inline std::vector<const SigDesc*> obs_enumerate(const char* glob) {
     return out;
 }
 
+// Dump every registered MEMWINDOW matching a glob: path, byte length, first bytes.
+// The "light the dark subsystems" readout — a whole POD device-state block is
+// visible with zero per-field work (coverage-first, granularity-on-demand).
+inline void obs_view_memwindows(const char* glob) {
+    for (const SigDesc* d : obs_enumerate(glob)) {
+        if (d->cls != OBS_C_MEMWINDOW) continue;
+        uint8_t buf[24];
+        uint32_t n = obs_read_window(d->sigid, buf, sizeof(buf));
+        printf("OBS WINDOW: %-14s len=%-5u first:", d->path, d->len);
+        for (uint32_t i = 0; i < n; i++) printf(" %02X", buf[i]);
+        printf("%s\n", (d->len > n) ? " ..." : "");
+    }
+}
+
 // ----------------------------------------------------------------------------
 // 7. Dump / hash — the golden path, verbatim house-FNV. For a full-ring hash we
 //    fold the same (addr, data, rw)-shaped tuple the existing traces hash, so a

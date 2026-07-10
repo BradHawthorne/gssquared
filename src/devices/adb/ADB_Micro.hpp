@@ -65,6 +65,10 @@ struct uc_vars_t {
 
 class KeyGloo
 {
+    public:
+        // Observatory: the uC RAM/vars image as a coverage-first memory window.
+        const void* obs_uc_window() const { return ram; }
+        uint32_t    obs_uc_len()    const { return (uint32_t)sizeof(ram); }
     private:
         ADB_Host * adb_host = nullptr;
 

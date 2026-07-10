@@ -2160,6 +2160,7 @@ static void run_headless_spike(GS2AppState *state) {
     }
     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(computer->cpu, "SPIKE-END");
     if (!g_obs_registry.empty()) obs_view_fault(computer->cpu, "SPIKE-END");  // Observatory LEVEL-pull proof (post-golden, neutral)
+    obs_view_memwindows("*");   // Observatory: dump the registered dark-subsystem memory windows (DOC/ADB/SCC)
     iigs_milestones_report();   // A2GSPU_MILESTONES: reached / NOT-REACHED table
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----

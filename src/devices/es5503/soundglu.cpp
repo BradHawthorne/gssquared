@@ -204,6 +204,9 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
     
     // Create and initialize ES5503 chip
     st->chip = new ES5503();
+    // Observatory: register the DOC oscillator array as a coverage-first memory window.
+    obs_add_memwindow(OBS_SUB_DOC, 0, "doc.osc", st->chip->get_oscillator(0),
+                      32 * (uint32_t)sizeof(Oscillator), OBS_F_INTERNAL_ONLY);
     st->chip->init(7159090, 48000, 1);  // Apple IIgs clock rate, 48kHz stereo
     st->chip->set_wave_memory(st->doc_ram);
     st->computer = computer;

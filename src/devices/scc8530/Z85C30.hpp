@@ -66,6 +66,11 @@ enum scc_register_t {
 };
 
 class Z85C30 {
+    public:
+        // Observatory: the per-channel RR/WR register file as a coverage-first window.
+        const void* obs_reg_window() const { return &registers[0]; }
+        uint32_t    obs_reg_len()    const { return (uint32_t)sizeof(registers); }
+    private:
     InterruptController *irq_control = nullptr;
     EventTimer *event_timer = nullptr;
     NClockII *clock = nullptr;
