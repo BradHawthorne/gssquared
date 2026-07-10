@@ -142,7 +142,13 @@ class MMU_IIgs : public MMU {
         inline void megaiiWrite(uint32_t address, uint8_t value) {
             if ((address & 0x1'0000) && g_bank_latch) {
                 megaii->get_memory_base()[address & 0x1'FFFF] = value;
-                bus_trace_note(get_cycle_count(), address & 0x1'FFFF, value, 1); // shadowed SHR write (provenance 1)
+                uint64_t _cyc = get_cycle_count();
+                bus_trace_note(_cyc, address & 0x1'FFFF, value, 1); // shadowed SHR write (provenance 1)
+                // Observatory: the shadowed store as a BUS_TXN (provenance flag), so obs_hash_bus
+                // reproduces bus_trace across BOTH provenance paths — the superset holds by
+                // construction, not just when zero shadowed writes happen to occur.
+                obs_note(_cyc, obs_sigid(OBS_SUB_BUS, 0, 0), OBS_K_BUS_TXN, address & 0x1'FFFF, value,
+                         ((uint32_t)g_obs_c14m_cost << 8) | g_obs_cycle_type, OBS_F_PROVENANCE_SH);
                 slot_emit(address & 0xFFFF, value, false, true);             // Mega-II write to $E1/aux (M2B0=1)
             }
             else {

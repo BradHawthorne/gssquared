@@ -153,6 +153,7 @@ inline std::vector<ObsRecord>  g_obs_ring;                         // the EVENT 
 inline uint64_t                g_obs_cap         = 0;               // 0 = unbounded grow; else wrap at cap records
 inline uint16_t                g_obs_seq         = 0;               // per-cycle sub-sequence counter
 inline uint64_t                g_obs_seq_cycle   = ~0ull;           // cycle the seq counter belongs to
+inline uint64_t                g_obs_ring_head   = 0;               // cap-wrap write head (reset with the ring)
 inline std::vector<SigDesc>    g_obs_registry;                     // LEVEL/EVENT descriptors
 
 // --- THE KEYSTONE RECLAIM (plan §2.4 aux, §2.3 CYCLE_COST) ------------------
@@ -183,9 +184,8 @@ inline void obs_note(uint64_t cycle, uint32_t sigid, uint8_t kind,
     ObsRecord r{ cycle, sigid, obs_next_seq(cycle), kind, flags, addr, aux, val };
     if (g_obs_cap && g_obs_ring.size() >= g_obs_cap) {
         // wrap: overwrite oldest (a bounded ring for per-cycle full-trace modes)
-        static uint64_t head = 0;
-        g_obs_ring[head % g_obs_cap] = r;
-        head++;
+        g_obs_ring[g_obs_ring_head % g_obs_cap] = r;
+        g_obs_ring_head++;
     } else {
         g_obs_ring.push_back(r);
     }
@@ -195,6 +195,7 @@ inline void obs_reset() {
     g_obs_ring.clear();
     g_obs_seq = 0;
     g_obs_seq_cycle = ~0ull;
+    g_obs_ring_head = 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -247,15 +248,22 @@ inline bool obs_read(uint32_t sigid, uint64_t* out, uint32_t idx = 0) {
     if (d->cls == OBS_C_ARRAY) p += (size_t)idx * (d->width ? d->width : 1);
     uint64_t v = 0;
     switch (d->type) {
-        case OBS_T_U16: case OBS_T_I16:
+        case OBS_T_U16:
             v = (uint64_t)p[0] | ((uint64_t)p[1] << 8); break;
-        case OBS_T_U32: case OBS_T_I32: case OBS_T_RGB12:
+        case OBS_T_I16:
+            v = (uint64_t)(int64_t)(int16_t)(p[0] | (p[1] << 8)); break;
+        case OBS_T_U32: case OBS_T_RGB12:
             v = (uint64_t)p[0] | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) | ((uint64_t)p[3] << 24); break;
-        case OBS_T_U64: case OBS_T_I64:
+        case OBS_T_I32:
+            v = (uint64_t)(int64_t)(int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8)
+                                           | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24)); break;
+        case OBS_T_U64: case OBS_T_I64:  // same bit pattern; sign bit already at bit 63
             for (int i = 7; i >= 0; --i) v = (v << 8) | p[i]; break;
+        case OBS_T_I8:
+            v = (uint64_t)(int64_t)(int8_t)p[0]; break;
         case OBS_T_BOOL:
             v = ((uint64_t)p[0] >> d->shift) & 1u; break;
-        default: /* U8/I8/ENUM/BITFIELD/BYTES */
+        default: /* U8/ENUM/BITFIELD/BYTES */
             v = p[0]; break;
     }
     if (out) *out = v;
