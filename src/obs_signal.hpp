@@ -119,8 +119,12 @@ struct ObsRecord {
 };
 static_assert(sizeof(ObsRecord) == 32, "ObsRecord must stay a 32-byte wire envelope");
 
-// The LEVEL descriptor. Raw-pointer accessor via owner handle (NO std::function —
-// the plan forbids it on the hot path). Wired in a later seam.
+// The LEVEL descriptor. Raw-pointer accessor (NO std::function — the plan forbids
+// it on the hot path). NOTE the owner MUST be STABLE for the run: CPU, clock, and
+// device-chip objects live for the whole session, so a raw pointer is safe. A
+// TRANSIENT owner (e.g. VideoScannerII, destroyed/recreated on a video-mode change)
+// dangles — those need the deferred OwnerHandle indirection layer (plan §4.1), NOT
+// this raw-owner path. Seams 3/4 register only stable-lifetime owners.
 struct SigDesc {
     uint32_t    sigid;
     const char* path;         // e.g. "doc.osc[3].freq"
@@ -129,10 +133,11 @@ struct SigDesc {
     uint8_t     cls;          // 0=SCALAR 1=ARRAY 2=MEMWINDOW 3=EVENT
     uint8_t     vol;          // 0=PER_CYCLE 1=ON_CHANGE 2=ON_EVENT 3=ON_DEMAND
     uint16_t    flags;        // obs_flags (descriptor-static honesty bits)
-    const void* owner;        // base pointer for a LEVEL pull (nullptr for pure EVENT)
+    const void* owner;        // STABLE base pointer for a LEVEL pull (nullptr for pure EVENT)
     uint32_t    off;          // byte offset within *owner
-    uint8_t     shift;        // bitfield shift
-    uint8_t     width;        // bitfield width / element size
+    uint8_t     shift;        // bit position (for a BOOL/flag pull)
+    uint8_t     width;        // element size in bytes (SCALAR/ARRAY); 1 for a flag
+    uint32_t    len;          // MEMWINDOW total byte length (0 for SCALAR/flag)
     const char* enum_tbl;     // optional enum-name table
 };
 enum obs_cls : uint8_t { OBS_C_SCALAR = 0, OBS_C_ARRAY, OBS_C_MEMWINDOW, OBS_C_EVENT };
@@ -200,6 +205,92 @@ inline void obs_register(const SigDesc& d) { g_obs_registry.push_back(d); }
 inline const SigDesc* obs_find(uint32_t sigid) {
     for (const SigDesc& d : g_obs_registry) if (d.sigid == sigid) return &d;
     return nullptr;
+}
+
+// --- LEVEL registration helpers (the plan's "one line makes it observable" contract).
+//     Field order matches SigDesc exactly. A registered signal is instantly
+//     read/enumerate/snapshot-able with zero code at the observation site. ---
+inline void obs_add_scalar(uint8_t sub, uint16_t sig, uint16_t idx, const char* path,
+                           uint8_t type, const void* base, uint32_t off, uint8_t width,
+                           uint16_t flags = 0, const char* enum_tbl = nullptr) {
+    obs_register(SigDesc{ obs_sigid(sub, sig, idx), path, type, OBS_K_SAMPLE,
+                          OBS_C_SCALAR, OBS_V_ON_DEMAND, flags, base, off, 0, width, 0, enum_tbl });
+}
+inline void obs_add_flag(uint8_t sub, uint16_t sig, const char* path,
+                         const void* pbyte, uint32_t off, uint8_t bit, uint16_t flags = 0) {
+    obs_register(SigDesc{ obs_sigid(sub, sig, 0), path, OBS_T_BOOL, OBS_K_SAMPLE,
+                          OBS_C_SCALAR, OBS_V_ON_DEMAND, flags, pbyte, off, bit, 1, 0, nullptr });
+}
+inline void obs_add_array(uint8_t sub, uint16_t sig, const char* path, uint8_t type,
+                          const void* base, uint32_t off, uint8_t elem_width,
+                          uint16_t flags = 0) {
+    obs_register(SigDesc{ obs_sigid(sub, sig, 0), path, type, OBS_K_SAMPLE,
+                          OBS_C_ARRAY, OBS_V_ON_DEMAND, flags, base, off, 0, elem_width, 0, nullptr });
+}
+inline void obs_add_memwindow(uint8_t sub, uint16_t sig, const char* path,
+                              const void* base, uint32_t len, uint16_t flags = 0) {
+    obs_register(SigDesc{ obs_sigid(sub, sig, 0), path, OBS_T_BYTES, OBS_K_SAMPLE,
+                          OBS_C_MEMWINDOW, OBS_V_ON_DEMAND, flags, base, 0, 0, 1, len, nullptr });
+}
+
+// --- LEVEL pull: side-effect-free read of a registered HOST-memory signal.
+//     Resolves owner+off (+ idx*width for an ARRAY), loads little-endian by type,
+//     extracts the bit for a BOOL/flag. REFUSES an EDGE_ONLY signal (its true value
+//     exists only mid-access — it must be EVENT-observed via obs_note, never peeked;
+//     this is the "$EE lied 6x" stale-peek guard, formalized). Returns false if the
+//     signal is absent / edge-only / has a null owner. Emulated bank-space reads go
+//     through MMU::probe_peek at the call site, NOT here (this is host struct memory). ---
+inline bool obs_read(uint32_t sigid, uint64_t* out, uint32_t idx = 0) {
+    const SigDesc* d = obs_find(sigid);
+    if (!d || !d->owner || (d->flags & OBS_F_EDGE_ONLY)) return false;
+    const uint8_t* p = (const uint8_t*)d->owner + d->off;
+    if (d->cls == OBS_C_ARRAY) p += (size_t)idx * (d->width ? d->width : 1);
+    uint64_t v = 0;
+    switch (d->type) {
+        case OBS_T_U16: case OBS_T_I16:
+            v = (uint64_t)p[0] | ((uint64_t)p[1] << 8); break;
+        case OBS_T_U32: case OBS_T_I32: case OBS_T_RGB12:
+            v = (uint64_t)p[0] | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) | ((uint64_t)p[3] << 24); break;
+        case OBS_T_U64: case OBS_T_I64:
+            for (int i = 7; i >= 0; --i) v = (v << 8) | p[i]; break;
+        case OBS_T_BOOL:
+            v = ((uint64_t)p[0] >> d->shift) & 1u; break;
+        default: /* U8/I8/ENUM/BITFIELD/BYTES */
+            v = p[0]; break;
+    }
+    if (out) *out = v;
+    return true;
+}
+
+// --- MEMWINDOW pull: copy a registered host POD block (cover-first coverage).
+//     Returns bytes copied (<= maxlen); 0 if absent / edge-only / not a memwindow. ---
+inline uint32_t obs_read_window(uint32_t sigid, uint8_t* dst, uint32_t maxlen) {
+    const SigDesc* d = obs_find(sigid);
+    if (!d || !d->owner || d->cls != OBS_C_MEMWINDOW || (d->flags & OBS_F_EDGE_ONLY)) return 0;
+    uint32_t n = (d->len < maxlen) ? d->len : maxlen;
+    memcpy(dst, (const uint8_t*)d->owner + d->off, n);
+    return n;
+}
+
+// --- Enumerate: the discoverability primitive. A '*' in the glob matches any run
+//     (so "cpu.*", "doc.osc*", "*.freq" all work). Globbing the registry is free. ---
+inline bool obs_glob_match(const char* pat, const char* s) {
+    if (!pat || !s) return false;
+    const char *star_p = nullptr, *star_s = nullptr;
+    while (*s) {
+        if (*pat == '*') { star_p = pat++; star_s = s; }
+        else if (*pat == *s) { pat++; s++; }
+        else if (star_p) { pat = star_p + 1; s = ++star_s; }
+        else return false;
+    }
+    while (*pat == '*') pat++;
+    return *pat == '\0';
+}
+inline std::vector<const SigDesc*> obs_enumerate(const char* glob) {
+    std::vector<const SigDesc*> out;
+    for (const SigDesc& d : g_obs_registry)
+        if (d.path && obs_glob_match(glob, d.path)) out.push_back(&d);
+    return out;
 }
 
 // ----------------------------------------------------------------------------
