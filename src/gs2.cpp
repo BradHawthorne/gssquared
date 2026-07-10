@@ -1651,6 +1651,9 @@ static void run_headless_spike(GS2AppState *state) {
     g_obs_enabled = true;
     g_obs_clock_cost_enabled = true;
     obs_register_iigs_core(computer->cpu);   // register cpu.*/clock.* LEVEL signals (the fault-context view)
+    if (computer->irq_control)               // register the aggregate IRQ line as a LEVEL signal
+        obs_add_scalar(OBS_SUB_IRQ, 0, 0, "irq.pending", OBS_T_U64,
+                       computer->irq_control->obs_pending_ptr(), 0, 8, OBS_F_INTERNAL_ONLY);
 
     // Arm the headless GS/OS app-bringup diagnostics (env-gated, stdout-only).
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
@@ -2161,6 +2164,12 @@ static void run_headless_spike(GS2AppState *state) {
     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(computer->cpu, "SPIKE-END");
     if (!g_obs_registry.empty()) obs_view_fault(computer->cpu, "SPIKE-END");  // Observatory LEVEL-pull proof (post-golden, neutral)
     obs_view_memwindows("*");   // Observatory: dump the registered dark-subsystem memory windows (DOC/ADB/SCC)
+    {   // Observatory: IRQ edge timeline proof — aggregate pending + edges recorded this run
+        uint64_t irqp = 0; obs_read(obs_sigid(OBS_SUB_IRQ, 0, 0), &irqp);
+        uint64_t nedge = 0; for (const ObsRecord &r : g_obs_ring) if (r.kind == OBS_K_IRQ_EDGE) nedge++;
+        printf("OBS IRQ: pending=%08llX  edges_recorded=%llu\n",
+               (unsigned long long)irqp, (unsigned long long)nedge);
+    }
     iigs_milestones_report();   // A2GSPU_MILESTONES: reached / NOT-REACHED table
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----

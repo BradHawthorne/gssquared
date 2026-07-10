@@ -5,6 +5,7 @@
 
 #include "device_irq_id.hpp"
 #include "util/DebugFormatter.hpp"
+#include "obs_signal.hpp"   // Observatory: IRQ_EDGE timeline (who interrupted whom, when)
 
 /**
  * @class InterruptController
@@ -51,6 +52,7 @@ class InterruptController {
         irq_asserted |= (1 << irq);
         if (old != irq_asserted) {
             notify_irq_receiver();
+            obs_emit_irq((uint8_t)irq, true);   // Observatory: rising edge (pure observation, after the effect)
         }
     }
 
@@ -59,6 +61,7 @@ class InterruptController {
         irq_asserted &= ~(1 << irq);
         if (old != irq_asserted) {
             notify_irq_receiver();
+            obs_emit_irq((uint8_t)irq, false);  // Observatory: falling edge
         }
     }
 
@@ -73,8 +76,12 @@ class InterruptController {
 
         if (old != irq_asserted) {
             notify_irq_receiver();
+            obs_emit_irq((uint8_t)irq, assert); // Observatory: the IRQ edge, keyed by device id
         }
     }
+
+    // Observatory: the aggregate IRQ line bitfield as a LEVEL signal owner.
+    inline const uint64_t* obs_pending_ptr() const { return &irq_asserted; }
 
     inline bool get_irq(device_irq_id irq) {
         return irq_asserted & (1 << irq);
@@ -117,6 +124,14 @@ class InterruptController {
         if (irq_receiver) {
             irq_receiver(irq_asserted ? true : false);
         }
+    }
+
+    // Observatory: emit one IRQ_EDGE record (gated, pure observation). Keyed by the
+    // device id, stamped on the master timeline; aux carries the new pending bitfield.
+    inline void obs_emit_irq(uint8_t irq, bool asserted) {
+        obs_note(g_obs_now_cycle, obs_sigid(OBS_SUB_IRQ, irq, 0), OBS_K_IRQ_EDGE,
+                 irq, asserted ? 1 : 0, (uint32_t)(irq_asserted & 0xFFFFFFFFu),
+                 OBS_F_INTERNAL_ONLY);
     }
 
 };
