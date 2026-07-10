@@ -1654,6 +1654,15 @@ static void run_headless_spike(GS2AppState *state) {
     if (computer->irq_control)               // register the aggregate IRQ line as a LEVEL signal
         obs_add_scalar(OBS_SUB_IRQ, 0, 0, "irq.pending", OBS_T_U64,
                        computer->irq_control->obs_pending_ptr(), 0, 8, OBS_F_INTERNAL_ONLY);
+    // VGC render-debug substrate (the BPWS-relevant hardware, audit-VERIFIED): the SHR
+    // Scan-Control-Byte table ($E1:$9D00, one SCB/line, bit7=640, bit6=scanline-IRQ-en,
+    // bits0-3=palette#) and the 16-palette RAM ($E1:$9E00, 16x16 entries of $0RGB). These
+    // live in STABLE Mega II $E1 memory (not the transient VideoScannerIIgs), and their
+    // writes are BUS_OBSERVABLE -> the card snoop can arbitrate them (task #60).
+    if (uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr) {
+        obs_add_memwindow(OBS_SUB_VGC, 0, "vgc.scb",     m2 + 0x19D00, 200, OBS_F_BUS_OBSERVABLE);
+        obs_add_memwindow(OBS_SUB_VGC, 1, "vgc.palette", m2 + 0x19E00, 512, OBS_F_BUS_OBSERVABLE);
+    }
 
     // Arm the headless GS/OS app-bringup diagnostics (env-gated, stdout-only).
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
