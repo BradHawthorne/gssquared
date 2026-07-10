@@ -1646,6 +1646,9 @@ static void run_headless_spike(GS2AppState *state) {
     g_slot_bus_enabled = true;
     mmu_state_trace_reset();      // arm the ground-truth MMU-state stream (cycle-aligned with the slot bus)
     g_mmu_state_trace_enabled = true;
+    obs_reset();                  // arm the Observatory spine + the NClock cost reclaim (the keystone proof)
+    g_obs_enabled = true;
+    g_obs_clock_cost_enabled = true;
 
     // Arm the headless GS/OS app-bringup diagnostics (env-gated, stdout-only).
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
@@ -2057,6 +2060,7 @@ static void run_headless_spike(GS2AppState *state) {
     }
 
     g_bus_trace_enabled = false;  // disarm before any teardown writes
+    g_obs_enabled = false;        // disarm the Observatory spine (ring stays intact for the dump/proof)
     g_slot_bus_enabled = false;
     g_mmu_state_trace_enabled = false;
 
@@ -2107,6 +2111,19 @@ static void run_headless_spike(GS2AppState *state) {
                (unsigned long long)ha, (unsigned long long)(nd + ns));
         printf("SPIKE BRACKET: shadow-INVISIBLE (naked M2B0, direct-$E1 only) hash=%016llX  writes=%llu  MISS=%llu shadowed\n",
                (unsigned long long)hd, (unsigned long long)nd, (unsigned long long)ns);
+
+        // ---- Observatory keystone proof: the bus projection of the GENERAL signal
+        //      spine reproduces the bus-trace golden BY CONSTRUCTION (same store site,
+        //      same order) -> ObsRecord is a faithful superset of BusTraceRecord, and
+        //      the E1 determinism golden is a projection of the one Observatory stream.
+        uint64_t on = 0;
+        uint64_t oh = obs_hash_bus(&on);
+        printf("SPIKE OBS: obs_hash_bus=%016llX (%llu BUS_TXN, SHR window) vs bus_trace=%016llX -> %s\n",
+               (unsigned long long)oh, (unsigned long long)on, (unsigned long long)th,
+               (oh == th) ? "MATCH (superset proven)" : "MISMATCH");
+        uint32_t last_aux = g_obs_ring.empty() ? 0 : g_obs_ring.back().aux;
+        printf("SPIKE OBS: ring=%llu records; reclaimed last aux (c14m_cost<<8|cycle_type)=%08X\n",
+               (unsigned long long)g_obs_ring.size(), last_aux);
     }
 
     // ---- (1.6) faithful slot-bus stream (the virtual slot; superset of the SHR oracle) ----

@@ -55,7 +55,13 @@ inline void bank_e1_write(void *context, uint32_t address, uint8_t value) {
     {
         uint8_t *ram = mmu_iigs->megaii->get_memory_base();
         ram[address & 0x1FFFF] = value;
-        bus_trace_note(mmu_iigs->get_cycle_count(), address & 0x1FFFF, value, 0); // direct $E1 write (provenance 0)
+        uint64_t _cyc = mmu_iigs->get_cycle_count();
+        bus_trace_note(_cyc, address & 0x1FFFF, value, 0); // direct $E1 write (provenance 0)
+        // Observatory: same store, as a general BUS_TXN carrying the reclaimed true cycle cost
+        // in aux (c14m_cost<<8 | cycle_type). Gated; obs_hash_bus() over this reproduces the
+        // bus_trace golden by construction (the superset proof).
+        obs_note(_cyc, obs_sigid(OBS_SUB_BUS, 0, 0), OBS_K_BUS_TXN, address & 0x1FFFF, value,
+                 ((uint32_t)g_obs_c14m_cost << 8) | g_obs_cycle_type, 0);
         mmu_iigs->slot_emit(address & 0xFFFF, value, false, true);            // $E1/aux (M2B0=1)
     }
 }

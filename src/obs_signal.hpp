@@ -233,3 +233,27 @@ inline uint64_t obs_dump(const char* path, uint64_t* out_count = nullptr) {
     }
     return obs_hash(out_count);
 }
+
+// ----------------------------------------------------------------------------
+// 8. Bus projection — reproduce bus_trace_dump()'s EXACT hashed tuple over the
+//    BUS_TXN records in the SHR window ($E1:$2000-$9FFF == Mega II index
+//    0x12000-0x19FFF), the same window+tuple bus_trace.hpp hashes. This is the
+//    superset proof: an armed Observatory run's obs_hash_bus() equals
+//    bus_trace_dump()'s hash BY CONSTRUCTION, because the same store site feeds
+//    both, in the same order — so the general spine is a faithful superset of the
+//    ad-hoc trace it subsumes, and the E1 determinism golden is a projection of it.
+// ----------------------------------------------------------------------------
+inline uint64_t obs_hash_bus(uint64_t* out_count = nullptr) {
+    uint64_t h = HOUSE_FNV_BASIS, n = 0;
+    for (const ObsRecord& r : g_obs_ring) {
+        if (r.kind != OBS_K_BUS_TXN) continue;
+        if (r.addr < 0x12000u || r.addr > 0x19FFFu) continue;   // SHR window (matches bus_trace)
+        uint8_t rw = (r.flags & OBS_F_READ) ? 0 : 1;            // bus_trace convention: writes = 1
+        uint8_t b[5] = { (uint8_t)(r.addr & 0xFF), (uint8_t)((r.addr >> 8) & 0xFF),
+                         (uint8_t)((r.addr >> 16) & 0xFF), (uint8_t)(r.val & 0xFF), rw };
+        for (uint8_t x : b) h = (h ^ x) * HOUSE_FNV_PRIME;
+        n++;
+    }
+    if (out_count) *out_count = n;
+    return h;
+}
