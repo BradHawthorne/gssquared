@@ -87,6 +87,7 @@ public:
             cpu->E = 1; // emul mode
             cpu->_M = 1; // 8 bit M and X
             cpu->_X = 1;
+            cpu->I = 1; // reset forces IRQ-disable set
             cpu->D = 0; // disable decimal mode
             //cpu->EFFI = 0;
             cpu->rdy = false;

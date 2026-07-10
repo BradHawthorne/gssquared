@@ -120,7 +120,10 @@ inline void MMU_IIgs::write_c0xx(uint16_t address, uint8_t value) {
         case 0xC056: g_hires = false;  break;
         case 0xC057: g_hires = true;  break;
         default:
-            assert(false && "MMU_IIgs: Unhandled C0XX write");
+            // Unhandled/undefined soft switch: real hardware treats a write here
+            // as a no-op (the address decoder simply asserts no device). Never abort.
+            if (DEBUG(DEBUG_MMUGS)) printf("Unhandled C0XX write (no-op): %04X: %02X\n", address, value);
+            break;
     }
     megaii_compose_map();
     if (DEBUG(DEBUG_MMUGS)) printf("Reg Write: %04X: %02X\n", address, value);
@@ -135,7 +138,10 @@ inline uint8_t MMU_IIgs::read_c0xx(uint16_t address) {
         case 0xC057: g_hires = true; /* Call Display; */; break;
         case 0xC029: retval = reg_new_video; break;
         default:
-            assert(false && "MMU_IIgs: Unhandled C0XX read");
+            // Unhandled/undefined soft switch: real hardware returns the floating
+            // bus value (already seeded into retval above). Never abort.
+            if (DEBUG(DEBUG_MMUGS)) printf("Unhandled C0XX read (floating bus): %04X\n", address);
+            break;
     }
     megaii_compose_map();
     return retval;

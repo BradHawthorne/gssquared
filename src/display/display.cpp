@@ -648,9 +648,9 @@ in the IIgs, and return whichever one was asked-for.
 uint8_t display_read_C02EF(void *context, uint32_t address) {
     display_state_t *ds = (display_state_t *)context;
 
-    ds->f_scanline_asserted = false;
-    update_vgc_interrupt(ds, true); // should clear flag and deassert IRQ
-
+    // Reading the video vert/horiz counters has no interrupt side effect;
+    // the scan-line interrupt latch is cleared only by writing the VGC
+    // interrupt-clear register with its scan-line-clear bit low.
     uint16_t vcounter = ds->video_scanner->get_vcounter() & 0x1FF;
     uint16_t hcounter = ds->video_scanner->get_hcounter() & 0x7F;
     uint8_t c02e = (vcounter >> 1);

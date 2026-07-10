@@ -330,14 +330,19 @@ uint8_t ES5503::read(uint8_t offset) {
             case 0xe0:  { // Interrupt status
                 // TODO: if there is no pending IRQ does the osc number remain unchanged?
                 int irq_osc = update_irq_status();
-                
-                
+
+
                 // Clear IRQ line immediately on read
                 /* if (m_irq_callback) {
                     m_irq_callback(false);
                 } */
-                m_oscillators[irq_osc].irqpend = 0;
-                return m_rege0;
+                // update_irq_status() returns -1 when no IRQ is pending; only
+                // clear a real oscillator's pending flag to avoid indexing [-1].
+                if (irq_osc >= 0) {
+                    m_oscillators[irq_osc].irqpend = 0;
+                }
+                // D0 and D6 of the interrupt-status register always read as 1.
+                return m_rege0 | 0x41;
 
                 // Scan all oscillators, find first one with IRQ
                 /* bool found_interrupt = false;
