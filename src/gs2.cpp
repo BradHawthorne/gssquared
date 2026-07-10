@@ -46,6 +46,7 @@
 #include "house_fnv.hpp"
 #include "bus_trace.hpp"
 #include "mmu_state_trace.hpp"
+#include "obs_signal.hpp"    // the Observatory spine (default-OFF; wired in later seams)
 #include "iigs_video_summary.hpp"
 #include "iigs_toolbox.hpp"
 #include "iigs_diag.hpp"
