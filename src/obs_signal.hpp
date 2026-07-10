@@ -164,9 +164,14 @@ inline std::vector<SigDesc>    g_obs_registry;                     // LEVEL/EVEN
 // Observatory owns the reclaim targets here; NClock stamps them when armed
 // (default OFF, so an unarmed build is byte-identical). A BUS_TXN's aux field
 // then carries (c14m_cost<<8 | cycle_type) — the true cost of the cycle it rode.
-inline bool     g_obs_clock_cost_enabled = false;  // NClock stamps the two below only when true
+inline bool     g_obs_clock_cost_enabled = false;  // NClock stamps the three below only when true
 inline uint32_t g_obs_c14m_cost          = 0;      // true 14M cost of the current CPU cycle
 inline uint8_t  g_obs_cycle_type         = 2;      // CYCLE_TYPE_* of the current cycle (2=FAST)
+inline uint64_t g_obs_now_cycle          = 0;      // the master CPU cycle count, mirrored here so ANY
+                                                   // emit/view site (IRQ edges, the fault view) can
+                                                   // stamp the ONE timeline axis without a clock handle
+                                                   // (NClock::cycles is protected); also the stable
+                                                   // owner backing the clock.cycle LEVEL signal.
 
 // ----------------------------------------------------------------------------
 // 5. EVENT emit — one gated push. Generalizes bus_trace_note / slot_bus_note /

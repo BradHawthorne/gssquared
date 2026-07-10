@@ -22,7 +22,7 @@
 // Signal ids within the CPU / CLOCK subsystems (the sigid 'signal' field).
 enum obs_cpu_sig { OCS_A = 0, OCS_X, OCS_Y, OCS_SP, OCS_D, OCS_PC, OCS_PBR, OCS_DBR, OCS_P,
                    OCS_FN, OCS_FV, OCS_FM, OCS_FX, OCS_FD, OCS_FI, OCS_FZ, OCS_FC };
-enum obs_clk_sig { OKS_C14M_COST = 0, OKS_CYCLE_TYPE };
+enum obs_clk_sig { OKS_C14M_COST = 0, OKS_CYCLE_TYPE, OKS_CYCLE };
 
 // Register cpu.* + clock.* LEVEL signals against the STABLE live CPU + the reclaim
 // globals. Uses direct member addresses as owners (owner=&member, off=0) — robust
@@ -50,7 +50,8 @@ inline void obs_register_iigs_core(cpu_state* cpu) {
     obs_add_flag(OBS_SUB_CPU, OCS_FI, "cpu.flag.i", &cpu->p, 0, 2, F);
     obs_add_flag(OBS_SUB_CPU, OCS_FZ, "cpu.flag.z", &cpu->p, 0, 1, F);
     obs_add_flag(OBS_SUB_CPU, OCS_FC, "cpu.flag.c", &cpu->p, 0, 0, F);
-    // clock: the reclaimed per-cycle cost (stable globals in obs_signal.hpp)
+    // clock: the master timeline axis + the reclaimed per-cycle cost (stable globals in obs_signal.hpp)
+    obs_add_scalar(OBS_SUB_CLOCK, OKS_CYCLE,      0, "clock.cycle",      OBS_T_U64, &g_obs_now_cycle,  0, 8, F);
     obs_add_scalar(OBS_SUB_CLOCK, OKS_C14M_COST,  0, "clock.c14m_cost",  OBS_T_U32, &g_obs_c14m_cost,  0, 4, F);
     obs_add_scalar(OBS_SUB_CLOCK, OKS_CYCLE_TYPE, 0, "clock.cycle_type", OBS_T_U8,  &g_obs_cycle_type, 0, 1, F);
 }
@@ -63,8 +64,8 @@ inline void obs_view_fault(cpu_state* cpu, const char* why) {
     if (!cpu) return;
     if (obs_enumerate("cpu.reg.a").empty()) obs_register_iigs_core(cpu);   // self-arm if not yet registered
     printf("\n=== OBS FAULT VIEW (%s) ===\n", why ? why : "?");
-    printf("OBS FAULT: PC=%02X/%04X  DBR=%02X  E=%d  cpu_type=%d\n",
-           cpu->pb, cpu->pc, cpu->db, (int)cpu->E, (int)cpu->cpu_type);
+    printf("OBS FAULT: cycle=%llu  PC=%02X/%04X  DBR=%02X  E=%d  cpu_type=%d\n",
+           (unsigned long long)g_obs_now_cycle, cpu->pb, cpu->pc, cpu->db, (int)cpu->E, (int)cpu->cpu_type);
     for (const SigDesc* d : obs_enumerate("cpu.*")) {
         uint64_t v = 0;
         if (obs_read(d->sigid, &v))

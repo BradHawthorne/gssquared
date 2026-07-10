@@ -344,6 +344,7 @@ protected:
         if (g_obs_clock_cost_enabled) {
             g_obs_c14m_cost  = (uint32_t)c14m_this_cycle;
             g_obs_cycle_type = (uint8_t)cycle_type;
+            g_obs_now_cycle  = cycles;   // mirror the master timeline axis for any emit/view site
         }
 
         // if a slow cycle we can use 14-video_accum (or, 16-video_accum for h=64) to get the number of 14Ms to add to
