@@ -190,6 +190,157 @@ inline void iigs_watch_check_read(cpu_state *cpu, uint32_t addr, uint8_t data) {
     }
 }
 
+// ---- A2GSPU_VALTRAP: value-provenance store trap ----------------------------
+// WATCH answers "who wrote to address X"; VALTRAP answers "who wrote the VALUE V".
+// bus_write is byte-granular, so a multi-byte pointer (e.g. $E06014) arrives as
+// consecutive ascending-address little-endian byte writes. We keep a tiny ring of
+// recent writes and, treating each write as the value's TOP byte, test whether the
+// `width` bytes at [addr-(width-1) .. addr] spell the target value LE. On a match we
+// emit the writer PC + regs -- the instruction that stored the bogus pointer. This
+// binds a base-lost/wrong-source address that dest-based WATCH attributes only to the
+// ROM consumer. Env A2GSPU_VALTRAP="<hexval>[:<width>]" (width 1-4, default 3).
+// Off => 1 branch; observation-only, deterministic (no wall-clock/rand).
+inline bool     g_valtrap_on    = false;
+inline uint32_t g_valtrap_val   = 0;
+inline int      g_valtrap_width = 3;
+inline int      g_valtrap_max   = 64;
+inline int      g_valtrap_hits  = 0;
+inline uint32_t g_valtrap_ra[8] = {};
+inline uint8_t  g_valtrap_rd[8] = {};
+inline int      g_valtrap_ri    = 0;
+
+inline void iigs_valtrap_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
+    // record this byte-write in the ring
+    g_valtrap_ra[g_valtrap_ri] = addr;
+    g_valtrap_rd[g_valtrap_ri] = data;
+    g_valtrap_ri = (g_valtrap_ri + 1) & 7;
+    // quick-reject: only proceed when the current byte is the value's TOP byte.
+    if (data != (uint8_t)((g_valtrap_val >> (8 * (g_valtrap_width - 1))) & 0xFF)) return;
+    // assemble [addr-(w-1) .. addr] LE from the most-recent ring write to each address.
+    uint32_t base = addr - (uint32_t)(g_valtrap_width - 1);
+    uint32_t built = 0;
+    for (int k = 0; k < g_valtrap_width; k++) {
+        uint32_t a = base + (uint32_t)k;
+        int found = -1;
+        for (int s = 0; s < 8; s++) {
+            int idx = (g_valtrap_ri - 1 - s) & 7;
+            if (g_valtrap_ra[idx] == a) { found = idx; break; }
+        }
+        if (found < 0) return;
+        built |= (uint32_t)g_valtrap_rd[found] << (8 * k);
+    }
+    uint32_t mask = (g_valtrap_width >= 4) ? 0xFFFFFFFFu : ((1u << (8 * g_valtrap_width)) - 1u);
+    if ((built & mask) != (g_valtrap_val & mask)) return;
+    if (g_valtrap_max && g_valtrap_hits >= g_valtrap_max) return;
+    g_valtrap_hits++;
+    printf("IIGS VALTRAP: value $%0*X -> %02X/%04X  by PC=%02X/%04X  S=$%04X D=$%04X DBR=$%02X  (hit %d)\n",
+           g_valtrap_width * 2, (unsigned)(g_valtrap_val & mask),
+           (unsigned)((addr >> 16) & 0xFF), (unsigned)(addr & 0xFFFF),
+           (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF),
+           (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db, g_valtrap_hits);
+}
+
+// ---- A2GSPU_CONDTRAP="bank:pc@f=v": conditional flag-provenance trap -----------
+// Trap at PC only when a processor flag holds a value, and report WHO last changed
+// that flag -- the instruction whose branch this PC's routing depends on (the P3
+// value-level hop: "who set the carry that routed check_express_seg to old_loader").
+// A per-instruction shadow records, for each P bit, the PC of the instruction that
+// last flipped it (P is diffed across consecutive landings; the CHANGER is the
+// PREVIOUS instruction). Env f in {c,z,i,d,x,m,v,n}; v in {0,1}. Off => cheap;
+// observation-only (reads regs, no writes) => golden-neutral.
+inline bool     g_condtrap_on   = false;
+inline uint32_t g_condtrap_pc   = 0;      // 24-bit trap PC
+inline uint8_t  g_condtrap_bit  = 0;      // P bit index 0..7
+inline uint8_t  g_condtrap_want = 0;      // required bit value 0/1
+inline int      g_condtrap_max  = 8;
+inline int      g_condtrap_hits = 0;
+inline uint8_t  g_ct_prev_p     = 0;
+inline uint32_t g_ct_prev_pc    = 0xFFFFFFFFu;
+inline uint32_t g_ct_setter[8]  = {};     // last PC that flipped each P bit
+
+inline void iigs_condtrap_step(cpu_state *cpu) {
+    uint8_t p = cpu->p;
+    if (g_ct_prev_pc != 0xFFFFFFFFu) {
+        uint8_t chg = p ^ g_ct_prev_p;
+        if (chg) for (int b = 0; b < 8; b++) if (chg & (1u << b)) g_ct_setter[b] = g_ct_prev_pc;
+    }
+    g_ct_prev_p = p;
+    g_ct_prev_pc = cpu->full_pc & 0xFFFFFF;
+    if (g_condtrap_hits >= g_condtrap_max) return;
+    if ((cpu->full_pc & 0xFFFFFF) != g_condtrap_pc) return;
+    if (((p >> g_condtrap_bit) & 1) != g_condtrap_want) return;
+    g_condtrap_hits++;
+    uint32_t stp = g_ct_setter[g_condtrap_bit];
+    static const char *fn = "czidxmvn";       // bit0=C 1=Z 2=I 3=D 4=X 5=M 6=V 7=N
+    printf("IIGS CONDTRAP: PC=%02X/%04X flag %c=%d  last-set-by PC=%02X/%04X  "
+           "A=%04X X=%04X Y=%04X S=$%04X D=$%04X DBR=$%02X  (hit %d)\n",
+           (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF),
+           fn[g_condtrap_bit], g_condtrap_want,
+           (unsigned)((stp >> 16) & 0xFF), (unsigned)(stp & 0xFFFF),
+           (unsigned)cpu->a, (unsigned)cpu->x, (unsigned)cpu->y,
+           (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db, g_condtrap_hits);
+}
+
+// ---- A2GSPU_LOADTRACE="bank[:lo-hi]": runtime segment-overlay tracker ----------
+// The System Loader OVERLAYS segments into a bank, so a fixed address holds DIFFERENT
+// code at different times -- which defeats end-of-run DUMPs and is the ROOT of the
+// loader's symbol aliasing (many routines map to one runtime address). LOADTRACE
+// watches WRITES into the tracked region, coalesces contiguous ascending write-bursts
+// (>= threshold = a segment being read/relocated into memory), and logs each load with
+// its range, frame, and writer PC, flagging when it OVERLAYS a prior load -- a queryable
+// "what code was loaded where, WHEN" timeline. A2GSPU_LOADTRACE_MIN=<n> = burst threshold
+// (default 64). Off => 1 branch; observation-only (only inspects writes already on the
+// bus, never dispatches one) => golden-byte-neutral.
+extern int      g_iigs_cur_frame;       // fwd: headless spike frame counter (defined below with ITRACE)
+inline bool     g_loadtrace_on = false;
+inline uint32_t g_lt_lo = 0, g_lt_hi = 0;
+inline uint32_t g_lt_min = 64;
+inline uint32_t g_lt_cur_lo = 0, g_lt_cur_hi = 0, g_lt_cur_pc = 0;
+inline int      g_lt_cur_frame = 0;
+inline bool     g_lt_in_burst = false;
+inline int      g_lt_loads = 0;
+inline uint32_t g_lt_hist_lo[128] = {}, g_lt_hist_hi[128] = {};
+inline int      g_lt_hist_n = 0;
+
+inline void iigs_loadtrace_flush() {
+    if (!g_lt_in_burst) return;
+    g_lt_in_burst = false;
+    if (g_lt_cur_hi - g_lt_cur_lo + 1 < g_lt_min) return;    // too small = data/stack, not a segment
+    int ov = -1;
+    int lim = (g_lt_hist_n < 128) ? 0 : g_lt_hist_n - 128;
+    for (int i = g_lt_hist_n - 1; i >= lim; i--) {
+        int idx = i & 127;
+        if (g_lt_cur_lo <= g_lt_hist_hi[idx] && g_lt_cur_hi >= g_lt_hist_lo[idx]) { ov = idx; break; }
+    }
+    g_lt_loads++;
+    printf("IIGS LOADTRACE: seg #%d [%02X/%04X-%04X] %u bytes @frame %d by PC=%02X/%04X%s\n",
+           g_lt_loads, (unsigned)((g_lt_cur_lo >> 16) & 0xFF), (unsigned)(g_lt_cur_lo & 0xFFFF),
+           (unsigned)(g_lt_cur_hi & 0xFFFF), (unsigned)(g_lt_cur_hi - g_lt_cur_lo + 1), g_lt_cur_frame,
+           (unsigned)((g_lt_cur_pc >> 16) & 0xFF), (unsigned)(g_lt_cur_pc & 0xFFFF),
+           ov >= 0 ? "" : "");
+    if (ov >= 0)
+        printf("                OVERLAYS prior seg [%02X/%04X-%04X]\n",
+               (unsigned)((g_lt_hist_lo[ov] >> 16) & 0xFF), (unsigned)(g_lt_hist_lo[ov] & 0xFFFF),
+               (unsigned)(g_lt_hist_hi[ov] & 0xFFFF));
+    g_lt_hist_lo[g_lt_hist_n & 127] = g_lt_cur_lo;
+    g_lt_hist_hi[g_lt_hist_n & 127] = g_lt_cur_hi;
+    g_lt_hist_n++;
+}
+
+inline void iigs_loadtrace_write(cpu_state *cpu, uint32_t addr, uint8_t /*data*/) {
+    if (addr < g_lt_lo || addr > g_lt_hi) return;
+    if (g_lt_in_burst && addr + 4 >= g_lt_cur_lo && addr <= g_lt_cur_hi + 4) {
+        if (addr < g_lt_cur_lo) g_lt_cur_lo = addr;
+        if (addr > g_lt_cur_hi) g_lt_cur_hi = addr;
+        return;
+    }
+    iigs_loadtrace_flush();                 // discontiguous -> close prior, open new
+    g_lt_in_burst = true;
+    g_lt_cur_lo = g_lt_cur_hi = addr;
+    g_lt_cur_pc = cpu->full_pc & 0xFFFFFF;
+    g_lt_cur_frame = g_iigs_cur_frame;
+}
+
 // ---- A2GSPU_LCTRACE: Language-Card softswitch ($C080-$C08F, any bank) access log ----
 // LC read-state is READ-triggered (`lda $C081` -> read-ROM), so WATCH (write-only) misses
 // it. This logs every LC-switch access with the PC + decoded read-RAM/ROM + $D000 bank, to
@@ -505,6 +656,15 @@ inline int      g_calltrace_logged  = 0;
 inline int      g_calltrace_depth   = 0;
 inline int      g_calltrace_skip    = 0;    // A2GSPU_CALLTRACE_SKIP: ignore the first N hits of the arm PC
 inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);  // fwd
+
+// ---- A2GSPU_CALLSTREAM=<file>: symbol-FREE NDJSON of the toolbox/GS-OS call sequence
+// (seq, call word, kind, RAW caller return-addr, S/D/DBR at the call; carry+err at the
+// matching return). The data layer for the automated ours-vs-pristine first-divergence
+// differ tools/gdiff/calldiff.py (the "call #260 finder"). Immune to symbol aliasing
+// (raw hex only). Off => untaken branch; on => writes ONLY to its file (stdout untouched).
+inline FILE *g_callstream_out = nullptr;
+inline bool  g_callstream_on  = false;
+inline int   g_callstream_seq = 0;
 
 inline void iigs_calltrace_step(cpu_state *cpu) {
     if (!g_calltrace_armed && g_calltrace_use_pc &&
@@ -901,7 +1061,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
         }
     }
 
-    if (!g_iigs_tbtrace_enabled) return;
+    if (!g_iigs_tbtrace_enabled && !g_callstream_on) return;
 
     // trace_from: begin logging only once PC first reaches the trigger address.
     if (g_iigs_trace_from && !g_iigs_trace_armed && lpc == g_iigs_trace_from)
@@ -917,15 +1077,18 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
         bool m8 = cpu->E || (cpu->p & 0x20);
         uint16_t aval = m8 ? (uint16_t)(cpu->a & 0xFF) : cpu->a;
         bool carry = (cpu->p & FLAG_C) != 0;
+        if (g_callstream_on)
+            fprintf(g_callstream_out, "{\"ev\":\"r\",\"word\":%u,\"kind\":%u,\"carry\":%d,\"err\":%u}\n",
+                    pend.callword, pend.kind, carry ? 1 : 0, aval);
         bool bank_ok = (g_iigs_tbtrace_bank < 0) || (pend.caller_bank == g_iigs_tbtrace_bank);
         if (pend.kind == 0) {
             g_iigs_last_result[pend.callword] = {carry, aval};   // for the assert gate
-            if (log_window && bank_ok)
+            if (g_iigs_tbtrace_enabled && log_window && bank_ok)
                 printf("IIGS TOOLBOX: ret %s ($%04X) carry=%d err=$%04X\n",
                        iigs_tool_name(pend.callword), pend.callword, carry ? 1 : 0, aval);
         } else {
             if (carry) g_iigs_last_gsos_err = aval;
-            if (log_window && bank_ok && (g_iigs_errhook_enabled || carry))
+            if (g_iigs_tbtrace_enabled && log_window && bank_ok && (g_iigs_errhook_enabled || carry))
                 printf("IIGS GSOS: ret (class-%d) carry=%d err=$%04X%s\n",
                        pend.kind == 1 ? 1 : 0, carry ? 1 : 0, aval,
                        carry ? "  <-- SYSTEM/LOADER ERROR" : "");
@@ -951,7 +1114,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
     // first toolbox call reveals the runtime bank GS/OS relocated it to. Correct
     // to the bank; may be off by the within-bank load offset. A2GSPU_SYM_BASE
     // pins it explicitly (locked). App region = banks $02..$DF (not ROM/Mega II).
-    if (g_iigs_syms_loaded && !g_iigs_sym_base_locked && g_iigs_sym_base == 0 &&
+    if (g_iigs_tbtrace_enabled && g_iigs_syms_loaded && !g_iigs_sym_base_locked && g_iigs_sym_base == 0 &&
         caller_bank >= 0x02 && caller_bank < 0xE0) {
         g_iigs_sym_base = (uint32_t)caller_bank << 16;
         printf("IIGS SYM: auto-base $%06X (from bank-$%02X toolbox call)\n",
@@ -962,10 +1125,12 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
     if (kind == 0) {
         bool x8 = cpu->E || (cpu->p & 0x10);
         callword = x8 ? (uint16_t)(cpu->x & 0xFF) : cpu->x;
-        if (log_window && bank_ok) {
+        if (g_iigs_tbtrace_enabled && log_window && bank_ok) {
             iigs_sym_resolve(ret - 1, sym, sizeof(sym));
-            printf("IIGS TOOLBOX: call %s ($%04X)%s%s\n",
-                   iigs_tool_name(callword), callword, sym[0] ? "  from " : "", sym);
+            printf("IIGS TOOLBOX: call %s ($%04X)  from %02X/%04X%s%s\n",
+                   iigs_tool_name(callword), callword,
+                   (unsigned)(((ret - 1) >> 16) & 0xFF), (unsigned)((ret - 1) & 0xFFFF),
+                   sym[0] ? " " : "", sym);
             // SysFailMgr ($1503) = fatal system-failure display. Dump the caller +
             // the pushed params (error code + message ptr) so a boot that dies here
             // reveals WHICH fatal condition fired (the stack words above the JSL RTA).
@@ -1001,6 +1166,11 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
     } else if (log_window && bank_ok && g_iigs_errhook_enabled) {
         printf("IIGS GSOS: call class-%d dispatch @ $%06X\n", kind == 1 ? 1 : 0, lpc);
     }
+    if (g_callstream_on)
+        fprintf(g_callstream_out,
+                "{\"ev\":\"c\",\"seq\":%d,\"word\":%u,\"kind\":%u,\"caller\":%u,\"s\":%u,\"d\":%u,\"dbr\":%u}\n",
+                g_callstream_seq++, callword, kind, (unsigned)((ret - 1) & 0xFFFFFF),
+                (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)caller_bank);
     g_iigs_pending.push_back({ret, callword, kind, caller_bank});
     if (g_iigs_pending.size() > 128) g_iigs_pending.erase(g_iigs_pending.begin());
 }

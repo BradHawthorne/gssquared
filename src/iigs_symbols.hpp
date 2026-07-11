@@ -17,12 +17,23 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
 
 struct IigsSym { uint32_t addr; std::string name; };
 inline std::vector<IigsSym> g_iigs_syms;
 inline bool g_iigs_syms_loaded = false;
 inline uint32_t g_iigs_sym_base = 0;        // runtime load base (subtracted at resolve)
 inline bool     g_iigs_sym_base_locked = false;  // true = A2GSPU_SYM_BASE pinned it (no auto)
+
+// SYMBOL-TRUTH (A2GSPU_SYM_SUSPECT=1): names that resolve at >1 DISTINCT address are
+// "reused local labels" — the resolver's nearest-preceding pick can silently land on
+// the wrong proc (this class produced 3 false roots in the owned-GS/OS loader debug:
+// cont6, Setup_Buf_Ptrs, Do_Path_Segment). When armed, iigs_sym_resolve appends a
+// bracketed [SUSPECT reused] so EVERY consumer (ITRACE/WATCH/TBTRACE/RETGUARD/BRK) is
+// warned the label may be aliased -> verify by PC/disasm. Off => output byte-identical.
+inline std::unordered_set<std::string> g_iigs_name_multi;   // names at >1 distinct addr
+inline bool g_iigs_sym_suspect = false;                     // A2GSPU_SYM_SUSPECT
 
 inline void iigs_symbols_load(const char *path) {
     FILE *f = fopen(path, "rb");
@@ -47,8 +58,16 @@ inline void iigs_symbols_load(const char *path) {
     std::sort(g_iigs_syms.begin(), g_iigs_syms.end(),
               [](const IigsSym &a, const IigsSym &b) { return a.addr < b.addr; });
     g_iigs_syms_loaded = !g_iigs_syms.empty();
-    printf("IIGS SYM: loaded %zu code symbols from '%s' (base $%06X)\n",
-           g_iigs_syms.size(), path, g_iigs_sym_base);
+    // SYMBOL-TRUTH: flag names that appear at >1 distinct address (reused local labels).
+    g_iigs_name_multi.clear();
+    std::unordered_map<std::string, uint32_t> firstaddr;
+    for (const auto &s : g_iigs_syms) {
+        auto it = firstaddr.find(s.name);
+        if (it == firstaddr.end()) firstaddr[s.name] = s.addr;
+        else if (it->second != s.addr) g_iigs_name_multi.insert(s.name);
+    }
+    printf("IIGS SYM: loaded %zu code symbols from '%s' (base $%06X); %zu reused-local names flagged\n",
+           g_iigs_syms.size(), path, g_iigs_sym_base, g_iigs_name_multi.size());
 }
 
 // Resolve full_pc -> "NAME+$off" into buf; "" if no table / no nearby symbol.
@@ -68,6 +87,12 @@ inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n) {
     if (off > 0x4000) return buf;          // too far from any symbol -> unknown
     if (off == 0) snprintf(buf, n, "%s", g_iigs_syms[best].name.c_str());
     else snprintf(buf, n, "%s+$%X", g_iigs_syms[best].name.c_str(), off);
+    // SYMBOL-TRUTH: append a bracketed warning when the picked name is a reused local
+    // label (present at >1 address) — the nearest-preceding pick may be the wrong proc.
+    if (g_iigs_sym_suspect && g_iigs_name_multi.count(g_iigs_syms[best].name)) {
+        size_t len = strlen(buf);
+        if (len < n) snprintf(buf + len, n - len, " [SUSPECT reused]");
+    }
     return buf;
 }
 

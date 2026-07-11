@@ -42,6 +42,30 @@ The call-name table is generated; it maps the 16-bit call word `(func<<8)|toolse
 | `A2GSPU_VIDEOSUM` | per-line SCB (320/640) + palette histogram, palettes as RGB888, mode-correct pixel-index histogram |
 | `A2GSPU_VIDEOMAP` | a 40×25 ASCII dominant-index map of the Super Hi-Res window |
 
+## Watchpoints — who touched address X, who wrote value V
+
+Three observe-only probes for tracking down *where* a value comes from. All default-off; when off each is a single untaken branch in the bus funnel, so the emulated machine is byte-identical.
+
+| Variable | Effect |
+|----------|--------|
+| `A2GSPU_WATCH="BANK:LO-HI[,…]"` | **write-watchpoint** on address range(s) (hex `bank:lo-hi`): log every write into the range with the writer PC, S, D, DBR. Answers *"who wrote to address X"*. |
+| `A2GSPU_WATCH_READ=1` | also watch **reads** of the same ranges |
+| `A2GSPU_WATCH_CHANGE=1` | log a write only when the value **differs** from the last seen for that range |
+| `A2GSPU_WATCH_MAX=N` | hit cap (default 256; `0` = unlimited) |
+| `A2GSPU_WATCH_OUT=<file>` | emit NDJSON (CPU-state fields only) to a file instead of stdout |
+| `A2GSPU_PCTRAP="BANK:LO-HI"` | one-shot dump of registers + the recent-PC ring on the **first entry** to a PC range |
+| `A2GSPU_VALTRAP="<hexval>[:<width>]"` | **value-provenance store trap**: bind the instruction that **stores the VALUE** `hexval` into memory. `width` = bytes (1–4, default 3). Answers *"who wrote value V"*. |
+| `A2GSPU_VALTRAP_MAX=N` | VALTRAP hit cap (default 64) |
+
+`WATCH` and `VALTRAP` are complements: `WATCH` keys on the **destination address**, `VALTRAP` on the **value**. When a bad value reaches memory via an intermediary (e.g. a ROM routine stores an address the OS computed with a lost base), a `WATCH` on the landing site only names the copier; `VALTRAP` on the value names the code that first materialized it. Because `bus_write` is byte-granular, `VALTRAP` reassembles consecutive ascending-address little-endian byte writes into the target value before matching, so a multi-byte pointer store fires once (at the top byte) with that instruction's PC.
+
+```sh
+# who writes into the SCM notify-queue region:
+A2GSPU_WATCH="E1:19A0-1FFF" A2GSPU_WATCH_MAX=0 GSSquared -p 5 -d s7d1=boot.po -n
+# who first materializes the 24-bit pointer $E06014:
+A2GSPU_VALTRAP="E06014" GSSquared -p 5 -d s7d1=boot.po -n
+```
+
 ## Deterministic clock — `A2GSPU_FAKETIME`
 
 | Variable | Effect |

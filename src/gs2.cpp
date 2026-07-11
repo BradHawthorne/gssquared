@@ -1729,6 +1729,66 @@ static void run_headless_spike(GS2AppState *state) {
     if (g_watch_on && (g_watch_max != 256 || g_watch_change_only || g_watch_read_on || g_watch_out))
         printf("A2GSPU_WATCH v2: max=%d change_only=%d read=%d out=%d\n",
                g_watch_max, g_watch_change_only ? 1 : 0, g_watch_read_on ? 1 : 0, g_watch_out ? 1 : 0);
+    // A2GSPU_VALTRAP="<hexval>[:<width>]" — value-provenance store trap: bind the PC
+    // that stores VALUE (e.g. a bogus pointer) into memory, LE across consecutive bytes.
+    if (const char *vt = SDL_getenv("A2GSPU_VALTRAP")) {
+        char *ep = nullptr;
+        g_valtrap_val = (uint32_t)strtoul(vt, &ep, 16);
+        if (ep && *ep == ':') g_valtrap_width = atoi(ep + 1);
+        if (g_valtrap_width < 1) g_valtrap_width = 1;
+        if (g_valtrap_width > 4) g_valtrap_width = 4;
+        if (const char *vm = SDL_getenv("A2GSPU_VALTRAP_MAX")) { int v = atoi(vm); if (v >= 0) g_valtrap_max = v; }
+        g_valtrap_on = true;
+        printf("A2GSPU_VALTRAP: trap value $%X width=%d max=%d\n", g_valtrap_val, g_valtrap_width, g_valtrap_max);
+    }
+    // A2GSPU_SYM_SUSPECT=1 — SYMBOL-TRUTH: append "[SUSPECT reused]" to any resolved symbol
+    // whose name lives at >1 address (reused local label; the nearest-preceding pick may be
+    // the wrong proc). Advisory-only (stderr/stdout trace text); emulated state untouched.
+    g_iigs_sym_suspect = (SDL_getenv("A2GSPU_SYM_SUSPECT") != nullptr);
+    // A2GSPU_CALLSTREAM=<file> — EXEC-DIFF: symbol-free NDJSON of the toolbox/GS-OS call
+    // sequence for the ours-vs-pristine first-divergence differ (tools/gdiff/calldiff.py).
+    if (const char *cs = SDL_getenv("A2GSPU_CALLSTREAM")) {
+        g_callstream_out = fopen(cs, "wb");
+        g_callstream_on  = (g_callstream_out != nullptr);
+        printf("A2GSPU_CALLSTREAM: %s -> '%s'\n", g_callstream_on ? "NDJSON" : "OPEN-FAILED", cs);
+    }
+    // A2GSPU_CONDTRAP="bank:pc@f=v" — conditional flag-provenance trap: at PC, when flag f
+    // (c/z/i/d/x/m/v/n) == v, report the PC that last changed that flag. Answers "who set
+    // the carry that routed here". Default-OFF; observation-only => golden-neutral.
+    if (const char *ct = SDL_getenv("A2GSPU_CONDTRAP")) {
+        const char *p = ct;
+        uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
+        if (*p == ':') p++;
+        uint32_t pc = (uint32_t)strtoul(p, (char**)&p, 16);
+        g_condtrap_pc = ((bank & 0xFF) << 16) | (pc & 0xFFFF);
+        if (*p == '@') {
+            p++;
+            char f = *p ? *p++ : 'c';
+            int v = 1;
+            if (*p == '=') { p++; v = atoi(p); }
+            const char *fl = "czidxmvn";
+            const char *pos = strchr(fl, f);
+            g_condtrap_bit = pos ? (uint8_t)(pos - fl) : 0;
+            g_condtrap_want = v ? 1 : 0;
+        }
+        if (const char *cm = SDL_getenv("A2GSPU_CONDTRAP_MAX")) { int v = atoi(cm); if (v > 0) g_condtrap_max = v; }
+        g_condtrap_on = true;
+        printf("A2GSPU_CONDTRAP: trap $%06X when flag-bit-%d=%d max=%d\n",
+               g_condtrap_pc, g_condtrap_bit, g_condtrap_want, g_condtrap_max);
+    }
+    // A2GSPU_LOADTRACE="bank[:lo-hi]" — runtime segment-overlay tracker: logs contiguous
+    // write-bursts into the region (segment loads) + when they OVERLAY prior loads.
+    if (const char *lt = SDL_getenv("A2GSPU_LOADTRACE")) {
+        const char *p = lt;
+        uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
+        uint32_t lo = 0x0000, hi = 0xFFFF;
+        if (*p == ':') { p++; lo = (uint32_t)strtoul(p, (char**)&p, 16); if (*p == '-') { p++; hi = (uint32_t)strtoul(p, (char**)&p, 16); } }
+        g_lt_lo = ((bank & 0xFF) << 16) | (lo & 0xFFFF);
+        g_lt_hi = ((bank & 0xFF) << 16) | (hi & 0xFFFF);
+        if (const char *lm = SDL_getenv("A2GSPU_LOADTRACE_MIN")) { int v = atoi(lm); if (v > 0) g_lt_min = (uint32_t)v; }
+        g_loadtrace_on = true;
+        printf("A2GSPU_LOADTRACE: track %06X-%06X min=%u\n", g_lt_lo, g_lt_hi, g_lt_min);
+    }
     // A2GSPU_PCTRAP="bank:lo-hi" (hex) — one-shot dump of regs + PC ring on first entry.
     if (const char *t = SDL_getenv("A2GSPU_PCTRAP")) {
         const char *p = t;
@@ -2171,6 +2231,7 @@ static void run_headless_spike(GS2AppState *state) {
         iigs_mem_range_dump(computer->cpu, mb, dg);
     }
     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(computer->cpu, "SPIKE-END");
+    if (g_loadtrace_on) { iigs_loadtrace_flush(); printf("IIGS LOADTRACE: %d segment loads recorded\n", g_lt_loads); }
     if (!g_obs_registry.empty()) obs_view_fault(computer->cpu, "SPIKE-END");  // Observatory LEVEL-pull proof (post-golden, neutral)
     obs_view_memwindows("*");   // Observatory: dump the registered dark-subsystem memory windows (DOC/ADB/SCC)
     {   // Observatory: IRQ edge timeline proof — aggregate pending + edges recorded this run

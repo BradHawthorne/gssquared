@@ -130,6 +130,8 @@ inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
 inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     cpu->mmu->write(addr & 0xFFFFFF, data);
     if (g_watch_on) iigs_watch_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH (off => 1 branch)
+    if (g_valtrap_on) iigs_valtrap_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_VALTRAP (off => 1 branch)
+    if (g_loadtrace_on) iigs_loadtrace_write(cpu, addr & 0xFFFFFF, data);  // A2GSPU_LOADTRACE (off => 1 branch)
     if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, true);    // A2GSPU_LCTRACE
     incr_cycles(cpu);
 }
@@ -2258,12 +2260,14 @@ int execute_next(cpu_state *cpu) override {
     // instruction about to execute (cpu->full_pc is the landing address), before
     // fetch. The breakpoint needs this per-instruction hook even with no trace.
     if constexpr (CPUTraits::has_65816_ops) {
-        if (g_iigs_tbtrace_enabled || g_iigs_break_enabled || g_save_at_enabled || g_poke_on) iigs_tb_on_landing(cpu);
+        if (g_iigs_tbtrace_enabled || g_iigs_break_enabled || g_save_at_enabled || g_poke_on || g_callstream_on) iigs_tb_on_landing(cpu);
         // A2GSPU_ITRACE: additive per-instruction crash post-mortem trace (off by
         // default; one cheap branch when off). Mirrors the BRKDUMP gating.
         if (g_iigs_itrace_enabled) iigs_itrace_step(cpu);
         // A2GSPU_CALLTRACE: call/return-flow trace (JSR/JSL/RTS/RTL/RTI/BRK).
         if (g_calltrace_enabled) iigs_calltrace_step(cpu);
+        // A2GSPU_CONDTRAP: conditional flag-provenance trap (who set the flag that routes here).
+        if (g_condtrap_on) iigs_condtrap_step(cpu);
         // A2GSPU_MILESTONES: boot-progress ledger.  A2GSPU_RETGUARD: bad-return detector.
         if (g_milestones_on) iigs_milestone_check(cpu, g_iigs_cur_frame);
         if (g_retguard_on)   iigs_retguard_step(cpu);
