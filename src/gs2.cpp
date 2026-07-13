@@ -1705,12 +1705,54 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
             if (kb) kb->paste_buffer += (line + 5);
             else snprintf(result, sizeof result, "no-keyboard");
+        } else if (!strncmp(line, "press ", 6)) {
+            // press <hex2> [holdframes] — a full PHYSICAL keypress: sets the
+            // $C000 latch AND any-key-down ($C010 bit7, key_down_count), holds
+            // for N frames (default 15), then releases. Needed for prompts that
+            // purge type-ahead and wait on AKD/a fresh edge (e.g. Wizardry's
+            // "PRESS [RET]" disk-swap prompt) — the paste path can't satisfy
+            // those. Mirrors handle_keydown/keyup.
+            unsigned int ch = 0; int hold = 15;
+            keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+            if (kb && sscanf(line + 6, "%x %d", &ch, &hold) >= 1) {
+                kb->kb_key_strobe = (uint8_t)(ch | 0x80);
+                if (kb->mk) kb->mk->last_key_val = (uint8_t)ch;
+                kb->key_down_count++;
+                for (int i = 0; i < hold; i++) {
+                    if (!run_one_frame(computer)) {
+                        snprintf(result, sizeof result, "halted@%d", i);
+                        break;
+                    }
+                }
+                kb->key_down_count--;
+            } else {
+                snprintf(result, sizeof result, kb ? "press-parse-fail" : "no-keyboard");
+            }
         } else if (!strncmp(line, "text ", 5)) {
             a2gspu_ctrl_dump_text(computer, line + 5);
         } else if (!strncmp(line, "shot ", 5)) {
             video_system_t *vs = computer->video_system;
             vs->update_display(true);
             vs->save_screenshot(line + 5);
+        } else if (!strncmp(line, "mount ", 6)) {
+            // mount sXdY <path> — swap media at runtime (the 1981 flippy dance,
+            // agent edition: multi-disk originals prompt for disk swaps mid-run).
+            // Saves-and-unmounts anything in the drive first so writes persist.
+            int slot = 0, drive = 0, off = 0;
+            if (sscanf(line + 6, "s%dd%d %n", &slot, &drive, &off) == 2 && line[6 + off]) {
+                storage_key_t key;
+                key.slot = (uint16_t)slot;
+                key.drive = (uint16_t)(drive - 1);
+                key.partition = 0;
+                key.subunit = 0;
+                computer->mounts->unmount_media(key, SAVE_AND_UNMOUNT);  // best-effort
+                disk_mount_t dm{ (uint16_t)slot, (uint16_t)(drive - 1),
+                                 std::string(line + 6 + off) };
+                if (!computer->mounts->mount_media(dm))
+                    snprintf(result, sizeof result, "mount-fail");
+            } else {
+                snprintf(result, sizeof result, "mount-parse-fail");
+            }
         } else if (!strncmp(line, "read ", 5)) {
             // read <hexaddr> <len> <file> — dump from the FLAT physical image
             // (get_memory_base(); IIe: 0x0000-0xFFFF main, 0x10000-0x1FFFF aux).
