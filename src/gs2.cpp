@@ -1620,12 +1620,18 @@ static int run_mmu_microtest(GS2AppState *state, const char *which) {
 // A closed-loop stepping protocol for agent-driven sessions (pascal-toolchain
 // UC-2): the caller drops <dir>/cmd.<seq> files (seq = 1,2,3,...), each one
 // command; we execute it and write <dir>/ack.<seq>. Commands:
-//   run <frames>    advance emulation N frames (headless, flat out)
-//   keys <string>   append to the keyboard paste buffer (rest of line verbatim;
-//                   \n arrives as Return via the paste path)
-//   text <file>     dump text page 1 main+aux (2KB) — screen-text observation
-//   shot <file>     render + save a backbuffer BMP — graphics observation
-//   quit            end the session
+//   run <frames>            advance emulation N frames (headless, flat out)
+//   keys <string>           append to the keyboard paste buffer (rest of line
+//                           verbatim; \n arrives as Return via the paste path)
+//   text <file>             dump text page 1 main+aux (2KB) — screen-text eyes
+//   shot <file>             render + save a backbuffer BMP — graphics eyes
+//   read <hex> <len> <file> dump RAM from the flat physical image (symbol-
+//                           mapped game-state reads; IIe main 0x0-0xFFFF,
+//                           aux 0x10000-0x1FFFF)
+//   save <file>             checkpoint: CPU + full MMU snapshot + sentinel
+//   restore <file>          restore a checkpoint (take/restore at quiescent
+//                           points; device state self-heals over next frames)
+//   quit                    end the session
 // Pacing: the poll ticks at 20Hz (SDL_Delay(50)) so an idle session neither
 // spins the CPU nor floods the filesystem; A2GSPU_CTRL_TIMEOUT seconds
 // (default 300) of silence auto-quits an orphaned session.
@@ -1705,6 +1711,58 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             video_system_t *vs = computer->video_system;
             vs->update_display(true);
             vs->save_screenshot(line + 5);
+        } else if (!strncmp(line, "read ", 5)) {
+            // read <hexaddr> <len> <file> — dump from the FLAT physical image
+            // (get_memory_base(); IIe: 0x0000-0xFFFF main, 0x10000-0x1FFFF aux).
+            // Symbol-mapped game-state reads for agent sessions (Wizardry prep):
+            // deterministic RAM view, no MMU banking surprises.
+            uint32_t addr = 0; int len = 0, off = 0;
+            if (sscanf(line + 5, "%x %d %n", &addr, &len, &off) >= 2 && len > 0) {
+                uint8_t *mem = computer->mmu->get_memory_base();
+                FILE *rf = mem ? fopen(line + 5 + off, "wb") : nullptr;
+                if (rf) {
+                    for (int i = 0; i < len; i++) {
+                        uint8_t b = mem[(addr + i) & 0x1FFFF];
+                        fwrite(&b, 1, 1, rf);
+                    }
+                    fclose(rf);
+                } else {
+                    snprintf(result, sizeof result, "read-fail");
+                }
+            } else {
+                snprintf(result, sizeof result, "read-parse-fail");
+            }
+        } else if (!strncmp(line, "save ", 5)) {
+            // save <file> — CPU regs + full MMU snapshot (128K + page tables +
+            // softswitch state) + sentinel. Quiescent-point checkpoints (take at
+            // a prompt, not mid disk-IO — device state is intentionally excluded
+            // and self-heals over the next frames, same policy as SNAP_SAVE).
+            FILE *sf = fopen(line + 5, "wb");
+            bool ok = false;
+            if (sf) {
+                a2gspu_cpu_save(sf, computer->cpu);
+                if (state->mmu_iigs) { state->mmu_iigs->A2GSPU_snapshot(sf); ok = true; }
+                else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(computer->mmu)) { m->A2GSPU_snapshot(sf); ok = true; }
+                if (ok) a2gspu_snap_write_sentinel(sf);
+                fclose(sf);
+                if (!ok) remove(line + 5);
+            }
+            if (!ok) snprintf(result, sizeof result, "save-fail");
+        } else if (!strncmp(line, "restore ", 8)) {
+            FILE *sf = fopen(line + 8, "rb");
+            bool ok = false;
+            if (sf) {
+                ok = a2gspu_cpu_load(sf, computer->cpu);
+                if (ok) {
+                    if (state->mmu_iigs) ok = state->mmu_iigs->A2GSPU_restore(sf);
+                    else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(computer->mmu)) ok = m->A2GSPU_restore(sf);
+                    else ok = false;
+                }
+                if (ok) ok = a2gspu_snap_check_sentinel(sf);
+                fclose(sf);
+            }
+            if (ok) computer->cpu->halt = 0;   // force-run after restore
+            else snprintf(result, sizeof result, "restore-fail");
         } else if (!strncmp(line, "quit", 4)) {
             a2gspu_ctrl_ack(dir, seq, "ok");
             printf("A2GSPU CTRL: session ended after %d command(s)\n", seq);
