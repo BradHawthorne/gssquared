@@ -52,6 +52,7 @@
 #include "iigs_toolbox.hpp"
 #include "iigs_diag.hpp"
 #include "devices/slot_bus/slot_bus.hpp"
+#include "devices/keyboard/keyboard.hpp"
 #include "util/EventTimer.hpp"
 #include "ui/SelectSystem.hpp"
 #include "ui/MainAtlas.hpp"
@@ -2106,8 +2107,27 @@ static void run_headless_spike(GS2AppState *state) {
         printf("A2GSPU RUN: final CPU full_pc=$%06X (if ~= the inject addr, the injected code ran)\n",
                (unsigned)computer->cpu->full_pc);
     } else {
+        // a2gspu spike key injection (env-gated; pascal-toolchain UC-2 boot spikes):
+        //   A2GSPU_SPIKE_KEYS=<string>   keys to type (\n is translated to \r by
+        //                                the keyboard paste path)
+        //   A2GSPU_SPIKE_KEYS_AT=N       frame to inject at (default spike_frames/2)
+        // Feeds the keyboard's existing paste_buffer, so consumption is paced by
+        // the emulated software's own $C000 polls — no artificial key timing.
+        const char *spike_keys = SDL_getenv("A2GSPU_SPIKE_KEYS");
+        int spike_keys_at = state->spike_frames / 2;
+        if (const char *ka = SDL_getenv("A2GSPU_SPIKE_KEYS_AT")) spike_keys_at = SDL_atoi(ka);
         for (int i = 0; i < state->spike_frames; i++) {
             iigs_itrace_frame_tick(i);
+            if (spike_keys && i == spike_keys_at) {
+                keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+                if (kb) {
+                    kb->paste_buffer += spike_keys;
+                    printf("A2GSPU SPIKE KEYS: injected %d chars at frame %d\n",
+                           (int)strlen(spike_keys), i);
+                } else {
+                    printf("A2GSPU SPIKE KEYS: no keyboard module -- skipped\n");
+                }
+            }
             if (!run_one_frame(computer)) {
                 printf("SPIKE: emulation halted early at frame %d\n", i);
                 break;
