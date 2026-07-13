@@ -1616,8 +1616,102 @@ static int run_mmu_microtest(GS2AppState *state, const char *which) {
     return 1;
 }
 
+// ---- a2gspu interactive control rail (env-gated): A2GSPU_CTRL=<dir> ----
+// A closed-loop stepping protocol for agent-driven sessions (pascal-toolchain
+// UC-2): the caller drops <dir>/cmd.<seq> files (seq = 1,2,3,...), each one
+// command; we execute it and write <dir>/ack.<seq>. Commands:
+//   run <frames>    advance emulation N frames (headless, flat out)
+//   keys <string>   append to the keyboard paste buffer (rest of line verbatim;
+//                   \n arrives as Return via the paste path)
+//   text <file>     dump text page 1 main+aux (2KB) — screen-text observation
+//   shot <file>     render + save a backbuffer BMP — graphics observation
+//   quit            end the session
+// Pacing: the poll ticks at 20Hz (SDL_Delay(50)) so an idle session neither
+// spins the CPU nor floods the filesystem; A2GSPU_CTRL_TIMEOUT seconds
+// (default 300) of silence auto-quits an orphaned session.
+static void a2gspu_ctrl_dump_text(computer_t *computer, const char *path) {
+    FILE *tfp = fopen(path, "wb");
+    if (!tfp) { printf("A2GSPU CTRL: text open fail '%s'\n", path); return; }
+    for (uint32_t a = 0x0400; a < 0x0800; a++) {
+        uint8_t b = computer->mmu->probe_peek(a);
+        fwrite(&b, 1, 1, tfp);
+    }
+    uint8_t *mem = computer->mmu->get_memory_base();
+    for (uint32_t a = 0x0400; a < 0x0800; a++) {
+        uint8_t b = mem ? mem[0x10000 + a] : 0;
+        fwrite(&b, 1, 1, tfp);
+    }
+    fclose(tfp);
+}
+
+static void a2gspu_ctrl_loop(GS2AppState *state) {
+    computer_t *computer = state->computer;
+    const char *dir = SDL_getenv("A2GSPU_CTRL");
+    int idle_timeout_s = 300;
+    if (const char *tmo = SDL_getenv("A2GSPU_CTRL_TIMEOUT")) idle_timeout_s = SDL_atoi(tmo);
+    computer->execution_mode = EXEC_NORMAL;
+    printf("A2GSPU CTRL: interactive rail on '%s' (idle timeout %ds)\n", dir, idle_timeout_s);
+    int seq = 1;
+    uint64_t idle_ms = 0;
+    char cmdpath[1024], ackpath[1024];
+    for (;;) {
+        snprintf(cmdpath, sizeof cmdpath, "%s/cmd.%d", dir, seq);
+        FILE *f = fopen(cmdpath, "rb");
+        if (!f) {
+            SDL_Delay(50);              // 20Hz poll tick — no spin, no fs flood
+            idle_ms += 50;
+            if (idle_ms >= (uint64_t)idle_timeout_s * 1000) {
+                printf("A2GSPU CTRL: idle timeout — quitting orphaned session\n");
+                break;
+            }
+            continue;
+        }
+        idle_ms = 0;
+        char line[2048] = {0};
+        size_t n = fread(line, 1, sizeof line - 1, f);
+        fclose(f);
+        while (n > 0 && (line[n-1] == '\r')) line[--n] = 0;  // strip trailing CR only
+        const char *result = "ok";
+        if (!strncmp(line, "run ", 4)) {
+            int frames = atoi(line + 4);
+            for (int i = 0; i < frames; i++) {
+                if (!run_one_frame(computer)) { result = "halted"; break; }
+            }
+        } else if (!strncmp(line, "keys ", 5)) {
+            keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+            if (kb) kb->paste_buffer += (line + 5);
+            else result = "no-keyboard";
+        } else if (!strncmp(line, "text ", 5)) {
+            a2gspu_ctrl_dump_text(computer, line + 5);
+        } else if (!strncmp(line, "shot ", 5)) {
+            video_system_t *vs = computer->video_system;
+            vs->update_display(true);
+            vs->save_screenshot(line + 5);
+        } else if (!strncmp(line, "quit", 4)) {
+            snprintf(ackpath, sizeof ackpath, "%s/ack.%d", dir, seq);
+            FILE *af = fopen(ackpath, "wb");
+            if (af) { fputs("ok\n", af); fclose(af); }
+            printf("A2GSPU CTRL: session ended after %d command(s)\n", seq);
+            return;
+        } else {
+            result = "unknown-cmd";
+        }
+        snprintf(ackpath, sizeof ackpath, "%s/ack.%d", dir, seq);
+        FILE *af = fopen(ackpath, "wb");
+        if (af) { fprintf(af, "%s\n", result); fclose(af); }
+        seq++;
+    }
+}
+
 static void run_headless_spike(GS2AppState *state) {
     computer_t *computer = state->computer;
+
+    // a2gspu interactive control rail: when A2GSPU_CTRL is set, the stepping
+    // protocol replaces the fixed-frame spike entirely (dumps are on-demand).
+    if (SDL_getenv("A2GSPU_CTRL")) {
+        a2gspu_ctrl_loop(state);
+        exit(0);
+    }
 
     // Env-gated CPU micro-test short-circuit: when A2GSPU_CPUTEST names a case,
     // run only that case and exit with its verdict (the normal frame spike, the
@@ -2466,6 +2560,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
                 state->spike_frames = n;
                 printf("A2GSPU SPIKE: headless mode enabled, %d frames\n", n);
             }
+        }
+        // Interactive control rail also runs headless (stepping protocol).
+        if (SDL_getenv("A2GSPU_CTRL")) {
+            state->headless = true;
+            printf("A2GSPU CTRL: headless interactive mode\n");
         }
     }
 
