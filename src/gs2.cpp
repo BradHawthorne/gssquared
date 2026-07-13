@@ -1738,14 +1738,16 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
             int akd = kb ? kb->key_down_count : -1;
             uint8_t kbd = computer->mmu ? computer->mmu->probe_peek(0xC000) : 0;
-            uint8_t txt = computer->mmu ? computer->mmu->probe_peek(0xC01A) : 0;  // RDTEXT b7
-            uint8_t hir = computer->mmu ? computer->mmu->probe_peek(0xC01D) : 0;  // RDHIRES b7
+            // Full 65816 state: PBR:PC (24-bit), 16-bit SP, E (emulation), and the
+            // run state (halt / clock_stopped) — a "stable PC" is only meaningful
+            // once you know the bank AND whether the CPU is even advancing.
             snprintf(result, sizeof result,
-                "PC=%04X A=%02X X=%02X Y=%02X SP=%02X P=%02X KBD=%02X AKD=%d TEXT=%d HIRES=%d",
-                (unsigned)(c->full_pc & 0xFFFF), (unsigned)(c->a & 0xFF),
-                (unsigned)(c->x & 0xFF), (unsigned)(c->y & 0xFF),
-                (unsigned)(c->sp & 0xFF), (unsigned)(c->p & 0xFF),
-                (unsigned)kbd, akd, (txt & 0x80) ? 1 : 0, (hir & 0x80) ? 1 : 0);
+                "PC=%02X:%04X A=%02X X=%02X Y=%02X SP=%04X P=%02X E=%d HALT=%d STP=%d RDY=%d KBD=%02X AKD=%d",
+                (unsigned)((c->full_pc >> 16) & 0xFF), (unsigned)(c->full_pc & 0xFFFF),
+                (unsigned)(c->a & 0xFF), (unsigned)(c->x & 0xFF), (unsigned)(c->y & 0xFF),
+                (unsigned)(c->sp & 0xFFFF), (unsigned)(c->p & 0xFF),
+                (int)(c->E & 1), (int)(c->halt ? 1 : 0), (int)(c->clock_stopped ? 1 : 0),
+                (int)(c->rdy ? 1 : 0), (unsigned)kbd, akd);
         } else if (!strncmp(line, "dis ", 4)) {
             // dis <hexaddr> <count> <file> — disassemble via the debugger's
             // Disassembler, which reads through the MMU (bank/langcard-correct,
@@ -1798,11 +1800,13 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             // deterministic RAM view, no MMU banking surprises.
             uint32_t addr = 0; int len = 0, off = 0;
             if (sscanf(line + 5, "%x %d %n", &addr, &len, &off) >= 2 && len > 0) {
-                uint8_t *mem = computer->mmu->get_memory_base();
-                FILE *rf = mem ? fopen(line + 5 + off, "wb") : nullptr;
+                // probe_peek takes a full (bank<<16 | addr) address; the MMU_IIgs
+                // override routes banks correctly. The old flat get_memory_base
+                // index was an IIe-only model that read the wrong region on -p 5.
+                FILE *rf = fopen(line + 5 + off, "wb");
                 if (rf) {
                     for (int i = 0; i < len; i++) {
-                        uint8_t b = mem[(addr + i) & 0x1FFFF];
+                        uint8_t b = computer->mmu->probe_peek(addr + i);
                         fwrite(&b, 1, 1, rf);
                     }
                     fclose(rf);
