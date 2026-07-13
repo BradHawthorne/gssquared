@@ -1644,6 +1644,20 @@ static void a2gspu_ctrl_dump_text(computer_t *computer, const char *path) {
     fclose(tfp);
 }
 
+// Atomic ack: write ack.N.tmp then rename, so a polling reader never sees a
+// half-written (or empty) ack file.
+static void a2gspu_ctrl_ack(const char *dir, int seq, const char *result) {
+    char tmppath[1024], ackpath[1024];
+    snprintf(tmppath, sizeof tmppath, "%s/ack.%d.tmp", dir, seq);
+    snprintf(ackpath, sizeof ackpath, "%s/ack.%d", dir, seq);
+    FILE *af = fopen(tmppath, "wb");
+    if (!af) return;
+    fprintf(af, "%s\n", result);
+    fclose(af);
+    remove(ackpath);
+    rename(tmppath, ackpath);
+}
+
 static void a2gspu_ctrl_loop(GS2AppState *state) {
     computer_t *computer = state->computer;
     const char *dir = SDL_getenv("A2GSPU_CTRL");
@@ -1653,7 +1667,8 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
     printf("A2GSPU CTRL: interactive rail on '%s' (idle timeout %ds)\n", dir, idle_timeout_s);
     int seq = 1;
     uint64_t idle_ms = 0;
-    char cmdpath[1024], ackpath[1024];
+    char cmdpath[1024];
+    char result[64];
     for (;;) {
         snprintf(cmdpath, sizeof cmdpath, "%s/cmd.%d", dir, seq);
         FILE *f = fopen(cmdpath, "rb");
@@ -1671,16 +1686,19 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
         size_t n = fread(line, 1, sizeof line - 1, f);
         fclose(f);
         while (n > 0 && (line[n-1] == '\r')) line[--n] = 0;  // strip trailing CR only
-        const char *result = "ok";
+        snprintf(result, sizeof result, "ok");
         if (!strncmp(line, "run ", 4)) {
             int frames = atoi(line + 4);
             for (int i = 0; i < frames; i++) {
-                if (!run_one_frame(computer)) { result = "halted"; break; }
+                if (!run_one_frame(computer)) {
+                    snprintf(result, sizeof result, "halted@%d", i);
+                    break;
+                }
             }
         } else if (!strncmp(line, "keys ", 5)) {
             keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
             if (kb) kb->paste_buffer += (line + 5);
-            else result = "no-keyboard";
+            else snprintf(result, sizeof result, "no-keyboard");
         } else if (!strncmp(line, "text ", 5)) {
             a2gspu_ctrl_dump_text(computer, line + 5);
         } else if (!strncmp(line, "shot ", 5)) {
@@ -1688,17 +1706,13 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             vs->update_display(true);
             vs->save_screenshot(line + 5);
         } else if (!strncmp(line, "quit", 4)) {
-            snprintf(ackpath, sizeof ackpath, "%s/ack.%d", dir, seq);
-            FILE *af = fopen(ackpath, "wb");
-            if (af) { fputs("ok\n", af); fclose(af); }
+            a2gspu_ctrl_ack(dir, seq, "ok");
             printf("A2GSPU CTRL: session ended after %d command(s)\n", seq);
             return;
         } else {
-            result = "unknown-cmd";
+            snprintf(result, sizeof result, "unknown-cmd");
         }
-        snprintf(ackpath, sizeof ackpath, "%s/ack.%d", dir, seq);
-        FILE *af = fopen(ackpath, "wb");
-        if (af) { fprintf(af, "%s\n", result); fclose(af); }
+        a2gspu_ctrl_ack(dir, seq, result);
         seq++;
     }
 }
