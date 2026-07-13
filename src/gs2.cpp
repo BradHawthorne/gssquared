@@ -1674,7 +1674,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
     int seq = 1;
     uint64_t idle_ms = 0;
     char cmdpath[1024];
-    char result[64];
+    char result[128];
     for (;;) {
         snprintf(cmdpath, sizeof cmdpath, "%s/cmd.%d", dir, seq);
         FILE *f = fopen(cmdpath, "rb");
@@ -1728,6 +1728,23 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             } else {
                 snprintf(result, sizeof result, kb ? "press-parse-fail" : "no-keyboard");
             }
+        } else if (!strncmp(line, "cpu", 3)) {
+            // CPU + input/video state snapshot — diagnose "waiting for key" vs
+            // "crashed" vs "grinding". PC in a tight $C000-poll loop with AKD=0
+            // = waiting for input; a stable PC across two 'cpu' calls with no
+            // frames run = halted; changing PC = executing.
+            cpu_state *c = computer->cpu;
+            keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+            int akd = kb ? kb->key_down_count : -1;
+            uint8_t kbd = computer->mmu ? computer->mmu->probe_peek(0xC000) : 0;
+            uint8_t txt = computer->mmu ? computer->mmu->probe_peek(0xC01A) : 0;  // RDTEXT b7
+            uint8_t hir = computer->mmu ? computer->mmu->probe_peek(0xC01D) : 0;  // RDHIRES b7
+            snprintf(result, sizeof result,
+                "PC=%04X A=%02X X=%02X Y=%02X SP=%02X P=%02X KBD=%02X AKD=%d TEXT=%d HIRES=%d",
+                (unsigned)(c->full_pc & 0xFFFF), (unsigned)(c->a & 0xFF),
+                (unsigned)(c->x & 0xFF), (unsigned)(c->y & 0xFF),
+                (unsigned)(c->sp & 0xFF), (unsigned)(c->p & 0xFF),
+                (unsigned)kbd, akd, (txt & 0x80) ? 1 : 0, (hir & 0x80) ? 1 : 0);
         } else if (!strncmp(line, "text ", 5)) {
             a2gspu_ctrl_dump_text(computer, line + 5);
         } else if (!strncmp(line, "shot ", 5)) {
