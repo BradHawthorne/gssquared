@@ -2245,6 +2245,31 @@ static void run_headless_spike(GS2AppState *state) {
     printf("SPIKE FRAMEBUF: save_screenshot('spike_frame.bmp') SDL_GetError='%s'\n",
            (err && *err) ? err : "(none)");
 
+    // ---- (2.5) text page 1 dump (env-gated, platform-agnostic) ----
+    // A2GSPU_TEXTDUMP=<file>: 2KB — main $0400-$07FF via probe_peek (no C0XX
+    // side effects) followed by AUX $0400-$07FF from the flat 128K image
+    // (aux lives at +0x10000; holds the EVEN columns in 80-col mode, which
+    // Apple Pascal 1.3 uses). Lets harnesses assert on screen TEXT instead of
+    // pixels (pascal-toolchain UC-2 RUN_GREEN gate).
+    if (const char *tf = SDL_getenv("A2GSPU_TEXTDUMP")) {
+        FILE *tfp = fopen(tf, "wb");
+        if (tfp) {
+            for (uint32_t a = 0x0400; a < 0x0800; a++) {
+                uint8_t b = computer->mmu->probe_peek(a);
+                fwrite(&b, 1, 1, tfp);
+            }
+            uint8_t *mem = computer->mmu->get_memory_base();
+            for (uint32_t a = 0x0400; a < 0x0800; a++) {
+                uint8_t b = mem ? mem[0x10000 + a] : 0;
+                fwrite(&b, 1, 1, tfp);
+            }
+            fclose(tfp);
+            printf("A2GSPU TEXTDUMP: wrote '%s' (text page 1 main+aux, 2KB)\n", tf);
+        } else {
+            printf("A2GSPU TEXTDUMP: could not open '%s'\n", tf);
+        }
+    }
+
     // ---- (3) optional headless memory-range hexdump + final CPU state ----
     if (const char *dg = SDL_getenv("A2GSPU_DUMP")) {
         uint8_t *mb = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
