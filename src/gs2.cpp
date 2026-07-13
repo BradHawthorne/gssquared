@@ -43,6 +43,7 @@
 #include "mmus/mmu_ii.hpp"
 #include "mmus/mmu_iie.hpp"
 #include "mmus/mmu_iigs.hpp"
+#include "debugger/disasm.hpp"
 #include "house_fnv.hpp"
 #include "bus_trace.hpp"
 #include "mmu_state_trace.hpp"
@@ -1745,6 +1746,26 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 (unsigned)(c->x & 0xFF), (unsigned)(c->y & 0xFF),
                 (unsigned)(c->sp & 0xFF), (unsigned)(c->p & 0xFF),
                 (unsigned)kbd, akd, (txt & 0x80) ? 1 : 0, (hir & 0x80) ? 1 : 0);
+        } else if (!strncmp(line, "dis ", 4)) {
+            // dis <hexaddr> <count> <file> — disassemble via the debugger's
+            // Disassembler, which reads through the MMU (bank/langcard-correct,
+            // unlike the flat 'read'). Writes N instruction lines to <file>.
+            unsigned int addr = 0; int n = 20, off = 0;
+            if (sscanf(line + 4, "%x %d %n", &addr, &n, &off) >= 1 && line[4 + off]) {
+                if (n <= 0 || n > 512) n = 20;
+                Disassembler dis(computer->mmu, computer->cpu->cpu_type);
+                dis.setAddress(addr);
+                std::vector<std::string> lines = dis.disassemble(n);
+                FILE *df = fopen(line + 4 + off, "wb");
+                if (df) {
+                    for (auto &l : lines) fprintf(df, "%s\n", l.c_str());
+                    fclose(df);
+                } else {
+                    snprintf(result, sizeof result, "dis-fail");
+                }
+            } else {
+                snprintf(result, sizeof result, "dis-parse-fail");
+            }
         } else if (!strncmp(line, "text ", 5)) {
             a2gspu_ctrl_dump_text(computer, line + 5);
         } else if (!strncmp(line, "shot ", 5)) {
