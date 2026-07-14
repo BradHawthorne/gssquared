@@ -533,14 +533,14 @@ class KeyGloo
             load_key_from_buffer();
         }
 
-        // A2GSPU: force an ASCII key straight into the latch (dynamic sibling of
-        // the A2GSPU_FORCE_KEY env hook). Sets the key-present bit so the guest's
-        // $C000 poll sees it; strobe-clear ($C010) consumes it normally. Lets the
-        // ctrl-rail drive IIgs (-p 5) sessions, where there is no MODULE_KEYBOARD.
+        // A2GSPU: inject an ASCII key for headless ctrl-rail drive on the IIgs
+        // (-p 5, no MODULE_KEYBOARD). Routes through the ADB micro's key BUFFER
+        // (store_key_to_buffer takes the mapped ASCII, not a raw ADB scancode) —
+        // the same path the guest's normal keyboard read drains, so it survives
+        // the micro's ticks and a menu poll catches it. A raw latch poke does not:
+        // the next micro tick clears it before a Pascal-menu read sees it.
         void force_key(uint8_t ascii) {
-            key_latch.keycode = (ascii & 0x7F) | 0x80;
-            kb_register_full = true;
-            update_interrupt_status();
+            store_key_to_buffer((uint8_t)(ascii & 0x7F), 0);
         }
 
         void print_keyboard() {

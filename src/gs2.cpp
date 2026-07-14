@@ -1726,12 +1726,10 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                         if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
                     }
                     kb->key_down_count--;
-                } else if (kg && kg->kg) {      // IIgs: re-assert the KeyGloo latch
-                    for (int i = 0; i < hold; i++) {   // each frame — the ADB micro
-                        kg->kg->force_key((uint8_t)ch);  // clears it between polls, so a
-                        if (!run_one_frame(computer)) {  // one-shot latch misses a menu
-                            snprintf(result, sizeof result, "halted@%d", i); break;
-                        }
+                } else if (kg && kg->kg) {      // IIgs: queue once via the ADB key
+                    kg->kg->force_key((uint8_t)ch);   // buffer (survives micro ticks),
+                    for (int i = 0; i < hold; i++) {   // then let the guest drain it
+                        if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
                     }
                 } else {
                     snprintf(result, sizeof result, "no-keyboard");
