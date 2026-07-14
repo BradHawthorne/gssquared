@@ -533,6 +533,16 @@ class KeyGloo
             load_key_from_buffer();
         }
 
+        // A2GSPU: force an ASCII key straight into the latch (dynamic sibling of
+        // the A2GSPU_FORCE_KEY env hook). Sets the key-present bit so the guest's
+        // $C000 poll sees it; strobe-clear ($C010) consumes it normally. Lets the
+        // ctrl-rail drive IIgs (-p 5) sessions, where there is no MODULE_KEYBOARD.
+        void force_key(uint8_t ascii) {
+            key_latch.keycode = (ascii & 0x7F) | 0x80;
+            kb_register_full = true;
+            update_interrupt_status();
+        }
+
         void print_keyboard() {
             printf("KG> KeyGloo: currmod: %02X, prevmod: %02X\n", vars.currmod.value, vars.prevmod.value);
             printf("KG> KeyGloo: key_latch: %02X, key_mods: %02X\n", key_latch.keycode, key_latch.keymods.value);
@@ -558,6 +568,16 @@ class KeyGloo
         }
 
         uint8_t read_key_latch() {  // c000
+            // Headless key-injection (A2GSPU_FORCE_KEY=<hex ascii>, default OFF): when no
+            // real key is latched, return the forced key with the key-present bit set. Used
+            // to test whether a boot wedged in a "wait for keypress" loop advances on input.
+            // Golden-neutral when unset (fk stays 0 -> the branch never taken).
+            if (!(key_latch.keycode & 0x80)) {
+                static int chk = 0; static uint8_t fk = 0;
+                if (!chk) { chk = 1; const char *e = getenv("A2GSPU_FORCE_KEY");
+                            if (e) fk = (uint8_t)((strtoul(e, nullptr, 16) & 0x7F) | 0x80); }
+                if (fk & 0x80) return fk;
+            }
             return key_latch.keycode;
         }
 

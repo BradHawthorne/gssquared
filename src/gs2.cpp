@@ -44,6 +44,7 @@
 #include "mmus/mmu_iie.hpp"
 #include "mmus/mmu_iigs.hpp"
 #include "debugger/disasm.hpp"
+#include "devices/adb/keygloo.hpp"
 #include "house_fnv.hpp"
 #include "bus_trace.hpp"
 #include "mmu_state_trace.hpp"
@@ -1714,20 +1715,29 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             // "PRESS [RET]" disk-swap prompt) — the paste path can't satisfy
             // those. Mirrors handle_keydown/keyup.
             unsigned int ch = 0; int hold = 15;
-            keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
-            if (kb && sscanf(line + 6, "%x %d", &ch, &hold) >= 1) {
-                kb->kb_key_strobe = (uint8_t)(ch | 0x80);
-                if (kb->mk) kb->mk->last_key_val = (uint8_t)ch;
-                kb->key_down_count++;
-                for (int i = 0; i < hold; i++) {
-                    if (!run_one_frame(computer)) {
-                        snprintf(result, sizeof result, "halted@%d", i);
-                        break;
+            if (sscanf(line + 6, "%x %d", &ch, &hold) >= 1) {
+                keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+                keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
+                if (kb) {                       // IIe: latch + any-key-down
+                    kb->kb_key_strobe = (uint8_t)(ch | 0x80);
+                    if (kb->mk) kb->mk->last_key_val = (uint8_t)ch;
+                    kb->key_down_count++;
+                    for (int i = 0; i < hold; i++) {
+                        if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
                     }
+                    kb->key_down_count--;
+                } else if (kg && kg->kg) {      // IIgs: re-assert the KeyGloo latch
+                    for (int i = 0; i < hold; i++) {   // each frame — the ADB micro
+                        kg->kg->force_key((uint8_t)ch);  // clears it between polls, so a
+                        if (!run_one_frame(computer)) {  // one-shot latch misses a menu
+                            snprintf(result, sizeof result, "halted@%d", i); break;
+                        }
+                    }
+                } else {
+                    snprintf(result, sizeof result, "no-keyboard");
                 }
-                kb->key_down_count--;
             } else {
-                snprintf(result, sizeof result, kb ? "press-parse-fail" : "no-keyboard");
+                snprintf(result, sizeof result, "press-parse-fail");
             }
         } else if (!strncmp(line, "cpu", 3)) {
             // CPU + input/video state snapshot — diagnose "waiting for key" vs
