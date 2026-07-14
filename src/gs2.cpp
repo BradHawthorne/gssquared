@@ -1741,6 +1741,18 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             } else {
                 snprintf(result, sizeof result, "press-parse-fail");
             }
+        } else if (!strncmp(line, "holdkey ", 8)) {
+            // holdkey <hex-ascii> — set the sticky IIgs hold-key WITHOUT running
+            // (0 clears). Lets the wrapper hold a key, step in small chunks, watch
+            // for a screen delta (RTSTRP consumed it), then release — reliable
+            // menu-nav vs a fixed hold window that over- or under-shoots the spin.
+            unsigned int ch = 0;
+            keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
+            if (sscanf(line + 8, "%x", &ch) == 1 && kg && kg->kg) {
+                kg->kg->hold_key((uint8_t)ch);
+            } else {
+                snprintf(result, sizeof result, kg ? "holdkey-parse-fail" : "no-keygloo");
+            }
         } else if (!strncmp(line, "iolog", 5)) {
             // Cumulative keyboard soft-switch read counts. Diff two 'iolog' calls
             // across a 'run' to see which switch a wedged menu actually polls

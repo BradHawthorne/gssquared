@@ -577,12 +577,12 @@ class KeyGloo
             // real key is latched, return the forced key with the key-present bit set. Used
             // to test whether a boot wedged in a "wait for keypress" loop advances on input.
             // Golden-neutral when unset (fk stays 0 -> the branch never taken).
+            // ctrl-rail sticky hold-key WINS over any (possibly stale) latched key:
+            // RTSTRP never clears $C010, so an old key sits in the latch forever and
+            // an empty-latch-only hold would never be seen. Returned on every read
+            // while set, so the furious $C000 spin catches it.
+            if (a2gspu_hold & 0x80) return a2gspu_hold;
             if (!(key_latch.keycode & 0x80)) {
-                if (a2gspu_hold & 0x80) return a2gspu_hold;  // ctrl-rail sticky hold-key:
-                                                             // returned on EVERY empty-latch
-                                                             // poll, so a furious $C000 spin
-                                                             // (RTSTRP) that never clears via
-                                                             // $C010 still sees the key.
                 static int chk = 0; static uint8_t fk = 0;
                 if (!chk) { chk = 1; const char *e = getenv("A2GSPU_FORCE_KEY");
                             if (e) fk = (uint8_t)((strtoul(e, nullptr, 16) & 0x7F) | 0x80); }
