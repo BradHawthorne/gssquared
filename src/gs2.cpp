@@ -1726,13 +1726,16 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                         if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
                     }
                     kb->key_down_count--;
-                } else if (kg && kg->kg) {      // IIgs: sticky hold-key for a SHORT
-                    int hk = hold < 3 ? hold : 3;    // window (~3 frames = enough for
-                    kg->kg->hold_key((uint8_t)ch);   // RTSTRP's $C000 spin to catch it
-                    for (int i = 0; i < hold; i++) { // once), then run the rest keyless
-                        if (i == hk) kg->kg->hold_key(0);  // so the NEXT screen's poll
+                } else if (kg && kg->kg) {      // IIgs: cover BOTH keyboard paths.
+                    kg->kg->force_key((uint8_t)ch);              // buffer + kb_register_full
+                    keygloo_update_interrupt_status(kg, kg->kg); // raise the keyboard IRQ so
+                                                                 // an interrupt-driven menu wakes
+                    int hk = hold < 3 ? hold : 3;
+                    kg->kg->hold_key((uint8_t)ch);   // sticky for $C000 pollers (short window)
+                    for (int i = 0; i < hold; i++) {
+                        if (i == hk) kg->kg->hold_key(0);
                         if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
-                    }                                 // doesn't re-read the held key
+                    }
                     kg->kg->hold_key(0);
                     kg->kg->key_up();
                 } else {
