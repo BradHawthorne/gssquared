@@ -541,7 +541,9 @@ class KeyGloo
         // the next micro tick clears it before a Pascal-menu read sees it.
         void force_key(uint8_t ascii) {
             store_key_to_buffer((uint8_t)(ascii & 0x7F), 0);
-        }
+            keysdown = 1;   // assert AKD ($C010 b7): AP1.3 reads $C000 bit7 (fine at
+        }                   // keysdown=0) but RTSTRP may gate the read on any-key-down.
+        void key_up() { keysdown = 0; }   // release AKD after the poll window
 
         void print_keyboard() {
             printf("KG> KeyGloo: currmod: %02X, prevmod: %02X\n", vars.currmod.value, vars.prevmod.value);

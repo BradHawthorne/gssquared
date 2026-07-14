@@ -1726,11 +1726,12 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                         if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
                     }
                     kb->key_down_count--;
-                } else if (kg && kg->kg) {      // IIgs: queue once via the ADB key
-                    kg->kg->force_key((uint8_t)ch);   // buffer (survives micro ticks),
-                    for (int i = 0; i < hold; i++) {   // then let the guest drain it
+                } else if (kg && kg->kg) {      // IIgs: queue via the ADB key buffer
+                    kg->kg->force_key((uint8_t)ch);   // (survives micro ticks) + assert
+                    for (int i = 0; i < hold; i++) {   // AKD, drain, then release AKD
                         if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
                     }
+                    kg->kg->key_up();
                 } else {
                     snprintf(result, sizeof result, "no-keyboard");
                 }
