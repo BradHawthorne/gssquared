@@ -545,6 +545,9 @@ class KeyGloo
         }                   // keysdown=0) but RTSTRP may gate the read on any-key-down.
         void key_up() { keysdown = 0; }   // release AKD after the poll window
 
+        uint8_t a2gspu_hold = 0;   // ctrl-rail sticky force-key (see read_key_latch)
+        void hold_key(uint8_t ascii) { a2gspu_hold = ascii ? (uint8_t)((ascii & 0x7F) | 0x80) : 0; }
+
         void print_keyboard() {
             printf("KG> KeyGloo: currmod: %02X, prevmod: %02X\n", vars.currmod.value, vars.prevmod.value);
             printf("KG> KeyGloo: key_latch: %02X, key_mods: %02X\n", key_latch.keycode, key_latch.keymods.value);
@@ -575,6 +578,11 @@ class KeyGloo
             // to test whether a boot wedged in a "wait for keypress" loop advances on input.
             // Golden-neutral when unset (fk stays 0 -> the branch never taken).
             if (!(key_latch.keycode & 0x80)) {
+                if (a2gspu_hold & 0x80) return a2gspu_hold;  // ctrl-rail sticky hold-key:
+                                                             // returned on EVERY empty-latch
+                                                             // poll, so a furious $C000 spin
+                                                             // (RTSTRP) that never clears via
+                                                             // $C010 still sees the key.
                 static int chk = 0; static uint8_t fk = 0;
                 if (!chk) { chk = 1; const char *e = getenv("A2GSPU_FORCE_KEY");
                             if (e) fk = (uint8_t)((strtoul(e, nullptr, 16) & 0x7F) | 0x80); }

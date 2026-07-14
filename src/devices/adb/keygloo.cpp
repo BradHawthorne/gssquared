@@ -39,13 +39,21 @@ void keygloo_update_interrupt_status(keygloo_state_t *kb_state, KeyGloo *kg ) {
     }
 }
 
+// A2GSPU: keyboard soft-switch read counters — answers "which switch does the
+// guest poll?" (RTSTRP vs AP1.3) without a full MMU I/O log. Read via the ctrl
+// 'iolog' verb; diff two reads across a run to see what a wedged menu polls.
+uint64_t g_kg_reads[5] = {0};   // [0]=C000 [1]=C010 [2]=C024 [3]=C025 [4]=C026
+void a2gspu_keygloo_read_counts(uint64_t out[5]) { for (int i = 0; i < 5; i++) out[i] = g_kg_reads[i]; }
+
 uint8_t keygloo_read_C000(void *context, uint32_t address) {
+    g_kg_reads[0]++;
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
     return kg->read_key_latch();
 }
 
 uint8_t keygloo_read_C010(void *context, uint32_t address) {
+    g_kg_reads[1]++;
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
     return kg->read_key_strobe();
@@ -58,12 +66,14 @@ void keygloo_write_C010(void *context, uint32_t address, uint8_t value) {
 }
 
 uint8_t keygloo_read_C025(void *context, uint32_t address) {
+    g_kg_reads[3]++;
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
     return kg->read_mod_latch();
 }
 
 uint8_t keygloo_read_C024(void *context, uint32_t address) {
+    g_kg_reads[2]++;
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
     uint8_t data = kg->read_mouse_data();
@@ -72,6 +82,7 @@ uint8_t keygloo_read_C024(void *context, uint32_t address) {
 }
 
 uint8_t keygloo_read_C026(void *context, uint32_t address) {
+    g_kg_reads[4]++;
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
     uint8_t data = kg->read_data_register();

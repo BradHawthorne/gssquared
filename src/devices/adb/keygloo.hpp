@@ -16,3 +16,6 @@ struct keygloo_state_t {
 };
 
 void init_slot_keygloo(computer_t *computer, SlotType_t slot);
+
+// A2GSPU: keyboard soft-switch read counts [C000,C010,C024,C025,C026].
+void a2gspu_keygloo_read_counts(uint64_t out[5]);

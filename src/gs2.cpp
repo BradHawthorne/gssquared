@@ -1726,11 +1726,14 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                         if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
                     }
                     kb->key_down_count--;
-                } else if (kg && kg->kg) {      // IIgs: queue via the ADB key buffer
-                    kg->kg->force_key((uint8_t)ch);   // (survives micro ticks) + assert
-                    for (int i = 0; i < hold; i++) {   // AKD, drain, then release AKD
+                } else if (kg && kg->kg) {      // IIgs: sticky hold-key for a SHORT
+                    int hk = hold < 3 ? hold : 3;    // window (~3 frames = enough for
+                    kg->kg->hold_key((uint8_t)ch);   // RTSTRP's $C000 spin to catch it
+                    for (int i = 0; i < hold; i++) { // once), then run the rest keyless
+                        if (i == hk) kg->kg->hold_key(0);  // so the NEXT screen's poll
                         if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
-                    }
+                    }                                 // doesn't re-read the held key
+                    kg->kg->hold_key(0);
                     kg->kg->key_up();
                 } else {
                     snprintf(result, sizeof result, "no-keyboard");
@@ -1738,6 +1741,16 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             } else {
                 snprintf(result, sizeof result, "press-parse-fail");
             }
+        } else if (!strncmp(line, "iolog", 5)) {
+            // Cumulative keyboard soft-switch read counts. Diff two 'iolog' calls
+            // across a 'run' to see which switch a wedged menu actually polls
+            // (C000 latch / C010 strobe+AKD / C025 mods / C026 ADB data reg).
+            uint64_t c[5];
+            a2gspu_keygloo_read_counts(c);
+            snprintf(result, sizeof result,
+                "KBDreads C000=%llu C010=%llu C024=%llu C025=%llu C026=%llu",
+                (unsigned long long)c[0], (unsigned long long)c[1], (unsigned long long)c[2],
+                (unsigned long long)c[3], (unsigned long long)c[4]);
         } else if (!strncmp(line, "cpu", 3)) {
             // CPU + input/video state snapshot — diagnose "waiting for key" vs
             // "crashed" vs "grinding". PC in a tight $C000-poll loop with AKD=0
