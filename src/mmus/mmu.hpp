@@ -6,6 +6,7 @@
 
 #include "util/DebugFormatter.hpp"
 #include "memoryspecs.hpp"      // not used here but used by lots of stuff that includes this.
+#include "io_trace.hpp"         // A2GSPU gap #6: $C0xx access ring (disabled by default)
 
 #define C0X0_BASE 0xC000
 #define C0X0_SIZE 0x100
@@ -144,7 +145,15 @@ class MMU {
             page_table_entry_t *pte = &page_table[page];
 
             if (pte->read_p != nullptr) return pte->read_p[offset];
-            else if (pte->read_h.read != nullptr) return pte->read_h.read(pte->read_h.context, address);
+            else if (pte->read_h.read != nullptr) {
+                uint8_t v = pte->read_h.read(pte->read_h.context, address);
+                // A2GSPU gap #6. Tapped on the HANDLER path only: $C0xx is always
+                // handler-backed, while read_p is plain RAM/ROM, so this keeps the
+                // instrumentation off the hottest branch entirely. Disabled by
+                // default -- one predictable bool test.
+                if (g_io_trace_enabled) io_trace_note(address, v, 0);
+                return v;
+            }
             else return floating_bus_read();
         }
 
@@ -166,7 +175,11 @@ class MMU {
             page_table_entry_t *pte = &page_table[page];
             
             // if there is a write handler, call it instead of writing directly.
-            if (pte->write_h.write != nullptr) pte->write_h.write(pte->write_h.context, address, value);
+            if (pte->write_h.write != nullptr) {
+                // A2GSPU gap #6 — same reasoning as the read tap: handler path only.
+                if (g_io_trace_enabled) io_trace_note(address, value, 1);
+                pte->write_h.write(pte->write_h.context, address, value);
+            }
             else if (pte->write_p) pte->write_p[offset] = value;
 
             if (pte->shadow_h.write != nullptr) pte->shadow_h.write(pte->shadow_h.context, address, value);

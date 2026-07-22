@@ -47,14 +47,17 @@
 #include "devices/adb/keygloo.hpp"
 #include "house_fnv.hpp"
 #include "bus_trace.hpp"
+#include "io_trace.hpp"
 #include "mmu_state_trace.hpp"
 #include "obs_signal.hpp"    // the Observatory spine (default-OFF; wired in later seams)
 #include "obs_iigs.hpp"      // IIgs LEVEL bindings + the boot-fault-context view
 #include "iigs_video_summary.hpp"
 #include "iigs_toolbox.hpp"
+#include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
 #include "iigs_diag.hpp"
 #include "devices/slot_bus/slot_bus.hpp"
 #include "devices/keyboard/keyboard.hpp"
+#include "wiz5_config.hpp"   // WIZ5_* title/interp-specific config layer (env-gated, off => no-op)
 #include "util/EventTimer.hpp"
 #include "ui/SelectSystem.hpp"
 #include "ui/MainAtlas.hpp"
@@ -277,6 +280,16 @@ bool run_one_frame(computer_t *computer) {
     speaker_state_t *speaker_state = (speaker_state_t *)computer->cached_speaker_state;
     display_state_t *ds = (display_state_t *)computer->cached_display_state;
 
+    // WIZ5 / A2GSPU_TAP lazy arm — run_one_frame is the SINGLE funnel for BOTH
+    // the windowed loop and the headless spike, so one guarded call arms both
+    // paths. Both arm helpers self-guard for idempotency (the spike also arms
+    // the generic tap earlier); no-op with no A2GSPU_TAP*/WIZ5_* env set, so the
+    // stock emulator is unchanged (dual-mode invariant).
+    {
+        static bool s_wiz5_armed = false;
+        if (!s_wiz5_armed) { s_wiz5_armed = true; generic_tap_arm(); wiz5_config_arm(computer); }
+    }
+
     if (cpu->halt == HLT_USER) { // top of frame.
         return false;
     }
@@ -286,6 +299,16 @@ bool run_one_frame(computer_t *computer) {
     if (computer->execution_mode == EXEC_PAUSED) {
         return true;
     }
+
+    // A2GSPU_TAP_SESSION: periodic memory-capture service (env-gated; no-op unless
+    // a session dir was set). Runs once per executed frame in every driver loop
+    // (windowed + headless spikes) since they all funnel through run_one_frame.
+    if (g_gtap.sess_on) generic_tap_session_frame(cpu, clock->get_cycles());
+
+    // WIZ5_KEYS: per-frame scheduled keyboard injection (env-gated — returns
+    // immediately when no key schedule is loaded). Shares this funnel so it
+    // drives the game identically in the windowed loop and the headless spike.
+    wiz5_keys_tick(computer, g_wiz5_frame++);
 
     if (computer->speed_shift) {
         computer->speed_shift = false;
@@ -1666,6 +1689,62 @@ static void a2gspu_ctrl_ack(const char *dir, int seq, const char *result) {
     rename(tmppath, ackpath);
 }
 
+// ---------------------------------------------------------------------------
+// Instruction-granular execution for the CTRL rail (gaps #3/#4/#5).
+//
+// The rail was frame-granular only (`run <frames>`), which is too coarse to
+// assert "at this point" -- a test could only check state after N frames, which
+// is flaky by construction, and a wedged loop could not be inspected at all.
+//
+// a2gspu_step_one() mirrors the per-instruction bookkeeping that run_one_frame()
+// performs: the three event timers (c14m / video / cpu) must be pumped around
+// each execute_next, or stepping starves the video scanner and any timer-driven
+// device and the machine drifts out from under the very code being diagnosed.
+// ---------------------------------------------------------------------------
+static inline void a2gspu_step_one(computer_t *computer) {
+    cpu_state *cpu = computer->cpu;
+    NClock *clock = computer->clock;
+    if (computer->event_timer->isEventPassed(clock->get_c14m()))
+        computer->event_timer->processEvents(clock->get_c14m());
+    if (computer->vid_event_timer->isEventPassed(clock->get_vid_cycles()))
+        computer->vid_event_timer->processEvents(clock->get_vid_cycles());
+    if (computer->cpu_event_timer->isEventPassed(clock->get_cycles()))
+        computer->cpu_event_timer->processEvents(clock->get_cycles());
+    (cpu->cpun->execute_next)(cpu);
+}
+
+// Shared CPU-state formatter so `cpu`, `step` and `run-until` all report in one
+// format -- a harness parses this line, so it must not vary by command.
+static void a2gspu_cpu_line(computer_t *computer, char *out, size_t outsz) {
+    cpu_state *c = computer->cpu;
+    keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+    int akd = kb ? kb->key_down_count : -1;
+    uint8_t kbd = computer->mmu ? computer->mmu->probe_peek(0xC000) : 0;
+    snprintf(out, outsz,
+        "PC=%02X:%04X A=%02X X=%02X Y=%02X SP=%04X P=%02X E=%d HALT=%d STP=%d RDY=%d KBD=%02X AKD=%d",
+        (unsigned)((c->full_pc >> 16) & 0xFF), (unsigned)(c->full_pc & 0xFFFF),
+        (unsigned)(c->a & 0xFF), (unsigned)(c->x & 0xFF), (unsigned)(c->y & 0xFF),
+        (unsigned)(c->sp & 0xFFFF), (unsigned)(c->p & 0xFF),
+        (int)(c->E & 1), (int)(c->halt ? 1 : 0), (int)(c->clock_stopped ? 1 : 0),
+        (int)(c->rdy ? 1 : 0), (unsigned)kbd, akd);
+}
+
+// Soft-switch read-status helper for `vid`.  A free function rather than a
+// lambda inside a2gspu_ctrl_loop(): that function is already very large, and at
+// -O3 the extra inlining candidate was enough to make g++ fall over silently
+// (no diagnostic, non-zero exit) while -O0/-O1/-O2 all compiled fine.
+static inline int a2gspu_sw(MMU_II *m, uint16_t a) {
+    return m ? ((m->probe_peek(a) & 0x80) ? 1 : 0) : -1;
+}
+
+// Parse "BB:AAAA" or a bare 24-bit hex address into a full physical address.
+static bool a2gspu_parse_addr(const char *s, uint32_t *out) {
+    unsigned bank = 0, addr = 0;
+    if (sscanf(s, "%x:%x", &bank, &addr) == 2) { *out = ((bank & 0xFF) << 16) | (addr & 0xFFFF); return true; }
+    if (sscanf(s, "%x", &addr) == 1) { *out = addr & 0xFFFFFF; return true; }
+    return false;
+}
+
 static void a2gspu_ctrl_loop(GS2AppState *state) {
     computer_t *computer = state->computer;
     const char *dir = SDL_getenv("A2GSPU_CTRL");
@@ -1675,6 +1754,13 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
     printf("A2GSPU CTRL: interactive rail on '%s' (idle timeout %ds)\n", dir, idle_timeout_s);
     int seq = 1;
     uint64_t idle_ms = 0;
+    // Harvested (wiz5): a persistent frame clock for the interactive rail so the
+    // frame-armed instruments work here too — WATCH `ts`, ITRACE_FRAME, and the
+    // loadtrace frame attribution all key off g_iigs_cur_frame, which was only
+    // advanced by the headless spike loop. Ticking it per `run` frame joins CTRL
+    // reads/writes to the same frame timeline the spike uses. Additive: with no
+    // A2GSPU_* frame-instrument armed, iigs_itrace_frame_tick just sets a counter.
+    int ctrl_frame = 0;
     char cmdpath[1024];
     char result[128];
     for (;;) {
@@ -1698,6 +1784,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
         if (!strncmp(line, "run ", 4)) {
             int frames = atoi(line + 4);
             for (int i = 0; i < frames; i++) {
+                iigs_itrace_frame_tick(ctrl_frame++);   // advance the shared frame clock
                 if (!run_one_frame(computer)) {
                     snprintf(result, sizeof result, "halted@%d", i);
                     break;
@@ -1756,6 +1843,30 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             } else {
                 snprintf(result, sizeof result, kg ? "holdkey-parse-fail" : "no-keygloo");
             }
+        } else if (!strncmp(line, "iolog on", 8)) {
+            // A2GSPU gap #6 — arm the general $C0xx access ring (read AND write,
+            // every soft switch, ordered). The bare `iolog` below only ever gave
+            // cumulative COUNTS for five keyboard switches, so which switch a
+            // routine touched, in what order, had to be inferred from side
+            // effects. Optional cap: "iolog on <n>".
+            long cap = 0;
+            if (sscanf(line + 8, "%ld", &cap) == 1 && cap > 0) g_io_trace_cap = (size_t)cap;
+            io_trace_reset();
+            g_io_trace_enabled = true;
+            snprintf(result, sizeof result, "iolog on cap=%zu", g_io_trace_cap);
+        } else if (!strncmp(line, "iolog off", 9)) {
+            g_io_trace_enabled = false;
+            snprintf(result, sizeof result, "iolog off seq=%u retained=%zu dropped=%u",
+                     g_io_trace_seq, g_io_trace.size(), g_io_trace_dropped);
+        } else if (!strncmp(line, "iolog dump ", 11)) {
+            if (io_trace_dump(line + 11))
+                snprintf(result, sizeof result, "dumped seq=%u retained=%zu dropped=%u",
+                         g_io_trace_seq, g_io_trace.size(), g_io_trace_dropped);
+            else
+                snprintf(result, sizeof result, "iolog-dump-fail");
+        } else if (!strncmp(line, "iolog reset", 11)) {
+            io_trace_reset();
+            snprintf(result, sizeof result, "iolog reset");
         } else if (!strncmp(line, "iolog", 5)) {
             // Cumulative keyboard soft-switch read counts. Diff two 'iolog' calls
             // across a 'run' to see which switch a wedged menu actually polls
@@ -1884,6 +1995,75 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             }
             if (ok) computer->cpu->halt = 0;   // force-run after restore
             else snprintf(result, sizeof result, "restore-fail");
+        } else if (!strncmp(line, "step", 4)) {
+            // step [n] — execute N instructions (default 1) and report state.
+            // Instruction-granular: the frame loop could only stop on a frame
+            // boundary, so a tight loop or a single toolbox dispatch could not
+            // be observed at all.
+            int n = 1;
+            if (line[4] == ' ') n = atoi(line + 5);
+            if (n < 1) n = 1;
+            int done = 0;
+            for (; done < n; done++) {
+                if (computer->cpu->halt) break;
+                a2gspu_step_one(computer);
+            }
+            char st[192];
+            a2gspu_cpu_line(computer, st, sizeof st);
+            snprintf(result, sizeof result, "stepped=%d %s", done, st);
+        } else if (!strncmp(line, "run-until ", 10)) {
+            // run-until <BB:AAAA|AAAAAA> [max_instr] — step until PBR:PC equals
+            // the target, or the instruction budget is exhausted. This is what
+            // lets a harness assert AT a known point (a routine's entry, a
+            // return address) instead of "after N frames", which is flaky by
+            // construction.
+            char addrbuf[64] = {0};
+            long budget = 2000000;
+            uint32_t target = 0;
+            if (sscanf(line + 10, "%63s %ld", addrbuf, &budget) >= 1 &&
+                a2gspu_parse_addr(addrbuf, &target)) {
+                long i = 0; bool hit = false;
+                for (; i < budget; i++) {
+                    if (computer->cpu->halt) break;
+                    a2gspu_step_one(computer);
+                    if ((computer->cpu->full_pc & 0xFFFFFF) == target) { hit = true; break; }
+                }
+                char st[192];
+                a2gspu_cpu_line(computer, st, sizeof st);
+                snprintf(result, sizeof result, "%s instr=%ld %s",
+                         hit ? "hit" : (computer->cpu->halt ? "halted" : "budget"), i, st);
+            } else {
+                snprintf(result, sizeof result, "run-until-parse-fail");
+            }
+        } else if (!strncmp(line, "stack", 5)) {
+            // stack [n] — dump N bytes above SP (bank 0; the 65816 stack always
+            // lives there).  Without this, SP was visible but its CONTENTS were
+            // not, so a call could be seen to be deep but never traced to its
+            // caller.
+            int n = 16;
+            if (line[5] == ' ') n = atoi(line + 6);
+            if (n < 1) n = 1;
+            if (n > 48) n = 48;
+            uint16_t sp = (uint16_t)(computer->cpu->sp & 0xFFFF);
+            char *p = result;
+            size_t rem = sizeof result;
+            int w = snprintf(p, rem, "SP=%04X", sp);
+            p += w; rem -= w;
+            for (int i = 1; i <= n && rem > 4; i++) {
+                uint8_t b = computer->mmu->probe_peek((uint16_t)(sp + i));
+                w = snprintf(p, rem, " %02X", b);
+                p += w; rem -= w;
+            }
+        } else if (!strncmp(line, "vid", 3)) {
+            // vid — decode the full video mode rather than the ambiguous
+            // TEXT=1 HIRES=1 pair that `cpu` reported.  Reads the soft switches
+            // through the MMU so it reflects the machine, not cached flags.
+            MMU_II *m = computer->mmu;
+            snprintf(result, sizeof result,
+                "TEXT=%d MIXED=%d PAGE2=%d HIRES=%d 80COL=%d 80STORE=%d ALTCHAR=%d DHIRES=%d",
+                a2gspu_sw(m, 0xC01A), a2gspu_sw(m, 0xC01B), a2gspu_sw(m, 0xC01C),
+                a2gspu_sw(m, 0xC01D), a2gspu_sw(m, 0xC01F), a2gspu_sw(m, 0xC018),
+                a2gspu_sw(m, 0xC01E), a2gspu_sw(m, 0xC07F));
         } else if (!strncmp(line, "quit", 4)) {
             a2gspu_ctrl_ack(dir, seq, "ok");
             printf("A2GSPU CTRL: session ended after %d command(s)\n", seq);
@@ -1896,21 +2076,46 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
     }
 }
 
+// A2GSPU_OUT_DIR: parallel-safe output relocation. When set, the fixed-name
+// headless/spike output files (spike_e1.bin, spike_e1_init.bin, spike_frame.bmp,
+// spike_trace.bin, spike_slot.bin, spike_mmu_truth.bin, plus the A2GSPU_TEXTDUMP
+// target) are written UNDER that directory, so N concurrent GSSquared invocations
+// with distinct OUT_DIR never clobber each other's dumps. Fills `buf` and returns
+// it; when OUT_DIR is UNSET returns `name` UNCHANGED (byte-identical to the legacy
+// behavior — the dual-mode invariant). An absolute `name` (leading '/'/'\\' or a
+// Windows drive-letter) is honored verbatim even when OUT_DIR is set, so an
+// explicit caller-chosen path is never rewritten.
+static const char *a2gspu_out_path(const char *name, char *buf, size_t bufsz) {
+    const char *dir = SDL_getenv("A2GSPU_OUT_DIR");
+    if (!dir || !*dir || !name) return name;
+    bool absolute = name[0] == '/' || name[0] == '\\' ||
+                    (name[0] != '\0' && name[1] == ':');   // Windows drive-letter (C:...)
+    if (absolute) return name;
+    snprintf(buf, bufsz, "%s/%s", dir, name);
+    return buf;
+}
+
 static void run_headless_spike(GS2AppState *state) {
     computer_t *computer = state->computer;
+    char a2gspu_outbuf[1024];   // scratch for a2gspu_out_path() (A2GSPU_OUT_DIR)
 
     // a2gspu interactive control rail: when A2GSPU_CTRL is set, the stepping
     // protocol replaces the fixed-frame spike entirely (dumps are on-demand).
-    if (SDL_getenv("A2GSPU_CTRL")) {
-        a2gspu_ctrl_loop(state);
-        exit(0);
-    }
+    // GAP-1: the CTRL loop is now entered LATER (just after the env-instrument
+    // suite + symbols are armed, below) instead of here, so a live/co-pilot
+    // session has full access to WATCH / VALTRAP / BREAK / POKE / ITRACE /
+    // CALLTRACE / SNAP / CONDTRAP / STACKTRAP / STACKWATCH / MILESTONES /
+    // RETGUARD + symbols. Those instruments hook run_one_frame's CPU loop, which
+    // the CTRL rail drives, so once armed they fire during `run` commands. The
+    // bus/obs oracle arming stays spike-only (its rings record every SHR write
+    // and would grow unbounded across a long interactive session).
+    const bool a2gspu_ctrl_mode = (SDL_getenv("A2GSPU_CTRL") != nullptr);
 
     // Env-gated CPU micro-test short-circuit: when A2GSPU_CPUTEST names a case,
     // run only that case and exit with its verdict (the normal frame spike, the
     // GS/OS round-trip, and the boot golden are all bypassed). Keeps the CPU
     // corner-case proof on the same headless exit-code rail as the boot gate.
-    if (const char *ct = SDL_getenv("A2GSPU_CPUTEST")) {
+    if (!a2gspu_ctrl_mode) if (const char *ct = SDL_getenv("A2GSPU_CPUTEST")) {
         int rc = run_cpu_microtest(state, ct);
         printf("=== CPUTEST COMPLETE (%s) ===\n", rc == 0 ? "PASS" : "FAIL");
         exit(rc);
@@ -1919,16 +2124,21 @@ static void run_headless_spike(GS2AppState *state) {
     // Env-gated MMU + VIDEO micro-test short-circuit (same rail as A2GSPU_CPUTEST):
     // exercises the FPI mapping + SHR decode contracts the render golden trusts,
     // then exits with the verdict. Bypasses the frame spike / boot golden entirely.
-    if (const char *mt = SDL_getenv("A2GSPU_MMUTEST")) {
+    if (!a2gspu_ctrl_mode) if (const char *mt = SDL_getenv("A2GSPU_MMUTEST")) {
         int rc = run_mmu_microtest(state, mt);
         printf("=== MMUTEST COMPLETE (%s) ===\n", rc == 0 ? "PASS" : "FAIL");
         exit(rc);
     }
 
-    printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
+    if (!a2gspu_ctrl_mode)
+        printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
 
     computer->execution_mode = EXEC_NORMAL;
 
+    // Bus/obs oracle arming is SPIKE-ONLY: its rings record every SHR write and
+    // would grow unbounded across a long interactive CTRL session. The CTRL rail
+    // still gets the full env-instrument suite (armed just below).
+    if (!a2gspu_ctrl_mode) {
     bus_trace_reset();            // arm the bus-trace oracle
     g_bus_trace_enabled = true;
     slot_bus_reset();             // arm the faithful slot-bus model (the virtual slot)
@@ -1951,8 +2161,12 @@ static void run_headless_spike(GS2AppState *state) {
         obs_add_memwindow(OBS_SUB_VGC, 0, "vgc.scb",     m2 + 0x19D00, 200, OBS_F_BUS_OBSERVABLE);
         obs_add_memwindow(OBS_SUB_VGC, 1, "vgc.palette", m2 + 0x19E00, 512, OBS_F_BUS_OBSERVABLE);
     }
+    }  // end if(!a2gspu_ctrl_mode): bus/obs oracle arming is spike-only
 
     // Arm the headless GS/OS app-bringup diagnostics (env-gated, stdout-only).
+    // A2GSPU_TAP*: generic title-agnostic PC-hit / session tap (merged wiz5 tap).
+    // No-op unless A2GSPU_TAP or A2GSPU_TAP_SESSION is set.
+    generic_tap_arm();
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
     g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);
@@ -2301,10 +2515,28 @@ static void run_headless_spike(GS2AppState *state) {
             printf("A2GSPU_SNAP: %s window $%06X-$%06X at %d PC(s) -> '%s'\n",
                    g_snap_out ? "logging" : "OPEN-FAILED", g_snap_lo, g_snap_hi, g_snap_npc, sout);
         }
+        // wiz5 snapshot extensions (recognized on the one tool): SNAP_MAX caps
+        // records (g_snap_max already backs the emitter); SNAP_ZP is a ZP-pointer
+        // correlation key — parsed here so the env name is honored (main's snap
+        // emitter keys on PC, so this is recorded as an annotation).
+        if (const char *smax = SDL_getenv("A2GSPU_SNAP_MAX")) { int v = atoi(smax); if (v > 0) g_snap_max = v; }
+        if (const char *szp = SDL_getenv("A2GSPU_SNAP_ZP"))
+            printf("A2GSPU_SNAP_ZP: %s (zp correlation key)\n", szp);
     }
     g_iigs_pending.clear();
     g_iigs_last_result.clear();
     g_iigs_last_gsos_err = 0;
+
+    // GAP-1: enter the interactive CTRL rail HERE — after the full env-instrument
+    // suite + symbols are armed — so WATCH/VALTRAP/BREAK/POKE/ITRACE/CALLTRACE/
+    // SNAP/CONDTRAP/STACK*/MILESTONES/RETGUARD fire during the loop's `run`
+    // frames. Everything below (E1 snapshot, boot loops, oracle dumps, golden
+    // gate) is the fixed-frame spike and is bypassed for CTRL, exactly as the
+    // original early short-circuit did.
+    if (a2gspu_ctrl_mode) {
+        a2gspu_ctrl_loop(state);
+        exit(0);
+    }
 
     // Snapshot the $E1 SHR window at trace-arm time. Replaying the trace
     // (init + every captured write) must byte-match the final $E1 below -> proves
@@ -2312,7 +2544,7 @@ static void run_headless_spike(GS2AppState *state) {
     {
         uint8_t *m2i = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
         if (m2i) {
-            FILE *fi = fopen("spike_e1_init.bin", "wb");
+            FILE *fi = fopen(a2gspu_out_path("spike_e1_init.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), "wb");
             if (fi) { fwrite(m2i + 0x12000, 1, 0x8000, fi); fclose(fi); } // $E1:$2000-$9FFF
         }
     }
@@ -2449,7 +2681,7 @@ static void run_headless_spike(GS2AppState *state) {
     uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
     if (m2) {
         const uint8_t *e1 = m2 + 0x10000;          // Mega II bank $E1 (64 KB)
-        FILE *f = fopen("spike_e1.bin", "wb");
+        FILE *f = fopen(a2gspu_out_path("spike_e1.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), "wb");
         if (f) { fwrite(e1, 1, 0x10000, f); fclose(f); }
         uint64_t hash = HOUSE_FNV_BASIS;    // FNV-1a 64
         int nonzero = 0; uint8_t seen[256] = {0}; int ndist = 0;
@@ -2478,7 +2710,7 @@ static void run_headless_spike(GS2AppState *state) {
     // ---- (1.5) bus-trace oracle: ordered SHR-write golden ----
     {
         uint64_t n = 0;
-        uint64_t th = bus_trace_dump("spike_trace.bin", &n);
+        uint64_t th = bus_trace_dump(a2gspu_out_path("spike_trace.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), &n);
         uint64_t c0 = g_bus_trace.empty() ? 0 : g_bus_trace.front().cycle;
         uint64_t c1 = g_bus_trace.empty() ? 0 : g_bus_trace.back().cycle;
         printf("SPIKE TRACE: wrote spike_trace.bin (%llu SHR writes) content-hash=%016llX\n",
@@ -2510,7 +2742,7 @@ static void run_headless_spike(GS2AppState *state) {
     // ---- (1.6) faithful slot-bus stream (the virtual slot; superset of the SHR oracle) ----
     {
         uint64_t n = 0;
-        uint64_t sh = slot_bus_dump("spike_slot.bin", &n);
+        uint64_t sh = slot_bus_dump(a2gspu_out_path("spike_slot.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), &n);
         printf("SPIKE SLOT: wrote spike_slot.bin (%llu Mega-II writes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)sh);
     }
@@ -2518,7 +2750,7 @@ static void run_headless_spike(GS2AppState *state) {
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {
         uint64_t n = 0;
-        uint64_t mh = mmu_state_trace_dump("spike_mmu_truth.bin", &n);
+        uint64_t mh = mmu_state_trace_dump(a2gspu_out_path("spike_mmu_truth.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), &n);
         printf("SPIKE MMU: wrote spike_mmu_truth.bin (%llu mapping-state changes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)mh);
     }
@@ -2527,7 +2759,7 @@ static void run_headless_spike(GS2AppState *state) {
     video_system_t *vs = computer->video_system;
     vs->update_display(true);
     SDL_ClearError();
-    vs->save_screenshot("spike_frame.bmp");
+    vs->save_screenshot(a2gspu_out_path("spike_frame.bmp", a2gspu_outbuf, sizeof a2gspu_outbuf));
     const char *err = SDL_GetError();
     printf("SPIKE FRAMEBUF: save_screenshot('spike_frame.bmp') SDL_GetError='%s'\n",
            (err && *err) ? err : "(none)");
@@ -2539,6 +2771,7 @@ static void run_headless_spike(GS2AppState *state) {
     // Apple Pascal 1.3 uses). Lets harnesses assert on screen TEXT instead of
     // pixels (pascal-toolchain UC-2 RUN_GREEN gate).
     if (const char *tf = SDL_getenv("A2GSPU_TEXTDUMP")) {
+        tf = a2gspu_out_path(tf, a2gspu_outbuf, sizeof a2gspu_outbuf);   // A2GSPU_OUT_DIR (relative names only)
         FILE *tfp = fopen(tf, "wb");
         if (tfp) {
             for (uint32_t a = 0x0400; a < 0x0800; a++) {
@@ -2644,6 +2877,20 @@ static void run_headless_spike(GS2AppState *state) {
                 printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
                 exit(gate_rc);
             }
+        }
+    }
+
+    // WIZ5_WRITEBACK (wiz5_clean fork): opt-in save-experiment flush. Persists
+    // the in-memory (possibly game-modified) disks to their FILES at spike end.
+    // OFF by default (mutation-guard discipline) — use ONLY on writable scratch
+    // images to capture an on-disk save. Suppressed when WIZ5_NO_WRITEBACK is set.
+    if (getenv("WIZ5_WRITEBACK") && !getenv("WIZ5_NO_WRITEBACK")) {
+        for (const auto &dm : state->disks_to_mount) {
+            storage_key_t k{}; k.slot = dm.slot; k.drive = dm.drive;
+            k.partition = 0; k.subunit = 0;
+            printf("WIZ5_WRITEBACK: flushing slot %d drive %d -> %s\n",
+                   dm.slot, dm.drive, dm.filename.c_str());
+            computer->mounts->unmount_media(k, SAVE_AND_UNMOUNT);
         }
     }
 
