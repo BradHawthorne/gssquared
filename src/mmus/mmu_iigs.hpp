@@ -245,6 +245,17 @@ class MMU_IIgs : public MMU {
         uint8_t read_c0xx(uint16_t address);
         
         virtual uint8_t *get_rom_base() { return main_rom; };
+
+        // Byte offset within main_rom of virtual bank $FF -- always the LAST
+        // physical bank of the image, whatever its size. ROM01 is 2 banks
+        // (128K) -> $10000; ROM03 and ROM04 are 4 banks (256K) -> $30000.
+        // Fixed-offset lookups that key off bank $FF (the LC-area ROM overlay
+        // read, vp_read) hardcoded $10000, which is silently correct ONLY for a
+        // 128K ROM -- and this fork ships ROM3 (Tenspeed) and ROM4 (Mark Twain)
+        // systems, both 256K, where it read the wrong bank entirely.
+        // init_map already derived this correctly by hand; now there is one
+        // definition instead of two conventions. (Ported from upstream f6a9a5c.)
+        inline uint32_t rom_bank_ff_offset() const { return (rom_banks - 1) * BANK_SIZE; }
         // Base of ROM bank $FF (the last 64KB) — the language-card / $D000-$FFFF ROM
         // region. Bank $FF lives at the TOP of the image: offset (rom_banks-1)*64KB =
         // 0x10000 for a 128KB ROM01, 0x30000 for a 256KB ROM03/ROM04. Use this instead

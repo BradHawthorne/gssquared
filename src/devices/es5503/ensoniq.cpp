@@ -73,6 +73,11 @@ void ES5503::reset() {
         osc.accumulator = 0;
         osc.irqpend = 0;
     }
+    // Drop the system IRQ line too. Clearing per-oscillator irqpend above leaves
+    // the InterruptController's SOUNDGLU assert stuck until something happens to
+    // read $E0 -- so a machine reset could come up with a phantom interrupt
+    // already pending from before it. (Ported from upstream be5c869.)
+    update_irq_status();
     update_sdl_stream_rate();
 }
 

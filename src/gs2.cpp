@@ -44,6 +44,7 @@
 #include "mmus/mmu_ii.hpp"
 #include "mmus/mmu_iie.hpp"
 #include "mmus/mmu_iigs.hpp"
+#include "mmus/iigs_memory.hpp"
 #include "debugger/disasm.hpp"
 #include "devices/adb/keygloo.hpp"
 #include "house_fnv.hpp"
@@ -682,7 +683,18 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
             // For a 128KB image this computes the original 0x1C000 (zero ROM01 change).
             size_t romsize = (size_t) rd->main_rom_file->size();
             state->mmu_iie = new MMU_IIe(256, 128*1024, /* (uint8_t *) */rd->main_rom_data + (romsize - 0x4000));
-            state->mmu_iigs = new MMU_IIgs(256, 8*1024*1024, (uint32_t) romsize, /* (uint8_t *) */rd->main_rom_data, state->mmu_iie);
+            // Contiguous FPI RAM is motherboard base (ROM-dependent: 128K on
+            // ROM01, 1M on ROM03) PLUS the expansion card -- not a flat 8MB
+            // total, which under-allocated and left the banks above $7F
+            // floating on a machine that should have them. Matches KEGS.
+            // (Ported from upstream e0729c9, with its iigs_memory.hpp.)
+            const size_t fast_ram = iigs_memory::fast_ram_bytes(romsize);
+            printf("IIgs RAM: %s mobo %zuKB + exp %zuMB = %zu bytes (banks $00-$%02X)\n",
+                   iigs_memory::is_rom03(romsize) ? "ROM03" : "ROM01",
+                   iigs_memory::mobo_ram_bytes(romsize) / 1024,
+                   iigs_memory::kDefaultExpBytes / (1024 * 1024),
+                   fast_ram, iigs_memory::last_ram_bank(fast_ram));
+            state->mmu_iigs = new MMU_IIgs(256, (int) fast_ram, (uint32_t) romsize, /* (uint8_t *) */rd->main_rom_data, state->mmu_iie);
             state->mmu_iigs->init_map();
             computer->cpu->set_mmu(state->mmu_iigs); // cpu gets FPI
             computer->set_mmu(state->mmu_iie); // everything else gets the Mega II

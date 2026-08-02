@@ -624,7 +624,7 @@ void bank_shadow_write(void *context, uint32_t address, uint8_t value) {
 
 uint8_t iolc_rom_read(void *context, uint32_t address) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
-    return mmu_iigs->get_rom_base()[0x1'0000 + (address & 0xFFFF)];
+    return mmu_iigs->get_rom_base()[mmu_iigs->rom_bank_ff_offset() + (address & 0xFFFF)];
 }
 
 read_handler_t float_read_handler = { (memory_read_func)float_area_read, nullptr };
@@ -716,7 +716,9 @@ void MMU_IIgs::init_map() {
 
     // use new routine.
     for (int i = 1; i < 16; i++) {
-        megaii->map_c1cf_internal_rom(0xC0 + i, main_rom + (rom_banks * BANK_SIZE - 0x4000) + i * GS2_PAGE_SIZE, "GS INT");
+        // Same value the hand-rolled (rom_banks * BANK_SIZE - 0x4000) produced,
+        // now expressed as "bank $FF, offset $C000" so there is one convention.
+        megaii->map_c1cf_internal_rom(0xC0 + i, main_rom + rom_bank_ff_offset() + 0xC000 + i * GS2_PAGE_SIZE, "GS INT");
     }
 
     /* megaii->set_slot_rom(SLOT_1, main_rom + 0x1'C100, "GS INT");
@@ -804,7 +806,7 @@ void MMU_IIgs::debug_dump(DebugFormatter *df) {
 
 uint8_t MMU_IIgs::vp_read(uint32_t address) {
     if (is_iolc_shadowed()) { // if IOLC is shadowed, read from ROM.
-        return get_rom_base()[0x1'0000 + (address & 0xFFFF)];
+        return get_rom_base()[rom_bank_ff_offset() + (address & 0xFFFF)];
     } else {
         return read(address);
     }
