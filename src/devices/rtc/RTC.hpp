@@ -208,7 +208,9 @@ public:
         // A2GSPU_FAKETIME: frozen deterministic clock (see the header note). Seeds
         // the accumulator AND skips time()/localtime()/timezone, so the seconds
         // registers read identically every run — as a real RTC stopped at the
-        // seeded instant would. Orchard MUST NOT depend on this knob.
+        // seeded instant would. It is a HARNESS knob: no guest software under
+        // development here may depend on it, or it will behave differently on
+        // a real machine, where the clock advances.
         rtc_faketime_probe_env();
         if (g_rtc_faketime_active) {
             seconds      = g_rtc_faketime_1904;
