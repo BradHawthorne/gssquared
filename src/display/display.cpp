@@ -599,7 +599,11 @@ uint8_t display_read_vbl(void *context, uint32_t address) {
     // This is enough to get basic VBL working. Total Replay boots anyway.
     display_state_t *ds = (display_state_t *)context;
 
-    uint8_t fl = (ds->video_scanner->is_vbl()) ? 0x00 : 0x80;
+    // Null-guard ported from upstream 6b91d9c: $C019 can be read before the
+    // scanner is constructed, and an unguarded deref crashes rather than
+    // reporting a machine state.
+    const bool in_vbl = ds->video_scanner && ds->video_scanner->is_vbl();
+    uint8_t fl = in_vbl ? 0x00 : 0x80;
     if (ds->video_scanner_type == Scanner_AppleIIgs) { // inverted sense on IIgs.
         fl ^= 0x80;
     }

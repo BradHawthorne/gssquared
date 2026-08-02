@@ -417,6 +417,7 @@ inline uint8_t fetch_pc(cpu_state *cpu) {
 /* read_data - read either 1 or 2 bytes from memory depending on width of the type T. */
 template<typename T>
 inline void read_data(cpu_state *cpu, uint32_t eaddr, T &reg) {
+    TRACE(cpu->trace_entry.f_write = 0;)
     if constexpr (is_byte<T>) {
         reg = bus_read(cpu, eaddr);
     }
@@ -430,7 +431,7 @@ inline void read_data(cpu_state *cpu, uint32_t eaddr, T &reg) {
 /* write_data - write either 1 or 2 bytes to memory depending on width of the type T. */
 template<typename T>
 inline void write_data(cpu_state *cpu, uint32_t eaddr, T &reg) {
-
+    TRACE(cpu->trace_entry.f_write = 1;)
     if constexpr (is_byte<T>) {
         bus_write(cpu, eaddr, reg);
     }
@@ -445,7 +446,7 @@ inline void write_data(cpu_state *cpu, uint32_t eaddr, T &reg) {
 /* Same as write_data but writes hi byte first then lo byte - used by rmw */
 template<typename T>
 inline void write_tada(cpu_state *cpu, uint32_t eaddr, T &reg) {
-
+    TRACE(cpu->trace_entry.f_write = 1;)
     if constexpr (is_byte<T>) {
         bus_write(cpu, eaddr, reg);
     }
@@ -458,6 +459,7 @@ inline void write_tada(cpu_state *cpu, uint32_t eaddr, T &reg) {
 /** Direct Mode Helpers */
 template<typename T>
 inline void read_data_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
+    TRACE(cpu->trace_entry.f_write = 0;)
     if constexpr (is_byte<T>) {
         reg = bus_read(cpu, eaddr_16);  // cycle 4
     }
@@ -470,6 +472,7 @@ inline void read_data_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
 
 template<typename T>
 inline void write_data_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
+    TRACE(cpu->trace_entry.f_write = 1;)
     if constexpr (is_byte<T>) {
         bus_write(cpu, eaddr_16, reg); // cycle 4
     }
@@ -482,6 +485,7 @@ inline void write_data_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
 
 template<typename T>
 inline void write_tada_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
+    TRACE(cpu->trace_entry.f_write = 1;)
     if constexpr (is_byte<T>) {
         bus_write(cpu, eaddr_16, reg); // cycle 4
     }
@@ -948,7 +952,11 @@ inline void read_direct_x_ind(cpu_state *cpu, T &reg, U &index ) {
 
     read_data(cpu, eaddr, reg);
 
-    TRACE(cpu->trace_entry.eaddr = eaddr_16; cpu->trace_entry.data = reg; cpu->trace_entry.f_data_sz = sizeof(T)-1;)
+    // eaddr, not eaddr_16: eaddr_16 is where the POINTER lives in the direct
+    // page, eaddr is what the instruction actually touched. Recording the
+    // former made the trace name an address the CPU never accessed on
+    // LDA (d,X) / LDA [d,X]. (Ported from upstream 9420cac.)
+    TRACE(cpu->trace_entry.eaddr = eaddr; cpu->trace_entry.data = reg; cpu->trace_entry.f_data_sz = sizeof(T)-1;)
 }
 
 /** Address Mode: 11. Direct Indexed Indirect (d,x) (Write) */
@@ -970,7 +978,8 @@ inline void write_direct_x_ind(cpu_state *cpu, T &reg, U &index ) {
 
     write_data(cpu, eaddr, reg);
 
-    TRACE(cpu->trace_entry.eaddr = eaddr_16; cpu->trace_entry.data = reg; cpu->trace_entry.f_data_sz = sizeof(T)-1;)
+    // See read_direct_x_ind: the effective address, not the pointer's home.
+    TRACE(cpu->trace_entry.eaddr = eaddr; cpu->trace_entry.data = reg; cpu->trace_entry.f_data_sz = sizeof(T)-1;)
 }
 
 /** 12. Direct Indirect         (d) */
@@ -2202,6 +2211,11 @@ int execute_next(cpu_state *cpu) override {
     }
     system_trace_entry_t *tb = &cpu->trace_entry;
     TRACE(
+    // Cleared every instruction, OUTSIDE the `if (cpu->trace)` guard: the
+    // access helpers set f_write during the instruction, so a reset that only
+    // runs when tracing is on would leave the flag stale for consumers that
+    // read it without the ring (DATA/IO breakpoints). Ported from 9420cac.
+    tb->flags = 0;
     if (cpu->trace) {
         tb->cycle = clock->get_cycles();
         tb->pc = cpu->pc;
@@ -2214,7 +2228,6 @@ int execute_next(cpu_state *cpu) override {
         tb->db = cpu->db;
         tb->pb = cpu->pb;
         tb->eaddr = 0;
-        tb->flags = 0; // tb->p & (TRACE_FLAG_M | TRACE_FLAG_X);
         tb->unused = 0;
     }
     )
@@ -2226,6 +2239,11 @@ int execute_next(cpu_state *cpu) override {
             // A2GSPU_INTLOG: interrupt-entry logger (IRQ), before the pushes so
             // PC/P/S read the interrupted state. Compiled out of the 6502 core.
             if (g_intlog_on) iigs_intlog(cpu, "IRQ", CPUTraits::e_mode ? IRQ_VECTOR : N_IRQ_VECTOR);
+            // Discarded opcode fetch: native IRQ is 8 cycles (incl. push PB),
+            // e-mode is 7. Without this, both are one cycle short. (Ported from
+            // upstream 6b91d9c -- intlog stays ahead of it so the log still
+            // reads the interrupted PC/P/S, which a phantom read cannot change.)
+            phantom_read_ign(cpu, make_pc_long(cpu, cpu->pc));
             if constexpr (!CPUTraits::e_mode) push_byte(cpu, cpu->pb);
             push_word(cpu, cpu->pc); // push current PC
             
@@ -2241,6 +2259,11 @@ int execute_next(cpu_state *cpu) override {
             cpu->pb = 0x00;
             incr_cycles(cpu);
         } else {
+            // 6502 IRQ is 7 cycles. push_word (2) + push_byte (1) + vector (2)
+            // + trailing incr (1) = 6; the discarded opcode fetch is the 7th.
+            // (Ported from upstream 6b91d9c; the stale "might be one too many"
+            // note it removes was describing the opposite of the real defect.)
+            phantom_read_ign(cpu, make_pc_long(cpu, cpu->pc));
             push_word(cpu, cpu->pc); // push current PC
             push_byte(cpu, (cpu->p & ~FLAG_B) | FLAG_UNUSED); // break flag = 0, Unused bit set to 1.
             cpu->I = 1; // interrupt disable flag set to 1.
@@ -2249,7 +2272,6 @@ int execute_next(cpu_state *cpu) override {
             }
             cpu->pc = read_word_bank0(cpu,IRQ_VECTOR);
             incr_cycles(cpu);
-            //incr_cycles(cpu); // todo might be one too many, we're at 8, refs say it's 7. push_byte takes an extra cycle now?
         }
         
         cpu->rdy = false;

@@ -2033,6 +2033,80 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
         }
         return true;
     }
+    /* tbuf -- the CPU trace ring, which only the on-screen debugger could read.
+       The emulator records every instruction with its registers, its effective
+       address, its data and (since the 9420cac port) whether the access was a
+       read or a write -- and the one consumer that cannot look at a window had
+       no route to any of it. Exactly the black box devstate was.
+
+       This is also what makes the eaddr fix checkable: itrace resolves the
+       effective address itself, so it never showed the bug. The ring is the
+       consumer that carried it.
+
+         tbuf                is tracing on, and how many entries are held
+         tbuf on | off       start/stop filling the ring
+         tbuf clear          discard what is held
+         tbuf dump <f> [n]   decode the newest n entries (default all), oldest
+                             first, so a dump reads in execution order          */
+    if (!strncmp(line, "tbuf", 4) && (line[4] == 0 || line[4] == ' ')) {
+        const char *arg = (line[4] == ' ') ? line + 5 : "";
+        while (*arg == ' ') arg++;
+        cpu_state *c = computer->cpu;
+        if (!c || !c->trace_buffer) {
+            snprintf(result, rsz, "status=FAIL tbuf-no-buffer -- no trace ring on this machine");
+            return true;
+        }
+        system_trace_buffer *tb = c->trace_buffer;
+        if (!*arg || !strcmp(arg, "status")) {
+            snprintf(result, rsz, "status=OK tbuf on=%d held=%zu capacity=%zu",
+                     c->trace ? 1 : 0, tb->count, tb->size);
+        } else if (!strcmp(arg, "on")) {
+            c->trace = true;
+            snprintf(result, rsz, "status=OK tbuf on held=%zu capacity=%zu", tb->count, tb->size);
+        } else if (!strcmp(arg, "off")) {
+            c->trace = false;
+            snprintf(result, rsz, "status=OK tbuf off held=%zu", tb->count);
+        } else if (!strcmp(arg, "clear")) {
+            tb->head = tb->tail = tb->count = 0;
+            snprintf(result, rsz, "status=OK tbuf cleared on=%d", c->trace ? 1 : 0);
+        } else if (!strncmp(arg, "dump", 4) && (arg[4] == 0 || arg[4] == ' ')) {
+            const char *p = arg + 4;
+            while (*p == ' ') p++;
+            char path[512] = {0};
+            long want = 0;
+            if (sscanf(p, "%511s %ld", path, &want) < 1 || !path[0]) {
+                snprintf(result, rsz, "status=FAIL bad-args -- usage: tbuf dump <file> [n]");
+            } else if (tb->count == 0) {
+                // Never claim a dump for an empty ring: that is the cov defect.
+                snprintf(result, rsz, "status=FAIL tbuf-empty -- nothing recorded; "
+                         "`tbuf on` then run, and check `tbuf` says on=1");
+            } else {
+                size_t n = tb->count;
+                if (want > 0 && (size_t)want < n) n = (size_t)want;
+                FILE *f = fopen(path, "wb");
+                if (!f) {
+                    snprintf(result, rsz, "status=FAIL tbuf-open-fail %s", path);
+                } else {
+                    size_t start = (tb->head + tb->size - n) % tb->size;
+                    for (size_t i = 0; i < n; i++) {
+                        system_trace_entry_t *e = tb->get_entry((start + i) % tb->size);
+                        char *dec = tb->decode_trace_entry(e);
+                        char lbuf[512];
+                        snprintf(lbuf, sizeof lbuf, "%s", dec ? dec : "(decode-failed)");
+                        for (char *q = lbuf; *q; q++) if (*q == '\r' || *q == '\n') { *q = '\0'; break; }
+                        fprintf(f, "%s eaddr=%06X rw=%c\n", lbuf,
+                                (unsigned)(e->eaddr & 0xFFFFFF), e->f_write ? 'W' : 'R');
+                    }
+                    fclose(f);
+                    snprintf(result, rsz, "status=OK tbuf dumped %zu of %zu entries to %s",
+                             n, tb->count, path);
+                }
+            }
+        } else {
+            snprintf(result, rsz, "status=FAIL tbuf-need: [status]|on|off|clear|dump <file> [n]");
+        }
+        return true;
+    }
     if (!strncmp(line, "stack", 5) && (line[5] == 0 || line[5] == ' ')) {
         int n = 16;
         if (line[5] == ' ') n = atoi(line + 6);
