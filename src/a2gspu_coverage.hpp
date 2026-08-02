@@ -75,7 +75,8 @@ static inline bool a2gspu_cov_init(const char *spec) {
     if (!spec || !spec[0]) return false;
     const char *p = strchr(spec, ':');
     uint32_t bank = 0;
-    if (p) { bank = (uint32_t)strtoul(spec, nullptr, 16) & 0xFF; p++; }
+    bool banked = false;
+    if (p) { bank = (uint32_t)strtoul(spec, nullptr, 16) & 0xFF; p++; banked = true; }
     else p = spec;
     const char *dash = strchr(p, '-');
     if (!dash) {
@@ -84,9 +85,29 @@ static inline bool a2gspu_cov_init(const char *spec) {
     }
     uint32_t lo = (uint32_t)strtoul(p, nullptr, 16);
     uint32_t hi = (uint32_t)strtoul(dash + 1, nullptr, 16);
-    if (hi < lo) { fprintf(stderr, "A2GSPU_COVERAGE: HI < LO\n"); return false; }
-    g_cov_lo = (bank << 16) | (lo & 0xFFFF);
-    g_cov_hi = (bank << 16) | (hi & 0xFFFF);
+    // Validate what we are actually going to USE, not the raw text.  Silently
+    // masking the offsets to 16 bits is how "E0:E000-E0FFF" armed $E0E000-$E00FFF:
+    // raw hi > lo so the old check passed, the mask then inverted the pair, and
+    // the (hi - lo) underflow asked calloc for half a gigabyte -- and answered
+    // status=OK, having written a 512 MB file of nothing.
+    if (banked && (lo > 0xFFFF || hi > 0xFFFF)) {
+        fprintf(stderr, "A2GSPU_COVERAGE: offset out of range in '%s' -- with a "
+                        "BANK: prefix both ends must be $0000-$FFFF\n", spec);
+        return false;
+    }
+    uint32_t flo = banked ? ((bank << 16) | lo) : (lo & 0xFFFFFF);
+    uint32_t fhi = banked ? ((bank << 16) | hi) : (hi & 0xFFFFFF);
+    if (fhi < flo) {
+        fprintf(stderr, "A2GSPU_COVERAGE: HI < LO ($%06X-$%06X) in '%s'\n", flo, fhi, spec);
+        return false;
+    }
+    // Re-arming must not leak the previous bitmap, and a failed re-arm must not
+    // leave the old range live and collecting: disarm first, then commit.
+    free(g_cov_bits);
+    g_cov_bits = nullptr;
+    g_cov_on = false;
+    g_cov_lo = flo;
+    g_cov_hi = fhi;
     g_cov_nbytes = ((size_t)(g_cov_hi - g_cov_lo) >> 3) + 1;
     g_cov_bits = (uint8_t *)calloc(g_cov_nbytes, 1);
     if (!g_cov_bits) { fprintf(stderr, "A2GSPU_COVERAGE: out of memory\n"); return false; }
@@ -109,15 +130,29 @@ inline void a2gspu_cov_reset() {
     g_cov_prev_pc = 0xFFFFFFFFu;
 }
 
+// Disarm and release the bitmap.  Symmetric with cov_init so that arm/disarm
+// cycles across a long session don't leak one bitmap per arm.
+inline void a2gspu_cov_off() {
+    free(g_cov_bits);
+    g_cov_bits = nullptr;
+    g_cov_nbytes = 0;
+    g_cov_marked = 0;
+    g_cov_prev_pc = 0xFFFFFFFFu;
+    g_cov_on = false;
+}
+
 // On-disk format (little-endian), deliberately trivial so any consumer can read it:
 //   0  : "A2COV1\0"   8 bytes (7 chars + NUL)
 //   8  : lo           uint32
 //   12 : hi           uint32
 //   16 : bitmap       ceil((hi-lo+1)/8) bytes, bit i = byte (lo+i) executed
-static inline void a2gspu_cov_write(const char *path) {
-    if (!g_cov_on || !g_cov_bits || !path || !path[0]) return;
+// Returns true only if a file actually landed on disk.  Callers MUST propagate
+// this: a caller that answers "wrote" unconditionally turns a silent no-op into
+// a reported success, which is the worst failure mode instrumentation has.
+static inline bool a2gspu_cov_write(const char *path) {
+    if (!g_cov_on || !g_cov_bits || !path || !path[0]) return false;
     FILE *f = fopen(path, "wb");
-    if (!f) { fprintf(stderr, "A2GSPU COVERAGE: cannot write '%s'\n", path); return; }
+    if (!f) { fprintf(stderr, "A2GSPU COVERAGE: cannot write '%s'\n", path); return false; }
     fwrite("A2COV1\0", 1, 8, f);
     uint32_t lo = g_cov_lo, hi = g_cov_hi;
     fwrite(&lo, 4, 1, f); fwrite(&hi, 4, 1, f);
@@ -127,4 +162,5 @@ static inline void a2gspu_cov_write(const char *path) {
     fprintf(stderr, "A2GSPU COVERAGE: wrote %s -- %llu/%u bytes executed (%.1f%%)\n",
             path, (unsigned long long)g_cov_marked, span,
             span ? (100.0 * (double)g_cov_marked / (double)span) : 0.0);
+    return true;
 }

@@ -1428,11 +1428,40 @@ inline void format_cpu_line(computer_t *computer, char *out, size_t outsz) {
         (int)(c->rdy ? 1 : 0), (unsigned)kbd, akd);
 }
 
+// A fired breakpoint (or save-at) leaves cpu->halt == HLT_USER, and
+// run_one_frame's top-of-frame guard then refuses to advance -- so every
+// subsequent `run` answered "status=HALT ran=0 cycles=0" forever, and the only
+// escape on the whole rail was `reset`, which discards the very state you
+// stopped to look at. An "interactive breakpoint" you cannot continue from is a
+// one-way door, and a silent one: the ack said HALT without saying how to leave.
+//
+// An explicit run/step/run-until IS the intent to continue, so clear a user halt
+// here and SAY SO in the ack. Never clear HLT_INSTRUCTION: that is the guest CPU
+// genuinely jammed on a halting opcode, a real machine state the agent has to be
+// able to see rather than have papered over.
+inline bool rail_clear_user_halt(computer_t *computer) {
+    if (!computer->cpu || computer->cpu->halt != HLT_USER) return false;
+    computer->cpu->halt = 0;
+    return true;
+}
+
 // run / step / run-until — needs ctrl_frame for itrace frame clock on `run`.
 inline bool try_exec(const char *line, char *result, size_t rsz,
                      computer_t *computer, int *ctrl_frame) {
     if (!strncmp(line, "run ", 4)) {
         int frames = atoi(line + 4);
+        const char *rsm = rail_clear_user_halt(computer) ? " resumed-from-halt" : "";
+        // `step` and `run-until` have always armed the CPU here; `run` did not,
+        // and that asymmetry made the most-used verb on the rail lie. On a fresh
+        // IIe session reset_asserted is still set, execute_next() no-ops on it,
+        // and the frame path under CTRL is not the one that would clear it -- so
+        // `run 2` advanced the clock 34056 cycles, executed ZERO instructions,
+        // left PC untouched, and answered "status=OK ran=2". The existing
+        // RAN-NOTHING guard could not catch it because it keys off elapsed
+        // cycles, and the cycles were real; only the instructions were missing.
+        // (Platform 5 masked it: the IIgs comes up without reset asserted, so
+        // the same script worked there and the IIe looked like a content bug.)
+        const char *armed = arm_cpu(computer);
         uint64_t cyc0 = computer->clock->get_cycles();
         uint32_t pc0  = computer->cpu->full_pc & 0xFFFFFF;
         int ran = 0;
@@ -1446,8 +1475,10 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
         uint32_t pc1 = computer->cpu->full_pc & 0xFFFFFF;
         if (halted) {
             snprintf(result, rsz,
-                     "status=HALT ran=%d cycles=%llu (in-command)",
-                     ran, (unsigned long long)dc);
+                     "status=HALT ran=%d cycles=%llu (in-command)%s%s halt=%d "
+                     "-- `resume` (or the next run/step) continues past a breakpoint",
+                     ran, (unsigned long long)dc, armed ? armed : "", rsm,
+                     (int)computer->cpu->halt);
         } else if (dc == 0) {
             snprintf(result, rsz,
                      "status=FAIL RAN NOTHING: %d frame(s), 0 cycles, PC still $%04X "
@@ -1459,9 +1490,10 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
                      (int)computer->cpu->halt);
         } else {
             snprintf(result, rsz,
-                     "status=OK ran=%d cycles=%llu (in-command) PC $%04X->$%04X",
+                     "status=OK ran=%d cycles=%llu (in-command) PC $%04X->$%04X%s%s",
                      ran, (unsigned long long)dc,
-                     (unsigned)(pc0 & 0xFFFF), (unsigned)(pc1 & 0xFFFF));
+                     (unsigned)(pc0 & 0xFFFF), (unsigned)(pc1 & 0xFFFF),
+                     armed ? armed : "", rsm);
         }
         soft_watch_after(computer, result, rsz);
         return true;
@@ -1473,6 +1505,7 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
         if (sscanf(line + 10, "%63s %ld", addrbuf, &budget) >= 1 &&
             parse_addr(addrbuf, &target)) {
             const char *armed = arm_cpu(computer);
+            const char *rsm = rail_clear_user_halt(computer) ? " resumed-from-halt" : "";
             uint64_t cyc0 = computer->clock ? computer->clock->get_cycles() : 0;
             long i = 0; bool hit = false;
             for (; i < budget; i++) {
@@ -1484,9 +1517,9 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
             char st[192];
             format_cpu_line(computer, st, sizeof st);
             snprintf(result, rsz,
-                     "status=%s instr=%ld cycles=%llu (in-command)%s %s",
+                     "status=%s instr=%ld cycles=%llu (in-command)%s%s %s",
                      hit ? "OK" : (computer->cpu->halt ? "HALT" : "BUDGET"),
-                     i, (unsigned long long)dcyc, armed ? armed : "", st);
+                     i, (unsigned long long)dcyc, armed ? armed : "", rsm, st);
             soft_watch_after(computer, result, rsz);
         } else {
             snprintf(result, rsz, "status=FAIL run-until-parse-fail");
@@ -1500,6 +1533,7 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
         if (line[4] == ' ') n = atoi(line + 5);
         if (n < 1) n = 1;
         const char *armed = arm_cpu(computer);
+        const char *rsm = rail_clear_user_halt(computer) ? " resumed-from-halt" : "";
         uint64_t cyc0 = computer->clock ? computer->clock->get_cycles() : 0;
         int done = 0;
         for (; done < n; done++) {
@@ -1510,9 +1544,29 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
         char st[192];
         format_cpu_line(computer, st, sizeof st);
         snprintf(result, rsz,
-                 "status=OK stepped=%d cycles=%llu (in-command)%s %s",
-                 done, (unsigned long long)dcyc, armed ? armed : "", st);
+                 "status=OK stepped=%d cycles=%llu (in-command)%s%s %s",
+                 done, (unsigned long long)dcyc, armed ? armed : "", rsm, st);
         soft_watch_after(computer, result, rsz);
+        return true;
+    }
+    // resume — the explicit half of the breakpoint round trip. Distinguishes the
+    // two halts by name, because they need opposite responses: a user halt is
+    // continuable, a jammed CPU is not and no amount of `run` will help.
+    if (!strcmp(line, "resume")) {
+        const int h = computer->cpu ? computer->cpu->halt : 0;
+        if (h == HLT_USER) {
+            computer->cpu->halt = 0;
+            char st[192];
+            format_cpu_line(computer, st, sizeof st);
+            snprintf(result, rsz, "status=OK resume cleared user-halt %s", st);
+        } else if (h == HLT_INSTRUCTION) {
+            snprintf(result, rsz, "status=FAIL resume-cpu-jammed halt=%d -- the guest "
+                     "executed a halting instruction; only `reset` leaves this state", h);
+        } else if (h) {
+            snprintf(result, rsz, "status=FAIL resume-unknown-halt halt=%d", h);
+        } else {
+            snprintf(result, rsz, "status=OK resume not-halted (nothing to clear)");
+        }
         return true;
     }
     return false;
@@ -1947,19 +2001,34 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
         }
         return true;
     }
-    if (!strncmp(line, "bp ", 3)) {
-        if (!strncmp(line + 3, "off", 3)) {
+    // Every ack on this rail leads with status=; these three did not, so a caller
+    // parsing acks generically saw a breakpoint set, cleared, or failed to parse
+    // as equally unclassifiable. Bare `bp` did not match at all (the old test
+    // required a trailing space) and fell through to unknown-cmd.
+    if (!strncmp(line, "bp", 2) && (line[2] == 0 || line[2] == ' ')) {
+        const char *arg = (line[2] == ' ') ? line + 3 : "";
+        while (*arg == ' ') arg++;
+        if (!*arg) {
+            if (g_iigs_break_enabled)
+                snprintf(result, rsz, "status=OK bp @%02X/%04X armed",
+                         (unsigned)((g_iigs_break_addr >> 16) & 0xFF),
+                         (unsigned)(g_iigs_break_addr & 0xFFFF));
+            else
+                snprintf(result, rsz, "status=OK bp off");
+        } else if (!strcmp(arg, "off")) {
             g_iigs_break_enabled = false;
-            snprintf(result, rsz, "bp cleared");
+            snprintf(result, rsz, "status=OK bp cleared");
         } else {
             uint32_t a = 0;
-            if (parse_addr(line + 3, &a)) {
+            if (parse_addr(arg, &a)) {
                 g_iigs_break_addr = a;
                 g_iigs_break_enabled = true;
-                snprintf(result, rsz, "bp @%02X/%04X armed",
+                snprintf(result, rsz, "status=OK bp @%02X/%04X armed "
+                         "(halts when PC reaches it; run/step/resume continue past it)",
                          (unsigned)((a >> 16) & 0xFF), (unsigned)(a & 0xFFFF));
             } else {
-                snprintf(result, rsz, "bp-parse-fail");
+                snprintf(result, rsz, "status=FAIL bp-parse-fail '%s' -- "
+                         "usage: bp <addr|BANK:addr|off>, hex", arg);
             }
         }
         return true;

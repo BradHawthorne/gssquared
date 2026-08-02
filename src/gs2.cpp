@@ -2166,41 +2166,79 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                          "text_rows=%d nonblank_rows=%d png=%s",
                          mode, p2 ? 2 : 1, litp[0], litp[1], ttext, tnb, fbuf);
             }
-        } else if (!strncmp(line, "cov", 3)) {
-            // cov on <LO-HI> | cov reset | cov <file> | cov
+        } else if (!strncmp(line, "cov", 3) && (line[3] == '\0' || line[3] == ' ')) {
+            // cov | cov status   -- report the armed range and what it has marked
+            // cov on <LO-HI>     -- arm (BANK:LO-HI also accepted, hex)
+            // cov off            -- disarm and release the bitmap
+            // cov reset          -- clear the bits, keep the range
+            // cov write <file>   -- dump the bitmap (legacy bare `cov <file>` still works)
             //
             // A2GSPU_COVERAGE_OUT is flushed at SPIKE end, which never executes in
             // a CTRL session -- so an interactive run could accumulate coverage and
             // then throw it away on quit.  Worse, env-only configuration means
             // coverage is always "everything since boot", when the interesting
             // question is almost always scoped: what does THIS menu / THIS combat /
-            // THIS shop conversation touch?  `cov reset` + activity + `cov <file>`
+            // THIS shop conversation touch?  `cov reset` + activity + `cov write`
             // answers that, and is what makes the emulator->disassembler edge
             // usable for archaeology rather than just a boot-time curiosity.
             const char *arg = line + 3;
             while (*arg == ' ') arg++;
-            if (!strncmp(arg, "on ", 3)) {
-                a2gspu_cov_init(arg + 3);
-                snprintf(result, sizeof result, g_cov_on ? "status=OK cov armed $%06X-$%06X"
-                                                         : "status=FAIL cov-arm-fail",
-                         g_cov_lo, g_cov_hi);
-            } else if (!strncmp(arg, "reset", 5)) {
-                a2gspu_cov_reset();
-                snprintf(result, sizeof result, "status=OK cov reset (range $%06X-$%06X)",
-                         g_cov_lo, g_cov_hi);
-            } else if (*arg) {
-                a2gspu_cov_write(arg);
-                uint32_t span = g_cov_on ? (g_cov_hi - g_cov_lo + 1) : 0;
-                snprintf(result, sizeof result, "status=OK cov wrote %s (%llu/%u bytes = %.1f%%)",
-                         arg, (unsigned long long)g_cov_marked, span,
-                         span ? 100.0 * (double)g_cov_marked / (double)span : 0.0);
-            } else {
+            if (!*arg || !strcmp(arg, "status")) {
                 uint32_t span = g_cov_on ? (g_cov_hi - g_cov_lo + 1) : 0;
                 snprintf(result, sizeof result, g_cov_on
                          ? "status=OK cov on $%06X-$%06X marked=%llu/%u (%.1f%%)"
                          : "status=OK cov off",
                          g_cov_lo, g_cov_hi, (unsigned long long)g_cov_marked, span,
                          span ? 100.0 * (double)g_cov_marked / (double)span : 0.0);
+            } else if (!strncmp(arg, "on", 2) && (arg[2] == '\0' || arg[2] == ' ')) {
+                const char *range = arg + 2;
+                while (*range == ' ') range++;
+                if (!*range) {
+                    snprintf(result, sizeof result, "status=FAIL bad-args -- "
+                             "cov on needs a range. usage: cov on <LO-HI> or <BANK:LO-HI>, hex");
+                } else if (a2gspu_cov_init(range)) {
+                    snprintf(result, sizeof result, "status=OK cov armed $%06X-$%06X",
+                             g_cov_lo, g_cov_hi);
+                } else {
+                    snprintf(result, sizeof result, "status=FAIL cov-arm-fail '%s' -- "
+                             "want LO-HI or BANK:LO-HI in hex", range);
+                }
+            } else if (!strcmp(arg, "off")) {
+                if (!g_cov_on) snprintf(result, sizeof result, "status=OK cov already off");
+                else { a2gspu_cov_off(); snprintf(result, sizeof result, "status=OK cov off"); }
+            } else if (!strcmp(arg, "reset")) {
+                if (!g_cov_on) {
+                    snprintf(result, sizeof result, "status=FAIL cov-not-armed -- "
+                             "nothing to reset; arm it with `cov on <LO-HI>`");
+                } else {
+                    a2gspu_cov_reset();
+                    snprintf(result, sizeof result, "status=OK cov reset (range $%06X-$%06X)",
+                             g_cov_lo, g_cov_hi);
+                }
+            } else {
+                // `cov write <file>`, or the legacy bare `cov <file>`.
+                const char *path = arg;
+                if (!strncmp(arg, "write", 5) && (arg[5] == '\0' || arg[5] == ' ')) {
+                    path = arg + 5;
+                    while (*path == ' ') path++;
+                }
+                if (!*path) {
+                    snprintf(result, sizeof result, "status=FAIL bad-args -- "
+                             "cov write needs a file. usage: cov write <file>");
+                } else if (!g_cov_on) {
+                    // The defect this replaces: an unarmed `cov <file>` wrote nothing
+                    // and still answered status=OK, so an agent following the old
+                    // synopsis could "collect coverage" all session and hold no bytes.
+                    snprintf(result, sizeof result, "status=FAIL cov-not-armed -- "
+                             "nothing written; arm it with `cov on <LO-HI>` first");
+                } else if (a2gspu_cov_write(path)) {
+                    uint32_t span = g_cov_hi - g_cov_lo + 1;
+                    snprintf(result, sizeof result, "status=OK cov wrote %s (%llu/%u bytes = %.1f%%)",
+                             path, (unsigned long long)g_cov_marked, span,
+                             span ? 100.0 * (double)g_cov_marked / (double)span : 0.0);
+                } else {
+                    snprintf(result, sizeof result, "status=FAIL cov-write-failed '%s'", path);
+                }
             }
         } else if (!strncmp(line, "save ", 5)) {
             // save <file> — CPU regs + full MMU snapshot (128K + page tables +

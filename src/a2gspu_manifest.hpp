@@ -38,9 +38,9 @@ inline const Verb *verbs(int *count) {
     static const Verb v[] = {
         {"assert", "observe", "assert peek:ADDR==VAL[;…] — probe_peek checks; status=PASS|FAIL", "memory-peek"},
         {"boot", "run", "boot <frames> — run N frames from power-on path", "run-frames"},
-        {"bp", "manipulate", "bp <addr|off> — interactive breakpoint", "force-control"},
+        {"bp", "manipulate", "bp [addr|off] — interactive breakpoint; bare reports state. A hit halts; run/step/resume continue past it", "force-control"},
         {"callstream", "trace", "callstream on <file>|off|status — LIVE NDJSON toolbox stream", "tool_locator"},
-        {"cov", "observe", "cov [on|off|status] — execution coverage", "coverage"},
+        {"cov", "observe", "cov [status] | cov on <LO-HI|BANK:LO-HI> | cov off | cov reset | cov write <file> — execution coverage", "coverage"},
         {"cpu", "observe", "cpu — PBR:PC A X Y SP P E HALT STP RDY KBD AKD", "cpu-state"},
         {"cycles", "observe", "cycles — guest cycle counter NOW (absolute). "
          "Deltas only valid inside run/step/run-until acks.", "cycles-absolute-warn"},
@@ -73,6 +73,7 @@ inline const Verb *verbs(int *count) {
         {"read", "observe", "read <addr> <len> <file> — probe_peek dump (side-effect-free)", "memory-peek"},
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
         {"restore", "snapshot", "restore <file> — Class A snapshot load", "time-travel-A"},
+        {"resume", "manipulate", "resume — clear a user halt (breakpoint/save-at) so the CPU advances again; refuses to paper over a jammed CPU", "force-control"},
         {"run", "run", "run <frames> — advance N frames; ack includes cycles= IN-COMMAND", "cycles-in-cmd"},
         {"run-until", "run", "run-until <addr> [max_instr] — stop at PC; cycles= IN-COMMAND", "cycles-in-cmd"},
         {"save", "snapshot", "save <file> — Class A CPU+MMU snapshot", "time-travel-A"},
