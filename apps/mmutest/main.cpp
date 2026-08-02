@@ -60,7 +60,22 @@ void fake_text_page_write_handler(void *context, uint32_t address, uint8_t value
 
 
 int main(int argc, char **argv) {
-    MMU_II mmu(MEM_SIZE / PAGE_SIZE, MEM_SIZE, nullptr);
+    // Unbuffered stdout: this test can fault, and with buffering the captured
+    // output stops wherever the buffer happened to flush -- which made the crash
+    // look like it was at page $AD three separate times when the dump had in fact
+    // completed and the fault was elsewhere. Unbuffered, the last line printed IS
+    // the last line executed, so the crash site is directly readable.
+    setvbuf(stdout, nullptr, _IONBF, 0);
+
+    // 256 pages, NOT MEM_SIZE/PAGE_SIZE.  MEM_SIZE is how much RAM exists (48K);
+    // the page TABLE must cover the whole 64K address space, because this test
+    // goes on to touch $C0-$CF (set_page_read_h(0xC4), read(0xC4FF), read(0xCFFF),
+    // dump_page_table(0xC0,0xCF)) -- pages 192..207.  Sizing the table to 192
+    // entries made every one of those an out-of-bounds index, which is what
+    // crashed this test with ACCESS_VIOLATION.  Base MMU::read guards with
+    // assert(page < num_pages), and asserts are compiled out in this Release
+    // build, so the overrun was silent until it wandered into unmapped memory.
+    MMU_II mmu(256, MEM_SIZE, nullptr);
     
     uint8_t *ram = new uint8_t[MEM_SIZE];
     for (int page = 0; page < MEM_SIZE / PAGE_SIZE; page++) {

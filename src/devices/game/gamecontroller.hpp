@@ -98,6 +98,21 @@ typedef struct gamec_state_t {
     computer_t *computer;
 
     JoystickValues last_jv = {0, 0};
+
+    /* A2GSPU: file/automation-driven paddle and button state.
+       The game controller took its input ONLY from live SDL -- mouse position or
+       a gamepad -- so on a headless rail session there is no way to set a paddle
+       and no way to press a button. It was therefore both uncontrollable and
+       unobservable: the one subsystem on the machine that no instrument could
+       reach, which is precisely what makes it a black box rather than a gap.
+
+       When inject_active is set, strobe_game_inputs() seeds the decay timers
+       from inject_paddle[] instead of the host device, and the switch readers
+       return inject_button[]. Additive: with inject_active false, nothing here
+       changes behaviour at all. */
+    bool    inject_active = false;
+    uint8_t inject_paddle[4] = {0, 0, 0, 0};   // 0..255, as the ADC would see
+    uint8_t inject_button[3] = {0, 0, 0};      // 0 = up, 1 = down
 } gamec_state_t;
 
 void init_mb_game_controller(computer_t *computer, SlotType_t slot);

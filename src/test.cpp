@@ -1,4 +1,26 @@
 
+/* ==========================================================================
+   THIS FILE IS NOT BUILT, AND WOULD NOT COMPILE IF IT WERE.
+
+   It is in no CMakeLists target, produces no object, and `ctest -N` reports 0
+   tests. It is also written against an older architecture: run_test() calls
+   run_cpus(), which no longer exists (gs2.cpp has run_cpus_init() and a
+   different execution model), and drives CPUs[0] directly rather than a
+   computer_t.
+
+   Stated here because the file LOOKS like the emulator's test suite -- it has
+   run_test() and assert_cycles() and a table of programs -- and finding it is a
+   reasonable way to conclude that CPU timing is covered by unit tests. It is
+   not. Nothing here has run in a long time.
+
+   Where the coverage actually lives: tools/cpucheck.ps1 in the a2engine repo,
+   driven over the A2GSPU CTRL rail -- 599 opcode timing checks against each of
+   the 6502, 65C02 and 65816 cores, plus base/page-cross/branch penalties. That
+   harness tests the SHIPPING BINARY through the same interface a guest uses,
+   rather than a separate link of the CPU core, which is the stronger position
+   of the two and the reason reviving this file has not been worth it.
+   ========================================================================== */
+
 #include <functional>
 #include <cassert>
 #include <iostream>

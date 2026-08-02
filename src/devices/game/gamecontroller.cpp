@@ -112,6 +112,19 @@ JoystickValues convertJoystickValues(int32_t x, int32_t y) {
 uint8_t strobe_game_inputs(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
 
+    /* A2GSPU injection takes precedence over the host device. Same decay-time
+       arithmetic the gamepad path uses, so an injected 0..255 means exactly what
+       a real ADC reading of 0..255 would: trigger = now + DECAY * value / 255.
+       Checked FIRST so a headless session -- which has no mouse and no gamepad
+       -- can still drive the paddles. */
+    if (ds->inject_active) {
+        ds->game_input_trigger_0 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[0]) / 255);
+        ds->game_input_trigger_1 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[1]) / 255);
+        ds->game_input_trigger_2 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[2]) / 255);
+        ds->game_input_trigger_3 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[3]) / 255);
+        return ds->mmu->floating_bus_read();
+    }
+
     if (ds->joystick_mode == JOYSTICK_APPLE_MOUSE) {
         float mouse_x, mouse_y;
         SDL_GetMouseState(&mouse_x, &mouse_y);
@@ -199,6 +212,12 @@ uint8_t read_game_input_3(void *context, uint32_t address) {
 
 uint8_t read_game_switch_0(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
+
+    /* A2GSPU injection: checked first, so a headless session can press
+       buttons that no host gamepad exists to press. */
+    if (ds->inject_active) {
+        return (ds->inject_button[0] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+    }
     
     if ((ds->joystick_mode == JOYSTICK_ATARI_DPAD) && (ds->clock->get_cycles() > ds->computer->last_reset + 100000)) { // reverse polarity for atari
         bool val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST);
@@ -229,6 +248,12 @@ uint8_t read_game_switch_0(void *context, uint32_t address) {
 
 uint8_t read_game_switch_1(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
+
+    /* A2GSPU injection: checked first, so a headless session can press
+       buttons that no host gamepad exists to press. */
+    if (ds->inject_active) {
+        return (ds->inject_button[1] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+    }
 
     if ((ds->joystick_mode == JOYSTICK_ATARI_DPAD) && (ds->clock->get_cycles() > ds->computer->last_reset + 100000)) {
         bool val = false;
@@ -268,6 +293,12 @@ uint8_t read_game_switch_1(void *context, uint32_t address) {
 
 uint8_t read_game_switch_2(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
+
+    /* A2GSPU injection: checked first, so a headless session can press
+       buttons that no host gamepad exists to press. */
+    if (ds->inject_active) {
+        return (ds->inject_button[2] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+    }
 
     if ((ds->joystick_mode == JOYSTICK_ATARI_DPAD) && (ds->clock->get_cycles() > ds->computer->last_reset + 100000)) {
         bool val = false;

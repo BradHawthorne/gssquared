@@ -17,6 +17,7 @@
 
 //#include <stdio.h>
 #include <iostream>
+#include <cstring>      // memset, for Format
 #include "gs2.hpp"
 #include "cpu.hpp"
 #include "mmus/mmu_ii.hpp"
@@ -223,6 +224,60 @@ public:
         drives[drive].last_block_access_time = clock ? clock->get_cycles() : 0;
     }
 
+    /* SmartPort Format ($03). A LOW-LEVEL format: it prepares the medium and
+       leaves it blank. It does NOT write a filesystem -- the caller (GS/OS
+       Finder "Erase Disk", ProDOS FILER) writes the directory itself afterwards,
+       which is why formatting alone leaves a volume the OS still calls damaged.
+       Zeroing every block is what that looks like on file-backed media.
+
+       This was `assert(false)`. The build ships WITHOUT -DNDEBUG (CMakeLists
+       overrides CMAKE_CXX_FLAGS_RELEASE to plain -O3), so that assert was live
+       in the shipping binary: a guest formatting a SmartPort volume did not get
+       a failure, it took the whole emulator down. Neither half of that is what
+       the hardware does. */
+    void format_device(uint8_t drive) {
+        if (!check_valid_unit(drive)) return;
+        if (!check_online(drive)) return;
+
+        key_info[drives[drive].key].last_active_unit = drive;
+
+        media_descriptor *media = drives[drive].media;
+        if (media->block_size == 0 || media->block_size > 512) {
+            cmd_buffer.error = PD_ERROR_IO;
+            return;
+        }
+        if (media->write_protected) {
+            cmd_buffer.error = PD_ERROR_WRITE_PROTECTED;
+            return;
+        }
+
+        uint8_t zero[512];
+        memset(zero, 0, sizeof(zero));
+
+        std::vector<uint8_t> &ram = drives[drive].ram;
+        if (!ram.empty()) {
+            // In-RAM COW path: the format stays in RAM, exactly as writes do,
+            // so a formatted --ram-disk never touches the host file.
+            uint64_t start = media->data_offset;
+            uint64_t len   = (uint64_t)media->block_count * media->block_size;
+            if (start < ram.size()) {
+                if (start + len > ram.size()) len = ram.size() - start;
+                memset(&ram[start], 0, (size_t)len);
+            }
+        } else {
+            FILE *fp = drives[drive].file;
+            for (uint32_t b = 0; b < media->block_count; b++) {
+                fseek(fp, media->data_offset + (uint64_t)b * media->block_size, SEEK_SET);
+                if (fwrite(zero, 1, media->block_size, fp) != media->block_size) {
+                    cmd_buffer.error = PD_ERROR_IO;
+                    return;
+                }
+            }
+            fflush(fp);
+        }
+        cmd_buffer.error = PD_ERROR_NONE;
+    }
+
     struct DriveInfo { uint8_t status; uint32_t blk_count; };
 
     DriveInfo get_drive_info(uint8_t unit_index) {
@@ -361,9 +416,13 @@ public:
                 write_block(cmdlist.unit - 1, cmdlist.block, cmdlist.addr);
                 break;
             }
-            case 0x03: // Format
-                assert(false); // not implemented
+            case 0x03: { // Format
+                CmdRW cmdlist;
+                read_from_memory(clist_addr, (uint8_t *)&cmdlist, sizeof(cmdlist));
+                if (!check_unit_nonzero(cmdlist.unit)) break;
+                format_device(cmdlist.unit - 1);
                 break;
+            }
             case 0x04: { // Control / Eject
                 /* SmartPort TN #2: Before May 1988, control code $04 was device-specific.
                    It is now defined as EJECT. Devices without removable media return success. */
@@ -455,8 +514,13 @@ public:
             read_block(drive, block, addr);
         } else if (cmd == 0x02) {
             write_block(drive, block, addr);
-        } else if (cmd == 0x03) { // not implemented
-            cmd_buffer.error = PD_ERROR_NO_DEVICE;
+        } else if (cmd == 0x03) { // Format
+            // The ProDOS block-device interface defines the same four commands
+            // as SmartPort (0=STATUS 1=READ 2=WRITE 3=FORMAT), so this is the
+            // same operation reached through the older entry point. It returned
+            // NO_DEVICE, which told the guest the drive did not exist -- a
+            // misleading error for a drive that had just answered a STATUS call.
+            format_device(drive);
         }
     }
         

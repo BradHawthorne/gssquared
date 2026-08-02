@@ -67,3 +67,17 @@ __pycache__/
 # rules above): regenerate locally from your own build. The synthetic IP-free overlay
 # selftest (tools/gdiff/selftest.py :: t_overlay_synth) covers the same logic without them.
 *.omf
+
+# CTRL-rail scratch. Every verb that writes a file takes an arbitrary path, and a
+# session driven from the repo root leaves its artifacts here: `read`/`vram`
+# dumps (.bin), `text`/`dis`/`manifest` output (.txt), `shot` backbuffers (.bmp).
+# Sixty-three of them had accumulated. They are test output, reproducible by
+# re-running the harness, and not source.
+/*.bin
+/*.bmp
+/*.txt
+!/CMakeLists.txt
+# Device-side artifacts the emulator writes relative to its own CWD.
+parallel.out
+speaker_event_log.txt
+test.asm

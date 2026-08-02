@@ -27,6 +27,11 @@ MMU::MMU(page_t num_pages) {
         page_table[i].read_h = {nullptr, nullptr};
         page_table[i].write_h = {nullptr, nullptr};
         page_table[i].shadow_h = {nullptr, nullptr};
+        // Description pointers must be nulled too -- see the note in the mmu.hpp
+        // constructor. Left uninitialized they are heap garbage, and any %s on them
+        // dereferences a wild pointer (this is what crashed mmutest).
+        page_table[i].read_d = nullptr;
+        page_table[i].write_d = nullptr;
     }
 }
 
@@ -189,37 +194,25 @@ void MMU::set_page_write_h(page_t page, write_handler_t handler, const char *wri
     page_table[page].write_d = write_d;
 }
 
-void MMU::dump_page_table(page_t start_page, page_t end_page) {
-    /* const char *type_str[] = {
-        "NON",
-        "RAM",
-        "ROM",
-        "IO"
-    }; */
-
-    printf("Page                        R-Ptr            W-Ptr              read_h   (    context     )        write_h  (     context    )        S-Handler(     context    )\n");
-    printf("-------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
-    for (int i = start_page ; i <= end_page ; i++) {
-        printf("%02X (%8s %8s): %16p %16p %16p(%16p) %16p(%16p) %16p(%16p)\n", 
-            i, 
-            page_table[i].read_d, page_table[i].write_d, //page_table[i].readable, page_table[i].writeable,
-            page_table[i].read_p,
-            page_table[i].write_p, 
-            page_table[i].read_h.read, page_table[i].read_h.context,
-            page_table[i].write_h.write, page_table[i].write_h.context,
-            page_table[i].shadow_h.write, page_table[i].shadow_h.context
-        );
-    }
-}
+/* MMU::dump_page_table lives ONLY in mmu.hpp as an inline definition.
+ * A duplicate body used to sit here. The header copy always won for anything
+ * including mmu.hpp, and some targets (mmutest) do not link this file at all,
+ * so this copy was dead code -- and was the reason two correct fixes applied
+ * here produced no observable change while a crash was being hunted.
+ * Keep exactly one definition. */
 
 void MMU::debug_output_page(DebugFormatter *f, page_t page, bool header) {
     if (header) {
         f->addLine("Page                        R-Ptr            W-Ptr              read_h   (    context     )        write_h  (     context    )        S-Handler(     context    )\n");
         f->addLine("-------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
     }
-    f->addLine("%02X (%8s %8s): %16p %16p %16p(%16p) %16p(%16p) %16p(%16p)\n", 
-        page, 
-        page_table[page].read_d, page_table[page].write_d, //page_table[i].readable, page_table[i].writeable,
+    /* Unmapped pages legitimately have no description, and %s on NULL with a width
+     * is undefined and can fault -- the same hazard that crashed mmutest. */
+    const char *rd = page_table[page].read_d  ? page_table[page].read_d  : "-";
+    const char *wd = page_table[page].write_d ? page_table[page].write_d : "-";
+    f->addLine("%02X (%8s %8s): %16p %16p %16p(%16p) %16p(%16p) %16p(%16p)\n",
+        page,
+        rd, wd,
         page_table[page].read_p,
         page_table[page].write_p, 
         page_table[page].read_h.read, page_table[page].read_h.context,

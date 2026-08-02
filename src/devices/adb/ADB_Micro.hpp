@@ -142,7 +142,14 @@ class KeyGloo
 
         union {
             struct {
-                bool num_response_bytes : 3;
+                /* MUST NOT be `bool : 3`. A bool bitfield converts its value to
+                   bool before storing, so any non-zero count lands as 1 no matter
+                   how wide the field is declared -- num_response_bytes = 5 read
+                   back as 1. That is the low three bits of the $C026 data
+                   register, i.e. the count of response bytes still to come, so
+                   every multi-byte response (READ CONFIGURATION BYTES, READ CHAR
+                   SETS, a 2-byte TALK) told the guest the wrong length. */
+                uint8_t num_response_bytes : 3;
                 bool service_request_valid : 1;
                 bool buffer_flush_sequence : 1;
                 bool desktop_manager_key_sequence : 1;
@@ -342,6 +349,41 @@ class KeyGloo
             return false;
         }
 
+        /* Name an unemulated command on stderr, once each, and say what its
+           silence costs. The alternative -- doing nothing quietly -- is
+           indistinguishable from the command having worked, because the
+           microcontroller clears its command state either way. */
+        void report_unemulated(uint8_t command, const char *name, const char *extra = nullptr) {
+            static bool named[256] = { false };
+            if (named[command]) return;
+            named[command] = true;
+            fprintf(stderr,
+                "[ADB_Micro] command $%02X %s is NOT EMULATED -- it did nothing, and the\n"
+                "            guest cannot tell, because the command completes either way.\n"
+                "            Treat behaviour that depends on it as unimplemented, not working.\n",
+                command, name);
+            if (extra) fprintf(stderr, "            %s\n", extra);
+        }
+
+        /* Enable/disable SRQ on one addressed device. The bit is the one the ADB
+           spec defines (register 3, bit 5), so a subsequent TALK R3 to that
+           device reports the change -- which is how the guest is supposed to be
+           able to see it. */
+        void set_device_srq(uint8_t addr, bool enable) {
+            ADB_Device *dev = adb_host ? adb_host->get_device(addr) : nullptr;
+            if (dev == nullptr) {
+                // No device at that address: on real hardware nothing answers
+                // and the transaction times out, so this must not read as
+                // success. The specific VALUE is not established -- the only
+                // consumer is `error_byte > 0` (the $C026 error bit) and the
+                // READ-THEN-CLEAR-ERROR command, neither of which distinguishes
+                // codes -- so do not take 0x01 for a documented ADB error code.
+                error_byte = 0x01;
+                return;
+            }
+            dev->set_srq_enable(enable);
+        }
+
         void execute_command() {
             uint8_t value = cmd[0];
             response_bytes = 0; // by default
@@ -442,24 +484,74 @@ class KeyGloo
                     if (value == 0x40) { // RESET FDB
                         adb_host->reset(0, 0, 0);
                     } else if (value == 0x48) { // RECEIVE BYTES
-                        printf("RECEIVE BYTES - unimplemented\n");
-                        // response bytes set after cmd execution
-                    } else if ((value & 0b11111000) == 0b01001'000) { // TRANSMIT NUM BYTES
-                        printf("TRANSMIT NUM BYTES - unimplemented\n");
-                        /*
-                         * command, w/address, is in 2nd byte.
-                         * system starts by sending this command followed by between 2 to 8 data bytes (num+1).
-                         * which are to be transmitted over FDB. the command sent will be transmitted
-                         * directly as the FDB Command byte, which is the first byte received after the transmit num bytes command.
-                         */
+                        /* Not emulated, and deliberately not guessed. What the
+                           microcontroller does with this command's arguments is
+                           not established here, and inventing a response for a
+                           command that RETURNS DATA to the guest is worse than
+                           admitting it does nothing.
 
-                        //adb_host->listen( addr,  cmd,  reg);                       
+                           The report names the second-order hazard too, because
+                           it is the one that would be hard to trace: the
+                           cmd_bytes table consumes TWO argument bytes for $48.
+                           If the real count is not two, the microcontroller
+                           swallows the guest's next command byte(s) as arguments
+                           and the whole ADB command stream desyncs from there --
+                           which would present as some later, unrelated command
+                           misbehaving, with nothing pointing back here. */
+                        report_unemulated(value, "RECEIVE BYTES",
+                            "It also CONSUMES 2 argument bytes (cmd_bytes table). If that\n"
+                            "            count is wrong, the next command byte(s) are eaten as arguments\n"
+                            "            and every later ADB command is misread. Suspect this first if\n"
+                            "            ADB goes strange after a $48.");
+                    } else if ((value & 0b11111000) == 0b01001'000) { // TRANSMIT NUM BYTES
+                        /* $49-$4F: transmit n bytes, n = value & 7 (matching the
+                           n bytes collected in the cmd_bytes table). The first
+                           of those bytes IS the ADB command byte -- address in
+                           the high nibble, command in bits 3-2, register in bits
+                           1-0 -- and the rest are its data. So this is the
+                           general form of the bus operation that $8n-$Bn does
+                           only for the fixed two-byte listen case. */
+                        uint8_t num = value & 0b0000'0111;
+                        uint8_t fdb_cmd = cmd[1];
+                        uint8_t addr    = (fdb_cmd >> 4) & 0x0F;
+                        uint8_t bus_cmd = (fdb_cmd >> 2) & 0b11;
+                        uint8_t reg     =  fdb_cmd       & 0b11;
+
+                        ADB_Register xmit_reg = {0};
+                        xmit_reg.size = (num > 0) ? num - 1 : 0;
+                        if (xmit_reg.size > 8) xmit_reg.size = 8;
+                        for (uint32_t i = 0; i < xmit_reg.size; i++) xmit_reg.data[i] = cmd[2 + i];
+
+                        switch (bus_cmd) {
+                            case 0b00: adb_host->reset(addr, bus_cmd, reg); break;
+                            case 0b01: adb_host->flush(addr, bus_cmd, reg); break;
+                            case 0b10: adb_host->listen(addr, bus_cmd, reg, xmit_reg); break;
+                            case 0b11: {
+                                // A talk issued through the transmit path still
+                                // returns data, and the guest reads it back the
+                                // same way a POLL does.
+                                ADB_Register rx = {0};
+                                if (adb_host->talk(addr, bus_cmd, reg, rx)) {
+                                    response_bytes = 2;
+                                    response_byte  = 1;
+                                    response[0] = rx.data[0];
+                                    response[1] = rx.data[1];
+                                }
+                                break;
+                            }
+                        }
                     } else if ((value & 0b1111'0000) == 0b0101'0000) { // ENABLE SRQ ON DEVICE
-                        printf("ENABLE SRQ ON DEVICE - unimplemented\n");
+                        set_device_srq(value & 0x0F, true);
                     } else if ((value & 0b1111'0000) == 0b0110'0000) { // FLUSH BUFFER ON DEVICE
-                        printf("FLUSH BUFFER ON DEVICE - unimplemented\n");
+                        // ADB Flush (bus command 0b01) to one addressed device.
+                        // Deliberately does NOT set buffer_flush_sequence: that
+                        // bit frames a RESPONSE, this command returns none, and
+                        // nothing in the microcontroller ever clears it -- so
+                        // setting it here would leave $C026 bit 4 stuck for the
+                        // rest of the session.
+                        adb_host->flush(value & 0x0F, 0b01, 0);
                     } else if ((value & 0b1111'0000) == 0b0111'0000) { // DISABLE SRQ ON DEVICE
-                        printf("DISABLE SRQ ON DEVICE - unimplemented\n");
+                        set_device_srq(value & 0x0F, false);
                     }
                     break;
                 case 0b10'000000: {
@@ -483,9 +575,29 @@ class KeyGloo
                         // abcd = address
                         uint8_t regnum = (value & 0b0011'0000) >> 4; // oopsie this was wrong
                         uint8_t addr = value & 0x0F;
-                        ADB_Register reg;
-                        adb_host->talk(addr, 0b11, regnum, reg);
-                        // if keyboard only.. 
+                        /* Initialised, because talk() returns false and touches
+                           NOTHING when no device answers at that address --
+                           which is the normal result of probing an empty ADB
+                           address, not an error. Declared bare, this fed
+                           uninitialised stack bytes to update_modifiers_from_reg()
+                           and back to the guest as a poll response, so an
+                           enumeration sweep across empty addresses returned
+                           whatever happened to be on the stack and could differ
+                           run to run. $FF$FF is the bus's "nobody home". */
+                        ADB_Register reg = {};
+                        reg.size = 2;
+                        reg.data[0] = 0xFF;
+                        reg.data[1] = 0xFF;
+                        if (!adb_host->talk(addr, 0b11, regnum, reg)) {
+                            // No device: leave the $FF$FF above in place, and do
+                            // not let a phantom reply update the modifier state.
+                            response_bytes = 2;
+                            response_byte  = 1;
+                            response[0] = reg.data[0];
+                            response[1] = reg.data[1];
+                            break;
+                        }
+                        // if keyboard only..
                         if (addr == (vars.fdbadr & 0x0F)) update_modifiers_from_reg(reg);
                         
                         response_bytes = 2;

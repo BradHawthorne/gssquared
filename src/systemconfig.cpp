@@ -345,6 +345,36 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         }
     },
     {
+        /* DEVICE_ID_UTHERNET2 was registered in devices.cpp but appeared in NO
+         * system config's slot map, and there is no CLI option to place a card
+         * in a slot -- so no guest on any built-in profile could reach the card
+         * at all. The W5100 global-interrupt-register fix (see the findings doc)
+         * was therefore not merely unverified but UNVERIFIABLE, which is a
+         * different and worse state.
+         *
+         * Added as a NEW configuration rather than by editing the default one:
+         * `-p 5` selects the FIRST matching config, so the machine every
+         * existing check runs against is byte-for-byte unchanged. Slot 3 is the
+         * card's conventional home and is free here; slot 7 keeps the SmartPort
+         * block device so the configuration can still boot something. */
+        "Apple IIgs + Uthernet II",
+        PLATFORM_APPLE_IIGS,
+        true,
+        CLOCK_SET_US,
+        Scanner_AppleIIgs,
+        "Apple IIgs 8MB RAM + Uthernet II network card in slot 3",
+        {
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_UTHERNET2,   // slot 3 — network card
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_PD_BLOCK3,   // slot 7 — boot
+        }
+    },
+    {
         "Apple IIgs (ROM 4 Mark Twain)",
         PLATFORM_APPLE_IIGS,
         true,
@@ -388,6 +418,33 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         DeviceMap_IIC,
         true
     }, */
+    {
+        /* THE THUNDERCLOCK HAD NO MACHINE. The device is fully implemented --
+           163 lines, shifting 40 bits of BCD date/time out one bit at a time --
+           and it appeared in NO system configuration, so nothing could
+           instantiate it and no guest could ever reach it. Implemented and
+           unreachable is a worse state than unimplemented: the code looks like
+           coverage and is not.
+
+           Added at the END so every existing -c index keeps its meaning; the
+           same reason the Uthernet II config went last when it was added. */
+        "Apple IIe Enhanced + Thunderclock",
+        PLATFORM_APPLE_IIE_ENHANCED,
+        true,
+        CLOCK_SET_US,
+        Scanner_AppleIIe,
+        "128K RAM; Disk II; Thunderclock Plus; Mockingboard",
+        {
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_MEM_EXPANSION,
+            DEVICE_ID_NONE,
+            DEVICE_ID_MOCKINGBOARD,
+            DEVICE_ID_PD_BLOCK3,
+            DEVICE_ID_DISK_II,
+            DEVICE_ID_THUNDER_CLOCK,
+        },
+    },
     // Add more built-in configurations as needed
 };
 

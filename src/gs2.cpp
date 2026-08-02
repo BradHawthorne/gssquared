@@ -17,6 +17,7 @@
 
 #include <iostream>
 #include <cstdio>
+#include <cstring>
 #include <unistd.h>
 #include <time.h>
 #include <getopt.h>
@@ -55,6 +56,13 @@
 #include "iigs_toolbox.hpp"
 #include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
 #include "iigs_diag.hpp"
+#include "a2gspu_coverage.hpp"  // A2GSPU_COVERAGE: execution-coverage bitmap (env-gated)
+#include "a2gspu_png.hpp"       // CTRL `png` / `pngc`: HGR/DHGR agent-readable PNG
+#include "a2gspu_dhgr.hpp"      // discrete DHGR 4-dot colour + profile export
+#include "a2gspu_manifest.hpp"
+#include "a2gspu_ctrl_cmds.hpp"  // extracted CTRL verb families
+  // help/manifest/oracle — no black boxes
+#include "display/filters.hpp"  // generate_filters for dhgr-export NTSC LUT
 #include "devices/slot_bus/slot_bus.hpp"
 #include "devices/keyboard/keyboard.hpp"
 #include "wiz5_config.hpp"   // WIZ5_* title/interp-specific config layer (env-gated, off => no-op)
@@ -1664,12 +1672,15 @@ static void a2gspu_ctrl_dump_text(computer_t *computer, const char *path) {
     FILE *tfp = fopen(path, "wb");
     if (!tfp) { printf("A2GSPU CTRL: text open fail '%s'\n", path); return; }
     for (uint32_t a = 0x0400; a < 0x0800; a++) {
-        uint8_t b = computer->mmu->probe_peek(a);
+        uint8_t b = rail_mmu(computer)->probe_peek(a);
         fwrite(&b, 1, 1, tfp);
     }
-    uint8_t *mem = computer->mmu->get_memory_base();
+    // The 80-column aux half. The old fallback read FPI bank $01, which on a
+    // IIgs is not the memory the display is generated from -- that is Mega II
+    // bank $E1, which rail_video_base resolves.
+    const uint8_t *mem = rail_video_base(computer);
     for (uint32_t a = 0x0400; a < 0x0800; a++) {
-        uint8_t b = mem ? mem[0x10000 + a] : 0;
+        uint8_t b = mem ? mem[0x10000 + a] : rail_mmu(computer)->probe_peek(0x010000u | a);
         fwrite(&b, 1, 1, tfp);
     }
     fclose(tfp);
@@ -1689,45 +1700,8 @@ static void a2gspu_ctrl_ack(const char *dir, int seq, const char *result) {
     rename(tmppath, ackpath);
 }
 
-// ---------------------------------------------------------------------------
-// Instruction-granular execution for the CTRL rail (gaps #3/#4/#5).
-//
-// The rail was frame-granular only (`run <frames>`), which is too coarse to
-// assert "at this point" -- a test could only check state after N frames, which
-// is flaky by construction, and a wedged loop could not be inspected at all.
-//
-// a2gspu_step_one() mirrors the per-instruction bookkeeping that run_one_frame()
-// performs: the three event timers (c14m / video / cpu) must be pumped around
-// each execute_next, or stepping starves the video scanner and any timer-driven
-// device and the machine drifts out from under the very code being diagnosed.
-// ---------------------------------------------------------------------------
-static inline void a2gspu_step_one(computer_t *computer) {
-    cpu_state *cpu = computer->cpu;
-    NClock *clock = computer->clock;
-    if (computer->event_timer->isEventPassed(clock->get_c14m()))
-        computer->event_timer->processEvents(clock->get_c14m());
-    if (computer->vid_event_timer->isEventPassed(clock->get_vid_cycles()))
-        computer->vid_event_timer->processEvents(clock->get_vid_cycles());
-    if (computer->cpu_event_timer->isEventPassed(clock->get_cycles()))
-        computer->cpu_event_timer->processEvents(clock->get_cycles());
-    (cpu->cpun->execute_next)(cpu);
-}
-
-// Shared CPU-state formatter so `cpu`, `step` and `run-until` all report in one
-// format -- a harness parses this line, so it must not vary by command.
-static void a2gspu_cpu_line(computer_t *computer, char *out, size_t outsz) {
-    cpu_state *c = computer->cpu;
-    keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
-    int akd = kb ? kb->key_down_count : -1;
-    uint8_t kbd = computer->mmu ? computer->mmu->probe_peek(0xC000) : 0;
-    snprintf(out, outsz,
-        "PC=%02X:%04X A=%02X X=%02X Y=%02X SP=%04X P=%02X E=%d HALT=%d STP=%d RDY=%d KBD=%02X AKD=%d",
-        (unsigned)((c->full_pc >> 16) & 0xFF), (unsigned)(c->full_pc & 0xFFFF),
-        (unsigned)(c->a & 0xFF), (unsigned)(c->x & 0xFF), (unsigned)(c->y & 0xFF),
-        (unsigned)(c->sp & 0xFFFF), (unsigned)(c->p & 0xFF),
-        (int)(c->E & 1), (int)(c->halt ? 1 : 0), (int)(c->clock_stopped ? 1 : 0),
-        (int)(c->rdy ? 1 : 0), (unsigned)kbd, akd);
-}
+// Instruction-granular step helpers: a2ctrl::arm_cpu / step_one / format_cpu_line
+// (a2gspu_ctrl_cmds.hpp). run/step/run-until/keys/press/key: try_exec / try_input.
 
 // Soft-switch read-status helper for `vid`.  A free function rather than a
 // lambda inside a2gspu_ctrl_loop(): that function is already very large, and at
@@ -1737,13 +1711,7 @@ static inline int a2gspu_sw(MMU_II *m, uint16_t a) {
     return m ? ((m->probe_peek(a) & 0x80) ? 1 : 0) : -1;
 }
 
-// Parse "BB:AAAA" or a bare 24-bit hex address into a full physical address.
-static bool a2gspu_parse_addr(const char *s, uint32_t *out) {
-    unsigned bank = 0, addr = 0;
-    if (sscanf(s, "%x:%x", &bank, &addr) == 2) { *out = ((bank & 0xFF) << 16) | (addr & 0xFFFF); return true; }
-    if (sscanf(s, "%x", &addr) == 1) { *out = addr & 0xFFFFFF; return true; }
-    return false;
-}
+// Addr parse: a2ctrl::parse_addr. Soft watch: a2ctrl::g_soft_watch / soft_watch_after.
 
 static void a2gspu_ctrl_loop(GS2AppState *state) {
     computer_t *computer = state->computer;
@@ -1752,6 +1720,8 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
     if (const char *tmo = SDL_getenv("A2GSPU_CTRL_TIMEOUT")) idle_timeout_s = SDL_atoi(tmo);
     computer->execution_mode = EXEC_NORMAL;
     printf("A2GSPU CTRL: interactive rail on '%s' (idle timeout %ds)\n", dir, idle_timeout_s);
+    printf("A2GSPU CTRL: agentic oracle — send 'oracle' or 'help' / 'manifest <file>' "
+           "(no black boxes; Docs/AGENTIC_ORACLE.md)\n");
     int seq = 1;
     uint64_t idle_ms = 0;
     // Harvested (wiz5): a persistent frame clock for the interactive rail so the
@@ -1762,7 +1732,8 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
     // A2GSPU_* frame-instrument armed, iigs_itrace_frame_tick just sets a counter.
     int ctrl_frame = 0;
     char cmdpath[1024];
-    char result[128];
+    // Large ack buffer: help/oracle contracts must fit; bare "ok" is a black box.
+    char result[8192];
     for (;;) {
         snprintf(cmdpath, sizeof cmdpath, "%s/cmd.%d", dir, seq);
         FILE *f = fopen(cmdpath, "rb");
@@ -1779,70 +1750,58 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
         char line[2048] = {0};
         size_t n = fread(line, 1, sizeof line - 1, f);
         fclose(f);
+
+        // A COMMAND FILE IS NOT GUARANTEED TO APPEAR ATOMICALLY.
+        //
+        // Acks have been written tmp-then-rename since a polling reader was
+        // caught seeing a half-written one. The command direction had no such
+        // protection: a client that writes cmd.N in place can be observed
+        // mid-write, and the short read then matches no handler and gets
+        // "unknown-cmd" for a command that is perfectly valid. Observed with
+        // `read <addr> <len> <long path>` -- the longest command an agent
+        // harness issues, and the most likely to straddle a write boundary.
+        // Re-issuing it verbatim succeeded, which is a race, not a syntax error.
+        //
+        // A well-behaved client renames into place and never trips this. This
+        // is here for the ones that do not: read again after a tick and discard
+        // the first result if the file changed underneath. Costs 20ms per
+        // command and cannot mask a genuine error, because a command that is
+        // still growing was never a command yet.
+        SDL_Delay(20);
+        FILE *f2 = fopen(cmdpath, "rb");
+        if (f2) {
+            char line2[2048] = {0};
+            size_t n2 = fread(line2, 1, sizeof line2 - 1, f2);
+            fclose(f2);
+            if (n2 != n || (n && memcmp(line, line2, n) != 0)) {
+                continue;               // still being written -- look again
+            }
+        }
         while (n > 0 && (line[n-1] == '\r')) line[--n] = 0;  // strip trailing CR only
-        snprintf(result, sizeof result, "ok");
-        if (!strncmp(line, "run ", 4)) {
-            int frames = atoi(line + 4);
-            for (int i = 0; i < frames; i++) {
-                iigs_itrace_frame_tick(ctrl_frame++);   // advance the shared frame clock
-                if (!run_one_frame(computer)) {
-                    snprintf(result, sizeof result, "halted@%d", i);
-                    break;
-                }
-            }
-        } else if (!strncmp(line, "keys ", 5)) {
-            keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
-            if (kb) kb->paste_buffer += (line + 5);
-            else snprintf(result, sizeof result, "no-keyboard");
-        } else if (!strncmp(line, "press ", 6)) {
-            // press <hex2> [holdframes] — a full PHYSICAL keypress: sets the
-            // $C000 latch AND any-key-down ($C010 bit7, key_down_count), holds
-            // for N frames (default 15), then releases. Needed for prompts that
-            // purge type-ahead and wait on AKD/a fresh edge (e.g. Wizardry's
-            // "PRESS [RET]" disk-swap prompt) — the paste path can't satisfy
-            // those. Mirrors handle_keydown/keyup.
-            unsigned int ch = 0; int hold = 15;
-            if (sscanf(line + 6, "%x %d", &ch, &hold) >= 1) {
-                keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
-                keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
-                if (kb) {                       // IIe: latch + any-key-down
-                    kb->kb_key_strobe = (uint8_t)(ch | 0x80);
-                    if (kb->mk) kb->mk->last_key_val = (uint8_t)ch;
-                    kb->key_down_count++;
-                    for (int i = 0; i < hold; i++) {
-                        if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
-                    }
-                    kb->key_down_count--;
-                } else if (kg && kg->kg) {      // IIgs: cover BOTH keyboard paths.
-                    kg->kg->force_key((uint8_t)ch);              // buffer + kb_register_full
-                    keygloo_update_interrupt_status(kg, kg->kg); // raise the keyboard IRQ so
-                                                                 // an interrupt-driven menu wakes
-                    int hk = hold < 3 ? hold : 3;
-                    kg->kg->hold_key((uint8_t)ch);   // sticky for $C000 pollers (short window)
-                    for (int i = 0; i < hold; i++) {
-                        if (i == hk) kg->kg->hold_key(0);
-                        if (!run_one_frame(computer)) { snprintf(result, sizeof result, "halted@%d", i); break; }
-                    }
-                    kg->kg->hold_key(0);
-                    kg->kg->key_up();
-                } else {
-                    snprintf(result, sizeof result, "no-keyboard");
-                }
-            } else {
-                snprintf(result, sizeof result, "press-parse-fail");
-            }
-        } else if (!strncmp(line, "holdkey ", 8)) {
-            // holdkey <hex-ascii> — set the sticky IIgs hold-key WITHOUT running
-            // (0 clears). Lets the wrapper hold a key, step in small chunks, watch
-            // for a screen delta (RTSTRP consumed it), then release — reliable
-            // menu-nav vs a fixed hold window that over- or under-shoots the spin.
-            unsigned int ch = 0;
-            keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
-            if (sscanf(line + 8, "%x", &ch) == 1 && kg && kg->kg) {
-                kg->kg->hold_key((uint8_t)ch);
-            } else {
-                snprintf(result, sizeof result, kg ? "holdkey-parse-fail" : "no-keygloo");
-            }
+        // strip trailing LF so "help\n" matches
+        while (n > 0 && (line[n-1] == '\n')) line[--n] = 0;
+        snprintf(result, sizeof result, "status=OK");
+        // ---- extracted families (a2gspu_ctrl_cmds.hpp) ----
+        if (a2ctrl::try_meta(line, result, sizeof result)) {
+            // oracle/help/manifest/rail
+        } else if (a2ctrl::try_trace_break(line, result, sizeof result)) {
+            // valtrap/itrace/tbtrace/callstream
+        } else if (a2ctrl::try_assert_dhgr(line, result, sizeof result, computer)) {
+            // assert/dhgr-*
+        } else if (a2ctrl::try_watch(line, result, sizeof result, computer)) {
+            // soft + bus watch
+        } else if (a2ctrl::try_inject(line, result, sizeof result, computer)) {
+            // poke / vram / load
+        } else if (a2ctrl::try_visual(line, result, sizeof result, computer)) {
+            // png / pngc
+        } else if (a2ctrl::try_exec(line, result, sizeof result, computer, &ctrl_frame)) {
+            // run / step / run-until (+ soft watch)
+        } else if (a2ctrl::try_input(line, result, sizeof result, computer)) {
+            // keys / press / key / holdkey
+        } else if (a2ctrl::try_cpu(line, result, sizeof result, computer)) {
+            // cpu snapshot
+        } else if (a2ctrl::try_regs(line, result, sizeof result, computer)) {
+            // read / setreg / cycles / bp / stack
         } else if (!strncmp(line, "iolog on", 8)) {
             // A2GSPU gap #6 — arm the general $C0xx access ring (read AND write,
             // every soft switch, ordered). The bare `iolog` below only ever gave
@@ -1853,75 +1812,110 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             if (sscanf(line + 8, "%ld", &cap) == 1 && cap > 0) g_io_trace_cap = (size_t)cap;
             io_trace_reset();
             g_io_trace_enabled = true;
-            snprintf(result, sizeof result, "iolog on cap=%zu", g_io_trace_cap);
+            snprintf(result, sizeof result, "status=OK iolog on cap=%zu", g_io_trace_cap);
         } else if (!strncmp(line, "iolog off", 9)) {
             g_io_trace_enabled = false;
-            snprintf(result, sizeof result, "iolog off seq=%u retained=%zu dropped=%u",
+            snprintf(result, sizeof result, "status=OK iolog off seq=%u retained=%zu dropped=%u",
                      g_io_trace_seq, g_io_trace.size(), g_io_trace_dropped);
         } else if (!strncmp(line, "iolog dump ", 11)) {
             if (io_trace_dump(line + 11))
-                snprintf(result, sizeof result, "dumped seq=%u retained=%zu dropped=%u",
+                snprintf(result, sizeof result, "status=OK iolog dumped seq=%u retained=%zu dropped=%u",
                          g_io_trace_seq, g_io_trace.size(), g_io_trace_dropped);
             else
-                snprintf(result, sizeof result, "iolog-dump-fail");
+                snprintf(result, sizeof result, "status=FAIL iolog-dump-fail");
         } else if (!strncmp(line, "iolog reset", 11)) {
             io_trace_reset();
-            snprintf(result, sizeof result, "iolog reset");
+            snprintf(result, sizeof result, "status=OK iolog reset");
         } else if (!strncmp(line, "iolog", 5)) {
             // Cumulative keyboard soft-switch read counts. Diff two 'iolog' calls
             // across a 'run' to see which switch a wedged menu actually polls
             // (C000 latch / C010 strobe+AKD / C025 mods / C026 ADB data reg).
             uint64_t c[5];
             a2gspu_keygloo_read_counts(c);
+            // These counters come from the IIgs ADB/KeyGloo path.  On a II-family
+            // machine the keyboard does not go through KeyGloo, so they are ALWAYS
+            // zero -- which reads as "nothing polled the keyboard" when the truth is
+            // "this counter does not apply here".  Say so, and point at the rail that
+            // does work, rather than reporting a confident zero.
+            bool gs = (state->mmu_iigs != nullptr);
             snprintf(result, sizeof result,
-                "KBDreads C000=%llu C010=%llu C024=%llu C025=%llu C026=%llu",
+                "status=OK iolog KBDreads C000=%llu C010=%llu C024=%llu C025=%llu C026=%llu%s",
                 (unsigned long long)c[0], (unsigned long long)c[1], (unsigned long long)c[2],
-                (unsigned long long)c[3], (unsigned long long)c[4]);
-        } else if (!strncmp(line, "cpu", 3)) {
-            // CPU + input/video state snapshot — diagnose "waiting for key" vs
-            // "crashed" vs "grinding". PC in a tight $C000-poll loop with AKD=0
-            // = waiting for input; a stable PC across two 'cpu' calls with no
-            // frames run = halted; changing PC = executing.
+                (unsigned long long)c[3], (unsigned long long)c[4],
+                gs ? "" : "  [KeyGloo counters are IIgs-only and read 0 on this "
+                          "machine; use 'iolog on' + 'iolog dump' for the real $C0xx ring]");
+        } else if (!strncmp(line, "reset", 5)) {
+            // reset [cold] — pull RESET (warm by default, cold with the arg).
+            // Without this the rail cannot recover a wedged machine: an Apple
+            // IIe autoboots slot 6 and, with no 5.25" disk present, spins in
+            // the Disk II boot ROM ($C65E/$C661, X=60) forever without ever
+            // reading the keyboard. Injected keys go nowhere, so `keys PR#5`
+            // cannot reach a ProDOS block device in another slot. A reset
+            // drops the machine to BASIC where PR#<slot> works.
+            bool cold = (strstr(line, "cold") != NULL);
+            computer->reset(cold);
             cpu_state *c = computer->cpu;
-            keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
-            int akd = kb ? kb->key_down_count : -1;
-            uint8_t kbd = computer->mmu ? computer->mmu->probe_peek(0xC000) : 0;
-            // Full 65816 state: PBR:PC (24-bit), 16-bit SP, E (emulation), and the
-            // run state (halt / clock_stopped) — a "stable PC" is only meaningful
-            // once you know the bank AND whether the CPU is even advancing.
-            snprintf(result, sizeof result,
-                "PC=%02X:%04X A=%02X X=%02X Y=%02X SP=%04X P=%02X E=%d HALT=%d STP=%d RDY=%d KBD=%02X AKD=%d",
-                (unsigned)((c->full_pc >> 16) & 0xFF), (unsigned)(c->full_pc & 0xFFFF),
-                (unsigned)(c->a & 0xFF), (unsigned)(c->x & 0xFF), (unsigned)(c->y & 0xFF),
-                (unsigned)(c->sp & 0xFFFF), (unsigned)(c->p & 0xFF),
-                (int)(c->E & 1), (int)(c->halt ? 1 : 0), (int)(c->clock_stopped ? 1 : 0),
-                (int)(c->rdy ? 1 : 0), (unsigned)kbd, akd);
+            snprintf(result, sizeof result, "status=OK reset %s PC=%02X:%04X",
+                cold ? "cold" : "warm",
+                (unsigned)((c->full_pc >> 16) & 0xFF),
+                (unsigned)(c->full_pc & 0xFFFF));
+        } else if (!strncmp(line, "boot ", 5)) {
+            // boot <slot> — enter a slot's firmware directly at $Cs00, the
+            // way the ROM's autoboot would. Needed because that autoboot is
+            // not steerable: an Apple IIe finds the Disk II in slot 6 first
+            // and, with no 5.25" media, spins in its boot ROM forever
+            // ($C65E/$C661, X=60) without ever polling the keyboard, so
+            // neither injected keys nor `PR#<slot>` can reach a ProDOS block
+            // device in a lower slot. This is how you boot an 800K .po image
+            // mounted on the SmartPort/pdblock card.
+            int slot = atoi(line + 5);
+            if (slot < 1 || slot > 7) {
+                snprintf(result, sizeof result, "status=FAIL boot-bad-slot %d", slot);
+            } else {
+                cpu_state *c = computer->cpu;
+                c->pc = (uint16_t)(0xC000 + slot * 0x100);
+                c->full_pc = (uint32_t)c->pc;      /* bank 0 */
+                snprintf(result, sizeof result, "status=OK boot slot=%d PC=00:%04X",
+                         slot, (unsigned)c->pc);
+            }
         } else if (!strncmp(line, "dis ", 4)) {
             // dis <hexaddr> <count> <file> — disassemble via the debugger's
             // Disassembler, which reads through the MMU (bank/langcard-correct,
             // unlike the flat 'read'). Writes N instruction lines to <file>.
+            // BOTH CONVERSIONS, OR NEITHER. This accepted `>= 1`, so `dis 0400`
+            // -- no count, no filename -- parsed the address, failed the %d, and
+            // then left %n UNASSIGNED. off kept its initialiser of 0, so the
+            // filename was taken from the start of the argument and the command
+            // cheerfully created a file called "0400" and acked status=OK.
+            //
+            // A verb that invents a filename out of an address it was asked to
+            // disassemble is not a parse failure the caller can see. Require the
+            // two numbers, and require something left over to be the path.
             unsigned int addr = 0; int n = 20, off = 0;
-            if (sscanf(line + 4, "%x %d %n", &addr, &n, &off) >= 1 && line[4 + off]) {
+            if (sscanf(line + 4, "%x %d %n", &addr, &n, &off) == 2 && off > 0 && line[4 + off]) {
                 if (n <= 0 || n > 512) n = 20;
-                Disassembler dis(computer->mmu, computer->cpu->cpu_type);
+                Disassembler dis(rail_mmu(computer), computer->cpu->cpu_type);
                 dis.setAddress(addr);
                 std::vector<std::string> lines = dis.disassemble(n);
                 FILE *df = fopen(line + 4 + off, "wb");
                 if (df) {
                     for (auto &l : lines) fprintf(df, "%s\n", l.c_str());
                     fclose(df);
+                    snprintf(result, sizeof result, "status=OK dis n=%d", n);
                 } else {
-                    snprintf(result, sizeof result, "dis-fail");
+                    snprintf(result, sizeof result, "status=FAIL dis-fail");
                 }
             } else {
-                snprintf(result, sizeof result, "dis-parse-fail");
+                snprintf(result, sizeof result, "status=FAIL dis-parse-fail");
             }
         } else if (!strncmp(line, "text ", 5)) {
             a2gspu_ctrl_dump_text(computer, line + 5);
+            snprintf(result, sizeof result, "status=OK text %s", line + 5);
         } else if (!strncmp(line, "shot ", 5)) {
             video_system_t *vs = computer->video_system;
             vs->update_display(true);
             vs->save_screenshot(line + 5);
+            snprintf(result, sizeof result, "status=OK shot %s", line + 5);
         } else if (!strncmp(line, "mount ", 6)) {
             // mount sXdY <path> — swap media at runtime (the 1981 flippy dance,
             // agent edition: multi-disk originals prompt for disk swaps mid-run).
@@ -1937,32 +1931,276 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 disk_mount_t dm{ (uint16_t)slot, (uint16_t)(drive - 1),
                                  std::string(line + 6 + off) };
                 if (!computer->mounts->mount_media(dm))
-                    snprintf(result, sizeof result, "mount-fail");
+                    snprintf(result, sizeof result, "status=FAIL mount-fail");
+                else
+                    snprintf(result, sizeof result, "status=OK mount s%dd%d", slot, drive);
             } else {
-                snprintf(result, sizeof result, "mount-parse-fail");
+                snprintf(result, sizeof result, "status=FAIL mount-parse-fail");
             }
-        } else if (!strncmp(line, "read ", 5)) {
-            // read <hexaddr> <len> <file> — dump from the FLAT physical image
-            // (get_memory_base(); IIe: 0x0000-0xFFFF main, 0x10000-0x1FFFF aux).
-            // Symbol-mapped game-state reads for agent sessions (Wizardry prep):
-            // deterministic RAM view, no MMU banking surprises.
-            uint32_t addr = 0; int len = 0, off = 0;
-            if (sscanf(line + 5, "%x %d %n", &addr, &len, &off) >= 2 && len > 0) {
-                // probe_peek takes a full (bank<<16 | addr) address; the MMU_IIgs
-                // override routes banks correctly. The old flat get_memory_base
-                // index was an IIe-only model that read the wrong region on -p 5.
-                FILE *rf = fopen(line + 5 + off, "wb");
-                if (rf) {
-                    for (int i = 0; i < len; i++) {
-                        uint8_t b = computer->mmu->probe_peek(addr + i);
-                        fwrite(&b, 1, 1, rf);
+        } else if (!strncmp(line, "hgr", 3)) {
+            // hgr [1|2] [<file>] -- HGR page as a 40x24 ASCII density map.
+            // `shot` writes a BMP the agent cannot read back, and VIDEOMAP is
+            // SHR-only, so on a II-family machine an agent had NO readable view of
+            // the graphics screen at all.  Honors HGR's interleaved line layout:
+            //   addr = base + (y&7)*$400 + ((y>>3)&7)*$80 + (y>>6)*$28
+            // Bit 7 is the palette select, not a pixel, so it is masked out.
+            int page = 1; char fbuf[512]; fbuf[0] = 0;
+            sscanf(line + 3, " %d %511s", &page, fbuf);
+            if (page != 2) page = 1;
+            uint32_t base = (page == 2) ? 0x4000 : 0x2000;
+            static const char *ramp = " .:-=+*#%@";
+            char map[24][41];
+            int lit_total = 0;
+            for (int cy = 0; cy < 24; cy++) {
+                for (int cx = 0; cx < 40; cx++) {
+                    int bits = 0;
+                    for (int sy = 0; sy < 8; sy++) {
+                        int y = cy * 8 + sy;
+                        uint32_t a = base + (uint32_t)((y & 7) << 10)
+                                          + (uint32_t)(((y >> 3) & 7) << 7)
+                                          + (uint32_t)((y >> 6) * 0x28) + cx;
+                        uint8_t b = rail_mmu(computer)->probe_peek(a) & 0x7F;
+                        for (int k = 0; k < 7; k++) if (b & (1 << k)) bits++;
                     }
-                    fclose(rf);
+                    lit_total += bits;
+                    int lvl = (bits * 9) / 56;           // 0..56 set pixels -> 0..9
+                    map[cy][cx] = ramp[lvl > 9 ? 9 : lvl];
+                }
+                map[cy][40] = 0;
+            }
+            // Always report the lit-pixel total.  Without it a blank screen and a
+            // failed read are indistinguishable -- both print 24 rows of spaces,
+            // and an agent cannot tell "nothing drawn yet" from "my probe broke".
+            printf("HGR PAGE %d ($%04X): %d lit pixel(s) of 53760\n",
+                   page, base, lit_total);
+            if (fbuf[0]) {
+                FILE *hf = fopen(fbuf, "wb");
+                if (hf) {
+                    for (int cy = 0; cy < 24; cy++) fprintf(hf, "%s\n", map[cy]);
+                    fclose(hf);
+                    snprintf(result, sizeof result, "status=OK hgr page%d -> %s", page, fbuf);
                 } else {
-                    snprintf(result, sizeof result, "read-fail");
+                    snprintf(result, sizeof result, "status=FAIL hgr-write-fail");
                 }
             } else {
-                snprintf(result, sizeof result, "read-parse-fail");
+                // No file: stream the map straight into the ack so a one-shot
+                // "what is on screen right now" needs no second round trip.
+                printf("HGR PAGE %d ($%04X) 40x24 density map:\n", page, base);
+                for (int cy = 0; cy < 24; cy++) printf("  |%s|\n", map[cy]);
+                snprintf(result, sizeof result, "status=OK hgr page%d dumped to stdout", page);
+            }
+        } else if (!strncmp(line, "screen", 6)) {
+            // screen [<file>] -- ONE mode-aware "what is on the display" verb.
+            //
+            // Rationale: choosing the decoder by hand is the single most repeated
+            // error in agent-driven sessions, and it fails SILENTLY.  Observed in
+            // one Ultima V run: (a) captured HGR while the machine was in TEXT mode
+            // and got lit=23299 of pure nonsense; (b) read the text page while the
+            // machine was in HIRES and saw a stale "Apple //e" banner that was no
+            // longer displayed, which reads as "the boot hung"; (c) captured HGR
+            // page 1 (blank) while the program was drawing to page 2 (lit=26880).
+            // Each mistake produced a confident, wrong conclusion.
+            //
+            // So: read VideoScannerII, pick the decoder AND the page, and always
+            // report BOTH HGR pages' lit counts so double-buffering is visible
+            // rather than something you have to already suspect.
+            display_state_t *dss = (display_state_t *)computer->cached_display_state;
+            VideoScannerII *vs = dss ? dss->video_scanner : nullptr;
+            if (!vs) { snprintf(result, sizeof result, "status=FAIL screen-no-scanner"); }
+            else {
+                bool txt = vs->is_text(), mix = vs->is_mixed();
+                bool hir = vs->is_hires(), p2 = vs->is_page_2();
+                char fbuf[512]; fbuf[0] = 0;
+                sscanf(line + 6, " %511s", fbuf);
+
+                // Both HGR pages, always -- cheap, and it catches double-buffering.
+                long litp[2] = {0, 0};
+                for (int pg = 0; pg < 2; pg++) {
+                    uint32_t b = pg ? 0x4000 : 0x2000;
+                    for (int y = 0; y < 192; y++)
+                        for (int cx = 0; cx < 40; cx++) {
+                            uint8_t v = rail_mmu(computer)->probe_peek(
+                                            a2png::hgr_addr(b, y, cx)) & 0x7F;
+                            for (int k = 0; k < 7; k++) if (v & (1 << k)) litp[pg]++;
+                        }
+                }
+                // Text page (respecting the display page), decoded to ASCII.
+                //
+                // Two counts, deliberately NOT collapsed into one:
+                //   nonblank  -- any row with a non-space cell
+                //   textlike  -- rows that plausibly contain REAL text
+                // Counting only "nonblank" reported text_rows=6 on a screen with no
+                // text at all, because HGR-era code leaves graphics bytes lying in
+                // $0400-$07FF and 74% of byte values mask to a printable character.
+                // A single number there is worse than none: it says "there is a
+                // prompt" when there is not, and the loop then waits for input that
+                // will never be asked for.
+                //
+                // Discriminator: real UI text is overwhelmingly letters, digits,
+                // spaces and a little punctuation, and arrives in runs. Random bytes
+                // masked to 7 bits are spread across the whole symbol range. So
+                // require both a >=60% share of text-ish characters among the
+                // non-space cells AND a run of >=4 consecutive ones.
+                uint32_t tb = p2 ? 0x0800 : 0x0400;
+                int tnb = 0, ttext = 0;
+                char rows[24][41];
+                bool rowtext[24] = {false};
+                for (int y = 0; y < 24; y++) {
+                    uint32_t a = tb + (uint32_t)((y % 8) << 7) + (uint32_t)((y / 8) * 0x28);
+                    for (int x = 0; x < 40; x++) {
+                        uint8_t ch = rail_mmu(computer)->probe_peek(a + x) & 0x7F;
+                        rows[y][x] = (ch >= 32 && ch < 127) ? (char)ch : ' ';
+                    }
+                    rows[y][40] = 0;
+                    int nonspace = 0, texty = 0, run = 0, bestrun = 0;
+                    for (int x = 0; x < 40; x++) {
+                        char c = rows[y][x];
+                        bool t = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                                 (c >= '0' && c <= '9') ||
+                                 c == ' ' || c == '.' || c == ',' || c == ':' ||
+                                 c == ';' || c == '!' || c == '?' || c == '\'' ||
+                                 c == '-' || c == '(' || c == ')' || c == '/';
+                        if (c != ' ') nonspace++;
+                        // A space BREAKS the run.  Letting it pass through was the
+                        // whole defect: a row of graphics residue like
+                        // "0 0 0 0 >>    >>0 0 0 0" is all digits-and-spaces, so it
+                        // scored bestrun=8 and was reported as text.  What actually
+                        // distinguishes prose from residue is WORDS -- a run of
+                        // consecutive non-space characters. "Apple //e" gives 5;
+                        // "0 0 0 0" gives 1.
+                        if (t && c != ' ') { texty++; run++; if (run > bestrun) bestrun = run; }
+                        else run = 0;
+                    }
+                    if (nonspace) tnb++;
+                    if (nonspace >= 3 && bestrun >= 4 && texty * 10 >= nonspace * 6) {
+                        rowtext[y] = true; ttext++;
+                    }
+                }
+                // DHGR must be NAMED. Reporting a double hi-res screen as "HIRES"
+                // is the same silent-wrong-decoder failure this verb exists to
+                // prevent, one level down: the reader sees HIRES, trusts the
+                // 280-wide PNG, and is looking at half of every tile -- a 28-dot
+                // tile appears as two 7-dot fragments with gaps, which reads as a
+                // broken blitter rather than as a renderer aimed at one bank.
+                bool dbl = vs->is_dblres() && vs->is_80col();
+                const char *mode = txt ? (mix ? "TEXT+MIXED" : "TEXT")
+                                       : (hir ? (dbl ? (mix ? "DHGR+MIXED" : "DHGR")
+                                                     : (mix ? "HIRES+MIXED" : "HIRES"))
+                                              : (dbl ? "DLORES" : "LORES"));
+                // Detail goes to a FILE, not stdout.  The ack file is the only
+                // reliable reply channel: stdout is buffered, so printf detail can
+                // sit unflushed for an arbitrary time (observed: the SCREEN line
+                // never appeared in the redirected log at all, while the ack was
+                // instant).  And `result` is only 128 bytes, so it cannot carry 24
+                // rows.  A sidecar file is both reliable and unbounded.
+                char sidecar[600];
+                snprintf(sidecar, sizeof sidecar, "%s",
+                         fbuf[0] ? fbuf : "screen.png");
+                { size_t n = strlen(sidecar);
+                  if (n > 4 && !strcmp(sidecar + n - 4, ".png")) sidecar[n - 4] = 0;
+                  strncat(sidecar, ".txt", sizeof(sidecar) - strlen(sidecar) - 1); }
+                if (FILE *sf = fopen(sidecar, "w")) {
+                    fprintf(sf, "mode=%s page=%d hgr1_lit=%ld hgr2_lit=%ld "
+                                "text_rows=%d nonblank_rows=%d\n",
+                            mode, p2 ? 2 : 1, litp[0], litp[1], ttext, tnb);
+                    // Emit ALL non-blank rows, tagging which read as real text, so a
+                    // reader can audit the classifier instead of trusting it.
+                    for (int y = 0; y < 24; y++) {
+                        bool nb = false;
+                        for (int x = 0; x < 40; x++) if (rows[y][x] != ' ') { nb = true; break; }
+                        if (nb) fprintf(sf, "%s T%02d |%s|\n",
+                                        rowtext[y] ? "TEXT" : "junk", y, rows[y]);
+                    }
+                    fclose(sf);
+                }
+                printf("SCREEN: mode=%s page=%d  hgr1_lit=%ld hgr2_lit=%ld "
+                       "text_rows=%d nonblank_rows=%d -> %s\n",
+                       mode, p2 ? 2 : 1, litp[0], litp[1], ttext, tnb, sidecar);
+                fflush(stdout);
+                // ALWAYS emit the PNG, even when the mode says TEXT.
+                //
+                // Gating this on the mode created a blind spot: after `restore` the
+                // video scanner's mode is stale (snapshots deliberately exclude
+                // device state and let it self-heal over the following frames), so a
+                // restored in-game session reported mode=TEXT while the real display
+                // was hi-res -- and `screen` then wrote no image at all, leaving no
+                // way to see the screen precisely when the state was hardest to
+                // re-reach. The PNG is cheap and the lit counts already say which
+                // page carries content, so emit unconditionally and let the reader
+                // decide. Being able to look must never depend on a flag being right.
+                {
+                    if (!fbuf[0]) snprintf(fbuf, sizeof fbuf, "screen.png");
+                    uint32_t base = p2 ? 0x4000 : 0x2000;
+                    // Aux comes from the flat image at +$10000, the way
+                    // VideoScannerIIe fetches it. probe_peek cannot be used for it:
+                    // on the IIe it follows the live RAMRD switch rather than
+                    // taking a bank, so reaching aux through it would mean
+                    // disturbing guest state in order to observe it.
+                    const uint8_t *sflat = rail_video_base(computer);
+                    bool sdbl = dbl && sflat;
+                    const int W = sdbl ? 560 : 280, H = 192;
+                    const int bpc = sdbl ? 14 : 7;
+                    // A DHGR dot is half as wide, so 560x192 covers the same screen
+                    // as 280x192; square pixels would stretch it 2:1.
+                    const int sx_n = 2, sy_n = sdbl ? 4 : 2;
+                    std::vector<uint8_t> img((size_t)(W*sx_n) * (H*sy_n), 0);
+                    for (int y = 0; y < H; y++)
+                        for (int cx = 0; cx < 40; cx++) {
+                            uint32_t a = a2png::hgr_addr(base, y, cx);
+                            uint8_t bm = sdbl ? sflat[a] : rail_mmu(computer)->probe_peek(a);
+                            uint8_t ba = sdbl ? sflat[a + 0x10000] : 0;
+                            for (int k = 0; k < bpc; k++) {
+                                uint8_t src = sdbl ? (k < 7 ? ba : bm) : bm;
+                                int bit = sdbl ? (k % 7) : k;
+                                uint8_t v = (src & (1 << bit)) ? 255 : 0;
+                                int px = cx * bpc + k;
+                                for (int sy = 0; sy < sy_n; sy++)
+                                    for (int sx = 0; sx < sx_n; sx++)
+                                        img[(size_t)(y*sy_n+sy)*(W*sx_n) + (px*sx_n+sx)] = v;
+                            }
+                        }
+                    a2png::write_gray(fbuf, img.data(), W*sx_n, H*sy_n);
+                }
+                snprintf(result, sizeof result,
+                         "status=OK screen mode=%s page=%d hgr1_lit=%ld hgr2_lit=%ld "
+                         "text_rows=%d nonblank_rows=%d png=%s",
+                         mode, p2 ? 2 : 1, litp[0], litp[1], ttext, tnb, fbuf);
+            }
+        } else if (!strncmp(line, "cov", 3)) {
+            // cov on <LO-HI> | cov reset | cov <file> | cov
+            //
+            // A2GSPU_COVERAGE_OUT is flushed at SPIKE end, which never executes in
+            // a CTRL session -- so an interactive run could accumulate coverage and
+            // then throw it away on quit.  Worse, env-only configuration means
+            // coverage is always "everything since boot", when the interesting
+            // question is almost always scoped: what does THIS menu / THIS combat /
+            // THIS shop conversation touch?  `cov reset` + activity + `cov <file>`
+            // answers that, and is what makes the emulator->disassembler edge
+            // usable for archaeology rather than just a boot-time curiosity.
+            const char *arg = line + 3;
+            while (*arg == ' ') arg++;
+            if (!strncmp(arg, "on ", 3)) {
+                a2gspu_cov_init(arg + 3);
+                snprintf(result, sizeof result, g_cov_on ? "status=OK cov armed $%06X-$%06X"
+                                                         : "status=FAIL cov-arm-fail",
+                         g_cov_lo, g_cov_hi);
+            } else if (!strncmp(arg, "reset", 5)) {
+                a2gspu_cov_reset();
+                snprintf(result, sizeof result, "status=OK cov reset (range $%06X-$%06X)",
+                         g_cov_lo, g_cov_hi);
+            } else if (*arg) {
+                a2gspu_cov_write(arg);
+                uint32_t span = g_cov_on ? (g_cov_hi - g_cov_lo + 1) : 0;
+                snprintf(result, sizeof result, "status=OK cov wrote %s (%llu/%u bytes = %.1f%%)",
+                         arg, (unsigned long long)g_cov_marked, span,
+                         span ? 100.0 * (double)g_cov_marked / (double)span : 0.0);
+            } else {
+                uint32_t span = g_cov_on ? (g_cov_hi - g_cov_lo + 1) : 0;
+                snprintf(result, sizeof result, g_cov_on
+                         ? "status=OK cov on $%06X-$%06X marked=%llu/%u (%.1f%%)"
+                         : "status=OK cov off",
+                         g_cov_lo, g_cov_hi, (unsigned long long)g_cov_marked, span,
+                         span ? 100.0 * (double)g_cov_marked / (double)span : 0.0);
             }
         } else if (!strncmp(line, "save ", 5)) {
             // save <file> — CPU regs + full MMU snapshot (128K + page tables +
@@ -1974,12 +2212,13 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             if (sf) {
                 a2gspu_cpu_save(sf, computer->cpu);
                 if (state->mmu_iigs) { state->mmu_iigs->A2GSPU_snapshot(sf); ok = true; }
-                else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(computer->mmu)) { m->A2GSPU_snapshot(sf); ok = true; }
+                else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(rail_mmu(computer))) { m->A2GSPU_snapshot(sf); ok = true; }
                 if (ok) a2gspu_snap_write_sentinel(sf);
                 fclose(sf);
                 if (!ok) remove(line + 5);
             }
-            if (!ok) snprintf(result, sizeof result, "save-fail");
+            if (ok) snprintf(result, sizeof result, "status=OK save %s", line + 5);
+            else snprintf(result, sizeof result, "status=FAIL save-fail");
         } else if (!strncmp(line, "restore ", 8)) {
             FILE *sf = fopen(line + 8, "rb");
             bool ok = false;
@@ -1987,89 +2226,86 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 ok = a2gspu_cpu_load(sf, computer->cpu);
                 if (ok) {
                     if (state->mmu_iigs) ok = state->mmu_iigs->A2GSPU_restore(sf);
-                    else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(computer->mmu)) ok = m->A2GSPU_restore(sf);
+                    else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(rail_mmu(computer))) ok = m->A2GSPU_restore(sf);
                     else ok = false;
                 }
                 if (ok) ok = a2gspu_snap_check_sentinel(sf);
                 fclose(sf);
             }
-            if (ok) computer->cpu->halt = 0;   // force-run after restore
-            else snprintf(result, sizeof result, "restore-fail");
-        } else if (!strncmp(line, "step", 4)) {
-            // step [n] — execute N instructions (default 1) and report state.
-            // Instruction-granular: the frame loop could only stop on a frame
-            // boundary, so a tight loop or a single toolbox dispatch could not
-            // be observed at all.
-            int n = 1;
-            if (line[4] == ' ') n = atoi(line + 5);
-            if (n < 1) n = 1;
-            int done = 0;
-            for (; done < n; done++) {
-                if (computer->cpu->halt) break;
-                a2gspu_step_one(computer);
-            }
-            char st[192];
-            a2gspu_cpu_line(computer, st, sizeof st);
-            snprintf(result, sizeof result, "stepped=%d %s", done, st);
-        } else if (!strncmp(line, "run-until ", 10)) {
-            // run-until <BB:AAAA|AAAAAA> [max_instr] — step until PBR:PC equals
-            // the target, or the instruction budget is exhausted. This is what
-            // lets a harness assert AT a known point (a routine's entry, a
-            // return address) instead of "after N frames", which is flaky by
-            // construction.
-            char addrbuf[64] = {0};
-            long budget = 2000000;
-            uint32_t target = 0;
-            if (sscanf(line + 10, "%63s %ld", addrbuf, &budget) >= 1 &&
-                a2gspu_parse_addr(addrbuf, &target)) {
-                long i = 0; bool hit = false;
-                for (; i < budget; i++) {
-                    if (computer->cpu->halt) break;
-                    a2gspu_step_one(computer);
-                    if ((computer->cpu->full_pc & 0xFFFFFF) == target) { hit = true; break; }
-                }
-                char st[192];
-                a2gspu_cpu_line(computer, st, sizeof st);
-                snprintf(result, sizeof result, "%s instr=%ld %s",
-                         hit ? "hit" : (computer->cpu->halt ? "halted" : "budget"), i, st);
-            } else {
-                snprintf(result, sizeof result, "run-until-parse-fail");
-            }
-        } else if (!strncmp(line, "stack", 5)) {
-            // stack [n] — dump N bytes above SP (bank 0; the 65816 stack always
-            // lives there).  Without this, SP was visible but its CONTENTS were
-            // not, so a call could be seen to be deep but never traced to its
-            // caller.
-            int n = 16;
-            if (line[5] == ' ') n = atoi(line + 6);
-            if (n < 1) n = 1;
-            if (n > 48) n = 48;
-            uint16_t sp = (uint16_t)(computer->cpu->sp & 0xFFFF);
-            char *p = result;
-            size_t rem = sizeof result;
-            int w = snprintf(p, rem, "SP=%04X", sp);
-            p += w; rem -= w;
-            for (int i = 1; i <= n && rem > 4; i++) {
-                uint8_t b = computer->mmu->probe_peek((uint16_t)(sp + i));
-                w = snprintf(p, rem, " %02X", b);
-                p += w; rem -= w;
-            }
+            if (ok) {
+                computer->cpu->halt = 0;   // force-run after restore
+                snprintf(result, sizeof result, "status=OK restore %s", line + 8);
+            } else snprintf(result, sizeof result, "status=FAIL restore-fail");
         } else if (!strncmp(line, "vid", 3)) {
-            // vid — decode the full video mode rather than the ambiguous
-            // TEXT=1 HIRES=1 pair that `cpu` reported.  Reads the soft switches
-            // through the MMU so it reflects the machine, not cached flags.
-            MMU_II *m = computer->mmu;
-            snprintf(result, sizeof result,
-                "TEXT=%d MIXED=%d PAGE2=%d HIRES=%d 80COL=%d 80STORE=%d ALTCHAR=%d DHIRES=%d",
-                a2gspu_sw(m, 0xC01A), a2gspu_sw(m, 0xC01B), a2gspu_sw(m, 0xC01C),
-                a2gspu_sw(m, 0xC01D), a2gspu_sw(m, 0xC01F), a2gspu_sw(m, 0xC018),
-                a2gspu_sw(m, 0xC01E), a2gspu_sw(m, 0xC07F));
+            // vid -- the live video mode, read from the VIDEO SCANNER's own state.
+            //
+            // This verb previously read the $C01x status switches with
+            // a2gspu_sw() -> probe_peek(). probe_peek is the observation-free
+            // read: it returns the RAW page-table byte, NOT the value a real
+            // read of a soft-switch status register produces. So on a IIe every
+            // $C01x came back $80 and `vid` reported ALL EIGHT flags as 1; on the
+            // IIgs they came back 0 and it reported all eight as 0. The verb was
+            // fabricating its answer on BOTH platforms -- worse than no telemetry,
+            // because it looked authoritative.
+            //
+            // VideoScannerII is the authority the renderer itself uses, so this
+            // now reports what is actually being scanned out.
+            display_state_t *dsv = (display_state_t *)computer->cached_display_state;
+            VideoScannerII *vs = dsv ? dsv->video_scanner : nullptr;
+            if (vs) {
+                snprintf(result, sizeof result,
+                    "status=OK vid TEXT=%d MIXED=%d PAGE2=%d HIRES=%d 80COL=%d 80STORE=%d "
+                    "ALTCHAR=%d DHIRES=%d SHR=%d",
+                    vs->is_text() ? 1 : 0, vs->is_mixed() ? 1 : 0,
+                    vs->is_page_2() ? 1 : 0, vs->is_hires() ? 1 : 0,
+                    vs->is_80col() ? 1 : 0, vs->is_80store() ? 1 : 0,
+                    vs->is_altchrset() ? 1 : 0, vs->is_dblres() ? 1 : 0,
+                    vs->is_shr() ? 1 : 0);
+            } else {
+                snprintf(result, sizeof result, "status=FAIL vid-no-scanner");
+            }
         } else if (!strncmp(line, "quit", 4)) {
-            a2gspu_ctrl_ack(dir, seq, "ok");
+            a2gspu_ctrl_ack(dir, seq, "status=OK quit");
             printf("A2GSPU CTRL: session ended after %d command(s)\n", seq);
             return;
         } else {
-            snprintf(result, sizeof result, "unknown-cmd");
+            /* "unknown-cmd" WAS A LIE FOR MOST OF THE VERBS THAT REACHED HERE.
+             *
+             * The dispatch above matches `strncmp(line, "read ", 5)` -- with the
+             * trailing space -- so a bare `read` matches nothing, falls through
+             * the entire chain, and was told the command did not exist. Twenty
+             * of the thirty-six argument-taking verbs behaved that way. For an
+             * agent driving this rail that is the worst possible answer: it is
+             * indistinguishable from a typo or a version skew, it carries no
+             * syntax, and the reasonable conclusion to draw from it -- "this
+             * emulator cannot do that" -- is false.
+             *
+             * The verb registry already holds a synopsis for every verb, for
+             * `help` and `manifest`. So look the first word up: if it is real,
+             * the problem is the arguments, and the synopsis is exactly what the
+             * caller needs to fix it. Only a genuinely unrecognised word still
+             * gets unknown-cmd, which then means what it says. */
+            char first[32] = {0};
+            for (size_t i = 0; i < sizeof first - 1 && line[i] &&
+                               line[i] != ' ' && line[i] != '\t'; i++) {
+                first[i] = line[i];
+            }
+            int nverbs = 0;
+            const a2manifest::Verb *vtab = a2manifest::verbs(&nverbs);
+            const char *syn = nullptr;
+            for (int i = 0; i < nverbs; i++) {
+                if (!strcmp(vtab[i].name, first)) { syn = vtab[i].synopsis; break; }
+            }
+            if (syn) {
+                snprintf(result, sizeof result,
+                         "status=FAIL bad-args -- %s IS a verb; its arguments are "
+                         "wrong or missing. usage: %s", first, syn);
+            } else {
+                snprintf(result, sizeof result,
+                         "status=FAIL unknown-cmd '%s' -- not a verb. `help` lists "
+                         "all of them; `manifest <file>` writes the full contract.",
+                         first);
+            }
         }
         a2gspu_ctrl_ack(dir, seq, result);
         seq++;
@@ -2422,6 +2658,11 @@ static void run_headless_spike(GS2AppState *state) {
     if (const char *tf = SDL_getenv("A2GSPU_TRACE_FROM"))
         g_iigs_trace_from = (uint32_t)strtoul(tf, nullptr, 16) & 0xFFFFFF;
 
+    // A2GSPU_COVERAGE="LO-HI"|"BANK:LO-HI" -> per-byte execution bitmap, written
+    // to A2GSPU_COVERAGE_OUT at spike end.  Feeds deasmiigs --coverage so the
+    // code/data split becomes a measurement instead of a heuristic.
+    if (const char *cv = SDL_getenv("A2GSPU_COVERAGE")) a2gspu_cov_init(cv);
+
     // ---- A2GSPU_ITRACE: additive, env-gated, per-instruction execution trace ----
     // Two arm modes (OR'd): A2GSPU_ITRACE_FROM=<hexPC> arms when full_pc first
     // hits that 24-bit PC; A2GSPU_ITRACE_FRAME=<N> arms at the start of headless
@@ -2584,6 +2825,55 @@ static void run_headless_spike(GS2AppState *state) {
         }
     }
 
+    // Shared frame counter so LOAD_BOOT / RUN_BOOT / main loop do not double-run.
+    int spike_i = 0;
+
+    // A2GSPU_LOAD: multi-file deliberate RAM splice WITHOUT changing PC.
+    // For a2tile / a2engine banks on IIe (tiles.bin@$6000, attrs@$8800) before
+    // A2GSPU_DHGR_GOLDEN. Specs are comma/semicolon-separated:
+    //   tiles.bin@6000;attrs.bin@8800
+    //   6000@tiles.bin,8800@attrs.bin
+    // Optional A2GSPU_LOAD_BOOT=N frames first (default 0). Hard-fails on any
+    // entry error so CI cannot silently gate an unloaded bank.
+    if (const char *loads = SDL_getenv("A2GSPU_LOAD")) {
+        int load_boot = 0;
+        if (const char *lb = SDL_getenv("A2GSPU_LOAD_BOOT")) load_boot = SDL_atoi(lb);
+        if (load_boot < 0) load_boot = 0;
+        if (load_boot > state->spike_frames) load_boot = state->spike_frames;
+        if (!snap_load) {
+            for (; spike_i < load_boot; spike_i++) {
+                iigs_itrace_frame_tick(spike_i);
+                if (!run_one_frame(computer)) {
+                    printf("SPIKE: halted during LOAD_BOOT at frame %d\n", spike_i);
+                    break;
+                }
+            }
+        }
+        if (!a2ctrl::apply_env_loads(computer, loads)) {
+            printf("A2GSPU LOAD: aborting SPIKE (exit 2) — fix paths/specs\n");
+            exit(2);
+        }
+    }
+
+    // A2GSPU_VRAM_LOAD: inject offline-painted DHGR page (16K aux‖main).
+    // Used by a2tile `paint` so A2GSPU_DHGR_GOLDEN can gate without guest blit.
+    //   A2GSPU_VRAM_LOAD=page.vram   A2GSPU_VRAM_PAGE=1|2 (default 1)
+    if (const char *vl = SDL_getenv("A2GSPU_VRAM_LOAD")) {
+        int vpage = 1;
+        if (const char *vp = SDL_getenv("A2GSPU_VRAM_PAGE")) {
+            if (vp[0] == '2') vpage = 2;
+        }
+        char err[256];
+        if (a2ctrl::load_vram_raw(computer, vl, vpage, err, sizeof err)) {
+            printf("A2GSPU VRAM_LOAD: OK page%d 16384 aux+main from %s "
+                   "(DELIBERATE splice profile=vram-raw)\n",
+                   vpage, vl);
+        } else {
+            printf("A2GSPU VRAM_LOAD: FAIL %s — aborting SPIKE (exit 2)\n", err);
+            exit(2);
+        }
+    }
+
     if (runbin) {
         char binpath[1024];
         strncpy(binpath, runbin, sizeof(binpath) - 1);
@@ -2597,11 +2887,10 @@ static void run_headless_spike(GS2AppState *state) {
         if (bootframes < 0) bootframes = 0;
         if (bootframes > state->spike_frames) bootframes = state->spike_frames;
 
-        int i = 0;
         if (!snap_load) {   // SNAP_LOAD already provided a booted desktop; skip the long boot
-            for (; i < bootframes; i++) {
-                iigs_itrace_frame_tick(i);
-                if (!run_one_frame(computer)) { printf("SPIKE: halted during boot at frame %d\n", i); break; }
+            for (; spike_i < bootframes; spike_i++) {
+                iigs_itrace_frame_tick(spike_i);
+                if (!run_one_frame(computer)) { printf("SPIKE: halted during boot at frame %d\n", spike_i); break; }
             }
         }
         FILE *rb = (state->mmu_iigs) ? fopen(binpath, "rb") : nullptr;
@@ -2612,16 +2901,16 @@ static void run_headless_spike(GS2AppState *state) {
             bus_trace_reset(); slot_bus_reset(); mmu_state_trace_reset();   // isolate the injected program
             computer->cpu->full_pc = loadaddr;                              // jump to it (pb = addr>>16)
             printf("A2GSPU RUN: injected %d bytes at $%06X after %d boot frames; PC set.\n",
-                   n, loadaddr, i);
+                   n, loadaddr, spike_i);
         } else if (!state->mmu_iigs) {
             printf("A2GSPU RUN: no IIgs MMU on this platform -- skipped (use -p 5)\n");
         } else {
             printf("A2GSPU RUN: could not open binary '%s'\n", binpath);
         }
-        for (; i < state->spike_frames; i++) {
-            iigs_itrace_frame_tick(i);
-            if (!run_one_frame(computer)) { printf("SPIKE: emulation halted early at frame %d\n", i); break; }
-            if (g_iigs_hang_detected) { printf("SPIKE: hang detected, halting at frame %d\n", i); break; }
+        for (; spike_i < state->spike_frames; spike_i++) {
+            iigs_itrace_frame_tick(spike_i);
+            if (!run_one_frame(computer)) { printf("SPIKE: emulation halted early at frame %d\n", spike_i); break; }
+            if (g_iigs_hang_detected) { printf("SPIKE: hang detected, halting at frame %d\n", spike_i); break; }
         }
         printf("A2GSPU RUN: final CPU full_pc=$%06X (if ~= the inject addr, the injected code ran)\n",
                (unsigned)computer->cpu->full_pc);
@@ -2635,7 +2924,8 @@ static void run_headless_spike(GS2AppState *state) {
         const char *spike_keys = SDL_getenv("A2GSPU_SPIKE_KEYS");
         int spike_keys_at = state->spike_frames / 2;
         if (const char *ka = SDL_getenv("A2GSPU_SPIKE_KEYS_AT")) spike_keys_at = SDL_atoi(ka);
-        for (int i = 0; i < state->spike_frames; i++) {
+        for (; spike_i < state->spike_frames; spike_i++) {
+            int i = spike_i;
             iigs_itrace_frame_tick(i);
             if (spike_keys && i == spike_keys_at) {
                 keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
@@ -2775,12 +3065,13 @@ static void run_headless_spike(GS2AppState *state) {
         FILE *tfp = fopen(tf, "wb");
         if (tfp) {
             for (uint32_t a = 0x0400; a < 0x0800; a++) {
-                uint8_t b = computer->mmu->probe_peek(a);
+                uint8_t b = rail_mmu(computer)->probe_peek(a);
                 fwrite(&b, 1, 1, tfp);
             }
-            uint8_t *mem = computer->mmu->get_memory_base();
+            // Same aux half, same reason -- see the note on the other textdump.
+            const uint8_t *mem = rail_video_base(computer);
             for (uint32_t a = 0x0400; a < 0x0800; a++) {
-                uint8_t b = mem ? mem[0x10000 + a] : 0;
+                uint8_t b = mem ? mem[0x10000 + a] : rail_mmu(computer)->probe_peek(0x010000u | a);
                 fwrite(&b, 1, 1, tfp);
             }
             fclose(tfp);
@@ -2816,6 +3107,10 @@ static void run_headless_spike(GS2AppState *state) {
         printf("OBS HANDLE: register->bound=%d release->freed=%d (expect 1/1)\n", bound, freed);
     }
     iigs_milestones_report();   // A2GSPU_MILESTONES: reached / NOT-REACHED table
+
+    // A2GSPU_COVERAGE: flush the execution bitmap BEFORE the gate block below,
+    // which exit()s on any gate and would otherwise discard the run's coverage.
+    if (const char *co = SDL_getenv("A2GSPU_COVERAGE_OUT")) a2gspu_cov_write(co);
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
     {
@@ -2873,6 +3168,139 @@ static void run_headless_spike(GS2AppState *state) {
             iigs_emit_status(st, any_gate ? gate_rc : 0,
                              any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
                              g_iigs_last_gsos_err, g_iigs_brk_count, scb, h);
+            if (any_gate) {
+                printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
+                exit(gate_rc);
+            }
+        } else {
+            // ---- Non-IIgs (Apple II / II+ / IIe / IIc) spike verdict --------------
+            //
+            // Everything above is gated on the Mega II image, which exists only on
+            // -p 5.  So on a IIe spike the golden, the asserts, the GSDIAG line AND
+            // the gate-driven exit were all skipped: the run printed
+            // "SPIKE E1: mmu_iigs/megaii base is NULL -- FAILED" and still exited 0.
+            // A gate that cannot fail is not a gate, and a harness has nothing to
+            // parse.  This is the II-family analogue.
+            //
+            // The IIe counterpart of the SHR window is the hi-res screen: hash HGR
+            // page 1 ($2000-$3FFF) and page 2 ($4000-$5FFF).  Reads go through
+            // probe_peek so they are observation-free (no $C0xx soft-switch side
+            // effects) -- the emulated machine cannot tell it is being measured.
+            //
+            // A2GSPU_HGR_PAGE selects what the golden covers: 1, 2, or "both"
+            // (default) -- a tile engine that renders to page 2 while showing page 1
+            // wants to gate on the page it just drew.
+            static uint8_t hgr[0x4000];
+            uint32_t lo = 0x2000, hi = 0x5FFF;
+            if (const char *pg = SDL_getenv("A2GSPU_HGR_PAGE")) {
+                if (pg[0] == '1') { lo = 0x2000; hi = 0x3FFF; }
+                else if (pg[0] == '2') { lo = 0x4000; hi = 0x5FFF; }
+            }
+            int nz = 0, nd = 0, lit = 0; uint8_t seen[256] = {0};
+            uint64_t h = HOUSE_FNV_BASIS;
+            size_t n = 0;
+            for (uint32_t a = lo; a <= hi && n < sizeof(hgr); a++, n++) {
+                uint8_t b = rail_mmu(computer) ? rail_mmu(computer)->probe_peek(a) : 0;
+                hgr[n] = b;
+                h = (h ^ b) * HOUSE_FNV_PRIME;
+                if (b) nz++;
+                // `lit` counts bytes with an actual PIXEL set (low 7 bits).  Bit 7
+                // is the HGR palette selector, not a pixel, and a page cleared to
+                // black in the high palette is filled with $80 -- so `nonzero`
+                // alone reports a completely blank screen as ~94% "content".  That
+                // reading is actively misleading, so report both.
+                if (b & 0x7F) lit++;
+                if (!seen[b]) { seen[b] = 1; nd++; }
+            }
+            printf("SPIKE HGR: $%04X-$%04X nonzero=%d lit=%d distinct=%d hash=%016llX\n",
+                   lo, hi, nz, lit, nd, (unsigned long long)h);
+
+            // DHGR peer golden (a2tile / a2engine): same as CTRL `dhgr-golden`.
+            // Profiles: vram-raw (default, 16K AUX‖MAIN FNV) | 4dot (discrete RGB).
+            // A2GSPU_DHGR_PAGE=1|2; A2GSPU_DHGR_GOLDEN_PROFILE=vram-raw|4dot.
+            uint64_t dhgr_h = 0;
+            bool dhgr_ok = false;
+            a2dhgr::GoldenProfile dhgr_prof = a2dhgr::GoldenProfile::VramRaw;
+            if (const char *pp = SDL_getenv("A2GSPU_DHGR_GOLDEN_PROFILE")) {
+                a2dhgr::GoldenProfile tmp;
+                if (a2dhgr::parse_golden_profile(pp, &tmp))
+                    dhgr_prof = tmp;
+                else
+                    printf("SPIKE DHGR: unknown A2GSPU_DHGR_GOLDEN_PROFILE='%s' "
+                           "(use vram-raw|4dot); keeping vram-raw\n", pp);
+            }
+            const char *dhgr_pname = a2dhgr::golden_profile_name(dhgr_prof);
+            {
+                uint32_t dbase = 0x2000u;
+                if (const char *dp = SDL_getenv("A2GSPU_DHGR_PAGE")) {
+                    if (dp[0] == '2') dbase = 0x4000u;
+                }
+                const uint8_t *flat = rail_video_base(computer);
+                if (flat) {
+                    const uint8_t *aux = flat + 0x10000 + dbase;
+                    const uint8_t *mainb = flat + dbase;
+                    uint64_t h_raw = a2dhgr::page_fnv64(aux, mainb);
+                    uint64_t h_4dot = a2dhgr::page_rgb_fnv64(aux, mainb, 1);
+                    dhgr_h = a2dhgr::page_hash(aux, mainb, dhgr_prof);
+                    dhgr_ok = true;
+                    printf("SPIKE DHGR: page@$%04X profile=vram-raw hash=%016llX\n",
+                           (unsigned)dbase, (unsigned long long)h_raw);
+                    printf("SPIKE DHGR: page@$%04X profile=4dot hash=%016llX\n",
+                           (unsigned)dbase, (unsigned long long)h_4dot);
+                    printf("SPIKE DHGR: gate profile=%s hash=%016llX\n",
+                           dhgr_pname, (unsigned long long)dhgr_h);
+                } else {
+                    printf("SPIKE DHGR: no flat image (cannot hash AUX‖MAIN)\n");
+                }
+            }
+
+            int gate_rc = 0; bool any_gate = false;
+            if (const char *dgf = SDL_getenv("A2GSPU_DHGR_GOLDEN")) {
+                any_gate = true;
+                if (!dhgr_ok) {
+                    printf("DHGR GOLDEN: ERROR — no flat image for hash\n");
+                    gate_rc = 1;
+                } else {
+                    gate_rc |= a2dhgr::golden_gate_file(dgf, dhgr_h, "DHGR GOLDEN",
+                                                         dhgr_pname);
+                }
+            }
+            if (const char *gf = SDL_getenv("A2GSPU_GOLDEN")) {
+                any_gate = true;
+                FILE *gp = fopen(gf, "r");
+                if (gp) {
+                    unsigned long long g = 0;
+                    if (fscanf(gp, "%llx", &g) == 1) {
+                        int match = (g == h);
+                        printf("HGR GOLDEN: %s (cur=%016llX want=%016llX)\n",
+                               match ? "MATCH" : "DIFF", (unsigned long long)h, g);
+                        if (!match) gate_rc = 1;
+                    } else {
+                        // Corrupt/empty golden must never silently disable the gate.
+                        printf("HGR GOLDEN: ERROR — golden file '%s' has no parseable "
+                               "hash (cur=%016llX); failing gate.\n",
+                               gf, (unsigned long long)h);
+                        gate_rc = 1;
+                    }
+                    fclose(gp);
+                } else if ((gp = fopen(gf, "w"))) {
+                    fprintf(gp, "%016llX\n", (unsigned long long)h); fclose(gp);
+                    printf("HGR GOLDEN: blessed %s = %016llX\n", gf, (unsigned long long)h);
+                }
+            }
+            if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
+                any_gate = true;
+                // peek:/nonzero/distinct are machine-independent; the SHR-only fields
+                // (scb_mode, idxN) are meaningless here and report as such.
+                gate_rc |= iigs_eval_asserts(as, computer->cpu, hgr, nz, nd);
+            }
+            const char *st = (any_gate && gate_rc) ? "GATE_FAIL"
+                           : g_iigs_brk_count       ? "CRASH_BRK"
+                           : g_iigs_hang_detected   ? "HANG" : "OK";
+            // scb is an SHR concept; report 0 on the II family rather than a fake mode.
+            iigs_emit_status(st, any_gate ? gate_rc : 0,
+                             any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
+                             0, g_iigs_brk_count, 0, h);
             if (any_gate) {
                 printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
                 exit(gate_rc);

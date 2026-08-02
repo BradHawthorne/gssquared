@@ -26,7 +26,11 @@ static void update_mouse_scale(keygloo_state_t *kb_state) {
 }
 
 void keygloo_update_interrupt_status(keygloo_state_t *kb_state, KeyGloo *kg ) {
-    // TODO: check if mouse interrupt is enabled, and if so, assert it.
+    // The mouse interrupt IS accounted for: KeyGloo::update_interrupt_status()
+    // folds (mouse_interrupt_enabled && mouse_data_full) into the same
+    // interrupt_asserted that interrupt_status() returns here. (A "TODO: check
+    // if mouse interrupt is enabled, and if so, assert it" sat on this line and
+    // described work the code above it already does.)
     if (kg->interrupt_status()) {
         kb_state->irq_control->set_irq(IRQ_ID_KEYGLOO, true);
     } else {

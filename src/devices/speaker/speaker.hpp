@@ -87,6 +87,21 @@ struct EventBuffer {
 
 typedef struct speaker_state_t {
     FILE *speaker_recording = NULL;
+
+    /* A2GSPU: the speaker had NO observable state. Every Apple II sound is made
+       by toggling $C030 at the right moments, and the emulator logged each
+       toggle into an audio event buffer that only the audio device ever saw --
+       so from outside there was no way to tell a working speaker from a dead
+       one short of listening to it. `toggle_speaker_recording()` exists for
+       exactly this, but its declaration is commented out in this header and
+       nothing calls it: an instrument with no switch.
+
+       These two are that switch. Counting the toggles proves the accesses reach
+       the device; the c14m timestamp of the last one proves they are being
+       stamped on the same clock the audio path resamples against, which is what
+       makes the pitch right rather than merely present. */
+    uint64_t toggle_count = 0;
+    uint64_t last_toggle_c14m = 0;
     //SDL_AudioDeviceID device_id = 0;
     //SDL_AudioStream *stream = NULL;
 

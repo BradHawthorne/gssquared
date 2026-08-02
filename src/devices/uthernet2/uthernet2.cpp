@@ -411,20 +411,10 @@ void init_slot_uthernet2(computer_t *computer, SlotType_t slot) {
     // Each resource is explicitly nulled after destruction to prevent
     // double-free if (hypothetically) the handler were called twice.
     computer->register_shutdown_handler([ud]() {
-        for (int i = 0; i < W5100_NUM_SOCKETS; i++) {
-            if (ud->w5100.sockets[i].tcp_socket) {
-                NET_DestroyStreamSocket(ud->w5100.sockets[i].tcp_socket);
-                ud->w5100.sockets[i].tcp_socket = nullptr;
-            }
-            if (ud->w5100.sockets[i].udp_socket) {
-                NET_DestroyDatagramSocket(ud->w5100.sockets[i].udp_socket);
-                ud->w5100.sockets[i].udp_socket = nullptr;
-            }
-            if (ud->w5100.sockets[i].resolve_addr) {
-                NET_UnrefAddress(ud->w5100.sockets[i].resolve_addr);
-                ud->w5100.sockets[i].resolve_addr = nullptr;
-            }
-        }
+        // One teardown path, in w5100.cpp. This used to be an inline copy of
+        // that loop, which meant it did not learn about the TCP server handle
+        // when LISTEN support was added and leaked the bound port on exit.
+        w5100_close_all_sockets(&ud->w5100);
         vnat_reset(&ud->w5100.vnat);
         delete ud;
         return true;

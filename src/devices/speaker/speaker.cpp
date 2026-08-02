@@ -110,6 +110,10 @@ uint64_t audio_generate_frame(speaker_state_t *speaker_state) {
 inline void log_speaker_blip(speaker_state_t *speaker_state) {
     speaker_state->sp->event_buffer->add_event({speaker_state->clock->get_c14m(), (uint64_t)(speaker_state->audio_system->get_volume())});
 
+    // A2GSPU: make the toggle observable from outside the audio path.
+    speaker_state->toggle_count++;
+    speaker_state->last_toggle_c14m = speaker_state->clock->get_c14m();
+
     if (speaker_state->speaker_recording) {
         fprintf(speaker_state->speaker_recording, "%llu\n", u64_t(speaker_state->clock->get_cycles()));
     }

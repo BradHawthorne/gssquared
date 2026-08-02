@@ -172,6 +172,7 @@ protected:
     device_irq_handler_s irq_handler = {nullptr, nullptr};
     mode_table_t calc_video_mode_x(uint8_t vmode);
     virtual void init_mode_table();
+    inline virtual bool supports_dblres() const { return false; }
 
     uint8_t current_scb = 0;
     uint16_t h_counter = 0;
@@ -237,6 +238,14 @@ public:
     inline bool is_hires()  { return  hires; }
     inline bool is_text()   { return !graf;  }
     inline bool is_graf()   { return  graf;  }
+
+    // The two mode flags that had no getter.  is_80col/is_altchrset/is_dblres
+    // already exist below; 80STORE and SHR did not, which forced the CTRL `vid`
+    // verb to guess the whole set by peeking the $C01x status switches -- a read
+    // that does not work through probe_peek and made `vid` report fabricated
+    // values on BOTH platforms (all-1s on IIe, all-0s on IIgs).
+    inline bool is_80store() { return f_80store; }
+    inline bool is_shr()     { return shr;       }
 
     inline bool is_80col()        { return sw80col;   }
     inline bool is_altchrset()    { return altchrset; }

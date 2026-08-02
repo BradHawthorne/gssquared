@@ -265,7 +265,13 @@ test_record test_records[] = {
     {
         "BCC Branch Different Page", 
         {0x90, 0xF0},  // BCC $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x00  // Clear carry flag (C=0)
     },
 
@@ -285,7 +291,13 @@ test_record test_records[] = {
     {
         "BCS Branch Different Page", 
         {0xB0, 0xF0},  // BCS $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x01  // Set carry flag (C=1)
     },
 
@@ -305,7 +317,13 @@ test_record test_records[] = {
     {
         "BEQ Branch Different Page", 
         {0xF0, 0xF0},  // BEQ $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x02  // Clear zero flag (Z=0)
     },
 
@@ -353,7 +371,13 @@ test_record test_records[] = {
     {
         "BMI Branch Different Page", 
         {0x30, 0xF0},  // BMI $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x80  // Set negative flag (N=1)
     },
 
@@ -374,7 +398,13 @@ test_record test_records[] = {
     {
         "BNE Branch Different Page", 
         {0xD0, 0xF0},  // BNE $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x00  // Clear zero flag (Z=0)
     },
 
@@ -394,7 +424,13 @@ test_record test_records[] = {
     {
         "BPL Branch Different Page", 
         {0x10, 0xF0},  // BPL $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x00  // Clear negative flag (N=0)
     },
     {
@@ -426,7 +462,13 @@ test_record test_records[] = {
     {
         "BVC Branch Different Page", 
         {0x50, 0xF0},  // BVC $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x00  // Clear overflow flag (V=0)
     },
 
@@ -446,7 +488,13 @@ test_record test_records[] = {
     {
         "BVS Branch Different Page", 
         {0x70, 0xF0},  // BVS $0FF2 (backwards)
-        4,
+        // 3, NOT 4: the +1 cycle for a taken branch crossing a page boundary
+        // applies only in 6502 EMULATION mode (E=1). This harness runs NATIVE
+        // (cpu->E = 0, set in main), where the 65816 takes a taken branch in a
+        // flat 3 cycles regardless of page. These eight expectations were copied
+        // from the 6502 table (where 4 IS correct) without adjusting for native
+        // mode, so they were failing a CPU core that was behaving correctly.
+        3,
         0, 0, 0, 0x40  // Set overflow flag (V=1)
     },
 

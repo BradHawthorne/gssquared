@@ -94,6 +94,16 @@ class MMU {
                 page_table[i].read_h = {nullptr, nullptr};
                 page_table[i].write_h = {nullptr, nullptr};
                 page_table[i].shadow_h = {nullptr, nullptr};
+                // read_d / write_d were NOT initialized here. They are description
+                // string pointers, so an unmapped page carried whatever heap garbage
+                // the allocation happened to contain -- and any consumer doing %s on
+                // them dereferenced a wild pointer. That is what actually crashed
+                // mmutest: page $C0 happened to hold a null (printed "(null)") and
+                // $C1 held garbage, faulting mid-line. A null check at the consumer
+                // cannot save you when the value is non-null junk, which is why two
+                // rounds of consumer-side hardening did not fix it.
+                page_table[i].read_d = nullptr;
+                page_table[i].write_d = nullptr;
             }
         }
 
@@ -113,7 +123,49 @@ class MMU {
 
         // Observation-free peek (default = read_raw; MMU_IIgs overrides to route
         // $E0/$E1 through the Mega II image). Never triggers IO/cycles/slot bus.
+        //
+        // ⚠ HAZARD -- READ THIS BEFORE USING probe_peek FOR ANY DIAGNOSTIC.
+        // probe_peek is observation-FREE, not observation-COMPLETE. read_raw()
+        // above returns floating_bus_read() for any page with no read_p pointer,
+        // i.e. every HANDLER-BACKED page. That is not an error and not detectable
+        // from the return value -- you get a plausible-looking byte that is pure
+        // bus noise. $C0xx is always handler-backed; language-card/ROM regions and
+        // IIgs shadowed banks $00/$01 often are too.
+        //
+        // This single property has produced FIVE separate confidently-wrong
+        // instruments: `vid` reported all eight video flags as 1 on a IIe (every
+        // $C01x read back $80 floating bus) and all 0 on a IIgs; `cpu`'s KBD field
+        // printed a fabricated $80 forever; CALLTRACE matched no opcode at all on
+        // the II family and logged every IIgs call target as "-> 00/EEEE"; the
+        // keygloo counters read 0; and the io_trace tap missed the II family
+        // entirely. Every one of them looked authoritative while being fiction.
+        //
+        // So: use probe_readable() first whenever a wrong answer would mislead, and
+        // prefer the owning module's own state (VideoScannerII for video mode,
+        // keyboard_state_t for the key latch) over peeking hardware addresses.
         virtual uint8_t probe_peek(uint32_t address) { return read_raw(address); }
+
+        // True iff probe_peek(address) reflects real memory rather than floating
+        // bus -- that is, the page is backed by a read pointer. Lets a diagnostic
+        // distinguish "the value is X" from "I cannot see this address", instead of
+        // silently reporting bus noise as data.
+        virtual bool probe_readable(uint32_t address) {
+            uint16_t page = address >> page_size_bits;
+            if (page > num_pages) return false;
+            return page_table[page].read_p != nullptr;
+        }
+
+        // Observation-free POKE -- the write-side twin of probe_peek, and the
+        // reason it exists is that without it an agent rail can place bytes
+        // somewhere the CPU never fetches from and be told it succeeded.
+        //
+        // On a IIgs, banks $00/$01 are HANDLER pages (bank_shadow_read/write),
+        // so write_raw silently drops writes to them exactly as read_raw returns
+        // floating bus for reads. Every rail memory verb was gated on a
+        // dynamic_cast<MMU_II*> that a IIgs MMU cannot satisfy, so `load` acked
+        // success, `read` acked the right bytes back, and the CPU executed
+        // zeros. MMU_IIgs overrides this to resolve the way the handlers do.
+        virtual void probe_poke(uint32_t address, uint8_t value) { write_raw(address, value); }
 
         // A2GSPU diagnostic: dump the IIgs main/aux soft-switch state + the resolved
         // read/write physical mapping of bank-$00/$01 $A600 (handler pages that
@@ -261,16 +313,31 @@ class MMU {
             page_table[page].write_d = write_d;
         }
 
+        // SOLE DEFINITION. There was an identical copy in mmu.cpp:192; this inline
+        // one always won for anything including the header, and some targets
+        // (mmutest) do not link mmu.cpp at all -- so the .cpp copy was dead code
+        // AND the reason two correct fixes applied there had no observable effect
+        // while I hunted a crash. The dead copy has been removed; keep exactly one.
+        //
+        // Hardening: clamp end_page to the allocated table, and never pass a NULL
+        // description to %8s (undefined with a width, and unmapped pages legitimately
+        // have none). A diagnostic dumper must not be able to fault the process it
+        // is diagnosing.
         void dump_page_table(page_t start_page, page_t end_page) {
-
+            if (num_pages > 0) {
+                if (end_page >= num_pages) end_page = (page_t)(num_pages - 1);
+                if (start_page >= num_pages) return;
+            }
             printf("Page                        R-Ptr            W-Ptr              read_h   (    context     )        write_h  (     context    )        S-Handler(     context    )\n");
             printf("-------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
             for (int i = start_page ; i <= end_page ; i++) {
-                printf("%02X (%8s %8s): %16p %16p %16p(%16p) %16p(%16p) %16p(%16p)\n", 
-                    i, 
-                    page_table[i].read_d, page_table[i].write_d, //page_table[i].readable, page_table[i].writeable,
+                const char *rd = page_table[i].read_d  ? page_table[i].read_d  : "-";
+                const char *wd = page_table[i].write_d ? page_table[i].write_d : "-";
+                printf("%02X (%8s %8s): %16p %16p %16p(%16p) %16p(%16p) %16p(%16p)\n",
+                    i,
+                    rd, wd,
                     page_table[i].read_p,
-                    page_table[i].write_p, 
+                    page_table[i].write_p,
                     page_table[i].read_h.read, page_table[i].read_h.context,
                     page_table[i].write_h.write, page_table[i].write_h.context,
                     page_table[i].shadow_h.write, page_table[i].shadow_h.context

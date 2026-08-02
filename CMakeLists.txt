@@ -489,6 +489,12 @@ add_subdirectory(apps/montest)
 
 add_subdirectory(apps/cycletest)
 
+# Owned semantic conformance test. cycletest proves TIMING; this proves the
+# instruction actually computes the right answer and sets the right flags --
+# distinct properties, and the CPU had no owned check of the second one because
+# cputest's Klaus Dormann fixture is third-party and not vendored here.
+add_subdirectory(apps/conformtest)
+
 #add_subdirectory(apps/dpp)
 add_subdirectory(apps/vpp)
 
@@ -985,3 +991,39 @@ if((UNIX) AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 
 configure_file(src/build_config.hpp.in "${CMAKE_BINARY_DIR}/cfg/build_config.hpp" @ONLY)
+
+# ---------------------------------------------------------------------------
+# ctest registration.
+#
+# These four binaries were already built, already worked, and were run by
+# NOTHING: `ctest -N` reported "Total Tests: 0" while conformtest alone was
+# passing 1189 checks whenever somebody happened to invoke it by hand. That is
+# the same shape as toggle_speaker_recording() -- an instrument that exists with
+# no switch -- except these were finished and correct.
+#
+# Only genuine pass/fail programs are registered. Deliberately NOT included:
+#   cputest      needs external gold-standard vectors (exits 77 without them)
+#   cpu816test   needs snes-tests/cputest/cputest-full.sfc, absent here
+#   iigsmmutest  a GENERATOR -- writes test.asm and exits 0 regardless
+#   rtctest      prints a register trace, asserts nothing
+# Registering those would add tests that cannot fail, which is worse than
+# having none: a green ctest would then mean less than it does now.
+enable_testing()
+
+add_test(NAME cpu_conformance COMMAND conformtest)
+set_tests_properties(cpu_conformance PROPERTIES
+    FAIL_REGULAR_EXPRESSION "Failed tests: [1-9]")
+
+add_test(NAME cpu_cycles_6502  COMMAND cycletest)
+set_tests_properties(cpu_cycles_6502 PROPERTIES
+    FAIL_REGULAR_EXPRESSION "Failed tests: [1-9]")
+
+add_test(NAME cpu_cycles_65816 COMMAND cycletest816)
+set_tests_properties(cpu_cycles_65816 PROPERTIES
+    FAIL_REGULAR_EXPRESSION "Failed tests: [1-9]")
+
+# The 6522 VIA (Mockingboard). Prints its own verdict; a zero exit alone is not
+# enough, because it exits 0 on the trace path too.
+add_test(NAME via_6522 COMMAND w6522)
+set_tests_properties(via_6522 PROPERTIES
+    PASS_REGULAR_EXPRESSION "PASS: all read expectations matched")

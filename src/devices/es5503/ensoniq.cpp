@@ -98,10 +98,27 @@ void ES5503::update_sdl_stream_rate() {
     
     // NULL destination means use device's native rate
     if (!SDL_SetAudioStreamFormat(m_sdl_stream, &src_spec, NULL)) {
-        // Log error but don't fail
-        printf("Warning: Failed to update ES5503 SDL stream rate to %u Hz: %s\n", 
-               es5503_output_rate, SDL_GetError());
-        assert(false);
+        // Log error but don't fail -- and that is what happens now. The
+        // assert(false) that used to sit here contradicted the line above it,
+        // and this build ships asserts LIVE: CMakeLists overrides
+        // CMAKE_CXX_FLAGS_RELEASE to plain -O3, dropping CMake's default
+        // -DNDEBUG. So a transient host audio failure -- a device change, a
+        // sample rate the driver refuses -- aborted the whole emulator instead
+        // of degrading the sound. Nothing about the emulated machine is wrong
+        // when this fails, so it must not take the machine down.
+        // Reported ONCE. This runs from the $E1 (oscillator enable) write path,
+        // which guest music code touches constantly, so an unguarded message
+        // here would bury every other line in the log at audio rates.
+        static bool said = false;
+        if (!said) {
+            said = true;
+            fprintf(stderr, "[ES5503] Failed to update SDL stream rate to %u Hz: %s\n"
+                            "         Audio continues at the previous rate. This is a HOST\n"
+                            "         audio condition, not an emulated-machine fault, and is\n"
+                            "         reported once -- it may still be happening.\n",
+                    es5503_output_rate, SDL_GetError());
+        }
+        return;
     }
     printf("updated sdl stream rate to %u Hz\n", es5503_output_rate);
 }

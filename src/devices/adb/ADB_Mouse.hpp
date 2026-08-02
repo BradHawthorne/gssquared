@@ -43,31 +43,73 @@ class ADB_Mouse : public ADB_Device
         registers[2].data[1] = 0x00;
     }
 
-    void reset(uint8_t cmd, uint8_t reg) override { }
-    void flush(uint8_t cmd, uint8_t reg) override { }
+    /* Both were empty. See the note on ADB_Keyboard's pair: a Reset returns the
+       device to its power-on address so the host can re-enumerate, and a Flush
+       discards buffered movement WITHOUT returning it -- which is what
+       distinguishes it from a Talk R0. */
+    void reset(uint8_t cmd, uint8_t reg) override {
+        reset_to_default_address();
+        handler = 1;                    // lo-res, the power-on handler
+        has_data = false;
+        registers[0].data[0] = 0;
+        registers[0].data[1] = 0;
+    }
+    void flush(uint8_t cmd, uint8_t reg) override {
+        has_data = false;
+        registers[0].data[0] = 0;
+        registers[0].data[1] = 0;
+    }
     void listen(uint8_t command, uint8_t reg, ADB_Register &msg) override {
         //printf("MS> Listen: command: %02X, reg: %02X, msg: %02X %02X\n", command, reg, msg.data[0], msg.data[1]);
-        if (reg == 3) { // 
-            /** Register 3
-             * Bit 15: reserved, must be 0. (byte 0)
-             * Bit 14: exceptional event.
-             * Bit 13: SR enable
-             * Bit 12: Reserved, must be 0.
-             * Bit 11-8: Device address.
-             * Bit 7-0: Device handler. (byte 1)
+        if (reg == 3) { //
+            /** Register 3, as the ADB spec defines it:
+             *   HIGH byte: bit 7 reserved(0), bit 6 exceptional event,
+             *              bit 5 SR enable, bit 4 reserved(0),
+             *              bits 3-0 DEVICE ADDRESS
+             *   LOW  byte: device HANDLER id
+             *
+             * In this codebase data[1] is the HIGH byte and data[0] the LOW one.
+             * Four things agree on that: ADB_Device::print_registers() walks
+             * size-1 down to 0 and calls it "MSB to LSB"; the ADB_Device
+             * constructor stores `id | ADB_SR_ENABLE` into data[1];
+             * ADB_Keyboard::listen() reads its address from data[1]; and a
+             * Talk R3 against this device returns the address in the second
+             * response byte.
+             *
+             * THESE TWO WERE SWAPPED -- address taken from data[0] and handler
+             * from data[1] -- so an address reassignment gave the mouse its
+             * handler value as an address and vice versa. That is not an
+             * exotic path: reassigning addresses is how ADB resolves the
+             * collision when two devices answer at the same one, which is
+             * exactly what a keyboard and a mouse do at power-on.
+             * The stale comment that used to sit here labelled byte 0 as bits
+             * 15-8, which is what made the swap look correct.
              */
             registers[3] = msg;
-            id = msg.data[0] & 0x0F; // change device address
-            handler = msg.data[1] & 0x0F;  // (1= lo res mouse vs 2= hi res mouse)
+            id = msg.data[1] & 0x0F;       // device address: HIGH byte, low nibble
+            handler = msg.data[0] & 0x0F;  // handler: LOW byte (1 = lo-res, 2 = hi-res)
             //printf("MS> New address: %02X, handler: %02X\n", id, handler);
         }
     }
     ADB_Register talk(uint8_t command, uint8_t reg) override {
 
+        /* This ignored `reg` entirely and always answered with register 0, so a
+           Talk R3 -- the ADB bus enumeration call -- got mouse movement data or
+           an empty register instead of the device's address and SRQ bit. The
+           mouse could therefore never identify itself on the bus.
+
+           Register 0 is the movement queue and IS consumed by a Talk, which is
+           why has_data gates it: reading twice must not report the same
+           movement twice. Registers 1-3 are persistent configuration and are
+           returned as they stand. */
         ADB_Register reg_result = {0};
-        if (has_data) {
-            reg_result = registers[0];
-            has_data = false;
+        if (reg == 0) {
+            if (has_data) {
+                reg_result = registers[0];
+                has_data = false;
+            }
+        } else {
+            reg_result = registers[reg & 0x03];
         }
         return reg_result;
     }

@@ -1088,7 +1088,21 @@ class SecondSight {
                     cmd_set_text_font();
                     break;
                 default:
-                    printf("SecondSight: execute_command: unknown command %d\n", active_command);
+                    /* Once per distinct command, on stderr. This is reached from
+                       the guest's own command stream, so an unguarded printf
+                       here is a flood waiting for a guest that polls with a bad
+                       opcode -- and on stdout it would be interleaved with the
+                       CTRL rail's own output. Same shape as the Uthernet II and
+                       ADB reports: name it, say it did nothing, do not repeat. */
+                    static bool ss_said[256] = { false };
+                    uint8_t ss_cmd = (uint8_t)active_command;
+                    if (!ss_said[ss_cmd]) {
+                        ss_said[ss_cmd] = true;
+                        fprintf(stderr,
+                            "[SecondSight] command %d is NOT IMPLEMENTED -- it did nothing.\n"
+                            "              Treat behaviour that depends on it as unimplemented.\n",
+                            active_command);
+                    }
                     break;
             }
         }

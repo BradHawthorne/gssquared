@@ -1,6 +1,9 @@
 //#include "gs2.hpp"
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL_mouse.h"
+#ifdef _WIN32
+#include <windows.h>            // SetWindowPos, for pushing rail windows to the back
+#endif
 #include "computer.hpp"
 #include "videosystem.hpp"
 #include "display/display.hpp"
@@ -28,16 +31,54 @@ video_system_t::video_system_t(computer_t *computer) {
     window_height = (BASE_HEIGHT + border_height*2) * SCALE_Y;
     aspect_ratio = (float)window_width / (float)window_height;
 
+    /* HEADLESS/AUTOMATED RUNS MUST NOT STEAL FOCUS.
+     *
+     * A conformance run starts and stops dozens of sessions, and each new window
+     * jumped to the front and took the keyboard -- which makes the machine
+     * unusable for anything else while a suite is running. The emulator still
+     * needs a real window (the renderer, and every video capture the CTRL rail
+     * does, draw through it), so it cannot simply be hidden.
+     *
+     * When A2GSPU_CTRL is set the session is being driven by the rail rather
+     * than by a person, so: create the window NOT_FOCUSABLE, and ask SDL not to
+     * activate it when it is shown or raised. Interactive runs -- no rail -- are
+     * completely unaffected and still behave normally.
+     */
+    const bool rail_driven = (SDL_getenv("A2GSPU_CTRL") != nullptr);
+    SDL_WindowFlags win_flags = SDL_WINDOW_RESIZABLE;
+    if (rail_driven) {
+        SDL_SetHint(SDL_HINT_WINDOW_ACTIVATE_WHEN_SHOWN,  "0");
+        SDL_SetHint(SDL_HINT_WINDOW_ACTIVATE_WHEN_RAISED, "0");
+        win_flags |= SDL_WINDOW_NOT_FOCUSABLE;
+    }
+
     window = SDL_CreateWindow(
-        "GSSquared - Apple ][ Emulator", 
-        (BASE_WIDTH + border_width*2) * SCALE_X, 
-        (BASE_HEIGHT + border_height*2) * SCALE_Y, 
-        SDL_WINDOW_RESIZABLE
+        "GSSquared - Apple ][ Emulator",
+        (BASE_WIDTH + border_width*2) * SCALE_X,
+        (BASE_HEIGHT + border_height*2) * SCALE_Y,
+        win_flags
     );
 
     if (!window) {
         fprintf(stderr, "Window could not be created! SDL_Error: %s\n", SDL_GetError());
     }
+
+    /* And push it to the BACK of the z-order, so it does not sit on top of
+     * whatever the user is actually doing. SDL3 has no "lower window" call, so
+     * this is the platform's own: HWND_BOTTOM with SWP_NOACTIVATE, which moves
+     * the window without giving it focus. Best-effort -- if the handle is not
+     * available the window simply stays where it is, unfocused, which is
+     * already the important half. */
+#ifdef _WIN32
+    if (rail_driven && window) {
+        SDL_PropertiesID props = SDL_GetWindowProperties(window);
+        HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+        if (hwnd) {
+            SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    }
+#endif
 
     // Set minimum and maximum window sizes to maintain reasonable dimensions
     SDL_SetWindowMinimumSize(window, window_width / 2, window_height / 2);  // Half size

@@ -432,9 +432,28 @@ class ADB_Keyboard : public ADB_Device
         
     }
 
-    void reset(uint8_t cmd, uint8_t reg) override { }
+    /* Both of these were empty, and both are observable through the bus, so
+       "does nothing" was indistinguishable from "worked" -- the same shape as
+       every other gap found in this pass.
 
-    void flush(uint8_t cmd, uint8_t reg) override { }
+       Reset is a broadcast that returns the device to its power-on address, so
+       the host can re-enumerate and resolve collisions. Leaving a reassigned
+       address in place meant a host that reset the bus then looked for its
+       devices where they no longer were. */
+    void reset(uint8_t cmd, uint8_t reg) override {
+        reset_to_default_address();
+        registers[0].data[0] = 0xFF;    // no key event pending
+        registers[0].data[1] = 0xFF;
+        count = index_in = index_out = 0;   // and nothing queued behind it
+    }
+
+    /* Flush discards buffered data WITHOUT returning it -- that is the entire
+       difference from a Talk R0, which returns the data and then clears it. */
+    void flush(uint8_t cmd, uint8_t reg) override {
+        registers[0].data[0] = 0xFF;
+        registers[0].data[1] = 0xFF;
+        count = index_in = index_out = 0;
+    }
 
     void listen(uint8_t command, uint8_t reg, ADB_Register &msg) override { 
         //printf("KB> Listen: command: %02X, reg: %02X, msg: %02X %02X\n", command, reg, msg.data[0], msg.data[1]);
@@ -450,8 +469,27 @@ class ADB_Keyboard : public ADB_Device
         for (int i = 0; i < registers[reg].size; i++) {
             reg_result.data[i] = registers[reg].data[i];
         }
-        registers[reg].data[0] = 0xFF; // clear reg0
-        registers[reg].data[1] = 0xFF;
+        /* ONLY REGISTER 0. This cleared registers[reg] -- whichever register was
+           addressed -- while the comment said "clear reg0", and the two are very
+           different things.
+
+           Register 0 is the key-event queue, and consuming it on a Talk is
+           correct: $FF$FF is this device's "no data" marker. Registers 1-3 are
+           persistent CONFIGURATION. Register 3 in particular holds the device
+           address in its low nibble and the SRQ-enable bit (bit 5) in its high
+           byte, so wiping it to $FF$FF destroyed the device's identity.
+
+           That matters because Talk R3 is exactly how the ADB bus is
+           enumerated: a host walks the addresses asking each device to identify
+           itself. Under the old code the FIRST Talk R3 answered correctly and
+           every one after it returned $FF$FF -- so enumeration corrupted the
+           very devices it was discovering, and any later read of the SRQ bit was
+           reading rubble. Found by testing Enable/Disable SRQ twice in a row:
+           the first answered $02, the second $FF. */
+        if (reg == 0) {
+            registers[0].data[0] = 0xFF;
+            registers[0].data[1] = 0xFF;
+        }
         return reg_result;
     }
 

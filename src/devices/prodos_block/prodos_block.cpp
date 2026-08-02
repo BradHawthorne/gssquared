@@ -15,6 +15,20 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/* ==========================================================================
+   THIS FILE IS NOT BUILT. It is an abandoned first cut at the ProDOS block
+   device, superseded by devices/pdblock2 and devices/pdblock3.
+
+   It appears in no CMakeLists target and produces no object file, and the
+   header it includes -- devices/prodos_block/prodos_block.hpp -- does not
+   exist, so it would not compile if it were added back unchanged.
+
+   Stated here because nothing else says it: the TODOs below (notably "format
+   not implemented" in the pv trap) describe code that never runs, and reading
+   them as live gaps in the emulator is wrong. Format IS implemented, in
+   pdblock2.cpp and pdblock3.cpp, which are the devices actually in use.
+   ========================================================================== */
+
 #include <stdio.h>
 
 #include "gs2.hpp"
@@ -132,7 +146,7 @@ void prodos_block_pv_trap(cpu_state *cpu) {
             cpu->C = 0; // clear carry
             cpu->a_lo = 0x00;
         }
-    } else if (cmd == 0x03) { // 
+    } else if (cmd == 0x03) { //
         cpu->C = 1; // set error flag. // format not implemented, TODO
         cpu->a_lo = PD_ERROR_NO_DEVICE;
     }

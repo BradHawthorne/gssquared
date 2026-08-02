@@ -152,6 +152,10 @@ static void close_socket_net(w5100_socket_t *s) {
         NET_DestroyDatagramSocket(s->udp_socket);
         s->udp_socket = nullptr;
     }
+    if (s->server) {
+        NET_DestroyServer(s->server);
+        s->server = nullptr;
+    }
     if (s->resolve_addr) {
         // resolve_addr is a temporary reference kept only during the
         // CONNECT command.  Under normal operation it is released in
@@ -268,6 +272,22 @@ static void exec_socket_cmd(w5100_state_t *w, int sn, uint8_t cmd) {
                                 r32(&w->mem[W5100_SUBR]));
                         }
                         // DEBUG: fprintf(stderr, "[U2] Socket 0: MACRAW open (VNAT active)\n");
+                    } else {
+                        // MACRAW on sockets 1-3 is not a thing the chip can do.
+                        // This used to fall out of the `if` leaving Sn_SR at
+                        // whatever it already held, so the guest's OPEN neither
+                        // worked nor reported failure. Treat it like any other
+                        // unsupported protocol and leave the socket CLOSED, so
+                        // the failure is visible in the register the guest is
+                        // going to read anyway.
+                        sr[W5100_Sn_SR] = W5100_SOCK_CLOSED;
+                        static bool said[W5100_NUM_SOCKETS] = { false };
+                        if (!said[sn]) {
+                            said[sn] = true;
+                            fprintf(stderr,
+                                "[Uthernet2] socket %d: MACRAW is socket 0 only (W5100 datasheet);\n"
+                                "            OPEN refused, Sn_SR left CLOSED.\n", sn);
+                        }
                     }
                     break;
 
@@ -285,11 +305,31 @@ static void exec_socket_cmd(w5100_state_t *w, int sn, uint8_t cmd) {
         // Phase 2 TODO: accept incoming SDL3_net connections.
         case W5100_Sn_CR_LISTEN: {
             if (sr[W5100_Sn_SR] == W5100_SOCK_INIT && protocol == W5100_Sn_MR_TCP) {
-                sr[W5100_Sn_SR] = W5100_SOCK_LISTEN;
-                // TODO phase 2: accept incoming connections. Requires NET_CreateServer() to bind a
-                // listening port, then NET_AcceptClient() polled in process_sockets() to detect
-                // incoming connections. Socket transitions: SOCK_INIT → SOCK_LISTEN → SOCK_SYNRECV
-                // → SOCK_ESTABLISHED. Sn_IR_CON interrupt must be set when the connection completes.
+                // This used to set SOCK_LISTEN and nothing else. The status
+                // register then said "listening" while no port was bound and
+                // nothing could ever arrive, so a guest running any server --
+                // OPEN, LISTEN, poll Sn_SR for ESTABLISHED -- waited forever
+                // with every register reporting success. Bind for real.
+                uint16_t port = (uint16_t)((sr[W5100_Sn_PORT] << 8) | sr[W5100_Sn_PORT + 1]);
+
+                if (s->server) {            // re-LISTEN without an intervening close
+                    NET_DestroyServer(s->server);
+                    s->server = nullptr;
+                }
+                s->server = NET_CreateServer(nullptr, port);   // nullptr = all interfaces
+                if (s->server) {
+                    sr[W5100_Sn_SR] = W5100_SOCK_LISTEN;
+                } else {
+                    // The bind failed -- port in use, or privileged. Real
+                    // hardware owns its own stack and cannot hit this, so there
+                    // is no hardware behaviour to imitate; report it and close,
+                    // which at least does not leave the guest polling a socket
+                    // that will never connect.
+                    fprintf(stderr, "[Uthernet2] socket %d: LISTEN on port %u failed: %s\n",
+                            sn, (unsigned)port, SDL_GetError());
+                    sr[W5100_Sn_SR] = W5100_SOCK_CLOSED;
+                    sr[W5100_Sn_IR] |= W5100_Sn_IR_TIMEOUT;
+                }
             }
             break;
         }
@@ -537,8 +577,64 @@ static void exec_socket_cmd(w5100_state_t *w, int sn, uint8_t cmd) {
             break;
         }
 
-        default:
+        // ── SEND_KEEP ────────────────────────────────────────────────────
+        // TCP keepalive. Valid only on an ESTABLISHED TCP socket; the real chip
+        // ignores it otherwise, which is why the guard comes first.
+        //
+        // WHAT IS FAITHFUL AND WHAT IS NOT, stated rather than glossed. On real
+        // silicon this emits a bare keepalive ACK on the wire and declares the
+        // connection dead if nothing answers within the retry count. Here the
+        // HOST owns the TCP connection, so there is no packet for this layer to
+        // emit. What is reproduced is the observable contract the guest can
+        // actually see: the command completes and reports SENDOK on a live
+        // connection, and a peer that has gone away still surfaces as DISCON
+        // through the same liveness check every other command relies on.
+        //
+        // The genuine limitation: because no packet leaves the machine, this
+        // will NOT refresh a NAT binding or a middlebox timeout the way a
+        // wire-level keepalive does. Anything depending on that effect is
+        // still unemulated, and this comment is the only place that says so.
+        case W5100_Sn_CR_SEND_KEEP: {
+            if (sr[W5100_Sn_SR] != W5100_SOCK_ESTABLISHED ||
+                protocol != W5100_Sn_MR_TCP)
+                break;
+            sr[W5100_Sn_IR] |= W5100_Sn_IR_SENDOK;
             break;
+        }
+
+        default: {
+            // AN UNEMULATED COMMAND MUST NOT BE ACKNOWLEDGED SILENTLY.
+            //
+            // Falling through here and then clearing Sn_CR below is
+            // indistinguishable, from the guest's side, from having executed the
+            // command perfectly: Sn_CR self-clearing is exactly how this chip
+            // reports "accepted and done". So SEND_KEEP, SEND_MAC and every
+            // PPPoE command were being answered with a positive acknowledgement
+            // for work that never happened.
+            //
+            // That is the failure mode this emulator exists to avoid. Reported
+            // unconditionally rather than behind a debug flag, because a flag
+            // that defaults to off leaves the lie in place for everyone who has
+            // not already guessed they need it. Rate-limited to once per command
+            // code so a polling loop cannot drown the log.
+            static bool named[256] = { false };
+            if (!named[cmd]) {
+                named[cmd] = true;
+                const char *what = "unknown";
+                switch (cmd) {
+                    case W5100_Sn_CR_SEND_MAC:  what = "SEND_MAC (MACRAW send with Sn_DHAR)"; break;
+                    case W5100_Sn_CR_SEND_KEEP: what = "SEND_KEEP (TCP keepalive)";           break;
+                    default: break;
+                }
+                fprintf(stderr,
+                        "[Uthernet2] socket %d: command $%02X %s is NOT EMULATED -- "
+                        "it did nothing, and Sn_CR still self-clears, so the guest "
+                        "cannot tell. Treat any behaviour that depends on it as "
+                        "unimplemented, not as working.\n",
+                        sn, cmd, what);
+            }
+            break;
+        }
     }
 
     // Command register self-clears after execution.
@@ -594,7 +690,20 @@ uint8_t w5100_read(w5100_state_t *w, uint16_t addr) {
         // "now != last_poll" fires at most once per millisecond, which is
         // still 1000 polls/second — ample for 60fps networking — without
         // the overhead of calling SDL3_net on every 6502 instruction.
-        if (offset == W5100_Sn_SR || offset == W5100_Sn_RX_RSR || offset == W5100_Sn_RX_RSR + 1) {
+        // Sn_IR IS IN THIS SET, AND LEAVING IT OUT DEADLOCKED THE INTERRUPT IDIOM.
+        //
+        // Polling Sn_IR (or the global IR) instead of Sn_SR is the documented,
+        // efficient way to drive this chip -- it is the whole reason the global
+        // IR mirrors the per-socket registers. But a guest doing that read no
+        // register in this set, so process_sockets() never ran, so no interrupt
+        // was ever raised, so IR stayed 0 forever and the guest waited forever.
+        //
+        // Measured: a probe that polled only Sn_IR sat in SOCK_SYNSENT
+        // indefinitely; the identical probe reading Sn_SR resolved the connect
+        // in two frame-slices. The interrupt-driven path was the one that could
+        // not work, which is exactly backwards.
+        if (offset == W5100_Sn_SR || offset == W5100_Sn_IR ||
+            offset == W5100_Sn_RX_RSR || offset == W5100_Sn_RX_RSR + 1) {
             // Shared across all W5100 instances (static local). If two Uthernet II cards exist
             // in different slots, they share the same rate-limiting timestamp. This is
             // intentional — both cards benefit from the same poll cadence, and the overhead
@@ -645,6 +754,42 @@ uint8_t w5100_read(w5100_state_t *w, uint16_t addr) {
             else
                 return (uint8_t)(rsr & 0xFF);
         }
+    }
+
+    // IR ($0015): bits [3:0] MIRROR the per-socket interrupt status.
+    //
+    // This register was previously write-only in effect -- the write path cleared
+    // bits (mem &= ~val) but nothing ever SET them, so a guest polling IR to find
+    // out which socket had data always read zero. That is the worst kind of bug
+    // for a status register: it does not fail, it reports "nothing happened"
+    // forever, and guest software written to the datasheet simply never receives.
+    //
+    // Derive the mirror on read rather than maintaining it at every site that
+    // touches Sn_IR. There are a dozen such sites (RECV, SENDOK, TIMEOUT, DISCON,
+    // CON) and any one of them forgetting would reintroduce exactly this bug.
+    // Computing it here cannot drift: Sn_IR is the single source of truth, and
+    // clearing Sn_IR clears the mirror automatically, which is also what the real
+    // chip does.
+    if (addr == W5100_IR) {
+        // Poll here too, for the same reason Sn_IR is now in the socket-register
+        // trigger above: a guest that polls ONLY the global IR -- the most
+        // efficient idiom there is, one read to learn which of four sockets
+        // needs attention -- would otherwise never advance the state machine and
+        // would spin on an IR that could never become non-zero. Same 1ms rate
+        // limit; SDL3_net calls are expensive in a tight poll loop.
+        {
+            static uint64_t last_ir_poll = 0;
+            uint64_t now = SDL_GetTicks();
+            if (now != last_ir_poll) {
+                last_ir_poll = now;
+                w5100_process_sockets(w);
+            }
+        }
+        uint8_t ir = w->mem[W5100_IR] & 0xF0;   // preserve non-socket bits
+        for (int sn = 0; sn < W5100_NUM_SOCKETS; sn++) {
+            if (sock_reg(w, sn)[W5100_Sn_IR] != 0) ir |= (uint8_t)(1u << sn);
+        }
+        return ir;
     }
 
     return w->mem[addr];
@@ -739,6 +884,40 @@ void w5100_write(w5100_state_t *w, uint16_t addr, uint8_t val) {
     // Note: the original second socket-range check for Sn_IR has been merged
     // into the in_sreg block above (O13: eliminates duplicate range test).
 
+    // MODE REGISTER reached through the INDIRECT WINDOW (chip address $0000).
+    //
+    // There are two ways to the same register: the card's own MR port at $C0n0,
+    // which uthernet2_write() handles correctly, and this one -- writing address
+    // $0000 through ADDR_HI/ADDR_LO/DATA, which is legal on the real chip and
+    // which used to fall through to the plain store below.
+    //
+    // That mattered most for MR_RST. It is SELF-CLEARING on real hardware, so
+    // the standard driver idiom is "write $80, poll until it reads back clear".
+    // Storing $80 and doing nothing means the reset never happens AND the bit
+    // never clears, so that loop spins forever -- a hang with no error, from a
+    // register write that looked like it was accepted.
+    if (addr == W5100_MR) {
+        if (val & W5100_MR_RST) {
+            w5100_reset(w);             // self-clearing: deliberately not stored
+            return;
+        }
+        if (val & W5100_MR_PPPOE) {
+            static bool said = false;
+            if (!said) {
+                said = true;
+                fprintf(stderr,
+                    "[Uthernet2] MR bit PPPOE ($08) is NOT EMULATED -- the bit is accepted\n"
+                    "            and readable, but no PPPoE session is established and PATR /\n"
+                    "            PTIMER / PMAGIC do nothing. Treat PPPoE as unimplemented.\n");
+            }
+        }
+        // The Uthernet II hardwires BUSMODE to indirect; software cannot clear
+        // IND. Same rule the $C0n0 path applies, kept identical on purpose.
+        w->mode_reg      = val | W5100_MR_IND;
+        w->mem[W5100_MR] = w->mode_reg;
+        return;
+    }
+
     // General register write: store value directly.
     w->mem[addr] = val;
 
@@ -799,6 +978,17 @@ void w5100_write(w5100_state_t *w, uint16_t addr, uint8_t val) {
 //    The key invariant: RX_WR is advanced by (frame_len + 2) to match
 //    what the reader will advance RX_RD by after reading PACKET_INFO.
 
+/* Release every socket's host-side resources.
+   Exists because the shutdown handler in uthernet2.cpp used to open-code this
+   loop, and an inline copy does not learn about new fields: when TCP server
+   support was added, that copy kept releasing tcp/udp/resolve_addr and silently
+   leaked the bound listening port on a clean exit. One teardown path only. */
+void w5100_close_all_sockets(w5100_state_t *w) {
+    for (int i = 0; i < W5100_NUM_SOCKETS; i++) {
+        close_socket_net(&w->sockets[i]);
+    }
+}
+
 void w5100_process_sockets(w5100_state_t *w) {
     for (int sn = 0; sn < W5100_NUM_SOCKETS; sn++) {
         uint8_t *sr = sock_reg(w, sn);
@@ -829,6 +1019,40 @@ void w5100_process_sockets(w5100_state_t *w) {
             }
             // status == 0: still pending, check next frame
             continue;
+        }
+
+        // ── Step 1b: Accept an inbound connection on a LISTENing socket ───
+        //
+        // NET_AcceptClient() does not block: it returns true with
+        // *client_stream == NULL when nothing is pending, which is the common
+        // case and NOT an error. Only a false return is a real failure.
+        //
+        // One W5100 socket carries one connection, so the server is torn down
+        // as soon as a client is taken -- otherwise the port would stay bound
+        // behind an ESTABLISHED socket and a later LISTEN on another socket
+        // would fail to bind for a reason nothing could see.
+        if (s->server && sr[W5100_Sn_SR] == W5100_SOCK_LISTEN) {
+            NET_StreamSocket *client = nullptr;
+            if (!NET_AcceptClient(s->server, &client)) {
+                fprintf(stderr, "[Uthernet2] socket %d: accept failed: %s\n", sn, SDL_GetError());
+                NET_DestroyServer(s->server);
+                s->server = nullptr;
+                sr[W5100_Sn_SR] = W5100_SOCK_CLOSED;
+                sr[W5100_Sn_IR] |= W5100_Sn_IR_TIMEOUT;
+                continue;
+            }
+            if (client) {
+                s->tcp_socket = client;
+                NET_DestroyServer(s->server);
+                s->server = nullptr;
+                sr[W5100_Sn_SR] = W5100_SOCK_ESTABLISHED;
+                sr[W5100_Sn_IR] |= W5100_Sn_IR_CON;
+                // Fall through to the data steps below: a client that sends
+                // immediately on connect must not have its first bytes held
+                // until the next poll.
+            } else {
+                continue;               // nothing pending yet
+            }
         }
 
         // ── Step 2: Buffer incoming TCP data ─────────────────────────────

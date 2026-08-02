@@ -52,6 +52,12 @@ private:
     
     uint8_t color_delay_mask = 0xFF;
 
+    // Discrete DHGR 4-dot state (NOT the HGR RGB LUT path).
+    // window = state | (bit<<3); phase = (phase_offset + x) & 3.
+    uint8_t dhgr_hist = 0;   // 3-bit trailing history
+    int dhgr_x = 0;          // content pixel column on this scanline
+    RGBA_t dhgr_4dot_lut[16][4];
+
     int palette_index = 0; // reset to 0 each scanline.
     bool modeChecks = true;
 
@@ -83,6 +89,8 @@ private:
     void hires_start();
     void emit_hires_pixels(uint16_t shift);
     void render_hires_mono();
+    void render_dhires_color(); // true 4-dot DHGR (not HGR LUT)
+    void build_dhgr_4dot_lut();
     void build_mono_lut(RGBA_t *ct, RGBA_t *mt);
     inline void update_mono_lut() { 
         if (mono_mode) {

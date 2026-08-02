@@ -545,6 +545,13 @@ struct w5100_socket_t {
     // Set to true in CONNECT command handling; cleared when
     // NET_WaitUntilConnected() returns non-zero (success or failure).
     bool connect_pending = false;
+
+    // TCP server mode (Sn_CR_LISTEN). Bound to Sn_PORT when the guest issues
+    // LISTEN; polled non-blocking in process_sockets(). Destroyed as soon as a
+    // client is accepted, because one W5100 socket carries exactly one
+    // connection -- a guest wanting to serve several must LISTEN again, which
+    // is what it does on real hardware.
+    NET_Server *server = nullptr;
 };
 
 // ── Chip state ──────────────────────────────────────────────────────
@@ -597,6 +604,11 @@ void w5100_init(w5100_state_t *w);
 // Reset chip to power-on state: close all sockets, clear mem[],
 // write datasheet-defined default register values, recalculate geometry.
 void w5100_reset(w5100_state_t *w);
+
+/* Release every socket's host-side resources (TCP, UDP, pending resolves, and
+   any bound listening server). The single teardown path -- call this rather
+   than open-coding the loop, or the next field added will be leaked again. */
+void w5100_close_all_sockets(w5100_state_t *w);
 
 // Read one byte from the W5100 internal address space.
 // Dynamic values (TX_FSR, RX_RSR) are computed on read.

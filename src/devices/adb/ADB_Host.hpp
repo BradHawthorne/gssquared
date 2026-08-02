@@ -31,11 +31,18 @@ class ADB_Host
         return true;
     }
 
+    /* Flush is ADDRESSED, unlike Reset. This used to flush every device on the
+       bus regardless of addr, so a flush aimed at the mouse would also have
+       discarded the keyboard's buffered data. Nothing called it, so the fault
+       never showed; the microcontroller's $6n command calls it now. */
     bool flush(uint8_t addr, uint8_t cmd, uint8_t reg) {
         for (auto &device : devices) {
-            device->flush(cmd, reg);
+            if (device->get_id() == addr) {
+                device->flush(cmd, reg);
+                return true;
+            }
         }
-        return true;
+        return false;
     }
 
     bool listen(uint8_t addr, uint8_t cmd, uint8_t reg, ADB_Register &msg) {

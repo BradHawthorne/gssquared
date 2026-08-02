@@ -27,6 +27,8 @@
 #include "cpu_traits.hpp"
 #include "NClock.hpp"
 #include "obs_iigs.hpp"   // Observatory boot-fault-context view (obs_view_fault)
+#include "generic_tap.hpp" // A2GSPU_TAP: generic title-agnostic PC-hit tap (off => 1 branch)
+#include "a2gspu_coverage.hpp" // A2GSPU_COVERAGE: execution bitmap (off => 1 branch)
 
 
 /**
@@ -1370,6 +1372,25 @@ inline void add_and_set_flags(cpu_state *cpu, uint8_t N) {
         set_n_z_flags(cpu, cpu->a_lo);
 #else
         add_bcd_8_set_flags(cpu, cpu->a_lo, N);
+        // 65C02/65816 DECIMAL ADC COSTS ONE EXTRA CYCLE for the decimal
+        // correction. The incr_cycles that did this is still visible in the
+        // #if 0 block just above -- it was orphaned when the BCD arithmetic was
+        // replaced by add_bcd_8_set_flags, so every CMOS part has been running
+        // decimal arithmetic one cycle fast ever since.
+        //
+        // FOUND BY MEASUREMENT, not by reading: an exhaustive 262,144-operation
+        // ADC/SBC sweep ran 152 cycles FASTER on the 65C02 than on the 6502,
+        // where the hardware difference says it must be ~262,144 cycles SLOWER.
+        // A sign error that large is only visible if something counts.
+        //
+        // 65C02 ONLY, NOT THE 65816. The first version of this fix guarded on
+        // has_65c02_ops alone, which every 65816 trait set also sets -- so it
+        // silently slowed 65816 decimal arithmetic as well. The 16-bit decimal
+        // path in this same file says why that is wrong: "816 takes no
+        // additional cycles here".
+        if constexpr (CPUTraits::has_65c02_ops && !CPUTraits::has_65816_ops) {
+            incr_cycles(cpu);
+        }
 #endif
     }
 }
@@ -1544,6 +1565,12 @@ inline void subtract_and_set_flags(cpu_state *cpu, uint8_t N) {
         set_n_z_flags(cpu, cpu->a_lo);
 #else
         sub_bcd_8_set_flags(cpu, cpu->a_lo, N);
+        // Same orphaned cycle as decimal ADC above, same fix, same 65816
+        // exclusion. SBC in decimal mode is one cycle longer on the 65C02 than
+        // on NMOS, and unchanged on the 816.
+        if constexpr (CPUTraits::has_65c02_ops && !CPUTraits::has_65816_ops) {
+            incr_cycles(cpu);
+        }
 #endif
     }
 }
@@ -2256,10 +2283,30 @@ int execute_next(cpu_state *cpu) override {
     } */
 
     //opcode_t opcode = read_byte_from_pc(cpu);
-    // Headless IIgs Tool Locator / GS-OS call trace + breakpoint: fires at the
-    // instruction about to execute (cpu->full_pc is the landing address), before
-    // fetch. The breakpoint needs this per-instruction hook even with no trace.
-    if constexpr (CPUTraits::has_65816_ops) {
+    // ---- Per-instruction instrumentation rails ------------------------------
+    // Fires at the instruction about to execute (cpu->full_pc is the landing
+    // address), before fetch.  The breakpoint needs this hook even with no trace.
+    //
+    // FORMERLY `if constexpr (CPUTraits::has_65816_ops)`, which compiled this
+    // entire block out on the 6502/65C02 path -- so on ANY Apple II/II+/IIe/IIc
+    // target, breakpoints, POKE, SAVE_AT, ITRACE, CALLTRACE, CONDTRAP,
+    // MILESTONES, RETGUARD, STACKWATCH, SNAP, TAP, PCTRAP and STACKTRAP did not
+    // exist at all.  Only A2GSPU_WATCH worked, because it lives in the MMU bus
+    // funnel rather than here.  That is a large silent hole for 6502 archaeology.
+    //
+    // Every rail here is CPU-generic: they read full_pc, the register file, sp
+    // and the MMU, none of which is 65816-only (cpu_state is a single
+    // non-templated struct, and 65816-only opcodes simply never match on a 6502).
+    // iigs_tb_on_landing() already self-guards its genuinely IIgs part (Tool
+    // Locator / GS-OS dispatch at $E10000) behind g_iigs_tbtrace_enabled and
+    // returns early before touching any of it.  So the gate was a scoping
+    // decision, not a technical constraint.
+    //
+    // Cost when unset is what the 65816 path already paid: one predictable
+    // untaken branch per rail.  The only thing still 65816-gated below is the
+    // $E0/$E1 Mega-II memory dump inside PCTRAP, since those banks do not exist
+    // on a II-family machine.
+    {
         if (g_iigs_tbtrace_enabled || g_iigs_break_enabled || g_save_at_enabled || g_poke_on || g_callstream_on) iigs_tb_on_landing(cpu);
         // A2GSPU_ITRACE: additive per-instruction crash post-mortem trace (off by
         // default; one cheap branch when off). Mirrors the BRKDUMP gating.
@@ -2282,6 +2329,8 @@ int execute_next(cpu_state *cpu) override {
             iigs_hang_check(cpu);       // #2: catch a no-BRK degenerate-loop / wild-code hang
             iigs_wildjump_check(cpu);   // catch the FIRST wild jump into a non-code bank + its caller
         }
+        // A2GSPU_TAP: generic, title-agnostic PC-hit call tap (the merged wiz5 tap).
+        if (g_gtap.on) generic_tap_check(cpu, clock->get_cycles());
         // A2GSPU_PCTRAP: one-shot — dump regs + the caller ring the instant execution
         // first enters the trap range (the wild-jump source, before a garbage run
         // scrolls it out of the ring).
@@ -2298,14 +2347,18 @@ int execute_next(cpu_state *cpu) override {
                                      g_pchist[k & 255] & 0xFFFF);
             printf("\n");
             iigs_print_ring_symbolized(64);   // #1: NAME+off caller path
-            printf("IIGS PCTRAP mem $E1/0000 read():");
-            for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
-                printf(" %02X", cpu->mmu->read(a));
-            printf("\n");
-            printf("IIGS PCTRAP mem $E1/0000 probe_peek(megaII):");
-            for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
-                printf(" %02X", cpu->mmu->probe_peek(a));
-            printf("\n");
+            // Bank $E0/$E1 is the IIgs Mega-II image; it does not exist on a
+            // II-family machine, so keep this one dump 65816-only.
+            if constexpr (CPUTraits::has_65816_ops) {
+                printf("IIGS PCTRAP mem $E1/0000 read():");
+                for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
+                    printf(" %02X", cpu->mmu->read(a));
+                printf("\n");
+                printf("IIGS PCTRAP mem $E1/0000 probe_peek(megaII):");
+                for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
+                    printf(" %02X", cpu->mmu->probe_peek(a));
+                printf("\n");
+            }
             if (g_trap_dump_len) {
                 printf("IIGS PCTRAP dump $%02X/%04X probe_peek:",
                        (g_trap_dump_base >> 16) & 0xFF, g_trap_dump_base & 0xFFFF);
@@ -2340,6 +2393,12 @@ int execute_next(cpu_state *cpu) override {
             iigs_print_ring_symbolized(64);   // #1: NAME+off caller path
         }
     }
+    // A2GSPU_COVERAGE: record that this byte is executed code.  Deliberately
+    // OUTSIDE the `if constexpr (CPUTraits::has_65816_ops)` block above -- most
+    // of the per-instruction rails there are 65816-only at compile time, and the
+    // whole point of coverage is to serve 6502 Apple II archaeology.
+    if (g_cov_on) a2gspu_cov_step(cpu->full_pc);
+
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;
 
@@ -3905,9 +3964,7 @@ int execute_next(cpu_state *cpu) override {
             break;
 
         case OP_JMP_IND: /* JMP (Indirect) */
-            {   // TODO: need to implement the "JMP" bug for non-65c02. The below is correct for 65c02.
-                // TODO: Note that JMP (absolute) is 5 cycles, same as the NMOS 6502, but different from the 65C02 (6 cycles).
-                // 1. get AA from PC+1, PC+2
+            {   // 1. get AA from PC+1, PC+2
                 // 2. get 0,AA and 0,AA+1 -> PC
                 uint16_t aa = fetch_pc(cpu);
                 aa |= fetch_pc(cpu) << 8;
@@ -3921,6 +3978,19 @@ int execute_next(cpu_state *cpu) override {
                 }
                 uint16_t eaddr = bus_read(cpu, aa);
                 eaddr |= bus_read(cpu, hi_addr) << 8 ;
+
+                // The 65C02 spends a SIXTH cycle here, and it is the cycle that
+                // buys the fix above: correcting the high-byte address is extra
+                // work the NMOS part does not do, so NMOS is 5 and CMOS is 6.
+                // Measured before this line existed: the CMOS core jumped to the
+                // right address in 5 cycles -- right answer, wrong price.
+                //
+                // NOT has_65c02_ops on its own. Every 65816 trait set also sets
+                // has_65c02_ops, and the 65816 is back to 5 cycles for JMP (abs);
+                // guarding on it alone would fix the IIe and break the IIgs.
+                if constexpr (CPUTraits::has_65c02_ops && !CPUTraits::has_65816_ops) {
+                    incr_cycles(cpu);
+                }
 
                 //absaddr_t addr = get_operand_address_absolute_indirect(cpu);
                 cpu->pc = eaddr;
@@ -4781,7 +4851,10 @@ int execute_next(cpu_state *cpu) override {
 
         case OP_INOP_DB: /* INOP DB */ /* OP_STP_IMP */
             if constexpr (CPUTraits::has_65816_ops) {
-                //assert(false && "STP not implemented");
+                // STP IS implemented: the clock stops until RESET, which is what
+                // clock_stopped means to the execute loop. (A stale
+                // "STP not implemented" assert used to sit here and said the
+                // opposite of the three lines under it.)
                 cpu->clock_stopped = true;
                 incr_cycles(cpu); // ticks 2 cycles past the opcode.
                 incr_cycles(cpu);

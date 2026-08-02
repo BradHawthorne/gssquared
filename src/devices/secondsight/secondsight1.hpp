@@ -1,4 +1,14 @@
 #pragma once
+/* ==========================================================================
+   THIS HEADER IS NOT BUILT. Nothing in the tree includes it -- the live device
+   is secondsight.hpp, which this is an older copy of.
+
+   Stated here because nothing else says it: the "Upload Bitmap (not
+   implemented)" note below sits in a commented-out command-length table in a
+   file that never compiles, and reading it as a live gap in the emulator is
+   wrong twice over. secondsight.hpp's dispatch reports unimplemented commands
+   rather than ignoring them.
+   ========================================================================== */
 #include <cstdint>
 #include <cstdio>
 #include <cstring>

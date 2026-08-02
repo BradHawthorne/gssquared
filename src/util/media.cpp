@@ -118,8 +118,26 @@ int read_2mg_header(format_2mg_t &hdr_out, const std::string& filename) {
     // Convert little-endian fields
     hdr_out.header_size = le16_to_cpu(raw.header_size);
     hdr_out.version = le16_to_cpu(raw.version);
-    hdr_out.flag = le32_to_cpu(raw.image_format);
+    /* The flags word is FOUR SEPARATE BYTES at offset $10, not a uint8_t[4],
+       so it has to be assembled by hand -- which is presumably how it came to
+       be read from raw.image_format instead. That copy-paste meant hdr.flag
+       always held the image FORMAT (0=DOS order, 1=ProDOS, 2=NIB), and both
+       flags tested against it are therefore dead:
+
+         FLAG_LOCKED (bit 31)  -- a write-protected 2MG mounted WRITABLE, so a
+                                  disk the user had locked could be written.
+         FLAG_DOS33  (bit 8)   -- the DOS 3.3 volume number was never honoured
+                                  and always defaulted to 254.
+
+       Byte roles per the 2MG spec, and matching the field comments in
+       format_2mg_raw_t: [0] DOS 3.3 volume number, [1] 0x01 = that volume
+       number is valid, [3] 0x80 = write protected. */
+    hdr_out.flag = (uint32_t)raw.flag_byte
+                 | ((uint32_t)raw.flag_type  << 8)
+                 | ((uint32_t)raw.flag_byte2 << 16)
+                 | ((uint32_t)raw.flag_byte3 << 24);
     hdr_out.block_count = le32_to_cpu(raw.block_count);
+    hdr_out.data_offset = le32_to_cpu(raw.data_offset);
     hdr_out.bytes_count = le32_to_cpu(raw.data_length);
     hdr_out.comment_offset = le32_to_cpu(raw.comment_offset);
     hdr_out.comment_length = le32_to_cpu(raw.comment_length);
@@ -358,7 +376,27 @@ int identify_media(media_descriptor& md) {
         md.block_count = hdr.block_count;
         md.block_size = hdr.bytes_count / hdr.block_count;
         md.data_size = hdr.bytes_count;
+        /* Prefer the file's OWN data offset ($18) over header_size. They are
+           both 64 in every ordinary image, which is why using header_size has
+           worked, but the format does not require them to match -- a writer may
+           place a comment or creator blob between the header and the data. When
+           they differ, header_size reads the payload at the wrong offset and
+           every block is quietly shifted.
+
+           Defensive, because a wrong data_offset is worse than an unused one:
+           accept it only when it is plausible, and say so when it is not. */
         md.data_offset = hdr.header_size;
+        if (hdr.data_offset != 0 && hdr.data_offset != hdr.header_size) {
+            if (hdr.data_offset >= hdr.header_size &&
+                (uint64_t)hdr.data_offset + hdr.bytes_count <= md.file_size) {
+                md.data_offset = hdr.data_offset;
+            } else {
+                std::cerr << "2MG data_offset " << hdr.data_offset
+                          << " is out of range for header_size " << hdr.header_size
+                          << " / file size " << md.file_size
+                          << "; using header_size: " << md.filename << std::endl;
+            }
+        }
         md.write_protected = md.write_protected || (hdr.flag & FLAG_LOCKED) != 0;
         md.dos33_volume = (hdr.flag & FLAG_DOS33) != 0 ? (hdr.flag & FLAG_DOS33_VOL_MASK) : 254; // if not set, then 254
 

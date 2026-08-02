@@ -14,6 +14,17 @@ void parallel_write_C0x0(void *context, uint32_t addr, uint8_t data) {
         parallel_d->output = fopen("parallel.out", "a");
     }
     fputc(data, parallel_d->output);
+
+    /* Flush every byte. stdio buffers, and nothing here flushed until
+       parallel_reset() closed the file -- so a print job sat invisibly in a
+       4KB buffer and `parallel.out` stayed EMPTY, sometimes for the whole
+       session. That is not what a printer does: on real hardware the byte is
+       gone the moment it is strobed, and anything watching the output sees it.
+
+       Per-byte flushing is the right trade here. Printing is inherently slow,
+       this is not a hot path, and the alternative is an output file that
+       disagrees with the machine's state for an unbounded time. */
+    fflush(parallel_d->output);
 }
 
 void parallel_reset(parallel_data *parallel_d) {

@@ -31,7 +31,24 @@ void MMU_II::power_on_randomize(uint8_t *ram, int ram_size) {
     }
 }
 
+/* NOTE ON page_table_size: it is VESTIGIAL and deliberately not honoured. A
+ * II-family page table must cover the whole 64K address space -- 256 pages of 256
+ * bytes -- because $C0xx I/O and $C100-$CFFF slot ROM live at pages 192..207
+ * regardless of how much RAM is fitted. Honouring a smaller value would hand the
+ * caller a table that every $C0xx access indexes past the end of, which is a
+ * silent out-of-bounds read rather than a smaller machine.
+ *
+ * It is kept only for source compatibility, and two callers (apps/vpp/main.cpp and
+ * main2.cpp) do pass 128 today, believing they are configuring something. Warn so
+ * that belief is corrected at runtime instead of persisting -- a parameter that is
+ * quietly ignored is worse than no parameter. */
 MMU_II::MMU_II(int page_table_size, int ram_amount, uint8_t *rom_pointer) : MMU(256, GS2_PAGE_SIZE) {
+    if (page_table_size != 256) {
+        fprintf(stderr, "MMU_II: page_table_size=%d ignored; the II-family page "
+                        "table is always 256 pages (64K / 256-byte pages) because "
+                        "$C0xx I/O and slot ROM occupy pages 192..207.\n",
+                page_table_size);
+    }
     //ram_pages = ram_amount / GS2_PAGE_SIZE;
     ram_pages = (48 * 1024) / GS2_PAGE_SIZE; // should be 48k worth of pages or 192 pages.
     main_ram = new uint8_t[ram_amount];
@@ -50,6 +67,15 @@ MMU_II::MMU_II(int page_table_size, int ram_amount, uint8_t *rom_pointer) : MMU(
         slot_rom_ptable[i].read_h = {nullptr, nullptr};
         slot_rom_ptable[i].write_h = {nullptr, nullptr};
         slot_rom_ptable[i].shadow_h = {nullptr, nullptr};
+        // read_d/write_d were omitted here too (third site with the same gap).
+        // This is the one that actually crashed mmutest: compose_c1cf() copies
+        // WHOLE page_table_entry_t structs out of these tables into
+        // page_table[$C1..$CF], so leaving the description pointers as heap
+        // garbage here overwrites the nulls the MMU constructor had just written.
+        // Nulling only page_table therefore fixed nothing -- the garbage came from
+        // the source of the copy, not the destination.
+        slot_rom_ptable[i].read_d = nullptr;
+        slot_rom_ptable[i].write_d = nullptr;
     }
 }
 
@@ -170,10 +196,17 @@ uint8_t MMU_II::read(uint32_t address) {
     uint16_t eaddress = address & 0xFFFF;
     uint8_t bank = eaddress >> 12;
     page_t page = eaddress >> 8;
-    
+
     if (eaddress != address) {
         printf("MMU_II::read: address %06X is out of bounds\n", address);
     }
+    // Range-guard the page index.  The base class relies on
+    // assert(page < num_pages), which is compiled out in a Release build, so an
+    // MMU constructed with fewer pages than the address space it is asked about
+    // indexed straight off the end of page_table -- a silent overrun that only
+    // surfaced as an ACCESS_VIOLATION once it reached unmapped memory. Fail
+    // predictably (floating bus, same as an unbacked page) instead.
+    if (page >= num_pages) return floating_bus_read();
 
     // TODO: we may have to check all the handlers to make sure they're returning correct values (i.e., just the bits they're responsible for)
     if (bank == 0xC) {
@@ -193,6 +226,15 @@ uint8_t MMU_II::read(uint32_t address) {
             if (funcptr.read == nullptr && funcptr2.read == nullptr) {
                 retval |= floating_bus_read();
             }
+            // A2GSPU gap #6 -- the $C0xx soft-switch READ tap for the II family.
+            //
+            // The tap in the base MMU::read() never fires on a II/II+/IIe: read()
+            // is virtual and THIS override handles $C0xx in its own block above,
+            // so the base class is not on the path at all.  Result: `iolog on`
+            // reported 0 touches while Ultima V was demonstrably spinning on the
+            // keyboard, which is precisely the case the rail exists to diagnose
+            // ("which switch does this wedged menu actually poll?").
+            if (g_io_trace_enabled) io_trace_note(eaddress, retval, 0);
             return retval;
         }
 
@@ -234,6 +276,9 @@ void MMU_II::write(uint32_t address, uint8_t value) {
             if (funcptr.write != nullptr) {
                 (*funcptr.write)(funcptr.context, eaddress, value);
             }
+            // Same gap on the write side: soft-switch WRITES (mode changes, page
+            // flips, strobe clears) were equally invisible on the II family.
+            if (g_io_trace_enabled) io_trace_note(eaddress, value, 1);
             return;
         }
 

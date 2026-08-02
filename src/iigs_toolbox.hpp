@@ -81,9 +81,24 @@ inline int      g_stackwatch_jump    = 0x40;
 inline int      g_stackwatch_hits    = 0;
 inline int      g_stackwatch_last_s  = -1;
 inline bool     g_stackwatch_was_out = false;
+// The stack pointer is stored 16-bit for the 65816, and 6502/65C02 code does not
+// keep the high byte consistent: TXS writes $01FF while a push or an RTS leaves
+// $00xx. Both describe the same physical byte in page 1, but comparing the raw
+// value against a window makes the over/underflow check nonsense on a IIe --
+// measured, watching a2engine: `TXS` reported S=$01FF and the very next `RTS`
+// reported S=$00FA, and the window fired on a stack that had not moved a page.
+//
+// wiz5_config.hpp already uses the right idiom for 6502 stack addresses. Use it
+// here too when the high byte is not a plausible 65816 native stack, so the
+// tripwire measures the address the machine actually pushes to.
+inline uint16_t iigs_stack_addr(const cpu_state *cpu) {
+    uint16_t s = (uint16_t)cpu->sp;
+    return (s < 0x0100) ? (uint16_t)(0x0100 | (s & 0xFF)) : s;
+}
+
 inline void iigs_stackwatch_check(cpu_state *cpu) {
     if (g_stackwatch_hits >= 64) return;
-    uint16_t s = (uint16_t)cpu->sp;
+    uint16_t s = iigs_stack_addr(cpu);
     if (g_stackwatch_last_s >= 0) {                          // (a) imbalance
         int ds = (int)s - g_stackwatch_last_s;
         int ads = ds < 0 ? -ds : ds;
@@ -145,6 +160,7 @@ inline bool iigs_probe_suspect(uint32_t addr, uint8_t val) {
     return (((addr >> 16) & 0xFF) <= 0x01) && (val == 0xEE);
 }
 
+extern int g_iigs_cur_frame;   // fwd (defined below with ITRACE): early decl so the WATCH `ts` field below can read the frame clock
 inline void iigs_watch_emit(cpu_state *cpu, uint32_t addr, uint8_t data, const char *kind) {
     if (g_watch_max && g_watch_hits >= g_watch_max) {
         if (g_watch_hits == g_watch_max) {
@@ -155,12 +171,30 @@ inline void iigs_watch_emit(cpu_state *cpu, uint32_t addr, uint8_t data, const c
         return;
     }
     g_watch_hits++;
+    // Harvested (wiz5): two ADDITIVE NDJSON fields, emitted only in the
+    // A2GSPU_WATCH_OUT NDJSON sink (the console/text line is byte-unchanged):
+    //   ts  = the current headless/CTRL frame counter -> joins a read/write to
+    //         the frame-stamped display timeline (fully generic).
+    //   ipc = a GENERIC interpreter instruction-pointer field: 0 unless
+    //         A2GSPU_WATCH_IPC_ZP=<hexZP> configures a 2-byte little-endian ZP
+    //         pointer to read (observation-free probe_peek), which attributes a
+    //         store to the interpreter's current segment. For UCSD p-code
+    //         (e.g. Wizardry) set A2GSPU_WATCH_IPC_ZP=9E; default-off so the
+    //         rail carries no title-specific assumption.
+    static const int ipc_zp = [] {
+        const char *e = getenv("A2GSPU_WATCH_IPC_ZP");
+        return e ? (int)strtol(e, nullptr, 16) : 0;
+    }();
+    const unsigned w_ipc = (g_watch_out && ipc_zp)
+        ? (unsigned)(cpu->mmu->probe_peek(ipc_zp) |
+                     (cpu->mmu->probe_peek((ipc_zp + 1) & 0xFFFF) << 8)) : 0u;
     if (g_watch_out)
         fprintf(g_watch_out,
                 "{\"event\":\"watch\",\"kind\":\"%s\",\"pc\":%u,\"addr\":%u,"
-                "\"data\":%u,\"s\":%u,\"d\":%u,\"dbr\":%u}\n",
+                "\"data\":%u,\"s\":%u,\"d\":%u,\"dbr\":%u,\"ipc\":%u,\"ts\":%u}\n",
                 kind, (unsigned)(cpu->full_pc & 0xFFFFFF), (unsigned)addr,
-                (unsigned)data, (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db);
+                (unsigned)data, (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db,
+                w_ipc, (unsigned)g_iigs_cur_frame);
     else
         printf("IIGS WATCH: PC=%02X/%04X %s $%02X %s %02X/%04X  S=$%04X D=$%04X DBR=$%02X\n",
                (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF),
@@ -666,6 +700,14 @@ inline FILE *g_callstream_out = nullptr;
 inline bool  g_callstream_on  = false;
 inline int   g_callstream_seq = 0;
 
+// Banking-correct, mostly-non-disturbing opcode read for the instrumentation
+// rails.  See the note at the fetch site in iigs_calltrace_step().
+static inline uint8_t iigs_instr_peek(cpu_state *cpu, uint32_t a) {
+    uint16_t off = (uint16_t)(a & 0xFFFF);
+    if (off >= 0xC000 && off <= 0xCFFF) return cpu->mmu->probe_peek(a);
+    return cpu->mmu->read(a);
+}
+
 inline void iigs_calltrace_step(cpu_state *cpu) {
     if (!g_calltrace_armed && g_calltrace_use_pc &&
         cpu->full_pc == g_calltrace_from) {
@@ -679,10 +721,22 @@ inline void iigs_calltrace_step(cpu_state *cpu) {
     }
     if (!g_calltrace_armed || g_calltrace_logged >= g_calltrace_n) return;
     uint32_t pc = cpu->full_pc;
-    uint8_t  op = cpu->mmu->probe_peek(pc);
+    // Opcode fetch for instrumentation.  probe_peek() is the side-effect-free
+    // read, but it returns the RAW page-table byte and so does not resolve
+    // ROM / language-card banking the way a real fetch does -- on the II family
+    // that made every opcode compare here fail, and CALLTRACE emitted nothing at
+    // all on -p 3 even with thousands of JSRs executing.  read() resolves banking
+    // correctly (it is what ITRACE already uses), at the cost of soft-switch side
+    // effects in the $C000-$CFFF I/O page -- so fall back to probe_peek there to
+    // keep the probe non-disturbing.
+    uint8_t  op = iigs_instr_peek(cpu, pc);
     if (op != 0x20 && op != 0x22 && op != 0xFC && op != 0x60 &&
         op != 0x6B && op != 0x40 && op != 0x00) return;
-    auto pk = [&](uint32_t o){ return cpu->mmu->probe_peek((pc & 0xFF0000) | ((pc + o) & 0xFFFF)); };
+    // Operand bytes need the same banking-correct read as the opcode.  With
+    // probe_peek these came back as floating-bus $EE for banks $00/$01 on the
+    // IIgs, so every logged call target read "-> 00/EEEE" -- the trace named the
+    // caller correctly and the callee not at all.
+    auto pk = [&](uint32_t o){ return iigs_instr_peek(cpu, (pc & 0xFF0000) | ((pc + o) & 0xFFFF)); };
     char here[80]; iigs_sym_resolve(pc, here, sizeof(here));
     char tgt[80]; tgt[0] = 0;
     const char *kind = "?";

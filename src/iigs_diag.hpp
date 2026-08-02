@@ -68,7 +68,18 @@ inline long iigs_assert_value(const char *name, cpu_state *cpu, const uint8_t *e
     // the introspection floor's structural-assert primitive.
     if (!strncmp(name, "peek:", 5)) {
         uint32_t a = (uint32_t)strtoul(name + 5, nullptr, 16) & 0xFFFFFF;
-        return (cpu && cpu->mmu) ? cpu->mmu->probe_peek(a) : -1;
+        if (!cpu || !cpu->mmu) return -1;
+        // peek: is the ONLY machine-independent assert field, so a silent wrong
+        // answer here poisons every portable gate. probe_peek returns floating-bus
+        // noise for handler-backed pages ($C0xx always), which would make an assert
+        // pass or fail on bus garbage. Refuse instead of guessing.
+        if (!cpu->mmu->probe_readable(a)) {
+            printf("IIGS ASSERT: peek:%06X is NOT probe-readable (handler-backed "
+                   "page; probe_peek would return floating bus, not memory). "
+                   "Assert cannot be evaluated.\n", a);
+            return -999999;
+        }
+        return cpu->mmu->probe_peek(a);
     }
     if (!strcmp(name, "scb_mode")) return (e1[0x9D00] & 0x80) ? 640 : 320;
     if (!strcmp(name, "qd_carry")) return tf(0x0204, 0);

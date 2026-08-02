@@ -135,6 +135,32 @@ int main(int argc, char **argv) {
         printf("Invalid CPU type\n");
         return 1;
     }
+    // The Klaus Dormann functional-test binaries are third-party fixtures and are
+    // NOT vendored in this repo, so ResourceFile::load() used to throw an uncaught
+    // std::runtime_error and the process aborted -- indistinguishable, from a CI
+    // log, from the CPU actually failing its conformance suite. Detect the missing
+    // fixture and SKIP loudly with instructions instead.
+    //
+    // This matters more than a tidiness fix: it means the 6502 core has never been
+    // run against the gold-standard functional suite in this tree, and the crash
+    // hid that fact rather than reporting it.
+    {
+        const char *want = (testsuite == 0) ? "6502_functional_test.bin"
+                         : (testsuite == 1) ? "65C02_extended_opcodes_test.bin"
+                                            : "6502_decimal_test.bin";
+        FILE *probe = fopen(want, "rb");
+        if (!probe) {
+            printf("=== CPUTEST SKIPPED: fixture '%s' not found ===\n", want);
+            printf("    This is a third-party test binary (Klaus Dormann's\n");
+            printf("    6502/65C02 functional tests) and is not vendored here.\n");
+            printf("    Obtain the bin_files/ set and run cputest from that\n");
+            printf("    directory, or copy the .bin beside the executable.\n");
+            printf("    NOTE: until this runs, the CPU core is UNVALIDATED against\n");
+            printf("    the gold-standard suite. cycletest covers timing only.\n");
+            return 77;   // conventional "skipped", not a pass and not a crash
+        }
+        fclose(probe);
+    }
     rom->load();
     uint8_t *rom_data = rom->get_data();
     int rom_size = rom->size();

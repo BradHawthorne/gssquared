@@ -449,7 +449,30 @@ int Woz_Nibblizer_35::decode_track(const woz_track_t *trk, int track_num, int si
  */
 
 int Woz_Nibblizer_35::write_disk_image_po_do(const media_descriptor *media, const disk_image_t *disk_image) {
-    FILE *out_fp = fopen(media->filename.c_str(), "w+b");
+    // "r+b", NOT "w+b". THIS DESTROYS 2MG IMAGES.
+    //
+    // "w+b" truncates the file to zero length. The write then seeks to
+    // data_offset -- 64 on a 2MG -- and writes the payload there, so the
+    // skipped header region is filled with ZEROS by the C library. The result
+    // is a file of exactly the right size, with the disk data correctly
+    // positioned, and a 64-byte hole where the "2IMG" header used to be. The
+    // image is unreadable, and nothing reports an error.
+    //
+    // Found by doing it: mounting a second image at the same drive triggers a
+    // SAVE_AND_UNMOUNT of the first, which write-backs a disk that was only
+    // ever READ from. One `mount` command silently destroyed an 800K ORCA/M
+    // image. Recovered because the payload survives intact at data_offset --
+    // only the header is lost -- so re-prefixing a correct 64-byte header
+    // restores the file byte for byte.
+    //
+    // The 5.25 writer alongside this one already used "r+b"; this was the
+    // outlier, and 3.5 is exactly where 2MG containers are common.
+    FILE *out_fp = fopen(media->filename.c_str(), "r+b");
+    if (!out_fp) {
+        // Only create if it genuinely does not exist yet -- never as a
+        // fallback that would reintroduce the truncation above.
+        out_fp = fopen(media->filename.c_str(), "w+b");
+    }
     if (!out_fp) {
         std::cerr << "Could not open " << media->filename << " for writing" << std::endl;
         return false;

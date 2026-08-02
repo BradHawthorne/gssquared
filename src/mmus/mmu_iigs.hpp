@@ -262,7 +262,48 @@ class MMU_IIgs : public MMU {
                 uint8_t *mb = get_megaii_memory_base();
                 if (mb) return mb[((bank & 1) << 16) | (addr24 & 0xFFFF)];
             }
+            // BANKS $00/$01 ARE HANDLER PAGES. set_ram_shadow_banks() installs
+            // bank_shadow_read/write over them, so read_raw sees no read pointer
+            // and returns floating bus -- while the CPU, going through the
+            // handler, reads main_ram at the aux-resolved offset. Two different
+            // answers for one address is how a rail can read a byte back
+            // correctly and still watch the CPU execute a zero.
+            //
+            // Resolved here the way bank_shadow_read resolves it, honouring
+            // ramrd/ramwrt/altzp. a2gspu_state_dump() has done exactly this for
+            // its own diagnostic all along; it just was not wired to the probe.
+            if (bank <= 0x01) {
+                uint8_t *mb = get_memory_base();
+                if (mb) return mb[addr24 + calc_aux_read(addr24)];
+            }
             return read_raw(addr24);
+        }
+
+        // The write-side twin, resolved identically -- with calc_aux_WRITE,
+        // because a IIgs can read main and write aux for the same logical
+        // address and putting bytes through the read mapping would land them
+        // where the CPU will not look for them.
+        void probe_poke(uint32_t addr24, uint8_t value) override {
+            uint32_t bank = (addr24 >> 16) & 0xFF;
+            if ((bank | 1) == 0xE1) {
+                uint8_t *mb = get_megaii_memory_base();
+                if (mb) { mb[((bank & 1) << 16) | (addr24 & 0xFFFF)] = value; return; }
+            }
+            if (bank <= 0x01) {
+                uint8_t *mb = get_memory_base();
+                if (mb) { mb[addr24 + calc_aux_write(addr24)] = value; return; }
+            }
+            write_raw(addr24, value);
+        }
+
+        // Handler pages ARE readable now that probe_peek resolves them; saying
+        // otherwise would make every rail read of bank $00 warn about floating
+        // bus while returning correct data.
+        bool probe_readable(uint32_t addr24) override {
+            uint32_t bank = (addr24 >> 16) & 0xFF;
+            if ((bank | 1) == 0xE1) return get_megaii_memory_base() != nullptr;
+            if (bank <= 0x01)       return get_memory_base() != nullptr;
+            return MMU::probe_readable(addr24);
         }
 
         // A2GSPU diagnostic: print the master soft-switch state + how bank-$00/$01

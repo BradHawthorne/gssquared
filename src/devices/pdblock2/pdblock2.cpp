@@ -17,6 +17,7 @@
 
 //#include <stdio.h>
 #include <iostream>
+#include <cstring>     // memset, for Format
 #include "gs2.hpp"
 #include "cpu.hpp"
 #include "debug.hpp"
@@ -99,6 +100,36 @@ void pdblock2_read_block(pdblock2_data *pdblock_d, uint8_t drive, uint16_t block
     pdblock_d->drives[drive].last_block_accessed = block;
     pdblock_d->drives[drive].last_block_access_time = SDL_GetTicksNS();
 }
+
+/* Format: a low-level format, which leaves the medium blank. The caller writes
+   the filesystem afterwards. See the note in pdblock3.cpp -- this is the same
+   operation on the older device. */
+void pdblock2_format(pdblock2_data *pdblock_d, uint8_t drive) {
+    FILE *fp = pdblock_d->drives[drive].file;
+    media_descriptor *media = pdblock_d->drives[drive].media;
+
+    if (media->write_protected) {
+        pdblock_d->cmd_buffer.error = PD_ERROR_WRITE_PROTECTED;
+        return;
+    }
+    if (media->block_size == 0 || media->block_size > 512) {
+        pdblock_d->cmd_buffer.error = PD_ERROR_IO;
+        return;
+    }
+
+    uint8_t zero[512];
+    memset(zero, 0, sizeof(zero));
+    for (uint32_t b = 0; b < media->block_count; b++) {
+        fseek(fp, media->data_offset + (uint64_t)b * media->block_size, SEEK_SET);
+        if (fwrite(zero, 1, media->block_size, fp) != media->block_size) {
+            pdblock_d->cmd_buffer.error = PD_ERROR_IO;
+            return;
+        }
+    }
+    fflush(fp);
+    pdblock_d->cmd_buffer.error = PD_ERROR_NONE;
+}
+
 
 void pdblock2_write_block(pdblock2_data *pdblock_d, uint8_t drive, uint16_t block, uint16_t addr) {
 
@@ -185,8 +216,10 @@ void pdblock2_execute(pdblock2_data *pdblock_d) {
         pdblock_d->cmd_buffer.error = 0x00;
         pdblock_d->cmd_buffer.status1 = 0x00;
         pdblock_d->cmd_buffer.status2 = 0x00;
-    } else if (cmd == 0x03) { // not implemented
-        pdblock_d->cmd_buffer.error = PD_ERROR_NO_DEVICE;
+    } else if (cmd == 0x03) { // Format
+        pdblock_d->cmd_buffer.status1 = 0x00;
+        pdblock_d->cmd_buffer.status2 = 0x00;
+        pdblock2_format(pdblock_d, drive);
     }
 }
 

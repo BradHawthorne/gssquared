@@ -64,8 +64,14 @@ void bsr_map_memory(iiememory_state_t *lc) {
         if (lc->ll.FF_READ_ENABLE) {
             lc->mmu->map_page_read(i + 0xD0, bankd0 + (i*GS2_PAGE_SIZE), bank_d);
         } else { // reads == READ_ROM
-        // TODO: this is wrong - needs to somehow know to return to ROM D0/etc wherever that may be.
-        // right now hard-code to what we know about the iie rom.
+        // The +$1000 assumes the ROM image starts at $C000, which is the IIe
+        // layout. That is not a general solution -- but it is correct for every
+        // platform that reaches this code: DEVICE_ID_IIE_MEMORY is registered
+        // only for PLATFLAG_APPLE_IIE / _ENHANCED / _65816 (see devices.cpp).
+        // The IIgs does not use this device; MMU_IIgs handles its own map.
+        // So this is a generality gap with no current instance, not a live bug
+        // -- but it WILL need a real ROM-base lookup if this device is ever
+        // given to a platform whose ROM does not begin at $C000.
             lc->mmu->map_page_read(i + 0xD0, rom + 0x1000 + (i*GS2_PAGE_SIZE), "SYS_ROM");
         }
 
@@ -83,7 +89,8 @@ void bsr_map_memory(iiememory_state_t *lc) {
             lc->mmu->map_page_read(i+0xE0, banke0 + (i * GS2_PAGE_SIZE), "LC RAM");
 
         } else { // reads == READ_ROM
-            // TODO: this is wrong - needs to somehow know to return to ROM D0/etc wherever that may be.
+            // Same IIe-only ROM-base assumption as the $D0 loop above; see the
+            // note there for why it is correct for this device's platforms.
             lc->mmu->map_page_read(i+0xE0, rom + 0x2000 + (i * GS2_PAGE_SIZE), "SYS_ROM");
         }
 

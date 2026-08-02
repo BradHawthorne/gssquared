@@ -1,6 +1,7 @@
 
 #include "Device_ID.hpp"
 #include "AppleIIgsColors.hpp"
+#include "a2gspu_dhgr.hpp"
 
 //#include "computer.hpp"
 #include "frame/Frames.hpp"
@@ -51,10 +52,35 @@ VideoScanGenerator_RGB::VideoScanGenerator_RGB(CharRom *charrom, bool border_ena
     build_mono_lut(hgr_color_lut, hgr_mono_lut);
     mono_mode = false;
     update_mono_lut();
+    build_dhgr_4dot_lut();
+    dhgr_hist = 0;
+    dhgr_x = 0;
 /*     txt_lut = txt_color_lut;
     hgr_lut = hgr_color_lut; */
 
     frame_vsg->set_line(0);
+}
+
+void VideoScanGenerator_RGB::build_dhgr_4dot_lut() {
+    // Share the a2dhgr discrete table (a2engine HW-order + phase rotation).
+    a2dhgr::Discrete4 pal;
+    for (int w = 0; w < 16; w++)
+        for (int p = 0; p < 4; p++)
+            dhgr_4dot_lut[w][p] = pal.lut[w][p];
+}
+
+// True DHGR colour: one pixel per bit, 4-dot sliding window. Do NOT use the
+// HGR 11-bit LUT here — HGR half-dot colour groups are a different model.
+inline void VideoScanGenerator_RGB::render_dhires_color() {
+    while (!bit_stream.empty()) {
+        bool bit = bit_stream.front();
+        bit_stream.pop();
+        uint8_t window = (uint8_t)((dhgr_hist & 7) | ((bit ? 1u : 0u) << 3));
+        int phase = (phase_offset + dhgr_x) & 3;
+        frame_vsg->push(dhgr_4dot_lut[window][phase]);
+        dhgr_hist = (uint8_t)(((dhgr_hist >> 1) | ((bit ? 1u : 0u) << 2)) & 7);
+        dhgr_x++;
+    }
 }
 
 void VideoScanGenerator_RGB::build_mono_lut(RGBA_t *ct, RGBA_t *mt) {
@@ -480,14 +506,19 @@ void VideoScanGenerator_RGB::generate_frame(ScanBuffer *frame_scan)
                     sawdata = true;
                     scanner_freq = 14;
                     if (hcount == 0) {
-                        phase_offset = 1; // 0 or 1
+                        // DHGR content phase offset 1 (90°) vs HGR — matches
+                        // Comp path color_mode.phase_offset and DisplayNG notes.
+                        phase_offset = 1;
                         hires_start();
+                        dhgr_hist = 0;
+                        dhgr_x = 0;
                     }
-                        
+
                     add_dhires_bits(scan.mainbyte, scan.auxbyte);
-                    if (dhgr_mono_mode) render_hires_mono();
-                    else //render_hires((hcount == 0), (hcount == 39));
-                        render_hires();
+                    if (dhgr_mono_mode)
+                        render_hires_mono();
+                    else
+                        render_dhires_color(); // discrete 4-dot, not HGR LUT
                 }
                 hcount++;
                 break;
