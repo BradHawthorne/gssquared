@@ -88,6 +88,7 @@ static inline uint8_t *rail_video_base(computer_t *computer) {
 
 
 #include <vector>
+#include "devices/es5503/audio_probe.hpp"
 
 
 // Frame runner defined in gs2.cpp (single funnel for windowed + headless).
@@ -2031,6 +2032,37 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
                          "usage: bp <addr|BANK:addr|off>, hex", arg);
             }
         }
+        return true;
+    }
+    /* audio -- the generated sample stream, which nothing could see.
+
+       Every other audio check in this tree is at the REGISTERS: periphcheck
+       round-trips DOC registers and sound RAM, spkcheck counts $C030 toggles and
+       times them. None of that observes a SAMPLE. A chip that is clocked and
+       addressed correctly but emits silence -- or emits one value forever --
+       passes all of it.
+
+         audio                is it armed, and what has it seen
+         audio on | off       arm/disarm (arming resets the counters)
+         audio reset          zero the counters, stay armed                     */
+    if (!strncmp(line, "audio", 5) && (line[5] == 0 || line[5] == ' ')) {
+        const char *arg = (line[5] == ' ') ? line + 6 : "";
+        while (*arg == ' ') arg++;
+        if (!strcmp(arg, "on"))       audio_probe::arm(true);
+        else if (!strcmp(arg, "off")) audio_probe::arm(false);
+        else if (!strcmp(arg, "reset")) audio_probe::reset();
+        else if (*arg && strcmp(arg, "status")) {
+            snprintf(result, rsz, "status=FAIL audio-need: [status]|on|off|reset");
+            return true;
+        }
+        const uint64_t n = audio_probe::g_samples;
+        snprintf(result, rsz,
+                 "status=OK audio on=%d samples=%llu nonzero=%llu min=%d max=%d avg_abs=%llu",
+                 audio_probe::g_on ? 1 : 0,
+                 (unsigned long long)n,
+                 (unsigned long long)audio_probe::g_nonzero,
+                 (int)audio_probe::g_min, (int)audio_probe::g_max,
+                 (unsigned long long)(n ? audio_probe::g_abs_sum / n : 0));
         return true;
     }
     /* tbuf -- the CPU trace ring, which only the on-screen debugger could read.

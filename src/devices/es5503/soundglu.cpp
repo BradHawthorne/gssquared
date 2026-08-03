@@ -10,6 +10,7 @@
 #include "device_irq_id.hpp"
 
 #include "NClock.hpp"
+#include "devices/es5503/audio_probe.hpp"
 
 //==============================================================================
 // Fast-forward / catch-up
@@ -70,6 +71,10 @@ static void ensoniq_catch_up(ensoniq_state_t *st, uint64_t now_c14m) {
     while (samples_due > 0) {
         uint32_t n = (samples_due > BATCH) ? BATCH : (uint32_t)samples_due;
         st->chip->generate_samples(st->audio_buffer, n);
+        // The only point where the generated stream is observable. See
+        // audio_probe.hpp: register round-trips prove the chip is ADDRESSED,
+        // nothing else proves it SOUNDS.
+        audio_probe::note(st->audio_buffer, n);
         SDL_PutAudioStreamData(st->stream, st->audio_buffer, n * sizeof(int16_t));
         samples_due -= n;
     }
