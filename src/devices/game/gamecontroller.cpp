@@ -145,8 +145,14 @@ uint8_t strobe_game_inputs(void *context, uint32_t address) {
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD /* ds->gps[0].game_type == GAME_INPUT_TYPE_GAMEPAD */) {
         // Scale the axes larger, to get the corners to full extent
         
-        int32_t axis0 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTX);
-        int32_t axis1 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+        // Same null case as the switch readers: this is the DEFAULT joystick
+        // mode, so a machine with no controller attached reaches here on every
+        // $C070 strobe. Centre the stick rather than handing SDL a null handle.
+        int32_t axis0 = 0, axis1 = 0;
+        if (ds->gps[0].gamepad) {
+            axis0 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+            axis1 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+        }
 
         JoystickValues jv = convertJoystickValues(axis0, axis1);
         ds->last_jv = jv;
@@ -223,7 +229,24 @@ uint8_t read_game_switch_0(void *context, uint32_t address) {
         bool val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST);
         return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);    
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
-        if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
+        // Guard the pointer before handing it to SDL. Upstream added this
+        // alongside a behavioural change (an ABSENT pad floats the switch);
+        // that half is NOT taken -- see the note below -- but calling into SDL
+        // with a null gamepad on the default joystick mode, which is what a
+        // machine with no controller attached does on every $C06x read, should
+        // not depend on SDL choosing to validate for us.
+        //
+        // BEHAVIOUR DELIBERATELY UNCHANGED: absent pad still reads NOT pressed.
+        // Upstream iterated twice here -- d79be3c set SW2 from a platform test
+        // (is_ii_or_iiplus_or_iie), then 0e60636 replaced that with an
+        // unconditional 1, "on all platforms, SW2 will float". Two passes at the
+        // same line reads like empirical tuning rather than a settled fact, and
+        // this fork has no hardware citation either way, so the value stays as
+        // it was and the question stays open rather than being answered by
+        // whichever revision was read last.
+        if (ds->gps[0].gamepad == nullptr) {
+            ds->game_switch_0 = 0;
+        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
             ds->game_switch_0 = 1;
         } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_NORTH)) {
             ds->game_switch_0 = 1;
@@ -269,7 +292,24 @@ uint8_t read_game_switch_1(void *context, uint32_t address) {
         }
         return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
-        if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_SOUTH)) {
+        // Guard the pointer before handing it to SDL. Upstream added this
+        // alongside a behavioural change (an ABSENT pad floats the switch);
+        // that half is NOT taken -- see the note below -- but calling into SDL
+        // with a null gamepad on the default joystick mode, which is what a
+        // machine with no controller attached does on every $C06x read, should
+        // not depend on SDL choosing to validate for us.
+        //
+        // BEHAVIOUR DELIBERATELY UNCHANGED: absent pad still reads NOT pressed.
+        // Upstream iterated twice here -- d79be3c set SW2 from a platform test
+        // (is_ii_or_iiplus_or_iie), then 0e60636 replaced that with an
+        // unconditional 1, "on all platforms, SW2 will float". Two passes at the
+        // same line reads like empirical tuning rather than a settled fact, and
+        // this fork has no hardware citation either way, so the value stays as
+        // it was and the question stays open rather than being answered by
+        // whichever revision was read last.
+        if (ds->gps[0].gamepad == nullptr) {
+            ds->game_switch_1 = 0;
+        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_SOUTH)) {
             ds->game_switch_1 = 1;
         } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_WEST)) {
             ds->game_switch_1 = 1;
@@ -311,7 +351,24 @@ uint8_t read_game_switch_2(void *context, uint32_t address) {
         }
         return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
-        if (SDL_GetGamepadButton(ds->gps[1].gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
+        // Guard the pointer before handing it to SDL. Upstream added this
+        // alongside a behavioural change (an ABSENT pad floats the switch);
+        // that half is NOT taken -- see the note below -- but calling into SDL
+        // with a null gamepad on the default joystick mode, which is what a
+        // machine with no controller attached does on every $C06x read, should
+        // not depend on SDL choosing to validate for us.
+        //
+        // BEHAVIOUR DELIBERATELY UNCHANGED: absent pad still reads NOT pressed.
+        // Upstream iterated twice here -- d79be3c set SW2 from a platform test
+        // (is_ii_or_iiplus_or_iie), then 0e60636 replaced that with an
+        // unconditional 1, "on all platforms, SW2 will float". Two passes at the
+        // same line reads like empirical tuning rather than a settled fact, and
+        // this fork has no hardware citation either way, so the value stays as
+        // it was and the question stays open rather than being answered by
+        // whichever revision was read last.
+        if (ds->gps[1].gamepad == nullptr) {
+            ds->game_switch_2 = 0;
+        } else if (SDL_GetGamepadButton(ds->gps[1].gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
             ds->game_switch_2 = 1;
         } else if (SDL_GetGamepadButton(ds->gps[1].gamepad, SDL_GAMEPAD_BUTTON_NORTH)) {
             ds->game_switch_2 = 1;
