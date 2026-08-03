@@ -994,6 +994,14 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
     // "~BUS" cycle-dump for the gssquared->card host gate (A2GSPU_BUS_DUMP=path).
     g_bus_path = getenv("A2GSPU_BUS_DUMP");
     if (g_bus_path) {
+        // ARMING THE CAPTURE IS PART OF ENABLING THE DUMP. Previously only
+        // A2GSPU_BUS_STREAM set g_slot_bus_enabled, so setting A2GSPU_BUS_DUMP
+        // alone printed "cycle dump enabled", recorded nothing (slot_bus_note()
+        // returns immediately when disabled), and then wrote no file at shutdown
+        // because the vector was empty -- with no message saying why. The
+        // operator got a confirmation and an absence, which is the same failure
+        // shape as a coverage verb reporting a file it never wrote.
+        g_slot_bus_enabled = true;
         printf("A2GSPU: ~BUS cycle dump enabled (source = slot_bus) -> %s\n", g_bus_path);
     }
     if (getenv("A2GSPU_BUS_STREAM")) {
@@ -1063,6 +1071,13 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
 
     // Register shutdown handler
     computer->register_shutdown_handler([ad]() -> bool {
+        // Say something when a dump was ASKED FOR and produced nothing. Silence
+        // here is indistinguishable from success to anyone watching the console,
+        // and "I recorded no cycles" is a real answer worth printing.
+        if (g_bus_path && g_slot_bus.empty()) {
+            fprintf(stderr, "A2GSPU: ~BUS dump requested but NO cycles were recorded "
+                            "-- nothing written to %s\n", g_bus_path);
+        }
         if (g_bus_path && !g_slot_bus.empty()) {
             FILE *f = fopen(g_bus_path, "wb");
             if (f) {

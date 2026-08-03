@@ -2826,6 +2826,15 @@ static void run_headless_spike(GS2AppState *state) {
     // original early short-circuit did.
     if (a2gspu_ctrl_mode) {
         a2gspu_ctrl_loop(state);
+        // Destroy the computer BEFORE exiting. exit() does not run destructors,
+        // and computer_t::~computer_t() is what fires every registered shutdown
+        // handler -- so in rail mode every shutdown-time artifact was silently
+        // discarded. The ~BUS cycle dump is the one that surfaced it: the device
+        // announced "cycle dump enabled" at startup, recorded cycles all session,
+        // and then wrote nothing, with no error, because the writer never ran.
+        // Any device that registers a shutdown handler had the same hole.
+        delete state->computer;
+        state->computer = nullptr;
         exit(0);
     }
 
