@@ -20,6 +20,10 @@
 constexpr bool MOUSE_X = false;
 constexpr bool MOUSE_Y = true;
 
+// modes_byte flag bits (ADB microcontroller SET MODES / CLR MODES / SYNCH)
+constexpr uint8_t keyboard_auto_poll_enabled = 0b0000'0001;
+constexpr uint8_t keyboard_buffer_enabled_bit = 0b0001'0000;
+
 /* enum mouse_next_t {
     MOUSE_X,
     MOUSE_Y,
@@ -250,6 +254,22 @@ class KeyGloo
             keysdown = 0;
         }
 
+        // Turning the key buffer OFF discards whatever is queued. A ring left
+        // populated across the mode change would deliver keys the guest typed
+        // under the old policy, arbitrarily later, through the latch path.
+        void flush_key_queue() {
+            vars.inpt = 0;
+            vars.outpt = 0;
+        }
+
+        void on_keyboard_buffer_disabled() {
+            flush_key_queue();
+        }
+
+        bool keyboard_buffer_enabled() const {
+            return (modes_byte & keyboard_buffer_enabled_bit) != 0;
+        }
+
         void set_vals_from_configuration() {
             // TODO: grab values out of the configuration bytes.
             // LANG: 
@@ -411,6 +431,7 @@ class KeyGloo
                     } else if (value == 0x04) { // set modes
                         modes_byte |= cmd[1]; 
                     } else if (value == 0x05) { // clr modes
+                        if (cmd[1] & keyboard_buffer_enabled_bit) on_keyboard_buffer_disabled();
                         modes_byte &= ~cmd[1];
                     } else if (value == 0x06) { // set configuration bytes
                         configuration_bytes[0] = cmd[1];
@@ -423,6 +444,7 @@ class KeyGloo
                         // on boot/reset there should be mode that accepts only synch command, and after that we're good.
                         reset();
                         modes_byte = cmd[1];
+                        if (!(modes_byte & keyboard_buffer_enabled_bit)) on_keyboard_buffer_disabled();
                         configuration_bytes[0] = cmd[2];
                         configuration_bytes[1] = cmd[3];
                         configuration_bytes[2] = cmd[4];
@@ -635,6 +657,16 @@ class KeyGloo
         void store_key_to_buffer(uint8_t keycode, uint8_t keymods) {
             // A2GSPU key interceptor: swallow file-driven keys before the ADB buffer.
             if (key_intercept && key_intercept(keycode, keymods)) return;
+            // Buffer disabled: the key goes straight to the latch. With the ring
+            // in the path it would sit there until something drained it, which is
+            // not what "no keyboard buffer" means to firmware that turned it off.
+            if (!keyboard_buffer_enabled()) {
+                key_latch.keycode = keycode | 0x80;
+                key_latch.keymods.value = keymods;
+                kb_register_full = true;
+                update_interrupt_status();
+                return;
+            }
             if ((vars.outpt + 1) % 16 == vars.inpt) return;
             key_codes[vars.outpt] = keycode;
             key_mods[vars.outpt] = keymods;
@@ -952,7 +984,7 @@ class KeyGloo
             if (status && (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)) {
 
                 // keyboard auto-poll is disabled...
-                if (modes_byte & 0x01) { 
+                if (modes_byte & keyboard_auto_poll_enabled) { 
                     // assert SRQ ..
                     service_request_valid = true;
                     data_register_full = true;
