@@ -364,14 +364,18 @@ bool recompute_gamepads(gamec_state_t *gp_d) {
         gp_d->gps[0].id = -1;
         gp_d->gps[1].id = -1;
     }
-    if (gpcount == 1) {
+    // >= 1, not == 1. With TWO pads attached this branch was skipped entirely,
+    // so pad 0 was never opened and only pad 1 worked -- the failure looked like
+    // "the first controller is dead" rather than a count test.
+    // (Ported from upstream cf94661.)
+    if (gpcount >= 1) {
         gp_d->gps[0].gamepad = SDL_OpenGamepad(gpid[0]);
         if (gp_d->gps[0].gamepad== NULL) {
             printf("Error opening gamepad: %s\n", SDL_GetError());
             return false;
         }
         gp_d->gps[0].id = gpid[0];
-        // zero out second gamepad info, because there is only one.
+        // zero out second gamepad info; the gpcount >= 2 branch below fills it in
         gp_d->gps[1].gamepad = nullptr;
         gp_d->gps[1].id = -1;
     }
@@ -379,7 +383,10 @@ bool recompute_gamepads(gamec_state_t *gp_d) {
         gp_d->gps[1].gamepad = SDL_OpenGamepad(gpid[1]);
         if (gp_d->gps[1].gamepad== NULL) {
             printf("Error opening gamepad: %s\n", SDL_GetError());
-            SDL_Quit();
+            // No SDL_Quit() here. A second controller failing to open tore down
+            // the whole SDL subsystem -- taking video, audio and input with it --
+            // for a peripheral the machine does not require. Report and refuse
+            // the pad; do not kill the emulator.
             return false;
         }
         gp_d->gps[1].id = gpid[1];
@@ -445,11 +452,16 @@ DebugFormatter *debug_gamecontroller(gamec_state_t *ds) {
         const char *name = SDL_GetGamepadNameForID(ds->gps[i].id);
         df->addLine("GamePad %d (%s)", i, name);
 
-        int32_t axis0 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTX);
-        int32_t axis1 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+        // gps[i], not gps[0]. The loop names each pad by its own id and then
+        // read pad 0's axes and buttons for every one of them, so the debug
+        // display reported gamepad 0's stick position under gamepad 1's name.
+        // An instrument that mislabels which device it is describing is worse
+        // than one that shows nothing. (Ported from upstream a359889.)
+        int32_t axis0 = SDL_GetGamepadAxis(ds->gps[i].gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+        int32_t axis1 = SDL_GetGamepadAxis(ds->gps[i].gamepad, SDL_GAMEPAD_AXIS_LEFTY);
         df->addLine("  Axis LX: %d  Axis LY: %d", axis0, axis1);
-        int b0 = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST);
-        int b1 = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
+        int b0 = SDL_GetGamepadButton(ds->gps[i].gamepad, SDL_GAMEPAD_BUTTON_EAST);
+        int b1 = SDL_GetGamepadButton(ds->gps[i].gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
         df->addLine("  Button N: %d  Button W: %d", b0, b1);
     }
     return df;
