@@ -10,7 +10,7 @@
 #include "device_irq_id.hpp"
 
 #include "NClock.hpp"
-#include "devices/es5503/audio_probe.hpp"
+#include "util/audio_probe.hpp"
 
 //==============================================================================
 // Mono mirroring
@@ -128,7 +128,7 @@ static void ensoniq_catch_up(ensoniq_state_t *st, uint64_t now_c14m) {
         // nothing else proves it SOUNDS. `n` is frames, so the width is passed
         // explicitly -- the probe reports it back rather than inferring it from
         // a sample total, which is what lets a gate catch a dropped channel.
-        audio_probe::note(st->audio_buffer, n, ch);
+        audio_probe::note(audio_probe::SRC_DOC, st->audio_buffer, n, ch);
         SDL_PutAudioStreamData(st->stream, st->audio_buffer,
                                (int)(n * ch * sizeof(int16_t)));
         samples_due -= n;

@@ -88,7 +88,7 @@ static inline uint8_t *rail_video_base(computer_t *computer) {
 
 
 #include <vector>
-#include "devices/es5503/audio_probe.hpp"
+#include "util/audio_probe.hpp"
 
 
 // Frame runner defined in gs2.cpp (single funnel for windowed + headless).
@@ -2042,50 +2042,68 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
        addressed correctly but emits silence -- or emits one value forever --
        passes all of it.
 
-         audio                is it armed, and what has it seen
-         audio on | off       arm/disarm (arming resets the counters)
-         audio reset          zero the counters, stay armed
+         audio                the DOC source (see below), and how many exist
+         audio doc | sfx      one named source: doc = Ensoniq, sfx = drive sounds
+         audio on | off       arm/disarm ALL sources (arming resets the counters)
+         audio reset          zero all counters, stay armed
 
        The aggregates alone cannot distinguish a working stereo stream from one
        that dropped a side, so the per-channel breakdown is always reported, and
        ch= states the observed width rather than leaving it to be inferred.
        ch=0 means no batch has been seen since arming. Interleave slot 0 is
        reported as l_*, slot 1 as r_*; which side that is in the air is the
-       emulator's TN #19 convention, not something this probe asserts.        */
+       emulator's TN #19 convention, not something this probe asserts.
+
+       SOURCES ARE NEVER SUMMED. The Ensoniq and the drive effects are separate
+       devices on separate paths, and the DOC is usually busy -- so one combined
+       figure would let "some audio happened" pass for "the DRIVE made a sound".
+       Every line names its src= for that reason, and the bare form reports the
+       DOC because that is what it has always reported; it is not "all audio".
+
+       unread= counts batches a source declined because the sample format was
+       not one it can read. Without it, an unreadable format and silence would
+       produce the same zeros.                                                */
     if (!strncmp(line, "audio", 5) && (line[5] == 0 || line[5] == ' ')) {
         const char *arg = (line[5] == ' ') ? line + 6 : "";
         while (*arg == ' ') arg++;
+        int which = audio_probe::SRC_DOC;
         if (!strcmp(arg, "on"))       audio_probe::arm(true);
         else if (!strcmp(arg, "off")) audio_probe::arm(false);
         else if (!strcmp(arg, "reset")) audio_probe::reset();
+        else if (!strcmp(arg, "doc")) which = audio_probe::SRC_DOC;
+        else if (!strcmp(arg, "sfx")) which = audio_probe::SRC_SFX;
         else if (*arg && strcmp(arg, "status")) {
-            snprintf(result, rsz, "status=FAIL audio-need: [status]|on|off|reset");
+            snprintf(result, rsz, "status=FAIL audio-need: [status]|doc|sfx|on|off|reset");
             return true;
         }
-        const uint64_t n = audio_probe::g_samples;
+        const audio_probe::source_t &S = audio_probe::g_src[which];
+        const char *name = (which == audio_probe::SRC_SFX) ? "sfx" : "doc";
+        const uint64_t n = S.samples;
         // Per-channel averages divide by FRAMES, not by total samples: one frame
         // contributes one sample to each channel, so frames is that channel's
-        // own count. Dividing by g_samples would halve every stereo channel
-        // average and make a healthy stereo stream look like it lost level.
-        const uint64_t fr = audio_probe::g_frames;
+        // own count. Dividing by the sample total would halve every stereo
+        // channel average and make a healthy stream look like it lost level.
+        const uint64_t fr = S.frames;
         snprintf(result, rsz,
-                 "status=OK audio on=%d samples=%llu nonzero=%llu min=%d max=%d avg_abs=%llu"
-                 " ch=%d frames=%llu"
+                 "status=OK audio on=%d src=%s sources=%d"
+                 " samples=%llu nonzero=%llu min=%d max=%d avg_abs=%llu"
+                 " ch=%d frames=%llu unread=%llu"
                  " l_nz=%llu l_min=%d l_max=%d l_avg=%llu"
                  " r_nz=%llu r_min=%d r_max=%d r_avg=%llu",
-                 audio_probe::g_on ? 1 : 0,
+                 audio_probe::g_on ? 1 : 0, name, (int)audio_probe::N_SRC,
                  (unsigned long long)n,
-                 (unsigned long long)audio_probe::g_nonzero,
-                 (int)audio_probe::g_min, (int)audio_probe::g_max,
-                 (unsigned long long)(n ? audio_probe::g_abs_sum / n : 0),
-                 audio_probe::g_channels,
+                 (unsigned long long)S.nonzero,
+                 (int)S.min, (int)S.max,
+                 (unsigned long long)(n ? S.abs_sum / n : 0),
+                 S.channels,
                  (unsigned long long)fr,
-                 (unsigned long long)audio_probe::g_ch_nonzero[0],
-                 (int)audio_probe::g_ch_min[0], (int)audio_probe::g_ch_max[0],
-                 (unsigned long long)(fr ? audio_probe::g_ch_abs_sum[0] / fr : 0),
-                 (unsigned long long)audio_probe::g_ch_nonzero[1],
-                 (int)audio_probe::g_ch_min[1], (int)audio_probe::g_ch_max[1],
-                 (unsigned long long)(fr ? audio_probe::g_ch_abs_sum[1] / fr : 0));
+                 (unsigned long long)S.unread,
+                 (unsigned long long)S.ch_nonzero[0],
+                 (int)S.ch_min[0], (int)S.ch_max[0],
+                 (unsigned long long)(fr ? S.ch_abs_sum[0] / fr : 0),
+                 (unsigned long long)S.ch_nonzero[1],
+                 (int)S.ch_min[1], (int)S.ch_max[1],
+                 (unsigned long long)(fr ? S.ch_abs_sum[1] / fr : 0));
         return true;
     }
     /* tbuf -- the CPU trace ring, which only the on-screen debugger could read.
