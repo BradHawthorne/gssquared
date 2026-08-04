@@ -37,7 +37,7 @@ struct Verb {
 inline const Verb *verbs(int *count) {
     static const Verb v[] = {
         {"assert", "observe", "assert peek:ADDR==VAL[;…] — probe_peek checks; status=PASS|FAIL", "memory-peek"},
-        {"audio", "observe", "audio [status]|on|off|reset — generated DOC sample stream: count, non-silent, min/max, average level", "sample-stream"},
+        {"audio", "observe", "audio [status]|on|off|reset — generated DOC sample stream: count, non-silent, min/max, average level, and the same broken out per channel (ch=/l_*/r_*) so a dropped side is visible", "sample-stream"},
         {"boot", "run", "boot <frames> — run N frames from power-on path", "run-frames"},
         {"bp", "manipulate", "bp [addr|off] — interactive breakpoint; bare reports state. A hit halts; run/step/resume continue past it", "force-control"},
         {"callstream", "trace", "callstream on <file>|off|status — LIVE NDJSON toolbox stream", "tool_locator"},

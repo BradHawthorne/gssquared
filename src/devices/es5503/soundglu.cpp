@@ -73,8 +73,11 @@ static void ensoniq_catch_up(ensoniq_state_t *st, uint64_t now_c14m) {
         st->chip->generate_samples(st->audio_buffer, n);
         // The only point where the generated stream is observable. See
         // audio_probe.hpp: register round-trips prove the chip is ADDRESSED,
-        // nothing else proves it SOUNDS.
-        audio_probe::note(st->audio_buffer, n);
+        // nothing else proves it SOUNDS. `n` is frames; the stream is mono
+        // today, so frames and int16 samples coincide -- the probe is told the
+        // width explicitly rather than inferring it, so the day that stops
+        // being true is a one-line change here and a visible one at the rail.
+        audio_probe::note(st->audio_buffer, n, 1);
         SDL_PutAudioStreamData(st->stream, st->audio_buffer, n * sizeof(int16_t));
         samples_due -= n;
     }

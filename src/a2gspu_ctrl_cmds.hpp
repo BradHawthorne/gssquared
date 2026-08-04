@@ -2044,7 +2044,14 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
 
          audio                is it armed, and what has it seen
          audio on | off       arm/disarm (arming resets the counters)
-         audio reset          zero the counters, stay armed                     */
+         audio reset          zero the counters, stay armed
+
+       The aggregates alone cannot distinguish a working stereo stream from one
+       that dropped a side, so the per-channel breakdown is always reported, and
+       ch= states the observed width rather than leaving it to be inferred.
+       ch=0 means no batch has been seen since arming. Interleave slot 0 is
+       reported as l_*, slot 1 as r_*; which side that is in the air is the
+       emulator's TN #19 convention, not something this probe asserts.        */
     if (!strncmp(line, "audio", 5) && (line[5] == 0 || line[5] == ' ')) {
         const char *arg = (line[5] == ' ') ? line + 6 : "";
         while (*arg == ' ') arg++;
@@ -2056,13 +2063,29 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
             return true;
         }
         const uint64_t n = audio_probe::g_samples;
+        // Per-channel averages divide by FRAMES, not by total samples: one frame
+        // contributes one sample to each channel, so frames is that channel's
+        // own count. Dividing by g_samples would halve every stereo channel
+        // average and make a healthy stereo stream look like it lost level.
+        const uint64_t fr = audio_probe::g_frames;
         snprintf(result, rsz,
-                 "status=OK audio on=%d samples=%llu nonzero=%llu min=%d max=%d avg_abs=%llu",
+                 "status=OK audio on=%d samples=%llu nonzero=%llu min=%d max=%d avg_abs=%llu"
+                 " ch=%d frames=%llu"
+                 " l_nz=%llu l_min=%d l_max=%d l_avg=%llu"
+                 " r_nz=%llu r_min=%d r_max=%d r_avg=%llu",
                  audio_probe::g_on ? 1 : 0,
                  (unsigned long long)n,
                  (unsigned long long)audio_probe::g_nonzero,
                  (int)audio_probe::g_min, (int)audio_probe::g_max,
-                 (unsigned long long)(n ? audio_probe::g_abs_sum / n : 0));
+                 (unsigned long long)(n ? audio_probe::g_abs_sum / n : 0),
+                 audio_probe::g_channels,
+                 (unsigned long long)fr,
+                 (unsigned long long)audio_probe::g_ch_nonzero[0],
+                 (int)audio_probe::g_ch_min[0], (int)audio_probe::g_ch_max[0],
+                 (unsigned long long)(fr ? audio_probe::g_ch_abs_sum[0] / fr : 0),
+                 (unsigned long long)audio_probe::g_ch_nonzero[1],
+                 (int)audio_probe::g_ch_min[1], (int)audio_probe::g_ch_max[1],
+                 (unsigned long long)(fr ? audio_probe::g_ch_abs_sum[1] / fr : 0));
         return true;
     }
     /* tbuf -- the CPU trace ring, which only the on-screen debugger could read.
