@@ -142,8 +142,23 @@ public:
     bool diskii_running_last = false;
     int  tracknumber_last    = 0;
 
+    // Drive 1 left, drive 2 right. Duplicated in IWM2.hpp for the IIgs, which
+    // is a different controller reaching the same speakers.
+    static SoundChannel channel_for_drive(uint8_t drive_select) {
+        return drive_select == 0 ? SoundChannel::Left : SoundChannel::Right;
+    }
+
     void soundeffects_update() {
+        // load() returns nullptr when an asset is missing or is not the mono
+        // PCM the stereo placement needs, and both branches below dereference
+        // si for the chunk length. Silence beats a crash -- and drivecheck
+        // asserts the drive DOES sound, so a missing asset fails a gate rather
+        // than passing quietly.
+        if (!sounds[SE_SHUGART_DRIVE].si || !sounds[SE_SHUGART_HEAD].si) {
+            return;
+        }
         int tracknumber = drives[diskii_select].get_track();
+        const SoundChannel ch = channel_for_drive(diskii_select);
 
         if (diskii_running_last && !motor_on) {
             diskii_running_last = false;
@@ -151,10 +166,14 @@ public:
         }
 
         if (motor_on) {
+            // Chunk length is measured on the MONO source; the stream queues
+            // stereo, so the queued figure is twice the chunk it came from.
+            // Routing this through sound_effect (it used to push straight at
+            // SDL) is what puts the spin sound on a side -- and, incidentally,
+            // what makes it observable at all.
             int dl = (int) sounds[SE_SHUGART_DRIVE].si->wav_data_len / 10;
-            if (SDL_GetAudioStreamQueued(sounds[SE_SHUGART_DRIVE].si->stream) < dl) {
-                SDL_PutAudioStreamData(sounds[SE_SHUGART_DRIVE].si->stream,
-                    sounds[SE_SHUGART_DRIVE].si->wav_data + dl * running_chunknumber, dl);
+            if (sound_effect->get_queued(SE_SHUGART_DRIVE) < dl * 2) {
+                sound_effect->play_specific(SE_SHUGART_DRIVE, dl * running_chunknumber, dl, ch);
                 running_chunknumber++;
                 if (running_chunknumber > 8) running_chunknumber = 0;
             }
@@ -165,7 +184,7 @@ public:
             int len = ((int)(200 * 2) * std::abs(tracknumber_last - tracknumber));
             if (ind + len > sounds[SE_SHUGART_HEAD].si->wav_data_len)
                 len = sounds[SE_SHUGART_HEAD].si->wav_data_len - ind;
-            sound_effect->play_specific(SE_SHUGART_HEAD, ind, len);
+            sound_effect->play_specific(SE_SHUGART_HEAD, ind, len, ch);
 
             if (start_track_movement == -1) start_track_movement = tracknumber_last;
             tracknumber_last = tracknumber;

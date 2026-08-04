@@ -16,8 +16,16 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 #include <SDL3/SDL.h>
 #include "AudioSystem.hpp"
+
+// Which side of a stereo pair an effect is placed on. The sources on disk are
+// mono; the expansion to interleaved stereo happens per play, so the same WAV
+// can come out of either drive's side without a second copy of the data.
+enum class SoundChannel : uint8_t { Both, Left, Right };
 
 /* things that are playing sound (the audiostream itself, plus the original data, so we can refill to loop. */
 struct SoundInfo_t {
@@ -25,6 +33,11 @@ struct SoundInfo_t {
     SDL_AudioStream *stream = nullptr;
     Uint8 *wav_data = nullptr;
     Uint32 wav_data_len = 0;
+    // Recorded at load so anything downstream can decide whether it is able to
+    // read this data, rather than assuming a shape. The probe declines formats
+    // it does not understand instead of reporting them as silence.
+    int wav_channels = 1;
+    SDL_AudioFormat wav_format = SDL_AUDIO_S16LE;
 };
 
 struct SoundEffectContainer_t {
@@ -36,6 +49,10 @@ class SoundEffect {
 protected:
     std::vector<SoundInfo_t *> streams;
     AudioSystem *audio_system;
+    std::vector<Uint8> expand_scratch;
+
+    SoundInfo_t *find(uint64_t key);
+    void put_mono_as_stereo(SoundInfo_t *si, const Uint8 *mono, Uint32 mono_len, SoundChannel ch);
 
 public:
     SoundEffect(AudioSystem *audio_system);
@@ -43,7 +60,10 @@ public:
 
 
     SoundInfo_t *load(const char *fname, uint64_t key);
-    void play(uint64_t key);
-    void play_specific(uint64_t key, int start, int length);
+    void play(uint64_t key, SoundChannel ch = SoundChannel::Both);
+    void play_specific(uint64_t key, int start, int length, SoundChannel ch = SoundChannel::Both);
     void flush(uint64_t key);       // clear pending data from an audio stream.
+    /** Bytes queued on the stream for this key. Counts STEREO bytes: a caller
+        comparing against a mono chunk length must double it. */
+    int get_queued(uint64_t key);
 };

@@ -42,6 +42,11 @@ class Floppy525_woz : public Floppy_woz {
     // Layout: 0xABAB0000 | (slot << 8) | drive  — distinct from Floppy35's 0xABAC*.
     uint64_t instanceID = 0;
 
+    // 0 = Drive 1 (left channel), 1 = Drive 2 (right channel). The eject and
+    // insert sounds come from the DRIVE, not the controller, so the drive has
+    // to know its own side.
+    uint16_t drive_index = 0;
+
     void update_track();
     static void phase_change_callback(uint64_t instanceID, void *userData);
 
@@ -57,9 +62,15 @@ protected:
 public:
     Floppy525_woz(SoundEffect *sound_effect, NClockII *clock, EventTimer *event_timer,
                   uint16_t slot, uint16_t drive)
-        : Floppy_woz(sound_effect, clock, event_timer) {
+        : Floppy_woz(sound_effect, clock, event_timer), drive_index(drive) {
             instanceID = 0xABAB0000ull | (static_cast<uint64_t>(slot) << 8) | drive;
         }
+
+    void play_sound(uint64_t sound_effect_id) override {
+        const SoundChannel ch =
+            (drive_index == 0) ? SoundChannel::Left : SoundChannel::Right;
+        sound_effect->play(sound_effect_id, ch);
+    }
 
     bool mount(uint64_t key, media_descriptor *media) override;
     bool unmount(uint64_t key) override;
