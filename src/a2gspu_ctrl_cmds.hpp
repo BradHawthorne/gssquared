@@ -1707,6 +1707,53 @@ inline bool try_input(const char *line, char *result, size_t rsz,
        0..255 means what a real ADC reading of 0..255 means -- the strobe seeds
        the decay timer with DECAY * value / 255 -- so the emulated timing is the
        hardware's, not a shortcut around it. */
+    /* joymode -- which controller shape the $C061-$C063 switches present.
+
+       The mode was reachable ONLY from a host GUI menu (MENU_CONTROLLER_GAMEPAD
+       -> set_joystick_mode), so on a headless rail session two of the three
+       modes could not be entered at all -- and the Joyport suspend window,
+       which only exists in Atari mode, could therefore never be measured. Same
+       shape of hole as the paddle injection above: a real behaviour with no
+       instrument that could reach it.
+
+         joymode                 which mode, and the suspend window in cycles
+         joymode gamepad         Apple II gamepad/paddles (the default)
+         joymode mouse           Apple Mouse as a paddle pair
+         joymode atari           Atari-style Joyport: reversed polarity, and
+                                 the mux stays suspended for a window after
+                                 reset because a real one trips the ROM's
+                                 button self-test coming out of it            */
+    if (!strncmp(line, "joymode", 7) && (line[7] == 0 || line[7] == ' ')) {
+        gamec_state_t *gc = (gamec_state_t *)computer->get_module_state(MODULE_GAMECONTROLLER);
+        if (!gc) {
+            snprintf(result, rsz, "status=FAIL no-game-controller");
+            return true;
+        }
+        const char *arg = (line[7] == ' ') ? line + 8 : "";
+        while (*arg == ' ') arg++;
+        if      (!strcmp(arg, "gamepad")) gc->joystick_mode = JOYSTICK_APPLE_GAMEPAD;
+        else if (!strcmp(arg, "mouse"))   gc->joystick_mode = JOYSTICK_APPLE_MOUSE;
+        else if (!strcmp(arg, "atari"))   gc->joystick_mode = JOYSTICK_ATARI_DPAD;
+        else if (*arg && strcmp(arg, "status")) {
+            snprintf(result, rsz, "status=FAIL joymode-need: [status]|gamepad|mouse|atari");
+            return true;
+        }
+        const char *nm = gc->joystick_mode == JOYSTICK_ATARI_DPAD   ? "atari"
+                       : gc->joystick_mode == JOYSTICK_APPLE_MOUSE  ? "mouse"
+                                                                    : "gamepad";
+        // suspended= is the question a gate actually asks: not "how long is the
+        // window" but "are we still inside it right now".
+        const uint64_t now = computer->clock->get_cycles();
+        const uint64_t ends = computer->last_reset + gc->joyport_suspend_cycles;
+        snprintf(result, rsz,
+                 "status=OK joymode %s suspend_cycles=%llu last_reset=%llu now=%llu suspended=%d",
+                 nm,
+                 (unsigned long long)gc->joyport_suspend_cycles,
+                 (unsigned long long)computer->last_reset,
+                 (unsigned long long)now,
+                 (gc->joystick_mode == JOYSTICK_ATARI_DPAD && now <= ends) ? 1 : 0);
+        return true;
+    }
     if (!strncmp(line, "paddle ", 7)) {
         gamec_state_t *gc = (gamec_state_t *)computer->get_module_state(MODULE_GAMECONTROLLER);
         if (!gc) {

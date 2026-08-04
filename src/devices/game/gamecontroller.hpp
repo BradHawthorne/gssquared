@@ -74,6 +74,12 @@ typedef enum joystick_mode {
 
 typedef struct gamec_state_t {
     joystick_mode_t joystick_mode = JOYSTICK_APPLE_GAMEPAD;
+    // How long after a reset the Joyport mux stays suspended. A real Joyport
+    // holds PB0/PB1 active out of reset, which trips the ROM's button
+    // self-test, so the emulation has to stay quiet for the same window. It is
+    // a CYCLE count and machines run at different speeds, which is why it
+    // cannot be one constant: see init_mb_game_controller.
+    uint64_t joyport_suspend_cycles = 100000;
     //uint64_t joyport_activate = 0;
 
     int game_switch_0;

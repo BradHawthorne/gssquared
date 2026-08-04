@@ -216,6 +216,20 @@ uint8_t read_game_input_3(void *context, uint32_t address) {
     return val | (ds->mmu->floating_bus_read() & 0x7F);
 }
 
+/* A real Joyport holds PB0/PB1 active coming out of reset, which trips the
+   ROM's button self-test, so the mux stays suspended for a window afterwards.
+
+   The condition was spelled out at all THREE switch readers with the same
+   literal 100000 in each. Three copies of one rule is three chances for a
+   change to land in two of them -- and the change below is exactly that: the
+   window is a CYCLE count, so it means different wall-clock time on machines
+   that run at different speeds, and it was wrong on one of them. Ported from
+   upstream 5bd804a. */
+inline bool joyport_active(const gamec_state_t *ds) {
+    return ds->joystick_mode == JOYSTICK_ATARI_DPAD
+        && ds->clock->get_cycles() > ds->computer->last_reset + ds->joyport_suspend_cycles;
+}
+
 uint8_t read_game_switch_0(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
 
@@ -225,9 +239,12 @@ uint8_t read_game_switch_0(void *context, uint32_t address) {
         return (ds->inject_button[0] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
     }
     
-    if ((ds->joystick_mode == JOYSTICK_ATARI_DPAD) && (ds->clock->get_cycles() > ds->computer->last_reset + 100000)) { // reverse polarity for atari
-        bool val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST);
-        return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);    
+    if (joyport_active(ds)) { // reverse polarity for atari
+        // Guarded like the other readers. This branch was missed when the rest
+        // were: SDL is reached here only in Atari mode, which nothing gated.
+        bool val = ds->gps[0].gamepad
+                && SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST);
+        return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
         // Guard the pointer before handing it to SDL. Upstream added this
         // alongside a behavioural change (an ABSENT pad floats the switch);
@@ -278,7 +295,7 @@ uint8_t read_game_switch_1(void *context, uint32_t address) {
         return (ds->inject_button[1] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
     }
 
-    if ((ds->joystick_mode == JOYSTICK_ATARI_DPAD) && (ds->clock->get_cycles() > ds->computer->last_reset + 100000)) {
+    if (joyport_active(ds)) {
         bool val = false;
 
         bool anc_1 = ds->annunciators[1];
@@ -340,7 +357,7 @@ uint8_t read_game_switch_2(void *context, uint32_t address) {
         return (ds->inject_button[2] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
     }
 
-    if ((ds->joystick_mode == JOYSTICK_ATARI_DPAD) && (ds->clock->get_cycles() > ds->computer->last_reset + 100000)) {
+    if (joyport_active(ds)) {
         bool val = false;
 
         bool anc_1 = ds->annunciators[1];
@@ -640,12 +657,22 @@ void init_mb_game_controller(computer_t *computer, SlotType_t slot) {
         }
     );
 
+    // How long the Joyport mux stays suspended after a reset. It is a CYCLE
+    // count, so one number cannot serve both machines: 100,000 cycles is ~100ms
+    // on a 1 MHz II/IIe and only ~36ms on a 2.8 MHz IIgs -- short enough that
+    // the GS ROM, which gets round to checking buttons later than the II ROM
+    // does, still sees the mux live and trips its self-test. 560,000 restores
+    // the ~200ms the GS actually needs. (Upstream 5bd804a.)
+    ds->joyport_suspend_cycles =
+        (computer->platform->id == PLATFORM_APPLE_IIGS) ? 560000 : 100000;
+
     computer->register_reset_handler(
-        // might need to be longer for GS, since GS may take longer to get around to check buttons on reset.
         [ds](bool cold_start) {
-            // TODO: erp. reset used to be instant. now if we hold reset, the cpu clock keeps ticking and
-            // we exceed our 100,000 cycle delay here rapidly. 
-            //ds->joyport_activate = ds->clock->get_cycles() + 100000; // 100ms
+            // The suspend window is timed from computer->last_reset rather than
+            // stamped here. Holding reset used to keep the CPU clock ticking
+            // past a deadline captured at reset time, so the window expired
+            // while reset was still asserted -- which is what the deleted
+            // joyport_activate line was working around.
 
             // reset annunciators
             ds->annunciators[3] = 0;
