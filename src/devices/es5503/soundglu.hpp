@@ -15,7 +15,13 @@ struct ensoniq_state_t {
     uint8_t sounddata = 0;
     uint8_t soundadrl = 0;  // DOC register address (only low byte used)
     uint8_t soundadrh = 0;  // High byte (stored but not used for DOC addressing)
-    int16_t *audio_buffer = nullptr;
+    int16_t *audio_buffer = nullptr;   // interleaved [L,R,L,R,...]
+    // The IIgs DOC drives a 4-bit channel address (CA0-CA3) out to the sound
+    // expansion connector. A stereo card decodes CA0 only; the convention the
+    // cards settled on is odd -> left, even -> right. Two host channels is
+    // therefore the shape a IIgs with a stereo card actually presents, and the
+    // buffers below carry frames, not samples: one frame is CHANNELS int16.
+    static constexpr int CHANNELS = 2;
     AudioSystem *audio_system = nullptr;
     SDL_AudioStream *stream = nullptr;
     double frame_rate = 59.9227;  // Apple II frame rate

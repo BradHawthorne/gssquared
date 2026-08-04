@@ -197,8 +197,16 @@ void ES5503::generate_samples(int16_t *buffer, int num_samples) {
         for (int osc = 0; osc < m_oscsenabled; osc++) {
             Oscillator *pOsc = &m_oscillators[osc];
 
-            // Check if oscillator is enabled and assigned to this channel
-            if (!(pOsc->control & 1) && ((pOsc->control >> 4) & (m_output_channels - 1)) == chan) {
+            // Channel select is control[7:4] (CA0-CA3). With two host outputs
+            // only CA0 is decoded. Stereo cards map odd -> left, even -> right,
+            // and interleave slot 0 is left, so CA0 is flipped when it becomes
+            // a mix index. With one output channel the mask is 0 and every
+            // oscillator lands in the single slot, which is the mono path.
+            int assigned = (pOsc->control >> 4) & (m_output_channels - 1);
+            if (m_output_channels == 2) {
+                assigned ^= 1;
+            }
+            if (!(pOsc->control & 1) && assigned == chan) {
                 uint32_t wtptr = pOsc->wavetblpointer & wavemasks[pOsc->wavetblsize];
                 uint32_t acc = pOsc->accumulator;
                 const uint16_t wtsize = pOsc->wtsize - 1;

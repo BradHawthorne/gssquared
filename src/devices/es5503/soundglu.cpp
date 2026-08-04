@@ -13,6 +13,56 @@
 #include "devices/es5503/audio_probe.hpp"
 
 //==============================================================================
+// Mono mirroring
+//==============================================================================
+
+/* The stereo path sends odd DOC channels left and even ones right. Almost all
+   IIgs software predates stereo cards and parks every voice on one CA0 value,
+   so routing it faithfully would put the entire soundtrack in one speaker --
+   a regression against the mono behaviour, dressed as a feature.
+
+   So: if every live oscillator shares a CA0, the side that has the energy is
+   copied onto both. If any two disagree the software is genuinely addressing
+   both sides and the mix is left alone. Deciding this from the oscillators
+   rather than from the buffer matters -- a buffer-side test ("is one side
+   quiet?") would mirror true stereo whenever one side happened to fall silent,
+   which is exactly what a stereo soundtrack does between notes. */
+static void ensoniq_mirror_mono_to_stereo(ensoniq_state_t *st, uint32_t n_frames) {
+    constexpr int ch = ensoniq_state_t::CHANNELS;
+    if (ch != 2 || !st->chip || !st->audio_buffer || n_frames == 0) {
+        return;
+    }
+
+    const int oscs = st->chip->get_oscsenabled();
+    int seen = 0;
+    int ca0 = 0;
+    for (int o = 0; o < oscs; o++) {
+        Oscillator *osc = st->chip->get_oscillator(o);
+        if (osc->control & 1) {
+            continue;                       // halted
+        }
+        const int osc_ca0 = (osc->control >> 4) & 1;
+        if (seen == 0) {
+            ca0 = osc_ca0;
+            seen = 1;
+        } else if (osc_ca0 != ca0) {
+            return;                         // true stereo -- leave L/R alone
+        }
+    }
+    if (seen == 0) {
+        return;                             // nothing playing
+    }
+
+    // Same flip as ES5503::generate_samples: odd CA0 -> slot 0, even -> slot 1.
+    const int live = ca0 ^ 1;
+    for (uint32_t i = 0; i < n_frames; i++) {
+        const int16_t s = st->audio_buffer[i * ch + live];
+        st->audio_buffer[i * ch + 0] = s;
+        st->audio_buffer[i * ch + 1] = s;
+    }
+}
+
+//==============================================================================
 // Fast-forward / catch-up
 //==============================================================================
 
@@ -67,18 +117,20 @@ static void ensoniq_catch_up(ensoniq_state_t *st, uint64_t now_c14m) {
         samples_due = MAX_SAMPLES;
     }
 
+    constexpr int ch = ensoniq_state_t::CHANNELS;
     const uint32_t BATCH = 1024;
     while (samples_due > 0) {
         uint32_t n = (samples_due > BATCH) ? BATCH : (uint32_t)samples_due;
         st->chip->generate_samples(st->audio_buffer, n);
+        ensoniq_mirror_mono_to_stereo(st, n);
         // The only point where the generated stream is observable. See
         // audio_probe.hpp: register round-trips prove the chip is ADDRESSED,
-        // nothing else proves it SOUNDS. `n` is frames; the stream is mono
-        // today, so frames and int16 samples coincide -- the probe is told the
-        // width explicitly rather than inferring it, so the day that stops
-        // being true is a one-line change here and a visible one at the rail.
-        audio_probe::note(st->audio_buffer, n, 1);
-        SDL_PutAudioStreamData(st->stream, st->audio_buffer, n * sizeof(int16_t));
+        // nothing else proves it SOUNDS. `n` is frames, so the width is passed
+        // explicitly -- the probe reports it back rather than inferring it from
+        // a sample total, which is what lets a gate catch a dropped channel.
+        audio_probe::note(st->audio_buffer, n, ch);
+        SDL_PutAudioStreamData(st->stream, st->audio_buffer,
+                               (int)(n * ch * sizeof(int16_t)));
         samples_due -= n;
     }
 }
@@ -274,16 +326,19 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
 
     st->audio_system = computer->audio_system;
 
-    // Allocate buffer large enough for maximum samples per frame
-    // Max rate ~298kHz at 59.92 fps = ~4972 samples, add some headroom
-    st->audio_buffer = new int16_t[16384];
-    
+    // Allocate buffer large enough for the maximum frames per video frame.
+    // Max rate ~298kHz at 59.92 fps = ~4972 frames, plus headroom; the catch-up
+    // clamp below uses the same 16384 figure, and it is FRAMES, so the buffer
+    // has to be that many times CHANNELS int16.
+    constexpr int ch = ensoniq_state_t::CHANNELS;
+    st->audio_buffer = new int16_t[16384 * ch];
+
     // Create and initialize ES5503 chip
     st->chip = new ES5503();
     // Observatory: register the DOC oscillator array as a coverage-first memory window.
     obs_add_memwindow(OBS_SUB_DOC, 0, "doc.osc", st->chip->get_oscillator(0),
                       32 * (uint32_t)sizeof(Oscillator), OBS_F_INTERNAL_ONLY);
-    st->chip->init(7159090, 48000, 1);  // Apple IIgs clock rate, 48kHz stereo
+    st->chip->init(7159090, 48000, ch);  // Apple IIgs clock rate; ch = stereo-card outputs
     st->chip->set_wave_memory(st->doc_ram);
     st->computer = computer;
     st->clock = computer->clock;
@@ -311,7 +366,7 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
     // Calculate initial samples per frame
     st->samples_per_frame = (float)es5503_output_rate / st->frame_rate;
     st->samples_accumulated = 0.0f;
-    st->stream = st->audio_system->create_stream(es5503_output_rate, 1, SDL_AUDIO_S16LE, true);
+    st->stream = st->audio_system->create_stream(es5503_output_rate, ch, SDL_AUDIO_S16LE, true);
     // Set the stream pointer in the chip so it can update the rate when oscillators change
     st->chip->set_sdl_stream(st->stream);
 
