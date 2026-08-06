@@ -1934,18 +1934,41 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             // Saves-and-unmounts anything in the drive first so writes persist.
             int slot = 0, drive = 0, off = 0;
             if (sscanf(line + 6, "s%dd%d %n", &slot, &drive, &off) == 2 && line[6 + off]) {
-                storage_key_t key;
-                key.slot = (uint16_t)slot;
-                key.drive = (uint16_t)(drive - 1);
-                key.partition = 0;
-                key.subunit = 0;
-                computer->mounts->unmount_media(key, SAVE_AND_UNMOUNT);  // best-effort
-                disk_mount_t dm{ (uint16_t)slot, (uint16_t)(drive - 1),
-                                 std::string(line + 6 + off) };
-                if (!computer->mounts->mount_media(dm))
-                    snprintf(result, sizeof result, "status=FAIL mount-fail");
-                else
-                    snprintf(result, sizeof result, "status=OK mount s%dd%d", slot, drive);
+                const char *path = line + 6 + off;
+
+                /* THE PATH IS CHECKED FIRST, AND THAT IS THE WHOLE FIX.
+                   mount_media() returns true for a file that does not exist, so
+                   this answered status=OK with no media in the drive. The guest
+                   then has no block device, $CsFF reads whatever firmware is
+                   there, and a driver call through it runs away into the I/O
+                   page -- a failure three subsystems away from the lie that
+                   caused it. It cost three rounds of diagnosis on a resource
+                   backend that turned out to be correct all along.
+
+                   Checking BEFORE the unmount matters just as much: the
+                   unmount below is unconditional, so a mistyped path used to
+                   eject the working disk and then report success at having
+                   done so. Validate, then disturb. */
+                FILE *probe = fopen(path, "rb");
+                if (!probe) {
+                    snprintf(result, sizeof result,
+                             "status=FAIL mount-no-such-file '%s' -- nothing was unmounted",
+                             path);
+                } else {
+                    fclose(probe);
+                    storage_key_t key;
+                    key.slot = (uint16_t)slot;
+                    key.drive = (uint16_t)(drive - 1);
+                    key.partition = 0;
+                    key.subunit = 0;
+                    computer->mounts->unmount_media(key, SAVE_AND_UNMOUNT);  // best-effort
+                    disk_mount_t dm{ (uint16_t)slot, (uint16_t)(drive - 1),
+                                     std::string(path) };
+                    if (!computer->mounts->mount_media(dm))
+                        snprintf(result, sizeof result, "status=FAIL mount-fail '%s'", path);
+                    else
+                        snprintf(result, sizeof result, "status=OK mount s%dd%d", slot, drive);
+                }
             } else {
                 snprintf(result, sizeof result, "status=FAIL mount-parse-fail");
             }
