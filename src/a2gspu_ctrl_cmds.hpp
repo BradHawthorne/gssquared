@@ -2291,6 +2291,62 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
                  (unsigned long long)(fr ? S.ch_abs_sum[1] / fr : 0));
         return true;
     }
+    /* session -- what is armed right now, and one command to disarm it all.
+
+       PROBE STATE HAS NO OWNER. `cov on`, `audio on`, `tbuf on`, `iolog on`,
+       `paddle`, `joymode` and the CPU trace flag all persist for the life of
+       the session with nothing recording who set them. A suite that exits
+       without disarming leaves the machine armed for whatever runs next, and
+       there was no way to ask "what is armed" or to clear it in one move.
+
+       That is not theoretical. A runaway probe left a session in a state that
+       `validate.ps1 -SkipBuild` then REUSED, producing a COREIMG failure --
+       the language-card core reading as zeros -- that looked exactly like a
+       regression in the engine. It was contamination, and establishing that
+       cost a debugging round.
+
+       WHAT IT DOES NOT COVER, stated rather than implied: valtrap, itrace,
+       tbtrace and callstream keep their state elsewhere and are not reachable
+       from here yet. `session` lists them as unknown rather than reporting a
+       confident zero -- a reset that silently misses half the state is worse
+       than no reset, because it licenses the assumption that the machine is
+       clean.
+
+         session               what is armed
+         session reset         disarm everything this verb can reach          */
+    if (!strncmp(line, "session", 7) && (line[7] == 0 || line[7] == ' ')) {
+        const char *arg = (line[7] == ' ') ? line + 8 : "";
+        while (*arg == ' ') arg++;
+        gamec_state_t *sgc = (gamec_state_t *)computer->get_module_state(MODULE_GAMECONTROLLER);
+        const bool doing = !strcmp(arg, "reset");
+        if (*arg && !doing && strcmp(arg, "status")) {
+            snprintf(result, rsz, "status=FAIL session-need: [status]|reset");
+            return true;
+        }
+        if (doing) {
+            audio_probe::arm(false);
+            a2gspu_cov_off();
+            g_io_trace_enabled = false;
+            io_trace_reset();
+            if (computer->cpu) computer->cpu->trace = 0;
+            if (sgc) { sgc->inject_active = false;
+                       sgc->joystick_mode = JOYSTICK_APPLE_GAMEPAD; }
+        }
+        snprintf(result, rsz,
+                 "status=OK session %s audio=%d cov=%d iolog=%d tbuf=%d "
+                 "paddle_inject=%d joymode=%s "
+                 "[not covered: valtrap itrace tbtrace callstream]",
+                 doing ? "reset" : "status",
+                 audio_probe::g_on ? 1 : 0,
+                 g_cov_on ? 1 : 0,
+                 g_io_trace_enabled ? 1 : 0,
+                 (computer->cpu && computer->cpu->trace) ? 1 : 0,
+                 (sgc && sgc->inject_active) ? 1 : 0,
+                 !sgc ? "-" : (sgc->joystick_mode == JOYSTICK_ATARI_DPAD  ? "atari"
+                             : sgc->joystick_mode == JOYSTICK_APPLE_MOUSE ? "mouse"
+                                                                          : "gamepad"));
+        return true;
+    }
     /* tbuf -- the CPU trace ring, which only the on-screen debugger could read.
        The emulator records every instruction with its registers, its effective
        address, its data and (since the 9420cac port) whether the access was a
