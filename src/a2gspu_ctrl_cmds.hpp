@@ -1922,7 +1922,15 @@ inline bool try_input(const char *line, char *result, size_t rsz,
         if (sscanf(line + 8, "%x", &ch) == 1 && kg && kg->kg) {
             kg->kg->hold_key((uint8_t)ch);
         } else {
-            snprintf(result, rsz, kg ? "holdkey-parse-fail" : "no-keygloo");
+            /* BOTH of these shipped WITHOUT a status= prefix, so a caller
+               branching on status=OK vs status=FAIL saw neither and had to
+               string-match the failure text -- or, more likely, treat an
+               unparseable reply as success. verbcheck's "every reply carries
+               status=" probes BARE verbs; it never sent a bad argument, which
+               is where both of these live. */
+            snprintf(result, rsz, kg
+                     ? "status=FAIL holdkey-parse-fail -- usage: holdkey <hex>"
+                     : "status=FAIL holdkey-no-keygloo -- this machine has no ADB keyboard");
         }
         return true;
     }
