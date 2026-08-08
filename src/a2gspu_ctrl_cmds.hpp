@@ -1950,9 +1950,27 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
                      path, (unsigned long long)got, len);
             return true;
         }
-        MMU_II *m2v = dynamic_cast<MMU_II *>(rail_mmu(computer));
-        const uint8_t *flatv = m2v ? m2v->get_memory_base() : nullptr;
-        const bool aux = (flatv && ((addr >> 16) & 0xFF) == 1);
+        /* USE rail_video_base, NOT dynamic_cast<MMU_II*>. MMU_IIgs is not in the
+           MMU_II hierarchy, so the cast returns null on a IIgs -- and this verb
+           originally fell back to probe_peek for a bank-01 request instead of
+           reading aux at all. It did not fail; it answered plausibly about the
+           wrong memory, and a `verify 01:6000` PASS was then used to conclude
+           that a resource stage had worked. That conclusion was unsupported.
+           The hazard is documented at the top of this file and this code was
+           written anyway, which is the argument for the explicit refusal below
+           rather than for another careful cast. */
+        const uint8_t *flatv = rail_video_base(computer);
+        const bool wants_aux = (((addr >> 16) & 0xFF) == 1);
+        if (wants_aux && !flatv) {
+            // Refuse rather than silently reading somewhere else. A verb that
+            // answers about memory it could not reach is worse than one that
+            // cannot answer.
+            snprintf(result, rsz,
+                     "status=FAIL verify-no-aux-image -- bank 01 requested but this "
+                     "machine exposes no flat main+aux image");
+            return true;
+        }
+        const bool aux = wants_aux;
         int diff = -1; uint8_t gb = 0;
         for (int i = 0; i < len; i++) {
             uint8_t b = aux
