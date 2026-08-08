@@ -1907,6 +1907,69 @@ inline bool try_cpu(const char *line, char *result, size_t rsz,
 // read / setreg / cycles / bp / stack — agent hands + timing mark + breakpoint.
 inline bool try_regs(const char *line, char *result, size_t rsz,
                      computer_t *computer) {
+    /* verify <addr> <len> <file> -- compare guest memory against a host file
+       HERE, and answer with the verdict rather than the bytes.
+
+       Every byte-comparison gate in the harness does the same three things:
+       `read` a region to a file, load both files host-side, and walk them for
+       the first difference. That is a lot of I/O to answer one question, and --
+       more to the point -- the ANSWER then lives in harness code instead of in
+       the status= contract. A suite can get the comparison wrong (one of them
+       printed "byte-identical" beside a FAIL because its detail text only
+       handled the differs case) and nothing about the rail would notice.
+
+       So the comparison moves to where the data already is. Same principle the
+       audio probe applies -- aggregate at the source, ship the conclusion, not
+       the samples -- and the same reason: the interesting output is four
+       numbers, not four kilobytes.
+
+       The first differing offset is the whole point of the reply. "They differ"
+       sends a reader back to a hex dump; "differ at 256" is a diagnosis. */
+    if (!strncmp(line, "verify ", 7)) {
+        uint32_t addr = 0; int len = 0, off = 0;
+        char abuf[64] = {0};
+        if (sscanf(line + 7, "%63s %d %n", abuf, &len, &off) < 2 || len <= 0 ||
+            !parse_addr(abuf, &addr)) {
+            snprintf(result, rsz, "status=FAIL verify-parse-fail -- usage: verify <addr|BANK:addr> <len> <file>");
+            return true;
+        }
+        const char *path = line + 7 + off;
+        FILE *vf = fopen(path, "rb");
+        if (!vf) {
+            snprintf(result, rsz, "status=FAIL verify-no-file '%s'", path);
+            return true;
+        }
+        std::vector<uint8_t> want((size_t)len);
+        size_t got = fread(want.data(), 1, (size_t)len, vf);
+        fclose(vf);
+        if (got != (size_t)len) {
+            // A short file is NOT a mismatch at byte `got` -- it is a broken
+            // expectation, and saying so keeps the two apart.
+            snprintf(result, rsz,
+                     "status=FAIL verify-short-file '%s' holds %llu of %d byte(s)",
+                     path, (unsigned long long)got, len);
+            return true;
+        }
+        MMU_II *m2v = dynamic_cast<MMU_II *>(rail_mmu(computer));
+        const uint8_t *flatv = m2v ? m2v->get_memory_base() : nullptr;
+        const bool aux = (flatv && ((addr >> 16) & 0xFF) == 1);
+        int diff = -1; uint8_t gb = 0;
+        for (int i = 0; i < len; i++) {
+            uint8_t b = aux
+                ? flatv[0x10000 + (((addr & 0xFFFF) + (uint32_t)i) & 0xFFFF)]
+                : rail_mmu(computer)->probe_peek(addr + (uint32_t)i);
+            if (b != want[(size_t)i]) { diff = i; gb = b; break; }
+        }
+        if (diff < 0) {
+            snprintf(result, rsz, "status=OK verify %d byte(s) identical%s",
+                     len, aux ? " (bank 01 aux)" : "");
+        } else {
+            snprintf(result, rsz,
+                     "status=FAIL verify-differs at %d guest=$%02X file=$%02X (of %d)",
+                     diff, gb, want[(size_t)diff], len);
+        }
+        return true;
+    }
     if (!strncmp(line, "read ", 5)) {
         // Accept the same BB:AAAA form `load` accepts.
         //

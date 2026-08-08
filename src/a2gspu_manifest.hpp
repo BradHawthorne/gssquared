@@ -63,6 +63,7 @@ inline const Verb *verbs(int *count) {
         {"mount", "manipulate", "mount sXdY <path> — runtime media swap", "inject-media"},
         {"oracle", "meta", "oracle — north-star contracts (cycles/colour/snapshot)", "discover"},
         {"paddle", "manipulate", "paddle <0-3> <0-255> | paddle off — analogue paddle; seeds the 558 decay so PREAD counts the value back", "force-control"},
+        {"verify", "observe", "verify <addr|BANK:addr> <len> <file> — compare guest memory to a host file in the emulator and answer with the verdict: identical, or the first differing offset and both bytes", "compare-in-place"},
         {"joymode", "manipulate", "joymode [status]|gamepad|mouse|atari — controller shape at $C061-$C063; reports the Joyport post-reset suspend window and whether it is still open", "force-control"},
         {"pbutton", "manipulate", "pbutton <0-2> <0|1> — game switch PB0-PB2 ($C061-$C063)", "force-control"},
         {"png", "observe", "png <file> [page] [scale] [auto|hgr|dhgr] — mono dots from RAM", "bits-mono"},
