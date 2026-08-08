@@ -86,6 +86,42 @@ static inline uint8_t *rail_video_base(computer_t *computer) {
     return nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// The OTHER flat image, and the distinction is the whole point.
+//
+// rail_video_base above answers "what does the screen show". This answers "what
+// does the CPU address" -- and on a IIgs they are different memory:
+//
+//     get_memory_base()        FPI flat RAM   what 65816 code reads and writes
+//     get_megaii_memory_base() Mega II 128K   what IIe-style video is drawn from
+//
+// Shadowing copies $00/$01 writes into $E0/$E1 for the SHADOWED RANGES ONLY, so
+// outside those the two never reconcile. Measured: `load 01:9000` then
+// `verify 01:9000` disagreed, because load wrote the FPI image and verify read
+// the Mega II one. A rail write that cannot be read back through the rail is
+// the one thing read's own comment says an actuator must never be.
+//
+// So `01:` on load/read/verify means CPU-addressable bank 01 -- aux on a IIe,
+// FPI bank $01 on a IIgs -- and the video verbs keep rail_video_base.
+//
+// IIgs BRANCH FIRST, for the reason the comment above already gives: a
+// cast-based dispatch that happens to work is how the original bug got in.
+//
+// THE REAL DEFECT IS UPSTREAM OF BOTH HELPERS. get_memory_base() is declared
+// `virtual` INDEPENDENTLY in MMU_II and MMU_IIgs; the MMU base declares no such
+// member, so they are two unrelated virtuals that share a name. That is why
+// every caller hand-rolls a cast chain, and why one of them got it wrong.
+// Declaring it on MMU would delete this category outright -- worth doing
+// deliberately, since the video path must not move with it.
+// ---------------------------------------------------------------------------
+static inline uint8_t *rail_cpu_ram_base(computer_t *computer) {
+    MMU *m = rail_mmu(computer);
+    if (!m) return nullptr;
+    if (MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(m)) return gs->get_memory_base();
+    if (MMU_II  *ii = dynamic_cast<MMU_II  *>(m))  return ii->get_memory_base();
+    return nullptr;
+}
+
 
 #include <vector>
 #include "util/audio_probe.hpp"
@@ -1959,7 +1995,10 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
            The hazard is documented at the top of this file and this code was
            written anyway, which is the argument for the explicit refusal below
            rather than for another careful cast. */
-        const uint8_t *flatv = rail_video_base(computer);
+        // rail_CPU_ram_base, not rail_video_base: `01:` means the bank guest
+        // code addresses, which is what `load 01:` writes. Reading the Mega II
+        // image here made a rail write unreadable through the rail on a IIgs.
+        const uint8_t *flatv = rail_cpu_ram_base(computer);
         const bool wants_aux = (((addr >> 16) & 0xFF) == 1);
         if (wants_aux && !flatv) {
             // Refuse rather than silently reading somewhere else. A verb that
@@ -2006,8 +2045,18 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
                 // the vram dump already reads it. probe_peek does not route bank
                 // bits on a IIe, so without this a caller can write aux and never
                 // read it back -- which makes the write unverifiable.
-                MMU_II *m2r = dynamic_cast<MMU_II *>(rail_mmu(computer));
-                const uint8_t *flat = m2r ? m2r->get_memory_base() : nullptr;
+                // Same helper `verify` uses, for the same reason: the cast to
+                // MMU_II returns null on a IIgs, and this branch then fell
+                // through to the main-memory path below -- answering status=OK
+                // about the wrong bank for a request that explicitly named 01.
+                const uint8_t *flat = rail_cpu_ram_base(computer);
+                if (((addr >> 16) & 0xFF) == 1 && !flat) {
+                    fclose(rf);
+                    snprintf(result, rsz,
+                             "status=FAIL read-no-aux-image -- bank 01 requested but this "
+                             "machine exposes no flat CPU RAM image");
+                    return true;
+                }
                 if (flat && ((addr >> 16) & 0xFF) == 1) {
                     for (int i = 0; i < len; i++) {
                         uint8_t b = flat[0x10000 + (((addr & 0xFFFF) + i) & 0xFFFF)];
