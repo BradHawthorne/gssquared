@@ -33,6 +33,83 @@ struct Verb {
     const char *model;  // observation/manipulation model id or "-"
 };
 
+/* WHEN TO REACH FOR EACH VERB.
+ *
+ * The synopsis says what a verb IS and what its syntax is. It does not say what
+ * question the verb answers, and that is the thing a caller arriving cold
+ * actually needs -- an agent that cannot tell `valtrap` from `bp` will hand-
+ * bisect a problem one of them answers directly. (Measured: it did. Three
+ * rounds of manual bisection went into "what wrote this byte" while a
+ * provenance trap sat unused in this table.)
+ *
+ * Kept as a separate lookup rather than a field in Verb so the synopsis strings
+ * -- some of them long -- are not disturbed, and so a verb with no entry yet
+ * degrades to "-" instead of failing to compile.
+ */
+struct VerbUse { const char *name; const char *when; };
+
+inline const char *verb_when(const char *name) {
+    static const VerbUse u[] = {
+        {"assert",     "a memory expectation checked INSIDE the emulator; returns PASS/FAIL, no host round trip"},
+        {"audio",      "proving a device makes SOUND. Register round-trips pass on a chip emitting silence"},
+        {"boot",       "bring a machine up from media, rather than splicing code into RAM"},
+        {"bp",         "stop at a PC you can name. A hit HALTS -- pair with resume or run/step"},
+        {"callstream", "capture toolbox/GS-OS calls as NDJSON while software runs (toolbox ABI work)"},
+        {"cov",        "which addresses executed AT ALL -- dead code, unreached branches, coverage of a run"},
+        {"cpu",        "registers and halt state. The first thing to read when execution went somewhere unexpected"},
+        {"cycles",     "the machine's clock rate, before trusting any timing a test assumes"},
+        {"devstate",   "what devices actually exist and in what state, before assuming a slot is populated"},
+        {"dis",        "disassemble where a PC landed. Needs a filename -- it will not name a file after the address"},
+        {"help",       "enumerate verbs from the RUNNING process rather than from documentation that may have drifted"},
+        {"hgr",        "a coarse ASCII view of an HGR page: 'is anything drawn'. Not pixel-exact -- see pngc"},
+        {"holdkey",    "hold a IIgs key DOWN across a boot (Open-Apple style options) rather than tapping it"},
+        {"iolog",      "the ordered $C0xx ring: WHICH soft switches were touched, in what order, read vs write"},
+        {"itrace",     "a live per-instruction trace from a chosen PC. Heavier than tbuf; use for a whole path"},
+        {"key",        "inject one keystroke headlessly"},
+        {"keys",       "inject a string headlessly -- typing a command line with no keyboard"},
+        {"load",       "write a host file into guest memory, including aux as bank 01"},
+        {"manifest",   "the full machine-readable capability record, for a client discovering this rail cold"},
+        {"mount",      "swap media at runtime. FAILS on a missing path and does not eject the current disk to find out"},
+        {"oracle",     "the contracts governing every other verb. Read FIRST -- especially the cycles= rule"},
+        {"paddle",     "inject an analogue paddle value; seeds the 558 decay so PREAD counts the value back"},
+        {"pbutton",    "press a game-controller button headlessly"},
+        {"png",        "pixel capture of a graphics page"},
+        {"pngc",       "pixel-exact COLOUR capture against a named profile -- this is the art oracle, not shot"},
+        {"poke",       "write bytes at an address. The fastest way to plant a stub and drive it"},
+        {"press",      "press a key with modifiers held, where a bare key injection is not enough"},
+        {"quit",       "end the session. A suite that does not is a paused machine that reads as a hang"},
+        {"rail",       "the rail's own state"},
+        {"read",       "dump guest memory to a host file, including aux as bank 01"},
+        {"reset",      "recover a wedged machine; cold with the argument"},
+        {"restore",    "reload a Class A snapshot (CPU+MMU+softswitches). Devices self-heal -- not time travel"},
+        {"resume",     "continue past a breakpoint hit without losing the breakpoint"},
+        {"run",        "advance N video frames. Use run-until when you can name a destination instead"},
+        {"run-until",  "run to a named PC with an instruction budget. THE timing primitive: its cycles= is an in-command delta, the only form the oracle certifies. Arriving proves this run executed that address -- a value in RAM cannot imitate a program counter"},
+        {"dhgr-calibrate", "derive the DHGR colour profile from the running machine rather than assuming one"},
+        {"dhgr-export",    "write the calibrated DHGR profile out for the art pipeline to compile against"},
+        {"dhgr-golden",    "capture or check a DHGR reference frame -- the art oracle for colour work"},
+        {"save",       "take a Class A snapshot before an experiment you expect to be destructive"},
+        {"screen",     "text-page helper"},
+        {"setreg",     "set PC or a register before running a stub"},
+        {"shot",       "an SDL backbuffer BMP for a HUMAN to look at. Never an art oracle -- use pngc"},
+        {"shr",        "SHR framebuffer observation on a IIgs"},
+        {"speaker",    "$C030 toggle counts and their timing -- proves the speaker moved and when"},
+        {"stack",      "stack contents. Read this when a runaway wound SP down and you need to know from where"},
+        {"step",       "execute N instructions. cycles= is IN-COMMAND and must not be subtracted across acks"},
+        {"tbtrace",    "live toolbox/GS-OS trace filtered by bank"},
+        {"tbuf",       "the CPU trace ring: per-instruction registers, effective address, data, read vs write"},
+        {"text",       "dump both text pages"},
+        {"valtrap",    "find where a VALUE came from. NOT an address watchpoint -- for 'stop at this address' use bp"},
+        {"verify",     "compare guest memory to a host file IN the emulator; answers with the first differing offset"},
+        {"vid",        "soft-switch video state -- the truth about what the display is actually doing"},
+        {"vram",       "raw 8K aux + 8K main video memory"},
+        {"watch",      "memory watch"},
+        {"joymode",    "pick the controller shape at $C061-$C063. The only way to reach Atari/mouse modes headlessly"},
+    };
+    for (const VerbUse &e : u) if (!strcmp(e.name, name)) return e.when;
+    return "-";
+}
+
 // Keep sorted by name for stable manifests. Update when adding CTRL verbs.
 inline const Verb *verbs(int *count) {
     static const Verb v[] = {
@@ -104,8 +181,14 @@ inline void write_help_short(FILE *f) {
     int n = 0;
     const Verb *v = verbs(&n);
     fprintf(f, "CTRL verbs (%d). Contracts: oracle | full: help <file> | manifest <file>\n", n);
-    for (int i = 0; i < n; i++)
+    // Syntax AND use case. A reader arriving cold needs to know which question
+    // a verb answers, not only how to spell it -- that is the difference
+    // between reaching for valtrap and hand-bisecting what it answers directly.
+    for (int i = 0; i < n; i++) {
         fprintf(f, "  %-14s [%s] %s\n", v[i].name, v[i].kind, v[i].synopsis);
+        const char *w = verb_when(v[i].name);
+        if (strcmp(w, "-")) fprintf(f, "  %-14s   when: %s\n", "", w);
+    }
 }
 
 inline void write_manifest(FILE *f) {
@@ -150,8 +233,12 @@ inline void write_manifest(FILE *f) {
     int n = 0;
     const Verb *v = verbs(&n);
     for (int i = 0; i < n; i++) {
-        fprintf(f, "%s\tkind=%s\tmodel=%s\t%s\n",
-                v[i].name, v[i].kind, v[i].model, v[i].synopsis);
+        // Tab-separated with a when= column, so a client can parse the use case
+        // rather than infer it. Absent entries emit "-" instead of being
+        // omitted, so the column count is stable for a splitter.
+        fprintf(f, "%s\tkind=%s\tmodel=%s\t%s\twhen=%s\n",
+                v[i].name, v[i].kind, v[i].model, v[i].synopsis,
+                verb_when(v[i].name));
     }
     fprintf(f, "\n## docs\n");
     fprintf(f, "Docs/AGENTIC_ORACLE.md\n");

@@ -1838,6 +1838,29 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
         } else if (!strncmp(line, "iolog reset", 11)) {
             io_trace_reset();
             snprintf(result, sizeof result, "status=OK iolog reset");
+        } else if (!strncmp(line, "iolog", 5) && line[5] == ' ' &&
+                   (!strcmp(line + 6, "dump") || !strncmp(line + 6, "dump ", 5))) {
+            /* `iolog dump` with no filename. The subcommand above matches
+               "iolog dump " WITH a trailing space and a name after it, so a bare
+               `iolog dump` used to fall through to the catch-all below and
+               answer status=OK with a keyboard-counter report -- reporting
+               success at having written a file it never opened.
+
+               That is the identical defect `cov` shipped with, and the one `dis`
+               was already fixed for ("no filename -> FAIL, not a file named
+               after the address"). Three verbs, one mistake, because nothing
+               tested the argument-missing path of any of them. */
+            snprintf(result, sizeof result,
+                     "status=FAIL iolog-dump-needs-file -- usage: iolog dump <file>");
+        } else if (!strncmp(line, "iolog", 5) && line[5] == ' ' &&
+                   strcmp(line + 6, "status") != 0) {
+            /* Anything else after `iolog` is not a subcommand this verb has.
+               It used to reach the catch-all and answer status=OK, so
+               `iolog zzz` reported keyboard counters and looked like it had
+               worked -- the same accept-nonsense-and-succeed shape as `cov`'s
+               advertised-but-absent grammar. */
+            snprintf(result, sizeof result,
+                     "status=FAIL iolog-need: [status]|on [cap]|off|dump <file>|reset");
         } else if (!strncmp(line, "iolog", 5)) {
             // Cumulative keyboard soft-switch read counts. Diff two 'iolog' calls
             // across a 'run' to see which switch a wedged menu actually polls
