@@ -52,7 +52,7 @@ inline const char *verb_when(const char *name) {
     static const VerbUse u[] = {
         {"assert",     "a memory expectation checked INSIDE the emulator; returns PASS/FAIL, no host round trip"},
         {"audio",      "proving a device makes SOUND. Register round-trips pass on a chip emitting silence"},
-        {"boot",       "bring a machine up from media, rather than splicing code into RAM"},
+        {"boot",       "enter a SLOT's firmware at $Cs00 the way autoboot would -- for a block device the ROM's own autoboot cannot reach"},
         {"bp",         "stop at a PC you can name. A hit HALTS -- pair with resume or run/step"},
         {"callstream", "capture toolbox/GS-OS calls as NDJSON while software runs (toolbox ABI work)"},
         {"cov",        "which addresses executed AT ALL -- dead code, unreached branches, coverage of a run"},
@@ -116,7 +116,7 @@ inline const Verb *verbs(int *count) {
     static const Verb v[] = {
         {"assert", "observe", "assert peek:ADDR==VAL[;…] — probe_peek checks; status=PASS|FAIL", "memory-peek"},
         {"audio", "observe", "audio [status]|doc|sfx|on|off|reset — generated sample streams per SOURCE (doc = Ensoniq, sfx = drive sounds; never summed): count, non-silent, min/max, average level, and the same broken out per channel (ch=/l_*/r_*) so a dropped side is visible", "sample-stream"},
-        {"boot", "run", "boot <frames> — run N frames from power-on path", "run-frames"},
+        {"boot", "run", "boot <slot> — enter slot firmware at $Cs00 (slot 1-7), as autoboot would", "enter-slot-firmware"},
         {"bp", "manipulate", "bp [addr|off] — interactive breakpoint; bare reports state. A hit halts; run/step/resume continue past it", "force-control"},
         {"callstream", "trace", "callstream on <file>|off|status — LIVE NDJSON toolbox stream", "tool_locator"},
         {"cov", "observe", "cov [status] | cov on <LO-HI|BANK:LO-HI> | cov off | cov reset | cov write <file> — execution coverage", "coverage"},

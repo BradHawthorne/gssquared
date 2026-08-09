@@ -283,7 +283,49 @@ class MMU_IIgs : public MMU {
             // Resolved here the way bank_shadow_read resolves it, honouring
             // ramrd/ramwrt/altzp. a2gspu_state_dump() has done exactly this for
             // its own diagnostic all along; it just was not wired to the probe.
+            // THE SHORTCUT ABOVE COVERED THE WHOLE BANK, AND THE BANK IS NOT ALL
+            // RAM. bank_shadow_read resolves three regions before it ever reaches
+            // calc_aux_read: $C0xx-$CFxx go to the Mega II, $D000-$FFFF go to LC
+            // RAM (with the bank-1 $1000 slide) or to ROM. Returning main_ram for
+            // those is returning the memory UNDERNEATH them.
+            //
+            // MEASURED on Platform 5: `read C7FF` answered $F8 while the CPU,
+            // executing LDA $C7FF at the same instant, read $10 -- the slot-7
+            // ProDOS driver offset. The rail was reporting FPI RAM beneath the
+            // I/O space as though it were firmware, with probe_readable saying
+            // the data was real, and an A/B of two disk images built on those
+            // bytes "proved" something about memory nobody had looked at.
+            //
+            // The language-card case is worse than merely wrong, because it is
+            // intermittent: a2engine's COREIMG gate compares guest $D000 against
+            // the core image and read $00 across it once, then passed on an
+            // identical re-run. $D000-$DFFF is the bank-switched 4K and $E000+ is
+            // the common 8K, so whenever the guest is on LC bank 2 or has ROM
+            // banked in, exactly the $D000 half disagrees and the $E000 half does
+            // not. That is a FALSE FAILURE in a gate, which is worse than no
+            // check at all -- it spends a debugging session on the instrument.
+            //
+            // Resolved the way bank_shadow_read resolves it. Where an
+            // observation-free answer is impossible ($C0xx is soft switches:
+            // reading one THROWS it, which is the one thing a probe must never
+            // do) the answer is "I cannot see this", via probe_readable below.
             if (bank <= 0x01) {
+                uint32_t page = (addr24 & 0xFF00) >> 8;
+                if (is_iolc_shadowed() && page >= 0xC0 && page <= 0xCF) {
+                    // $C100-$CFFF is genuine ROM and worth dumping; ask the Mega
+                    // II, whose page table already holds whichever of slot card
+                    // and internal firmware is currently selected. $C0xx has no
+                    // side-effect-free answer at all.
+                    if (page > 0xC0 && megaii) return megaii->probe_peek(addr24 & 0xFFFF);
+                    return floating_bus_read();
+                }
+                if (is_iolc_shadowed() && page >= 0xD0) {
+                    if (!is_lc_read_enable()) return get_lc_rom_base()[addr24 & 0xFFFF];
+                    uint32_t a = addr24;
+                    if (is_lc_bank1() && page <= 0xDF) a -= 0x1000;
+                    uint8_t *mb = get_memory_base();
+                    if (mb) return mb[a + calc_aux_read(a)];
+                }
                 uint8_t *mb = get_memory_base();
                 if (mb) return mb[addr24 + calc_aux_read(addr24)];
             }
@@ -301,8 +343,43 @@ class MMU_IIgs : public MMU {
                 if (mb) { mb[((bank & 1) << 16) | (addr24 & 0xFFFF)] = value; return; }
             }
             if (bank <= 0x01) {
+                uint32_t page = (addr24 & 0xFF00) >> 8;
+                // Symmetric with the read side, and refusing for the same reason:
+                // poking a soft switch is throwing it, and poking ROM writes to
+                // the RAM underneath where the CPU will never read it back. A
+                // silently-dropped write that acks success is what probe_poke
+                // was introduced to stop.
+                if (is_iolc_shadowed() && page >= 0xC0 && page <= 0xCF) return;
+                uint32_t a = addr24;
+                if (is_iolc_shadowed() && page >= 0xD0) {
+                    // is_lc_WRITE_enable, not read. The language card has two
+                    // independent enables and the classic $C081-twice setup has
+                    // ROM readable while LC RAM takes writes -- reusing the read
+                    // side here would silently drop every poke in that state,
+                    // which is the exact failure probe_poke exists to prevent.
+                    if (!is_lc_write_enable()) return;      // writes are inhibited
+                    if (is_lc_bank1() && page <= 0xDF) a -= 0x1000;
+                }
+                a += calc_aux_write(a);
+                // bank_shadow_write mirrors shadowed pages into the Mega II
+                // before storing. Skipping it leaves the copy the video scanner
+                // and $E0/$E1 read from holding the OLD byte, so a rail poke
+                // would be half-visible: correct through `read`, stale on screen.
+                //
+                // DIRECTLY, not via megaiiWrite. That helper is the CPU's path
+                // and it EMITS -- slot_emit, bus_trace_note, obs_note, and
+                // set_next_cycle_type(CYCLE_TYPE_SYNC). Calling it from here
+                // would make an observation-free poke change the next
+                // instruction's timing and inject phantom transactions into the
+                // very traces a caller pokes memory in order to study. probe_
+                // peek already reaches the Mega II image this way for $E0/$E1;
+                // this is the write-side twin of that, and nothing else.
+                if (shadow_is_enabled(a)) {
+                    uint8_t *mm = get_megaii_memory_base();
+                    if (mm) mm[a & 0x1FFFF] = value;
+                }
                 uint8_t *mb = get_memory_base();
-                if (mb) { mb[addr24 + calc_aux_write(addr24)] = value; return; }
+                if (mb) { mb[a] = value; return; }
             }
             write_raw(addr24, value);
         }
@@ -313,7 +390,16 @@ class MMU_IIgs : public MMU {
         bool probe_readable(uint32_t addr24) override {
             uint32_t bank = (addr24 >> 16) & 0xFF;
             if ((bank | 1) == 0xE1) return get_megaii_memory_base() != nullptr;
-            if (bank <= 0x01)       return get_memory_base() != nullptr;
+            if (bank <= 0x01) {
+                // Must track probe_peek exactly. It used to claim the whole bank
+                // readable, which is how `read C7FF` came back status=OK holding
+                // RAM from underneath the I/O space: the caller was told the
+                // bytes were real, so it had no reason to doubt them.
+                uint32_t page = (addr24 & 0xFF00) >> 8;
+                if (is_iolc_shadowed() && page >= 0xC0 && page <= 0xCF)
+                    return page > 0xC0 && megaii != nullptr;   // ROM yes, switches no
+                return get_memory_base() != nullptr;
+            }
             return MMU::probe_readable(addr24);
         }
 

@@ -2158,6 +2158,25 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
             else if (!strcmp(rn, "p"))   c->p  = (uint8_t)v;
             else if (!strcmp(rn, "d"))   c->d  = (uint16_t)v;
             else if (!strcmp(rn, "pc"))  c->full_pc = (uint32_t)(v & 0xFFFFFF);
+            // THE EMULATION FLAG, because there was no way to set it and it is
+            // needed constantly. `run <n>` advances n VIDEO FRAMES and leaves the
+            // IIgs ROM wherever it happened to be -- which is NATIVE mode, a
+            // state a 128K Apple II cannot be in. Every harness that splices 6502
+            // code in after a `run` inherits it, and slot firmware called from
+            // there does not survive. The workaround was to poke `38 FB 4C ..`
+            // (SEC / XCE / JMP) and run it, which is three verbs and a scratch
+            // address to express one bit.
+            //
+            // Entering emulation mode does MORE than set the bit: XCE forces M
+            // and X to 1 and truncates the index and stack high bytes. Setting
+            // E alone would leave 16-bit registers live in a mode that has none,
+            // which is not a state the CPU can reach and not one worth being
+            // able to fake. Mirrored from OP_XCE_IMP in base_6502.cpp.
+            else if (!strcmp(rn, "e")) {
+                c->E = (v & 1) ? 1 : 0;
+                if (c->E) { c->x_hi = 0; c->y_hi = 0; c->sp_hi = 0x01;
+                            c->_M = 1;  c->_X = 1; }
+            }
             else ok = false;
             snprintf(result, rsz, ok
                      ? "status=OK setreg %s=$%lX (DELIBERATE splice)"
