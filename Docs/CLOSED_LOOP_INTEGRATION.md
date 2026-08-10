@@ -9,6 +9,11 @@
 > maximal control, observability, and **named understanding** of every answer (cycles,
 > colour profile, memory path, snapshot class). See [`AGENTIC_ORACLE.md`](AGENTIC_ORACLE.md).
 > Live discovery: CTRL verbs `oracle`, `help`, `manifest <file>`.
+>
+> **Multi-consumer (2026-08-10):** the same instrumented surfaces also serve other product
+> trees (a2engine, a2tile, a2os, a2gpu/a2vga, …). Rosetta closed-loop remains the primary
+> mission; product sessions may drive fixes, but rail/device contracts stay general.
+> See [`SHARED_FOUNDATION.md`](SHARED_FOUNDATION.md).
 
 This is the design spec for task #87: make **all** closed-loop work coherently and fully
 integrated into gssquared, refactoring as needed to fulfill all needs.

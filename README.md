@@ -55,6 +55,11 @@ precise diagnostics (toolbox returns, render state, error codes) back to the bui
 toolchain bug shows up immediately as a failed assertion instead of a silent wrong-pixel or a corrupt
 object file. The emulator is the toolchain's regression oracle.
 
+**Shared foundation.** This is not a single-product harness. a2engine, a2tile, a2os, a2gpu/a2vga,
+Rosetta closed-loop work, and interactive use all share the same rail and device contracts. Product
+sessions often drive fixes here; behaviour must stay general. See
+[`Docs/SHARED_FOUNDATION.md`](Docs/SHARED_FOUNDATION.md) (and [`AGENTS.md`](AGENTS.md) for agents).
+
 > Automation is **headless-only**: the `apps/` CPU/MMU test programs pop a GUI dialog when their
 > external test ROMs are absent, so they are never used in automation — the loop drives the main
 > emulator headless (`-n`), and CPU/MMU behavior is checked with small headless micro-tests instead.

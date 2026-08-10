@@ -21,7 +21,7 @@ This is not “more debug prints.” It is a **product definition**.
 | G5 | **Manipulate is deliberate** | Hands (`load`/`poke`/`press`/…) are documented as state-changing; acks label them |
 | G6 | **Observe does not disturb** | Default reads use `probe_peek` / flat image; exceptions are named |
 | G7 | **Dual-mode** | Zero `A2GSPU_*` ⇒ stock windowed emulator; instrumentation never is the default UX tax |
-| G8 | **Platform honesty** | IIe DHGR and IIgs SHR are both first-class oracles, never one pretending to be the other |
+| G8 | **Platform honesty** | IIe DHGR and IIgs SHR are both first-class oracles, never one pretending to be the other. **IIe-focused instrumentation must not regress IIgs** (MMU, banks, native mode, KeyGloo, SHR, ROM size); IIe-green is not ship-green — see [`SHARED_FOUNDATION.md`](SHARED_FOUNDATION.md) |
 
 ---
 
@@ -124,6 +124,7 @@ is still a black box — fix discovery, not the agent.
 
 ## 8. Related docs
 
+- [`SHARED_FOUNDATION.md`](SHARED_FOUNDATION.md) — multi-consumer contract (product-aware, product-agnostic)
 - [`A2GSPU_RAILS.md`](A2GSPU_RAILS.md) — env rail catalog (batch)  
 - [`INSTRUMENTATION_AUDIT.md`](INSTRUMENTATION_AUDIT.md) — first-principles audit of gaps  
 - [`CLOSED_LOOP_INTEGRATION.md`](CLOSED_LOOP_INTEGRATION.md) — Rosetta harness mission  

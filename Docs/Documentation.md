@@ -5,6 +5,12 @@ The ambition for this project is large - and it will take a while to get it done
 Looking for how to use GSSquared?
 [Click here for User Documentation](index.md)
 
+This **fork** also has agent/oracle docs (multi-consumer closed loop):
+
+* [Shared foundation (multi-consumer contract)](SHARED_FOUNDATION.md)
+* [Agentic oracle north star](AGENTIC_ORACLE.md)
+* [Closed-loop integration](CLOSED_LOOP_INTEGRATION.md)
+
 Keep reading for Project Status, Design, and development journals.
 
 * [Project Status](#project-status-as-of-2026-03-10)
