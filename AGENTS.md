@@ -33,8 +33,14 @@ Also required context for instrumentation work:
 4. **IIe work must not break IIgs** (and the reverse). Shared rail/MMU/device
    changes need evidence on **both** platforms. IIe-green alone is not done —
    this regression has already cost real IIgs logic. See SHARED_FOUNDATION and
-   [`Docs/DUAL_PLATFORM.md`](Docs/DUAL_PLATFORM.md). From a2engine run
-   `.\tools\dualsmoke.ps1` after shared rail work.
+   [`Docs/DUAL_PLATFORM.md`](Docs/DUAL_PLATFORM.md). After shared rail work run:
+
+   ```powershell
+   .\tools\a2rail\dualsmoke.ps1
+   ```
+
+   (Portable instrument harness — no a2engine clone required. Full device net:
+   a2engine `.\tools\gscheck.ps1`.)
 5. Dual-mode: instrumentation env-gated off by default; do not break windowed UX.
 6. New verbs/rails must be discoverable (`help` / `manifest`).
 7. Prefer foundation-local regression; product suites are clients, not owners.

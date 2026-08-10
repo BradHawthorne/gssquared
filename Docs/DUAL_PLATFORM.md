@@ -24,16 +24,19 @@ unless the code is sealed behind an explicit IIe-only or IIgs-only branch.
 
 ## What to run
 
-From the **a2engine** tree (hosts the current instrument suites):
+**From this fork** (portable DualSmoke — FOUNDATION_MILESTONES M9):
 
 ```powershell
-.\tools\dualsmoke.ps1
+.\tools\a2rail\dualsmoke.ps1
 ```
 
 That runs offline ctest plus railcheck / execcheck / altzpcheck on **both**
-platforms. Full depth remains:
+platforms. See `tools/a2rail/README.md` and `tools/a2rail/SUITES.md`.
+
+**From a2engine** (same DualSmoke + full device net):
 
 ```powershell
+.\tools\dualsmoke.ps1
 .\tools\gscheck.ps1
 ```
 
