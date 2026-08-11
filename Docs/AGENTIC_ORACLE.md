@@ -60,6 +60,11 @@ Black-box anti-patterns (forbidden):
 | **Env rails** | Arm traces/watch/assert | catalogued in RAILS; `manifest` lists groups |
 | **Windowed co-pilot** | Human drives, agent reads | observe verbs work without `-n` |
 
+Windowed co-pilot uses `A2GSPU_COPILOT=<dir>`, a read-only `cmd.N`/`ack.N`
+rail polled on the SDL frame thread. It deliberately refuses mutation rather
+than racing the human or accessing machine state from a worker thread. Live
+contract: `copilot`. Full takeover remains `A2GSPU_CTRL` and is headless.
+
 ---
 
 ## 4. Capability maturity model
@@ -116,9 +121,18 @@ Agents must pick a model. Toolchain recipes pin models in scripts.
 | `help <file>` | full verb catalog written to file |
 | `manifest <file>` | machine-oriented capability dump (verbs + env groups + models + contracts) |
 | `oracle` | one-screen north-star + cycle/colour rules |
+| `protocol` | version/framing/ownership/JSON contract |
+| `systems [file]` | running binary's platform/config/ROM/device inventory |
+| `limitations [file]` | machine-readable known fidelity gaps |
 
 If an agent cannot discover a capability without reading this repo, that capability
 is still a black box — fix discovery, not the agent.
+
+The contract is deliberately agent-vendor-neutral: atomic files, UTF-8 text,
+JSON/NDJSON, numeric exit codes, and host paths only. ChatGPT/Codex, Grok, and
+Claude Code can all negotiate `protocol`, consume `json <command>`, and retain
+the `a2rail-event-v1` transcript without a proprietary SDK or prompt-specific
+parser. Human-readable replies remain useful diagnostics, not the sole API.
 
 ---
 

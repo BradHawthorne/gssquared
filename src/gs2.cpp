@@ -61,6 +61,7 @@
 #include "a2gspu_png.hpp"       // CTRL `png` / `pngc`: HGR/DHGR agent-readable PNG
 #include "a2gspu_dhgr.hpp"      // discrete DHGR 4-dot colour + profile export
 #include "a2gspu_manifest.hpp"
+#include "a2gspu_ctrl_json.hpp"
 #include "a2gspu_ctrl_cmds.hpp"  // extracted CTRL verb families
   // help/manifest/oracle — no black boxes
 #include "display/filters.hpp"  // generate_filters for dhgr-export NTSC LUT
@@ -1792,6 +1793,11 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
         while (n > 0 && (line[n-1] == '\r')) line[--n] = 0;  // strip trailing CR only
         // strip trailing LF so "help\n" matches
         while (n > 0 && (line[n-1] == '\n')) line[--n] = 0;
+        bool json_reply = !strncmp(line, "json ", 5) && line[5];
+        if (json_reply) {
+            memmove(line, line + 5, strlen(line + 5) + 1);
+            n = strlen(line);
+        }
         snprintf(result, sizeof result, "status=OK");
         // ---- extracted families (a2gspu_ctrl_cmds.hpp) ----
         if (a2ctrl::try_meta(line, result, sizeof result)) {
@@ -2361,7 +2367,8 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 snprintf(result, sizeof result, "status=FAIL vid-no-scanner");
             }
         } else if (!strncmp(line, "quit", 4)) {
-            a2gspu_ctrl_ack(dir, seq, "status=OK quit");
+            if (json_reply) a2gspu_ctrl_ack(dir, seq, "{\"schema\":\"a2ctrl-reply-v2\",\"ok\":true,\"command\":\"quit\",\"text\":\"status=OK quit\"}");
+            else a2gspu_ctrl_ack(dir, seq, "status=OK quit");
             printf("A2GSPU CTRL: session ended after %d command(s)\n", seq);
             return;
         } else {
@@ -2403,9 +2410,37 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                          first);
             }
         }
-        a2gspu_ctrl_ack(dir, seq, result);
+        if (json_reply) {
+            char json[16384]; a2ctrljson::format(json,sizeof json,line,result);
+            a2gspu_ctrl_ack(dir, seq, json);
+        } else a2gspu_ctrl_ack(dir, seq, result);
         seq++;
     }
+}
+
+// Windowed co-pilot telemetry. Unlike A2GSPU_CTRL this never takes over the
+// frame loop and never runs on a worker thread: one read-only command is polled
+// after each normal frame, on the same SDL thread that owns the machine.
+static void a2gspu_copilot_poll(computer_t *computer) {
+    const char *dir = SDL_getenv("A2GSPU_COPILOT");
+    if (!dir || !*dir || !computer) return;
+    static int seq = 1;
+    char path[1024]; snprintf(path,sizeof path,"%s/cmd.%d",dir,seq);
+    FILE *f=fopen(path,"rb"); if(!f) return;
+    char line[2048]={0}, result[8192]={0};
+    size_t n=fread(line,1,sizeof line-1,f); fclose(f);
+    while(n && (line[n-1]=='\r'||line[n-1]=='\n')) line[--n]=0;
+    bool handled=false;
+    if (!strcmp(line,"protocol") || !strcmp(line,"systems") || !strncmp(line,"systems ",8) ||
+        !strncmp(line,"manifest ",9) || !strcmp(line,"limitations") || !strncmp(line,"limitations ",12) || !strcmp(line,"help") || !strncmp(line,"help ",5) ||
+        !strcmp(line,"oracle") || !strcmp(line,"copilot"))
+        handled=a2ctrl::try_meta(line,result,sizeof result);
+    else if (!strcmp(line,"cpu")) handled=a2ctrl::try_cpu(line,result,sizeof result,computer);
+    else if (!strncmp(line,"read ",5)) handled=a2ctrl::try_regs(line,result,sizeof result,computer);
+    else if (!strncmp(line,"assert ",7)) handled=a2ctrl::try_assert_dhgr(line,result,sizeof result,computer);
+    else if (!strncmp(line,"png ",4)||!strncmp(line,"pngc ",5)) handled=a2ctrl::try_visual(line,result,sizeof result,computer);
+    if(!handled) snprintf(result,sizeof result,"status=FAIL copilot-read-only command-not-allowed use='copilot'");
+    a2gspu_ctrl_ack(dir,seq,result); seq++;
 }
 
 // A2GSPU_OUT_DIR: parallel-safe output relocation. When set, the fixed-name
@@ -3684,6 +3719,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 return SDL_APP_SUCCESS;
             }
         }
+        a2gspu_copilot_poll(computer);
         return SDL_APP_CONTINUE;
     }
 

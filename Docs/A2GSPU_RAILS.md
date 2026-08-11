@@ -178,10 +178,17 @@ golden/assert-gate-driven (`0`/`1`) for harness compatibility; `status` is the r
 
 ## CTRL rail — the interactive `cmd.N`→`ack.N` protocol
 
+`ctl.ps1 -Report <file.ndjson>` (or `A2RAIL_REPORT`) records every issued,
+acknowledged, refused, or stalled transaction as `a2rail-event-v1`, including
+sequence, session PID/owner, exact command/reply, timestamp, and host latency.
+This is the forensic transcript for long agent runs; `cmd.N`/`ack.N` remain the
+protocol authority.
+
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
 | `A2GSPU_CTRL=<dir>` | enable the interactive stepping rail: 20 Hz poll of `<dir>/cmd.N`, atomic `<dir>/ack.N` reply; replaces the fixed-frame spike. Also forces headless when set | CTRL | env |
 | `A2GSPU_CTRL_TIMEOUT=<s>` | idle timeout in seconds before an orphaned session quits (default 300) | CTRL | env |
+| `A2GSPU_COPILOT=<dir>` | windowed, read-only telemetry rail; human input stays active | co-pilot | env |
 
 **Verbs** (one per `cmd.N`; reply text lands in `ack.N`), verified in `a2gspu_ctrl_loop`:
 
@@ -227,6 +234,10 @@ golden/assert-gate-driven (`0`/`1`) for harness compatibility; `status` is the r
 | `tbtrace on\|off\|bank` | LIVE toolbox/GSOS dispatch trace | CTRL-verb (trace) |
 | `callstream on <file>` / `off` / `status` | LIVE NDJSON toolbox/GSOS call stream | CTRL-verb (trace) |
 | `key` | inject key + wait for consume receipt | CTRL-verb (manipulate) |
+| `protocol` | CTRL v2 framing, ownership and `json <command>` reply wrapper | CTRL-verb (meta) |
+| `systems [file]` | platform/configuration/ROM/slot-device inventory | CTRL-verb (meta) |
+| `limitations [file]` | known unsupported or partial fidelity surfaces | CTRL-verb (meta) |
+| `shr-golden <file> [bless]` | live IIgs SHR-window golden without relaunch | CTRL-verb (calibrate) |
 
 **Cycle contract:** only `cycles=` on `run` / `step` / `run-until` acks are valid timing.
 Never subtract two standalone `cycles` acks across other commands. See AGENTIC_ORACLE.md.

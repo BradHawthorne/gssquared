@@ -17,6 +17,7 @@
 
 #pragma once
 
+
 #include "PlatformIDs.hpp"
 #include "Device_ID.hpp"
 #include "NClock.hpp"
@@ -52,3 +53,7 @@ SystemConfig_t *get_system_config(int index);
 // command-line `-p PLATFORM` auto-launch path so we can pick a system
 // without going through the SelectSystem UI.
 int find_first_system_for_platform(int platform_id);
+
+// Stable agent-facing inventory. Kept out of a2gspu_manifest.hpp so adding
+// discovery does not grow the already-large optimized gs2.cpp translation unit.
+bool write_system_manifest(const char *path);

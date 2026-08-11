@@ -28,10 +28,13 @@ unless the code is sealed behind an explicit IIe-only or IIgs-only branch.
 
 ```powershell
 .\tools\a2rail\dualsmoke.ps1
+.\tools\a2rail\personalitycheck.ps1
 ```
 
 That runs offline ctest plus railcheck / execcheck / altzpcheck on **both**
 platforms. See `tools/a2rail/README.md` and `tools/a2rail/SUITES.md`.
+The personality gate is the broader cold-start/configuration bar: it exercises
+every built-in system configuration across all six implemented platform IDs.
 
 **From a2engine** (same DualSmoke + full device net):
 

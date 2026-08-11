@@ -17,6 +17,7 @@
 
 #include "gs2.hpp"
 #include "systemconfig.hpp"
+#include "platforms.hpp"
 #include "devices/displaypp/VideoScanner.hpp"
 #include "devices.hpp"
 
@@ -461,4 +462,32 @@ int find_first_system_for_platform(int platform_id) {
         }
     }
     return -1;
+}
+
+bool write_system_manifest(const char *path) {
+    if (!path || !path[0]) return false;
+    FILE *f = fopen(path, "wb");
+    if (!f) return false;
+    fprintf(f, "# a2gspu systems manifest\n");
+    fprintf(f, "schema\ta2systems-v1\n");
+    fprintf(f, "platform_count\t%d\n", num_platforms);
+    for (int i = 0; i < num_platforms; ++i) {
+        platform_info *p = get_platform(i);
+        if (!p) continue;
+        fprintf(f, "platform\tid=%d\tname=%s\trom_dir=%s\tprocessor=%d\tmmu=%d\n",
+                i, p->name, p->rom_dir, (int)p->cpu_type, (int)p->mmu_type);
+    }
+    fprintf(f, "config_count\t%d\n", NUM_SYSTEM_CONFIGS);
+    for (int i = 0; i < NUM_SYSTEM_CONFIGS; ++i) {
+        SystemConfig_t *s = get_system_config(i);
+        platform_info *p = get_platform((int)s->platform_id);
+        const char *rom = (s->rom_dir && s->rom_dir[0]) ? s->rom_dir : (p ? p->rom_dir : "-");
+        fprintf(f, "config\tid=%d\tplatform=%d\tname=%s\trom_dir=%s\tscanner=%d\tclock=%d\tbuiltin=%d",
+                i, (int)s->platform_id, s->name, rom, (int)s->scanner_type,
+                (int)s->clock_set, s->builtin ? 1 : 0);
+        for (int slot = 0; slot < NUM_SLOTS; ++slot) fprintf(f, "\tslot%d=%d", slot, (int)s->slot_devices[slot]);
+        fprintf(f, "\n");
+    }
+    fclose(f);
+    return true;
 }

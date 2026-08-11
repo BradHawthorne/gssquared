@@ -21,14 +21,48 @@
 param(
   [Parameter(Mandatory=$true)][string]$Cmd,
   [string]$Dir = $(if ($env:A2RAIL_DIR) { $env:A2RAIL_DIR } else { Join-Path $env:TEMP 'a2rail' }),
+  [string]$Owner = "",
+  [string]$Report = $(if ($env:A2RAIL_REPORT) { $env:A2RAIL_REPORT } else { "" }),
   [int]$TimeoutMs = 180000
 )
+
+$started = [DateTime]::UtcNow
+function Write-RailEvent([string]$event, [hashtable]$fields = @{}) {
+  if (-not $Report) { return }
+  $row = [ordered]@{
+    schema = 'a2rail-event-v1'; event = $event
+    timestamp_utc = [DateTime]::UtcNow.ToString('o')
+    duration_ms = [int]([DateTime]::UtcNow - $started).TotalMilliseconds
+    ctrl = $Dir; owner = $Owner
+  }
+  foreach ($key in $fields.Keys) { $row[$key] = $fields[$key] }
+  $parent = Split-Path $Report -Parent
+  if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+  Add-Content -LiteralPath $Report -Value ($row | ConvertTo-Json -Compress -Depth 5) -Encoding utf8
+}
+
+$sessionFile = Join-Path $Dir 'session.json'
+$session = $null
+if (Test-Path $sessionFile) {
+  try { $session = Get-Content $sessionFile -Raw | ConvertFrom-Json } catch {
+    "[--] INVALID SESSION METADATA: $sessionFile"
+    exit 2
+  }
+}
+if ($Owner -and $session -and $session.owner -ne $Owner) {
+  Write-RailEvent 'refused' @{ reason='owner-mismatch'; session_owner=$session.owner; command=$Cmd }
+  "[--] OWNER MISMATCH: requested=$Owner session=$($session.owner); command not issued."
+  exit 3
+}
 
 # A dead session cannot ever ack, so waiting the full timeout for one only delays
 # the diagnosis. The rail quits itself on A2GSPU_CTRL_TIMEOUT idle seconds, which
 # is easy to trip while reading code between commands -- and the symptom was a
 # silent 120s stall that looked like a hung emulator rather than an absent one.
 function Test-SessionAlive {
+  if ($session -and $session.pid) {
+    return [bool](Get-Process -Id ([int]$session.pid) -ErrorAction SilentlyContinue)
+  }
   return [bool](Get-Process -Name GSSquared -ErrorAction SilentlyContinue)
 }
 
@@ -42,6 +76,7 @@ function Wait-Ack([string]$path, [int]$ms) {
 }
 
 if (-not (Test-SessionAlive)) {
+  Write-RailEvent 'refused' @{ reason='no-session'; command=$Cmd }
   "[--] NO SESSION: GSSquared is not running. Start one with tools\session.ps1"
   "     (the rail self-quits after A2GSPU_CTRL_TIMEOUT idle seconds)."
   exit 2
@@ -58,6 +93,7 @@ if ($seq -gt 1) {
   $prev = Join-Path $Dir ("ack." + ($seq - 1))
   if (-not (Test-Path $prev)) {
     if (-not (Wait-Ack $prev $TimeoutMs)) {
+      Write-RailEvent 'stalled' @{ sequence=($seq-1); reason='previous-command'; command=$Cmd }
       "[--] STALLED: cmd.$($seq-1) has not acked; not issuing '$Cmd'."
       "     Session is still consistent -- re-run this command to keep waiting."
       exit 1
@@ -79,11 +115,15 @@ if ($seq -gt 1) {
 $tmp = Join-Path $Dir "cmd.$seq.tmp"
 Set-Content -Path $tmp -Value $Cmd -NoNewline
 Move-Item -Path $tmp -Destination (Join-Path $Dir "cmd.$seq") -Force
+Write-RailEvent 'issued' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); command=$Cmd }
 $ack = Join-Path $Dir "ack.$seq"
 if (Wait-Ack $ack $TimeoutMs) {
+  $reply = (Get-Content $ack -Raw).Trim()
+  Write-RailEvent 'ack' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); command=$Cmd; reply=$reply }
   "[$seq] $Cmd"
-  "     -> " + (Get-Content $ack -Raw).Trim()
+  "     -> " + $reply
 } else {
+  Write-RailEvent 'stalled' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); reason='ack-timeout'; command=$Cmd }
   "[$seq] $Cmd"
   "     -> STALL after ${TimeoutMs}ms. Command IS queued and will complete;"
   "        the next invocation drains it before issuing anything new."

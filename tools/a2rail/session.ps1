@@ -32,6 +32,7 @@ param(
     # -p alone can never reach any of them but the first. -1 keeps the old
     # behaviour exactly.
     [int]   $Config   = -1,
+    [string]$Owner    = ([guid]::NewGuid().ToString('N')),
     # FOUNDATION_MILESTONES M1: fail if gssquared sources look newer than the exe.
     [switch]$StrictTools
 )
@@ -56,9 +57,10 @@ if (Test-Path $Dir) {
 $env:A2GSPU_CTRL         = $Dir
 $env:A2GSPU_CTRL_TIMEOUT = "$TimeoutS"
 
-# libstdc++-6.dll and friends live here; without it the process dies with
-# STATUS_DLL_NOT_FOUND before printing anything at all.
-$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+# libstdc++-6.dll and friends must be discoverable before launch. Keep this in
+# one shared preflight so ctest, personality gates and sessions cannot drift.
+. (Join-Path $PSScriptRoot "runtime.ps1")
+$null = Initialize-A2RailRuntime
 
 . (Join-Path $PSScriptRoot "toolpin.ps1")
 if (-not $Exe) { $Exe = Get-GSSquaredExe }
@@ -83,10 +85,22 @@ if ($Config -ge 0) { $launchArgs += @("-c", "$Config") }
 # discoverable from the rail at all. Pinning it to the session directory puts
 # every emulator-produced artifact next to the session log, with the rest of the
 # evidence.
-Start-Process -FilePath $Exe -ArgumentList $launchArgs -WorkingDirectory $Dir `
+$proc = Start-Process -FilePath $Exe -ArgumentList $launchArgs -WorkingDirectory $Dir `
               -RedirectStandardOutput $log `
               -RedirectStandardError (Join-Path $Dir "session.err") `
-              -WindowStyle Hidden
+              -WindowStyle Hidden -PassThru
+
+@{
+    schema = "a2rail-session-v1"
+    protocol = 2
+    owner = $Owner
+    pid = $proc.Id
+    exe = $Exe
+    platform = $Platform
+    config = $Config
+    ctrl = $Dir
+    started_utc = [DateTime]::UtcNow.ToString('o')
+} | ConvertTo-Json | Set-Content (Join-Path $Dir 'session.json') -Encoding utf8
 
 Write-Host "CTRL rail: $Dir"
 Write-Host "log:       $log"
@@ -113,6 +127,14 @@ for ($i = 0; $i -lt 120; $i++) {          # 30s: ROM load and video init take a 
         Write-Host ("  " + (Get-Content $ack -Raw).Trim())
         exit 0
     }
+    if ($proc.HasExited) {
+        $err = Join-Path $Dir 'session.err'
+        $tail = if (Test-Path $err) { (Get-Content $err -Tail 20) -join "`n" } else { '<no stderr>' }
+        Write-Host ("rail process exited before readiness: pid={0} exit={1}`n{2}" -f `
+                    $proc.Id, $proc.ExitCode, $tail) -ForegroundColor Red
+        exit 1
+    }
 }
-Write-Host "rail did not answer within 30s -- check $log" -ForegroundColor Yellow
+Write-Host ("rail did not answer within 30s: pid={0} alive={1} log={2}" -f `
+           $proc.Id, (-not $proc.HasExited), $log) -ForegroundColor Yellow
 exit 1

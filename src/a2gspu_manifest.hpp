@@ -7,6 +7,7 @@
 #pragma once
 #include <cstdio>
 #include <cstring>
+#include "systemconfig.hpp"
 
 namespace a2manifest {
 
@@ -55,6 +56,7 @@ inline const char *verb_when(const char *name) {
         {"boot",       "enter a SLOT's firmware at $Cs00 the way autoboot would -- for a block device the ROM's own autoboot cannot reach"},
         {"bp",         "stop at a PC you can name. A hit HALTS -- pair with resume or run/step"},
         {"callstream", "capture toolbox/GS-OS calls as NDJSON while software runs (toolbox ABI work)"},
+        {"copilot",    "discover the read-only windowed telemetry rail used while a human drives the emulator"},
         {"cov",        "which addresses executed AT ALL -- dead code, unreached branches, coverage of a run"},
         {"cpu",        "registers and halt state. The first thing to read when execution went somewhere unexpected"},
         {"cycles",     "the machine's clock rate, before trusting any timing a test assumes"},
@@ -65,9 +67,11 @@ inline const char *verb_when(const char *name) {
         {"holdkey",    "hold a IIgs key DOWN across a boot (Open-Apple style options) rather than tapping it"},
         {"iolog",      "the ordered $C0xx ring: WHICH soft switches were touched, in what order, read vs write"},
         {"itrace",     "a live per-instruction trace from a chosen PC. Heavier than tbuf; use for a whole path"},
+        {"json",       "wrap any command reply in a stable JSON envelope for agents that must not scrape human-oriented text"},
         {"key",        "inject one keystroke headlessly"},
         {"keys",       "inject a string headlessly -- typing a command line with no keyboard"},
         {"load",       "write a host file into guest memory, including aux as bank 01"},
+        {"limitations","enumerate known fidelity gaps from the running binary so unsupported hardware cannot be mistaken for working"},
         {"manifest",   "the full machine-readable capability record, for a client discovering this rail cold"},
         {"mount",      "swap media at runtime. FAILS on a missing path and does not eject the current disk to find out"},
         {"oracle",     "the contracts governing every other verb. Read FIRST -- especially the cycles= rule"},
@@ -75,6 +79,7 @@ inline const char *verb_when(const char *name) {
         {"pbutton",    "press a game-controller button headlessly"},
         {"png",        "pixel capture of a graphics page"},
         {"pngc",       "pixel-exact COLOUR capture against a named profile -- this is the art oracle, not shot"},
+        {"protocol",   "negotiate the stable CTRL contract and discover the JSON reply wrapper before parsing other acknowledgements"},
         {"poke",       "write bytes at an address. The fastest way to plant a stub and drive it"},
         {"press",      "press a key with modifiers held, where a bare key injection is not enough"},
         {"quit",       "end the session. A suite that does not is a paused machine that reads as a hang"},
@@ -91,9 +96,11 @@ inline const char *verb_when(const char *name) {
         {"save",       "take a Class A snapshot before an experiment you expect to be destructive"},
         {"screen",     "text-page helper"},
         {"session",    "starting or ending a suite. Ask what is armed before trusting a measurement; reset before handing the machine on, or the next run inherits your probes"},
+        {"systems",    "enumerate every platform, built-in configuration, ROM personality and numeric slot-device map from the running binary"},
         {"setreg",     "set PC or a register before running a stub"},
         {"shot",       "an SDL backbuffer BMP for a HUMAN to look at. Never an art oracle -- use pngc"},
         {"shr",        "SHR framebuffer observation on a IIgs"},
+        {"shr-golden", "bless or compare the live IIgs SHR memory window without relaunching into SPIKE mode"},
         {"speaker",    "$C030 toggle counts and their timing -- proves the speaker moved and when"},
         {"stack",      "stack contents. Read this when a runaway wound SP down and you need to know from where"},
         {"step",       "execute N instructions. cycles= is IN-COMMAND and must not be subtracted across acks"},
@@ -119,6 +126,7 @@ inline const Verb *verbs(int *count) {
         {"boot", "run", "boot <slot> — enter slot firmware at $Cs00 (slot 1-7), as autoboot would", "enter-slot-firmware"},
         {"bp", "manipulate", "bp [addr|off] — interactive breakpoint; bare reports state. A hit halts; run/step/resume continue past it", "force-control"},
         {"callstream", "trace", "callstream on <file>|off|status — LIVE NDJSON toolbox stream", "tool_locator"},
+        {"copilot", "meta", "copilot — windowed read-only rail contract (A2GSPU_COPILOT)", "discover"},
         {"cov", "observe", "cov [status] | cov on <LO-HI|BANK:LO-HI> | cov off | cov reset | cov write <file> — execution coverage", "coverage"},
         {"cpu", "observe", "cpu — PBR:PC A X Y SP P E HALT STP RDY KBD AKD", "cpu-state"},
         {"cycles", "observe", "cycles — guest cycle counter NOW (absolute). "
@@ -134,9 +142,11 @@ inline const Verb *verbs(int *count) {
         {"holdkey", "manipulate", "holdkey <hex> — sticky IIgs hold key", "inject-key"},
         {"iolog", "observe", "iolog [on [cap]|off|dump <f>|reset] — $C0xx R/W ring", "io-trace"},
         {"itrace", "trace", "itrace from <pc>|now|n <c>|clear|status — LIVE per-instr trace", "execute"},
+        {"json", "meta", "json <command> — execute any CTRL command and wrap its reply as a2ctrl-reply-v2 JSON", "structured-reply"},
         {"key", "manipulate", "key <hex> [maxf] — inject key and wait for consume receipt", "inject-key"},
         {"keys", "manipulate", "keys <str> — paste buffer (no consume proof)", "inject-key"},
         {"load", "manipulate", "load <addr> <file> — splice binary into RAM via mmu->write", "inject-ram"},
+        {"limitations", "meta", "limitations [file] — machine-readable known fidelity gaps and status", "discover"},
         {"manifest", "meta", "manifest <file> — full capability dump for agents", "discover"},
         {"mount", "manipulate", "mount sXdY <path> — runtime media swap", "inject-media"},
         {"oracle", "meta", "oracle — north-star contracts (cycles/colour/snapshot)", "discover"},
@@ -147,8 +157,10 @@ inline const Verb *verbs(int *count) {
         {"pbutton", "manipulate", "pbutton <0-2> <0|1> — game switch PB0-PB2 ($C061-$C063)", "force-control"},
         {"png", "observe", "png <file> [page] [scale] [auto|hgr|dhgr] — mono dots from RAM", "bits-mono"},
         {"pngc", "observe", "pngc <file> [page] [scale] [4dot|mono] — named colour PNG", "colour-4dot"},
+        {"protocol", "meta", "protocol — CTRL version, framing, ownership and json-wrapper contract", "discover"},
         {"poke", "manipulate", "poke [bank:]<addr> <hexbytes...> — write bytes (labeled splice)", "inject-ram"},
         {"shr", "observe", "shr <file> [scale] — IIgs super hi-res as PNG; 320 or 640 per-line by SCB", "shr-linear"},
+        {"shr-golden", "calibrate", "shr-golden <file> [bless] — live FNV of $E1:2000-$9FFF", "shr-window"},
         {"press", "manipulate", "press <hex> [hold] — physical key edge (no consume proof)", "inject-key"},
         {"quit", "run", "quit — end CTRL session", "-"},
         {"rail", "meta", "rail list|env-only — discover env rails still launch-only (L4 gap)", "discover"},
@@ -165,6 +177,7 @@ inline const Verb *verbs(int *count) {
         {"speaker", "observe", "speaker — $C030 toggle count and c14m stamp of the last one; sound is WHEN, not whether", "speaker-toggles"},
         {"stack", "observe", "stack [n] — bytes above SP bank0", "cpu-state"},
         {"step", "run", "step [n] — execute N instructions; cycles= IN-COMMAND", "cycles-in-cmd"},
+        {"systems", "meta", "systems [file] — list platform/config/ROM/device maps; file form is TSV", "discover"},
         {"tbtrace", "trace", "tbtrace on|off|status|bank <hex>|all — LIVE toolbox/GSOS trace", "tool_locator"},
         {"tbuf", "trace", "tbuf [status]|on|off|clear|dump <file> [n] — CPU trace ring: per-instruction regs, effective address and R/W", "instr-ring"},
         {"text", "observe", "text <file> — text page main+aux dump", "text-page"},
@@ -219,6 +232,7 @@ inline void write_manifest(FILE *f) {
     fprintf(f, "assert: ASSERT GOLDEN\n");
     fprintf(f, "determinism: SEED FAKETIME RAMDISK\n");
     fprintf(f, "ctrl: CTRL CTRL_TIMEOUT\n");
+    fprintf(f, "copilot: COPILOT (windowed read-only cmd.N/ack.N)\n");
     fprintf(f, "\n## env_only_rationale\n");
     fprintf(f, "# High-volume traces arm at launch; CTRL parity is the roadmap (AGENTIC_ORACLE L4).\n");
     fprintf(f, "env-only-today: GOLDEN(SPIKE SHR/HGR) DHGR_GOLDEN(SPIKE) SPIKE_* ASSERT(env)\n");
@@ -286,6 +300,16 @@ inline void write_env_only_rails(FILE *f) {
     fprintf(f, "#   dhgr-golden -> same hash as A2GSPU_DHGR_GOLDEN (live mid-session)\n");
     fprintf(f, "#   load/poke/setreg -> live inject-ram\n");
     fprintf(f, "#   A2GSPU_LOAD -> SPIKE multi-file bank inject (IIe tiles.bin@6000)\n");
+}
+
+inline void write_limitations(FILE *f) {
+    fprintf(f,"# a2gspu known limitations\n");
+    fprintf(f,"schema\ta2limitations-v1\n");
+    fprintf(f,"limitation\tid=adb-receive-bytes\tcomponent=ADB\tcommand=$48\tstatus=unimplemented\treason=argument-and-response-contract-unverified\trisk=command-stream-desync\n");
+    fprintf(f,"limitation\tid=w5100-pppoe\tcomponent=Uthernet-II\tstatus=unimplemented\tregisters=accepted-readable\tsession=none\n");
+    fprintf(f,"capability\tid=w5100-listen\tcomponent=Uthernet-II\tstatus=implemented\tgate=listencheck\n");
+    fprintf(f,"limitation\tid=vidhd\tcomponent=VidHD\tstatus=detection-only\tfunctionality=none\n");
+    fprintf(f,"limitation\tid=prodos-block-dead\tcomponent=prodos_block\tstatus=not-in-any-build-config\n");
 }
 
 inline void format_rail_ack(char *buf, size_t bufsz) {

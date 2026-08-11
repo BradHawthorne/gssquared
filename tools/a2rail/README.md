@@ -11,9 +11,20 @@ From the gssquared repo root (or any cwd):
 ```powershell
 .\tools\a2rail\dualsmoke.ps1
 .\tools\a2rail\dualsmoke.ps1 -SkipOffline
+.\tools\a2rail\personalitycheck.ps1
+.\tools\a2rail\protocolcheck.ps1
+.\tools\a2rail\copilotcheck.ps1
 ```
 
+Pass `-Report trace.ndjson` to `ctl.ps1`, or set `A2RAIL_REPORT`, to retain a
+machine-readable event for every command, acknowledgement, refusal, and stall.
+The a2engine `gscheck -Report ...` orchestrator enables this automatically in a
+sibling `.rail.ndjson` file, exposing progress inside long opcode sweeps.
+
 Requires a built `build\GSSquared.exe` (or `GSSQUARED_ROOT` / `A2_GSSQUARED`).
+On Windows, `runtime.ps1` discovers the UCRT DLL directory from
+`A2GSPU_UCRT_BIN`, `MSYS2_ROOT`, or `C:\msys64\ucrt64\bin` and fails with an
+actionable message instead of the opaque `0xC0000135` process exit.
 
 ## What runs
 
@@ -23,6 +34,15 @@ Requires a built `build\GSSquared.exe` (or `GSSQUARED_ROOT` / `A2_GSSQUARED`).
 | railcheck | 3 and 5 |
 | execcheck | 3 and 5 |
 | altzpcheck | 3 and 5 |
+| personalitycheck | all 15 built-in configurations across platforms 0–5 |
+| protocolcheck | protocol v2, systems discovery, JSON replies, ownership, live SHR golden |
+| copilotcheck | normal windowed loop + read-only telemetry + mutation refusal |
+
+`personalitycheck.ps1` cold-starts every built-in machine, requires a valid
+`cpu` acknowledgement, shuts it down, and writes a durable JSON ledger to
+`$TEMP\a2rail-personalities\personality-results.json`. This covers the base
+Apple II/Plus/IIe families plus PAL, mouse, dual Mockingboard, IIe/65816,
+IIgs Disk II, A2GSPU, Uthernet II, ROM 3, ROM 4, and Thunderclock variants.
 
 Full device net remains in **a2engine** `tools\gscheck.ps1` (see `SUITES.md`).
 

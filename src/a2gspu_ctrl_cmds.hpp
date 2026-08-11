@@ -1012,6 +1012,22 @@ inline bool try_visual(const char *line, char *result, size_t rsz, computer_t *c
 
 // ---- meta: oracle / help / manifest / rail ---------------------------------
 inline bool try_meta(const char *line, char *result, size_t rsz) {
+    if (!strcmp(line, "copilot")) {
+        snprintf(result, rsz, "status=OK copilot transport=atomic-files mode=windowed-read-only thread=SDL-frame commands=protocol,systems,manifest,help,oracle,cpu,read,assert,png,pngc");
+        return true;
+    }
+    if (!strcmp(line, "protocol")) {
+        snprintf(result, rsz,
+                 "status=OK protocol version=2 transport=atomic-files sequence=strict ownership=session-json replies=text json_wrapper='json <command>' schemas=a2systems-v1,a2suite-event-v1");
+        return true;
+    }
+    if (!strcmp(line,"limitations") || !strncmp(line,"limitations ",12)) {
+        const char *path=line[11]?line+12:nullptr; while(path&&*path==' ')path++;
+        if(!path||!*path) snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 known=4 capabilities=1 use='limitations <file>'");
+        else { FILE *lf=fopen(path,"wb"); if(!lf)snprintf(result,rsz,"status=FAIL limitations-open-fail %s",path);
+            else {a2manifest::write_limitations(lf);fclose(lf);snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 wrote %s",path);} }
+        return true;
+    }
     if (!strcmp(line, "oracle") || !strncmp(line, "oracle ", 7)) {
         snprintf(result, rsz, "%s", a2manifest::oracle_banner());
         return true;
@@ -1046,6 +1062,21 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
                 a2manifest::write_manifest(mf);
                 fclose(mf);
                 snprintf(result, rsz, "status=OK manifest wrote %s", path);
+            }
+        }
+        return true;
+    }
+    if (!strcmp(line, "systems") || !strncmp(line, "systems ", 8)) {
+        const char *path = line[7] ? line + 8 : nullptr;
+        while (path && *path == ' ') path++;
+        if (!path || !*path) {
+            snprintf(result, rsz, "status=OK systems schema=a2systems-v1 platforms=%d configs=%d use='systems <file>'",
+                     num_platforms, NUM_SYSTEM_CONFIGS);
+        } else {
+            if (!write_system_manifest(path)) snprintf(result, rsz, "status=FAIL systems-open-fail %s", path);
+            else {
+                snprintf(result, rsz, "status=OK systems schema=a2systems-v1 platforms=%d configs=%d wrote %s",
+                         num_platforms, NUM_SYSTEM_CONFIGS, path);
             }
         }
         return true;
@@ -1372,6 +1403,31 @@ inline bool try_assert_dhgr(const char *line, char *result, size_t rsz,
                      "got=%016llX want=%016llX",
                      pname, page, (unsigned long long)h, old);
         }
+        return true;
+    }
+    if (!strncmp(line, "shr-golden ", 11)) {
+        char fbuf[512] = {0}, mode[32] = {0};
+        int narg = sscanf(line + 11, "%511s %31s", fbuf, mode);
+        if (narg < 1 || !fbuf[0]) { snprintf(result, rsz, "status=FAIL shr-golden-need-file"); return true; }
+        if (!computer || !computer->platform || computer->platform->id != PLATFORM_APPLE_IIGS) {
+            snprintf(result, rsz, "status=FAIL shr-golden-platform requires=Apple-IIgs"); return true;
+        }
+        uint64_t h = HOUSE_FNV_BASIS;
+        for (uint32_t a = 0xE12000; a < 0xE1A000; ++a) {
+            h ^= rail_mmu(computer)->probe_peek(a); h *= HOUSE_FNV_PRIME;
+        }
+        unsigned long long old = 0; bool missing = false;
+        FILE *gf = fopen(fbuf, "rb");
+        if (!gf) missing = true;
+        else { if (fscanf(gf, "%llx", &old) != 1) missing = true; fclose(gf); }
+        bool bless = narg > 1 && !strcmp(mode, "bless");
+        if (bless || missing) {
+            FILE *wf=fopen(fbuf,"wb");
+            if (!wf) snprintf(result,rsz,"status=FAIL shr-golden-write-fail %s",fbuf);
+            else { fprintf(wf,"%016llX\n",(unsigned long long)h); fclose(wf);
+                snprintf(result,rsz,"status=PASS shr-golden BLESSED profile=shr-window hash=%016llX file=%s",(unsigned long long)h,fbuf); }
+        } else if ((uint64_t)old == h) snprintf(result,rsz,"status=PASS shr-golden MATCH profile=shr-window hash=%016llX",(unsigned long long)h);
+        else snprintf(result,rsz,"status=FAIL shr-golden DIFF profile=shr-window got=%016llX want=%016llX",(unsigned long long)h,old);
         return true;
     }
     return false;
