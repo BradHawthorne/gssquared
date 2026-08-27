@@ -91,3 +91,5 @@ struct mouse_state_t: public SlotData {
 };
 
 void init_mouse(computer_t *computer, SlotType_t slot);
+// headless injection (A2GSPU file rail): dx/dy relative motion; btn 1=down 0=up -1=unchanged
+void mouse_inject(mouse_state_t *ds, int dx, int dy, int btn);

@@ -211,6 +211,36 @@ bool mouse_updown(mouse_state_t *ds, const SDL_Event &event) {
     return false;
 }
 
+// Headless injection (A2GSPU file rail): replicate the SDL paths exactly.
+// dx/dy = relative motion; btn: 1 = left down, 0 = left up, -1 = unchanged.
+void mouse_inject(mouse_state_t *ds, int dx, int dy, int btn) {
+    if (dx != 0 || dy != 0) {
+        ds->motion_x = (int16_t)dx;
+        ds->motion_y = (int16_t)dy;
+        int tmp_x = ds->x_pos.value + dx;
+        int tmp_y = ds->y_pos.value + dy;
+        clamp_mouse(ds, tmp_x, tmp_y);
+        ds->x_pos.value = tmp_x;
+        ds->y_pos.value = tmp_y;
+        ds->status.x_y_changed = 1;
+        ds->last_x_pos = ds->x_pos.value;
+        ds->last_y_pos = ds->y_pos.value;
+        if (ds->mode.int_ena_motion) {
+            ds->status.int_motion = 1;
+            mouse_propagate_interrupt(ds);
+        }
+    }
+    if (btn == 1) {
+        ds->status.button_down = 1;
+        if (ds->mode.int_ena_button) {
+            ds->status.int_button = 1;
+            mouse_propagate_interrupt(ds);
+        }
+    } else if (btn == 0) {
+        ds->status.button_down = 0;
+    }
+}
+
 void mouse_vbl_interrupt(uint64_t instanceID, void *user_data) {
     mouse_state_t *ds = (mouse_state_t *)user_data;
     //ds->vbl_cycle += 17030;
@@ -258,6 +288,7 @@ void init_mouse(computer_t *computer, SlotType_t slot) {
     
     mouse_reset(ds);
     ds->vbl_cycle = (ds->clock->get_c14m_per_scanline() * 192);
+    computer->set_module_state(MODULE_MOUSECARD, ds);   // headless lookup (A2GSPU inject rail)
 
     SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE,"1");
 

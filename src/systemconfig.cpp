@@ -447,6 +447,38 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         },
     },
     // Add more built-in configurations as needed
+    {
+        /* Apple Pascal 1.3's MOUSE ATTACH driver is a Mouse II CARD client: it slot-
+         * scans for the card firmware and stalls without card data (U-047b/c in the
+         * pascal repo, 2026-08-26). The ADB mouse cannot satisfy it. Added as a NEW
+         * configuration (the Uthernet II precedent above): `-p 5` still selects the
+         * unchanged default machine, so every existing check is byte-for-byte
+         * identical; mouse runs opt in with `-c THIS_INDEX`. A2GSPU stays at slot 3
+         * (its file-based mouse injection rail lives in the card's frame callback);
+         * the Mouse II card takes slot 4, its conventional home; slot 7 keeps the
+         * SmartPort block device for booting. */
+        "Apple IIgs + A2GSPU + Mouse",
+        PLATFORM_APPLE_IIGS,
+        true,
+        CLOCK_SET_US,
+        Scanner_AppleIIgs,
+        "Apple IIgs 8MB RAM + A2GSPU (slot 3) + Apple Mouse II (slot 1)",
+        {
+            DEVICE_ID_NONE,
+            /* Slot 1, not 4: on the IIgs, EMPTY slots expose internal firmware whose
+             * bytes at Cn05/Cn07/Cn0B (38/18/01) partially match the AppleMouse ID --
+             * the Pascal ATTACH driver's first-match scan binds slot 1's internal ROM
+             * before reaching a real card in a higher slot (live bus dump 2026-08-26).
+             * Putting the card at slot 1 makes the scan's first match the REAL mouse. */
+            DEVICE_ID_MOUSE,       // slot 1 -- Apple Mouse II
+            DEVICE_ID_NONE,
+            DEVICE_ID_A2GSPU,      // slot 3 -- video/instrumentation card
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_PD_BLOCK3,   // slot 7 -- boot
+        }
+    },
 };
 
 const int NUM_SYSTEM_CONFIGS = sizeof(BuiltinSystemConfigs) / sizeof(BuiltinSystemConfigs[0]);

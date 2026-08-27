@@ -76,11 +76,26 @@ uint8_t keygloo_read_C025(void *context, uint32_t address) {
     return kg->read_mod_latch();
 }
 
+// A2GSPU: env-gated GLU mouse trace (W-5 diagnosis). Appends to kg_mouse_trace.txt in CWD.
+static void kg_mtrace(const char *tag, int a, int b) {
+    static int enabled = -1;
+    static int lines = 0;
+    if (enabled < 0) enabled = getenv("A2GSPU_MOUSETRACE") ? 1 : 0;
+    if (!enabled || lines > 400) return;
+    FILE *f = fopen("kg_mouse_trace.txt", "a");
+    if (!f) return;
+    fprintf(f, "%s %02X %02X\n", tag, a & 0xFF, b & 0xFF);
+    fclose(f);
+    lines++;
+}
+
 uint8_t keygloo_read_C024(void *context, uint32_t address) {
     g_kg_reads[2]++;
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
+    uint8_t st_before = kg->read_status_register();
     uint8_t data = kg->read_mouse_data();
+    kg_mtrace("R24", data, st_before);
     keygloo_update_interrupt_status(kb_state, kg); // could have IRQ after event..
     return data;
 }
@@ -104,7 +119,9 @@ void keygloo_write_C026(void *context, uint32_t address, uint8_t value) {
 uint8_t keygloo_read_C027(void *context, uint32_t address) {
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
-    return kg->read_status_register();
+    uint8_t st = kg->read_status_register();
+    if (st & 0x80) kg_mtrace("R27", st, 0); // log only mouse-data-full polls
+    return st;
 }
 
 void keygloo_write_C027(void *context, uint32_t address, uint8_t value) {

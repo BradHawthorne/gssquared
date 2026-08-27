@@ -16,5 +16,6 @@ typedef enum {
     MODULE_CASSETTE,
     MODULE_KEYGLOO,
     MODULE_IIGSMEMORY,
+    MODULE_MOUSECARD,
     MODULE_NUM_MODULES
 } module_id_t;

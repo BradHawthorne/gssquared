@@ -954,6 +954,16 @@ class KeyGloo
             mouse_data[0] = data0;
             mouse_data[1] = data1;
             mouse_data_full = true;
+            {   // W-5 trace hook (mirrors keygloo kg_mtrace, env-gated)
+                static int en = -1;
+                if (en < 0) en = getenv("A2GSPU_MOUSETRACE") ? 1 : 0;
+                if (en) { FILE *tf = fopen("kg_mouse_trace.txt", "a");
+                    if (tf) { fprintf(tf, "INJ %02X %02X\n", data0, data1); fclose(tf); } }
+            }
+            mouse_x_available = MOUSE_X; // reset the X/Y pair phase like the SDL
+                                         // path does; without this the ROM's
+                                         // strict X-then-Y C024 protocol desyncs
+                                         // and one axis is lost (pascal W-5).
             update_interrupt_status();
         }
 
