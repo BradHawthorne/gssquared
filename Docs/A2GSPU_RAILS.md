@@ -136,8 +136,25 @@ total because they are real bus cycles on silicon, and reported separately so th
 subtracted). `write_word` is dead code and is deliberately untapped; **if it is ever revived it
 must be tapped, or this rail silently undercounts 16-bit stores.**
 
-**Boot is not a representative workload.** A GS/OS boot is heavily I/O-bound, so `device`
-dominates in a way steady-state application work does not. Compare workloads, not absolutes.
+**`phantom` near zero on a IIgs is correct, not a dead tap.** Only an NMOS 6502 and a 65816 in
+*emulation* mode write during the RMW modify cycle; a 65C02, and a 65816 in *native* mode, read
+instead. The field therefore tracks time spent in emulation mode — ~83 for a IIgs sitting in ROM
+firmware, 7 across a GS/OS boot, 0 on the Finder desktop. A large value on a native-mode
+workload would be the surprising result.
+
+**Boot is not a representative workload**, and the spread is wide enough to change conclusions.
+Measured on GS/OS 6.0.1, each window taken from its own snapshot:
+
+| window | stores | visible | note |
+|--------|--------|---------|------|
+| boot, first 300f | 1,091,936 | **27.08%** | firmware probing hardware — 155,935 stores into I/O space |
+| boot, 400–800f | 1,690,879 | **8.04%** | |
+| boot, 800–1200f | 2,044,310 | **6.39%** | I/O-space stores down to 1,912 — a 99% fall |
+| Finder desktop, idle | 1,548,694 | **5.32%** | `device` = 0; an event loop *reads* soft switches |
+
+Stores per frame *rise* across those windows (3,640 → 5,162) while the visible share falls: the
+later phases do more work and more of it is private. Quote the phase, not the average, and treat
+the early-boot figure as the outlier it is.
 
 ## Break — breakpoints, watchpoints, provenance traps
 

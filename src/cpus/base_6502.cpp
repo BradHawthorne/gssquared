@@ -125,6 +125,7 @@ inline word_t word(uint8_t lo, uint8_t hi) { return lo | (hi << 8); }
 */
 inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
     uint8_t data = cpu->mmu->read(addr & 0xFFFFFF);
+    if (memvu_lv_on) memvu_lv_note_load(addr & 0xFFFFFF, MEMVU_K_DATA);  // MEMVU_LOADVIS (off => 1 branch)
     if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, false);   // A2GSPU_LCTRACE (off => 1 branch)
     if (g_watch_read_on) iigs_watch_check_read(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH_READ (off => 1 branch)
     incr_cycles(cpu);
@@ -142,6 +143,7 @@ inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
 
 inline uint8_t vp_read(cpu_state *cpu, uint32_t addr) {
     uint8_t data = cpu->mmu->vp_read(addr);
+    if (memvu_lv_on) memvu_lv_note_load(addr & 0xFFFFFF, MEMVU_K_VECTOR);  // MEMVU_LOADVIS
     incr_cycles(cpu);
     return data;
 }
@@ -155,6 +157,7 @@ inline uint8_t vp_read(cpu_state *cpu, uint32_t addr) {
 // Normal phantom read - always performs
 inline void phantom_read(cpu_state *cpu, uint32_t address) {
     cpu->mmu->read(address);
+    if (memvu_lv_on) memvu_lv_note_load(address & 0xFFFFFF, MEMVU_K_PHANTOM);  // MEMVU_LOADVIS
     incr_cycles(cpu);
 }
 
@@ -162,6 +165,7 @@ inline void phantom_read(cpu_state *cpu, uint32_t address) {
 inline void phantom_read_ign(cpu_state *cpu, uint32_t address) {
     if constexpr (CPUTraits::full_phantom_reads) {
         cpu->mmu->read(address);
+        if (memvu_lv_on) memvu_lv_note_load(address & 0xFFFFFF, MEMVU_K_PHANTOM);  // MEMVU_LOADVIS
     }
     incr_cycles(cpu);
 }
@@ -411,6 +415,7 @@ inline uint32_t _PC(cpu_state *cpu) {
 
 inline uint8_t fetch_pc(cpu_state *cpu) {
     uint8_t b = cpu->mmu->read(_PC(cpu));
+    if (memvu_lv_on) memvu_lv_note_load(_PC(cpu) & 0xFFFFFF, MEMVU_K_FETCH);  // MEMVU_LOADVIS
     incr_cycles(cpu);
     cpu->pc++;
     return b;

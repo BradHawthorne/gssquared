@@ -2736,11 +2736,15 @@ static void run_headless_spike(GS2AppState *state) {
     // MEMVU_STOREVIS=1 — store-visibility accounting (see src/memvu_storevis.hpp).
     // The observation model depends on the platform: only a IIgs MMU can shadow, so
     // the rail is told which model it is running under rather than inferring a zero.
-    if (SDL_getenv("MEMVU_STOREVIS")) {
-        memvu_sv_reset();
+    if (SDL_getenv("MEMVU_STOREVIS") || SDL_getenv("MEMVU_LOADVIS")) {
+        memvu_reset();
         memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
-        memvu_sv_on = true;
-        printf("MEMVU STOREVIS: armed (model=%s)\n",
+        memvu_sv_on = (SDL_getenv("MEMVU_STOREVIS") != nullptr);
+        memvu_lv_on = (SDL_getenv("MEMVU_LOADVIS")  != nullptr);
+        printf("MEMVU: armed (%s%s%s, model=%s)\n",
+               memvu_sv_on ? "STOREVIS" : "",
+               (memvu_sv_on && memvu_lv_on) ? "+" : "",
+               memvu_lv_on ? "LOADVIS" : "",
                memvu_sv_have_shadow ? "iigs-shadow-v1" : "iie-basic-v1");
     }
 
@@ -3194,6 +3198,7 @@ static void run_headless_spike(GS2AppState *state) {
     // them? A property of the software, so it is answerable here exactly.
     memvu_sv_report(stdout);
     if (SDL_getenv("MEMVU_STOREVIS_BANKS")) memvu_sv_report_banks(stdout);
+    memvu_lv_report(stdout);
 
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {
