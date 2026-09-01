@@ -2796,6 +2796,21 @@ static void run_headless_spike(GS2AppState *state) {
         }
     }
 
+    // MEMVU_BLAME[=<topN>] -- which code generates the externally-visible traffic.
+    if (const char *bl = SDL_getenv("MEMVU_BLAME")) {
+        if (!memvu_blame_init()) {
+            fprintf(stderr, "MEMVU_BLAME: ** REFUSED ** allocation failed\n");
+        } else {
+            memvu_blame_reset();
+            memvu_blame_on = true;
+            memvu_sv_on = true;   // blame rides the store/load classification
+            memvu_lv_on = true;
+            memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
+            int n = atoi(bl); if (n <= 0) n = 20;
+            printf("MEMVU BLAME: armed (top %d code granules)\n", n);
+        }
+    }
+
     // (2) A2GSPU_POKE="<hexPC>:<act>[;<act>...]": one-shot DELIBERATE state injection.
     //     acts: A/X/Y/S/D/P/DBR/PB=<hex> reg/flag; PC=<hex> force-branch;
     //     M<hex24>=<hexbyte> poke mem; RTS/RTL force-return; SKIP=<n> skip bytes.
@@ -3249,6 +3264,10 @@ static void run_headless_spike(GS2AppState *state) {
     memvu_lv_report(stdout);
     memvu_istream_report(stdout);
     memvu_seam_report(stdout);
+    if (const char *bl = SDL_getenv("MEMVU_BLAME")) {
+        int n = atoi(bl); if (n <= 0) n = 20;
+        memvu_blame_report(stdout, n);
+    }
 
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {

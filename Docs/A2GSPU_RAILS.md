@@ -170,6 +170,33 @@ The group table is **hand-derived from the opcode map** and is good enough to st
 attention, not to quote normatively — which is why the raw per-opcode histogram is
 emitted beside it, so any aggregate can be recomputed from primary data.
 
+### Who causes the expensive traffic
+
+| Rail | Effect | Group | Gated |
+|------|--------|-------|-------|
+| `MEMVU_BLAME[=<topN>]` | attributes every externally-visible store and machine-served read to the **opcode address** of the instruction responsible, and reports the worst code granules | observe | env |
+| `MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads>` | **a MODEL, not a counter** — cost of routing part of a workload's memory traffic to the machine. Parameters are mandatory; an incomplete set is REFUSED. Output is an upper bound | observe | env |
+
+`MEMVU_BLAME` turns the visibility rails around. They say how much a workload costs;
+this says where the cost comes from. Pointed at a system whose source you have, the
+output stops being a performance measurement and becomes a work list.
+
+Attribution is to the address of the **opcode**, captured at dispatch — not the PC at
+the moment of the access, which for any multi-byte instruction has already walked past
+the operand and would blame a point inside the instruction itself. Counts are per
+256-byte granule: fine enough to land on a routine, coarse enough to stay a fixed
+512 KB however much code runs. Pair with `A2GSPU_SYMBOLS` to get names.
+
+Measured on the idle Finder desktop — **17 granules, roughly 4 KB of code, generate
+every externally-visible access in the system**:
+
+```
+$E1/0000  visible_writes=0      routed_reads=104624
+$07/0E00  visible_writes=19360  routed_reads=73568
+$FE/0000  visible_writes=0      routed_reads=81376
+$FF/C000  visible_writes=23252  routed_reads=23252
+```
+
 **`phantom` near zero on a IIgs is correct, not a dead tap.** Only an NMOS 6502 and a 65816 in
 *emulation* mode write during the RMW modify cycle; a 65C02, and a 65816 in *native* mode, read
 instead. The field therefore tracks time spent in emulation mode — ~83 for a IIgs sitting in ROM

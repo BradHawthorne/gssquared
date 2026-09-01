@@ -5,6 +5,20 @@
 //                    agent other than the CPU can see them?
 //   MEMVU_LOADVIS  : of the loads, how many MUST be served by the machine
 //                    rather than from any local copy?
+//   MEMVU_BLAME    : WHICH CODE generates that traffic?
+//
+// MEMVU_BLAME turns the other two around. They say how much a workload costs;
+// this says where the cost comes from, attributed to the program counter of the
+// instruction responsible. Point it at a system with source available and the
+// output stops being a performance measurement and becomes a work list: these
+// are the routines whose memory behaviour is expensive, ranked.
+//
+// Attribution is to the address of the OPCODE, captured at dispatch, not to the
+// program counter at the moment of the access -- by then the fetch has already
+// walked past the operand bytes and every multi-byte instruction would blame a
+// point somewhere inside itself. Counts are kept per 256-byte granule across the
+// 24-bit space: fine enough to land on a routine, coarse enough to stay a fixed
+// 512 KB regardless of how much code runs.
 //
 // The question is not academic. Every memory-side design decision in this
 // machine — shadowing, the fast/slow split, what a card can snoop, what any
@@ -119,6 +133,29 @@ inline memvu_vis_t memvu_classify(uint32_t addr) {
     return MEMVU_PRIVATE;
 }
 
+// ---- BLAME state -------------------------------------------------------------
+inline bool     memvu_blame_on = false;
+inline uint32_t memvu_blame_pc = 0;            // opcode address of the current instruction
+inline uint32_t *memvu_blame_w = nullptr;      // visible stores per 256-byte granule
+inline uint32_t *memvu_blame_r = nullptr;      // routed reads per 256-byte granule
+
+static constexpr uint32_t MEMVU_BLAME_GRAN = 8;                 // log2(256)
+static constexpr uint32_t MEMVU_BLAME_N    = 1u << (24 - MEMVU_BLAME_GRAN);   // 65536
+
+inline bool memvu_blame_init() {
+    if (!memvu_blame_w) memvu_blame_w = (uint32_t *)calloc(MEMVU_BLAME_N, sizeof(uint32_t));
+    if (!memvu_blame_r) memvu_blame_r = (uint32_t *)calloc(MEMVU_BLAME_N, sizeof(uint32_t));
+    return memvu_blame_w && memvu_blame_r;
+}
+inline void memvu_blame_reset() {
+    if (memvu_blame_w) memset(memvu_blame_w, 0, MEMVU_BLAME_N * sizeof(uint32_t));
+    if (memvu_blame_r) memset(memvu_blame_r, 0, MEMVU_BLAME_N * sizeof(uint32_t));
+}
+inline void memvu_blame_note(bool write) {
+    uint32_t *t = write ? memvu_blame_w : memvu_blame_r;
+    if (t) t[(memvu_blame_pc & 0xFFFFFF) >> MEMVU_BLAME_GRAN]++;
+}
+
 // ---- store counters ----------------------------------------------------------
 inline uint64_t memvu_sv_total    = 0;   // every CPU store, phantoms included
 inline uint64_t memvu_sv_phantom  = 0;   // subset of total: RMW dummy writes
@@ -158,8 +195,14 @@ inline void memvu_sv_note_store(uint32_t addr, bool phantom) {
     if (phantom) memvu_sv_phantom++;
 
     switch (memvu_classify(addr)) {
-        case MEMVU_DEVICE:   memvu_sv_device++;   memvu_sv_bank_visible[bank]++; break;
-        case MEMVU_SLOWSIDE: memvu_sv_slowside++; memvu_sv_bank_visible[bank]++; break;
+        case MEMVU_DEVICE:
+            memvu_sv_device++;   memvu_sv_bank_visible[bank]++;
+            if (memvu_blame_on) memvu_blame_note(true);
+            break;
+        case MEMVU_SLOWSIDE:
+            memvu_sv_slowside++; memvu_sv_bank_visible[bank]++;
+            if (memvu_blame_on) memvu_blame_note(true);
+            break;
         default: break;   // PRIVATE unless the machine shadows it, counted below
     }
 }
@@ -187,6 +230,7 @@ inline void memvu_seam_load(uint32_t addr) {
 // ---- the machine-side shadow tap ---------------------------------------------
 inline void memvu_sv_note_shadowed(uint32_t addr) {
     if (!memvu_sv_on) return;
+    if (memvu_blame_on) memvu_blame_note(true);
     memvu_sv_shadowed++;
     memvu_sv_bank_visible[(addr >> 16) & 0xFF]++;
 }
@@ -198,8 +242,14 @@ inline void memvu_lv_note_load(uint32_t addr, memvu_kind_t kind) {
     if (memvu_seam_on) memvu_seam_load(addr);
     memvu_lv_kind_total[kind]++;
     switch (memvu_classify(addr)) {
-        case MEMVU_DEVICE:   memvu_lv_kind_device[kind]++;   break;
-        case MEMVU_SLOWSIDE: memvu_lv_kind_slowside[kind]++; break;
+        case MEMVU_DEVICE:
+            memvu_lv_kind_device[kind]++;
+            if (memvu_blame_on) memvu_blame_note(false);
+            break;
+        case MEMVU_SLOWSIDE:
+            memvu_lv_kind_slowside[kind]++;
+            if (memvu_blame_on) memvu_blame_note(false);
+            break;
         default: break;
     }
 }
@@ -253,6 +303,36 @@ inline void memvu_sv_report_banks(FILE *f) {
                 b, (unsigned long long)memvu_sv_bank_total[b],
                 (unsigned long long)memvu_sv_bank_visible[b]);
     }
+}
+
+// Top offenders. Sorted by total cost; the split says what KIND of cost, because
+// a routine that writes the display and one that polls a device need different
+// fixes.
+inline void memvu_blame_report(FILE *f, int topn) {
+    if (!memvu_blame_on || !memvu_blame_w) return;
+    struct Row { uint32_t g, w, r; };
+    Row *rows = (Row *)malloc(sizeof(Row) * 4096);
+    if (!rows) return;
+    int nr = 0;
+    for (uint32_t g = 0; g < MEMVU_BLAME_N && nr < 4096; g++) {
+        if (memvu_blame_w[g] || memvu_blame_r[g])
+            rows[nr++] = Row{g, memvu_blame_w[g], memvu_blame_r[g]};
+    }
+    // partial selection sort: topn is small, the array is not worth qsort here
+    for (int i = 0; i < topn && i < nr; i++) {
+        int best = i;
+        for (int j = i + 1; j < nr; j++)
+            if ((uint64_t)rows[j].w + rows[j].r > (uint64_t)rows[best].w + rows[best].r) best = j;
+        Row t = rows[i]; rows[i] = rows[best]; rows[best] = t;
+    }
+    fprintf(f, "MEMVU BLAME: %d code granules generated externally-visible traffic; top %d\n",
+            nr, topn < nr ? topn : nr);
+    for (int i = 0; i < topn && i < nr; i++) {
+        const uint32_t base = rows[i].g << MEMVU_BLAME_GRAN;
+        fprintf(f, "MEMVU BLAME: $%02X/%04X  visible_writes=%u  routed_reads=%u\n",
+                (base >> 16) & 0xFF, base & 0xFFFF, rows[i].w, rows[i].r);
+    }
+    free(rows);
 }
 
 inline void memvu_lv_report(FILE *f) {

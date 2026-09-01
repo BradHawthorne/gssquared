@@ -2434,6 +2434,7 @@ int execute_next(cpu_state *cpu) override {
     if (g_cov_on) a2gspu_cov_step(cpu->full_pc);
 
     const uint32_t memvu_ipc = cpu->full_pc;   // opcode address, before fetch_pc advances PC
+    if (memvu_blame_on) memvu_blame_pc = memvu_ipc;   // MEMVU_BLAME attributes to the opcode
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;
     // MEMVU_OPMIX / MEMVU_IREUSE (off => 1 branch). The mode context is a
