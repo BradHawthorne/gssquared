@@ -5,6 +5,19 @@
 //                  under which CPU mode?
 //   MEMVU_IREUSE : how much does the instruction stream repeat, and how often
 //                  does the CPU mode change underneath code that is repeating?
+//   MEMVU_WORKSET: how much of the data traffic goes through the direct page,
+//                  how many direct pages are live, and how deep does the stack
+//                  actually get?
+//
+// MEMVU_WORKSET exists because "this architecture's programs keep their working
+// set in the direct page and on the stack" is the kind of claim everyone repeats
+// and nobody has counted. Direct-page accesses are counted EXACTLY, at the two
+// funnels that form a direct-page data address, not inferred by testing whether
+// an address happens to fall inside the current D window -- an ordinary absolute
+// access to the same address would be indistinguishable that way. D and S are
+// sampled once per instruction at the dispatch tap, so the count of distinct
+// direct pages and the stack's depth are both exact rather than sampled at
+// access time and biased toward busy pages.
 //
 // The store/load rails (memvu_storevis.hpp) answer where a workload's memory
 // traffic goes. These answer what the workload *is*. Between them they describe
@@ -66,6 +79,43 @@
 // ---- arm bits ---------------------------------------------------------------
 inline bool memvu_op_on  = false;   // MEMVU_OPMIX
 inline bool memvu_ir_on  = false;   // MEMVU_IREUSE
+inline bool memvu_ws_on  = false;   // MEMVU_WORKSET
+
+// ---- WORKSET state ----------------------------------------------------------
+inline uint64_t memvu_ws_dp_read = 0, memvu_ws_dp_write = 0;
+inline uint8_t *memvu_ws_dseen = nullptr;   // bitmap of every D value observed (8 KB)
+inline uint64_t memvu_ws_ddistinct = 0, memvu_ws_dchanges = 0;
+inline uint32_t memvu_ws_dlast = 0xFFFFFFFF;
+inline uint32_t memvu_ws_smin = 0xFFFFFFFF, memvu_ws_smax = 0;
+inline uint64_t memvu_ws_spage[256] = {};   // histogram of S >> 8
+
+inline bool memvu_ws_init() {
+    if (!memvu_ws_dseen) memvu_ws_dseen = (uint8_t *)calloc(8192, 1);   // 65536 bits
+    return memvu_ws_dseen != nullptr;
+}
+
+// Exact: called from the two funnels that form a direct-page data address.
+inline void memvu_ws_note_dp(bool write) {
+    if (write) memvu_ws_dp_write++; else memvu_ws_dp_read++;
+}
+
+// Sampled once per instruction, so D churn and stack depth are unbiased by how
+// busy any particular page or frame happens to be.
+inline void memvu_ws_note_state(uint32_t d, uint32_t sp) {
+    if (d != memvu_ws_dlast) {
+        if (memvu_ws_dlast != 0xFFFFFFFF) memvu_ws_dchanges++;
+        memvu_ws_dlast = d;
+    }
+    const uint32_t dv = d & 0xFFFF;
+    uint8_t &cell = memvu_ws_dseen[dv >> 3];
+    const uint8_t bit = (uint8_t)(1u << (dv & 7));
+    if (!(cell & bit)) { cell |= bit; memvu_ws_ddistinct++; }
+
+    const uint32_t s = sp & 0xFFFF;
+    if (s < memvu_ws_smin) memvu_ws_smin = s;
+    if (s > memvu_ws_smax) memvu_ws_smax = s;
+    memvu_ws_spage[(s >> 8) & 0xFF]++;
+}
 
 // ---- mode context -----------------------------------------------------------
 inline const char *memvu_ctx_name[8] = {
@@ -127,6 +177,12 @@ inline void memvu_istream_reset() {
     if (memvu_ir_tag)  memset(memvu_ir_tag, 0xFF, sizeof(uint32_t) * memvu_ir_lines);
     if (memvu_ir_ctx)  memset(memvu_ir_ctx, 0, memvu_ir_lines);
     if (memvu_ir_seen) memset(memvu_ir_seen, 0, MEMVU_SEEN_BYTES);
+    memvu_ws_dp_read = memvu_ws_dp_write = 0;
+    memvu_ws_ddistinct = memvu_ws_dchanges = 0;
+    memvu_ws_dlast = 0xFFFFFFFF;
+    memvu_ws_smin = 0xFFFFFFFF; memvu_ws_smax = 0;
+    memset(memvu_ws_spage, 0, sizeof memvu_ws_spage);
+    if (memvu_ws_dseen) memset(memvu_ws_dseen, 0, 8192);
 }
 
 // ---- the dispatch tap -------------------------------------------------------
@@ -232,6 +288,26 @@ inline void memvu_istream_report(FILE *f) {
                     1u << MEMVU_SEEN_SHIFT,
                     (unsigned long long)memvu_ir_distinct,
                     (unsigned long long)((memvu_ir_distinct << MEMVU_SEEN_SHIFT) / 1024));
+        }
+    }
+
+    if (memvu_ws_on) {
+        const uint64_t dp = memvu_ws_dp_read + memvu_ws_dp_write;
+        if (memvu_ws_smin > memvu_ws_smax) {
+            fprintf(f, "MEMVU WORKSET: no instructions observed; nothing to report\n");
+        } else {
+            fprintf(f, "MEMVU WORKSET: dp_accesses=%llu (read=%llu write=%llu) "
+                       "distinct_D=%llu D_changes=%llu\n",
+                    (unsigned long long)dp,
+                    (unsigned long long)memvu_ws_dp_read,
+                    (unsigned long long)memvu_ws_dp_write,
+                    (unsigned long long)memvu_ws_ddistinct,
+                    (unsigned long long)memvu_ws_dchanges);
+            fprintf(f, "MEMVU WORKSET STACK: S range=[$%04X..$%04X] span=%u bytes  pages:",
+                    memvu_ws_smin, memvu_ws_smax, memvu_ws_smax - memvu_ws_smin + 1);
+            for (int p = 0; p < 256; p++)
+                if (memvu_ws_spage[p]) fprintf(f, " %02X=%llu", p, (unsigned long long)memvu_ws_spage[p]);
+            fprintf(f, "\n");
         }
     }
 }

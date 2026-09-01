@@ -2750,7 +2750,7 @@ static void run_headless_spike(GS2AppState *state) {
     }
 
     // MEMVU_OPMIX / MEMVU_IREUSE=<lines>,<linesize> — instruction-stream shape.
-    if (SDL_getenv("MEMVU_OPMIX") || SDL_getenv("MEMVU_IREUSE")) {
+    if (SDL_getenv("MEMVU_OPMIX") || SDL_getenv("MEMVU_IREUSE") || SDL_getenv("MEMVU_WORKSET")) {
         const char *ir = SDL_getenv("MEMVU_IREUSE");
         memvu_op_on = (SDL_getenv("MEMVU_OPMIX") != nullptr);
         if (ir) {
@@ -2761,11 +2761,21 @@ static void run_headless_spike(GS2AppState *state) {
                 memvu_ir_on = true;
             }
         }
+        if (SDL_getenv("MEMVU_WORKSET")) {
+            if (!memvu_ws_init()) {
+                fprintf(stderr, "MEMVU_WORKSET: ** REFUSED ** allocation failed\n");
+                memvu_ws_on = false;
+            } else {
+                memvu_ws_on = true;
+            }
+        }
         memvu_istream_reset();
-        printf("MEMVU ISTREAM: armed (%s%s%s)\n",
+        printf("MEMVU ISTREAM: armed (%s%s%s%s%s)\n",
                memvu_op_on ? "OPMIX" : "",
                (memvu_op_on && memvu_ir_on) ? "+" : "",
-               memvu_ir_on ? "IREUSE" : "");
+               memvu_ir_on ? "IREUSE" : "",
+               ((memvu_op_on || memvu_ir_on) && memvu_ws_on) ? "+" : "",
+               memvu_ws_on ? "WORKSET" : "");
     }
 
     // (2) A2GSPU_POKE="<hexPC>:<act>[;<act>...]": one-shot DELIBERATE state injection.

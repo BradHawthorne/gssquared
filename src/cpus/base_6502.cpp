@@ -469,6 +469,7 @@ inline void write_tada(cpu_state *cpu, uint32_t eaddr, T &reg) {
 /** Direct Mode Helpers */
 template<typename T>
 inline void read_data_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
+    if (memvu_ws_on) memvu_ws_note_dp(false);  // MEMVU_WORKSET: exact direct-page access
     TRACE(cpu->trace_entry.f_write = 0;)
     if constexpr (is_byte<T>) {
         reg = bus_read(cpu, eaddr_16);  // cycle 4
@@ -482,6 +483,7 @@ inline void read_data_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
 
 template<typename T>
 inline void write_data_direct(cpu_state *cpu, uint16_t eaddr_16, T &reg) {
+    if (memvu_ws_on) memvu_ws_note_dp(true);  // MEMVU_WORKSET: exact direct-page access
     TRACE(cpu->trace_entry.f_write = 1;)
     if constexpr (is_byte<T>) {
         bus_write(cpu, eaddr_16, reg); // cycle 4
@@ -2442,6 +2444,7 @@ int execute_next(cpu_state *cpu) override {
                            (uint8_t)((CPUTraits::e_mode ? 4 : 0)
                                    | (CPUTraits::m_16   ? 2 : 0)
                                    | (CPUTraits::x_16   ? 1 : 0)));
+    if (memvu_ws_on) memvu_ws_note_state(cpu->d, cpu->sp);  // MEMVU_WORKSET
 
     switch (opcode) {
 
