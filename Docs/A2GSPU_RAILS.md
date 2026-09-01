@@ -266,6 +266,20 @@ the early-boot figure as the outlier it is.
 
 *(File-format tokens `A2GSPU_SNAP_MAGIC/_VER/_END/_FREAD` are snapshot on-disk constants, not env rails.)*
 
+> **A restored machine cannot accept keyboard input.** "Devices self-heal" understates this
+> one. Measured on GS/OS 6.0.1 at the Finder desktop: a cold-booted machine reads `$C000`
+> **1,213 times** over 2,000 frames and keeps polling indefinitely; a machine restored from
+> a snapshot of that same desktop reads it **zero** times, ever. The Finder falls back to
+> polling only `$C025` from one ROM routine. Injected keys land correctly in the ADB latch
+> and are simply never collected.
+>
+> Two consequences. Any workload that needs input **must cold-boot** — restoring is what
+> makes a workload cheap and is exactly what makes it unable to be driven. And a restored
+> desktop is not behaviourally identical to a booted one: measured over comparable windows
+> (~3.005 M instructions each) the restored desktop shows **5.32%** of stores externally
+> visible against **6.20%** cold-booted, so a snapshot understates display-side traffic by
+> about a sixth. Fine for measuring boot phases; not fine if the number is load-bearing.
+
 ## Assert — gate the exit code
 
 | Rail | Effect | Group | Gated |
