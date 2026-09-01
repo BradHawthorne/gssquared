@@ -3148,12 +3148,37 @@ static void run_headless_spike(GS2AppState *state) {
             iigs_itrace_frame_tick(i);
             if (spike_keys && i == spike_keys_at) {
                 keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+                keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
                 if (kb) {
                     kb->paste_buffer += spike_keys;
-                    printf("A2GSPU SPIKE KEYS: injected %d chars at frame %d\n",
+                    printf("A2GSPU SPIKE KEYS: injected %d chars at frame %d (paste path)\n",
                            (int)strlen(spike_keys), i);
+                } else if (kg && kg->kg) {
+                    // A IIgs has no MODULE_KEYBOARD and therefore no paste buffer:
+                    // its keys arrive through the ADB/KeyGloo path. Until this
+                    // branch existed the rail printed "no keyboard module --
+                    // skipped" on every IIgs run, which is honest but leaves the
+                    // one platform this fork exists for unable to be driven in
+                    // spike mode at all. Same one-force_key-per-char sequence the
+                    // CTRL `keys` verb uses, so the two paths cannot diverge.
+                    int nkeys = 0;
+                    for (const char *p = spike_keys; *p; p++) {
+                        uint8_t ch = (uint8_t)*p;
+                        if (ch == '\n') ch = '\r';
+                        kg->kg->force_key(ch);
+                        keygloo_update_interrupt_status(kg, kg->kg);
+                        for (int f = 0; f < 2 && spike_i < state->spike_frames; f++) {
+                            if (!run_one_frame(computer)) break;
+                            spike_i++;
+                        }
+                        kg->kg->hold_key(0);
+                        kg->kg->key_up();
+                        nkeys++;
+                    }
+                    printf("A2GSPU SPIKE KEYS: injected %d chars at frame %d (ADB path)\n",
+                           nkeys, i);
                 } else {
-                    printf("A2GSPU SPIKE KEYS: no keyboard module -- skipped\n");
+                    printf("A2GSPU SPIKE KEYS: no keyboard AND no KeyGloo -- skipped\n");
                 }
             }
             if (!run_one_frame(computer)) {
