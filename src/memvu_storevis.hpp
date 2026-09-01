@@ -97,6 +97,7 @@
 // ============================================================================
 #include <cstdint>
 #include <cstdio>
+#include "memvu_seam.hpp"   // MEMVU_SEAM feeds off these same taps rather than adding its own
 
 // ---- arm bits + observation model -------------------------------------------
 inline bool memvu_sv_on = false;          // MEMVU_STOREVIS
@@ -147,7 +148,10 @@ inline void memvu_reset() {
 inline void memvu_sv_reset() { memvu_reset(); }   // name kept for the store-only caller
 
 // ---- the CPU-side store tap --------------------------------------------------
+inline void memvu_seam_store(uint32_t addr);   // defined below; same classifier
+
 inline void memvu_sv_note_store(uint32_t addr, bool phantom) {
+    if (memvu_seam_on) memvu_seam_store(addr);
     const uint32_t bank = (addr >> 16) & 0xFF;
     memvu_sv_total++;
     memvu_sv_bank_total[bank]++;
@@ -160,6 +164,26 @@ inline void memvu_sv_note_store(uint32_t addr, bool phantom) {
     }
 }
 
+// The seam model consumes the same classification rather than re-deriving it, so
+// the model and the counters can never disagree about what an address is.
+inline void memvu_seam_store(uint32_t addr) {
+    switch (memvu_classify(addr)) {
+        case MEMVU_DEVICE:   memvu_seam_write(true);  break;   // I/O: slow tier
+        case MEMVU_SLOWSIDE: memvu_seam_write(true);  break;   // Mega II: slow tier
+        default:             memvu_seam_local_access(); break;
+    }
+}
+inline void memvu_seam_load(uint32_t addr) {
+    switch (memvu_classify(addr)) {
+        case MEMVU_DEVICE:   memvu_seam_read(true); break;     // must be served
+        case MEMVU_SLOWSIDE:
+            if (memvu_seam_shadowreads_local) memvu_seam_local_access();
+            else                              memvu_seam_read(true);
+            break;
+        default: memvu_seam_local_access(); break;
+    }
+}
+
 // ---- the machine-side shadow tap ---------------------------------------------
 inline void memvu_sv_note_shadowed(uint32_t addr) {
     if (!memvu_sv_on) return;
@@ -168,7 +192,10 @@ inline void memvu_sv_note_shadowed(uint32_t addr) {
 }
 
 // ---- the CPU-side load tap ---------------------------------------------------
+inline void memvu_seam_load(uint32_t addr);    // defined below; same classifier
+
 inline void memvu_lv_note_load(uint32_t addr, memvu_kind_t kind) {
+    if (memvu_seam_on) memvu_seam_load(addr);
     memvu_lv_kind_total[kind]++;
     switch (memvu_classify(addr)) {
         case MEMVU_DEVICE:   memvu_lv_kind_device[kind]++;   break;

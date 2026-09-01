@@ -2445,6 +2445,12 @@ int execute_next(cpu_state *cpu) override {
                                    | (CPUTraits::m_16   ? 2 : 0)
                                    | (CPUTraits::x_16   ? 1 : 0)));
     if (memvu_ws_on) memvu_ws_note_state(cpu->d, cpu->sp);  // MEMVU_WORKSET
+    if (memvu_seam_on) {   // MEMVU_SEAM: reference cycles from the machine's own clock
+        const uint64_t mvc = this->clock->get_cycles();
+        static thread_local uint64_t mvc_prev = 0;
+        if (mvc_prev && mvc > mvc_prev) memvu_seam_note_vcycles(mvc - mvc_prev);
+        mvc_prev = mvc;
+    }
 
     switch (opcode) {
 

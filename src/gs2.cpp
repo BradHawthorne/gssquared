@@ -2778,6 +2778,24 @@ static void run_headless_spike(GS2AppState *state) {
                memvu_ws_on ? "WORKSET" : "");
     }
 
+    // MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads> -- the seam model.
+    // No defaults: a model whose parameters are implicit invites its output to be
+    // quoted as a property of the software rather than of software-plus-parameters.
+    if (const char *sm = SDL_getenv("MEMVU_SEAM")) {
+        if (!memvu_seam_init(sm)) {
+            fprintf(stderr, "MEMVU_SEAM: ** REFUSED ** '%s' -- want <ratio>,<slowmul>,<bufdepth>,<shadowreads 0|1> (e.g. 36,3,8,1)\n", sm);
+        } else {
+            memvu_seam_reset();
+            memvu_seam_on = true;
+            memvu_sv_on = true;   // the model rides the store/load taps
+            memvu_lv_on = true;
+            memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
+            printf("MEMVU SEAM: armed ratio=%u slowmul=%u bufdepth=%u shadowreads=%s\n",
+                   memvu_seam_ratio, memvu_seam_slowmul, memvu_seam_bufdepth,
+                   memvu_seam_shadowreads_local ? "local" : "routed");
+        }
+    }
+
     // (2) A2GSPU_POKE="<hexPC>:<act>[;<act>...]": one-shot DELIBERATE state injection.
     //     acts: A/X/Y/S/D/P/DBR/PB=<hex> reg/flag; PC=<hex> force-branch;
     //     M<hex24>=<hexbyte> poke mem; RTS/RTL force-return; SKIP=<n> skip bytes.
@@ -3230,6 +3248,7 @@ static void run_headless_spike(GS2AppState *state) {
     if (SDL_getenv("MEMVU_STOREVIS_BANKS")) memvu_sv_report_banks(stdout);
     memvu_lv_report(stdout);
     memvu_istream_report(stdout);
+    memvu_seam_report(stdout);
 
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {
