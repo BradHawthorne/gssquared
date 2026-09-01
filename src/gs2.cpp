@@ -50,6 +50,7 @@
 #include "house_fnv.hpp"
 #include "bus_trace.hpp"
 #include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting
+#include "memvu_istream.hpp"   // MEMVU_OPMIX / MEMVU_IREUSE
 #include "io_trace.hpp"
 #include "mmu_state_trace.hpp"
 #include "obs_signal.hpp"    // the Observatory spine (default-OFF; wired in later seams)
@@ -2748,6 +2749,25 @@ static void run_headless_spike(GS2AppState *state) {
                memvu_sv_have_shadow ? "iigs-shadow-v1" : "iie-basic-v1");
     }
 
+    // MEMVU_OPMIX / MEMVU_IREUSE=<lines>,<linesize> — instruction-stream shape.
+    if (SDL_getenv("MEMVU_OPMIX") || SDL_getenv("MEMVU_IREUSE")) {
+        const char *ir = SDL_getenv("MEMVU_IREUSE");
+        memvu_op_on = (SDL_getenv("MEMVU_OPMIX") != nullptr);
+        if (ir) {
+            if (!memvu_ir_init(ir)) {
+                fprintf(stderr, "MEMVU_IREUSE: ** REFUSED ** '%s' -- want <lines>,<linesize>, both powers of two (e.g. 512,64)\n", ir);
+                memvu_ir_on = false;
+            } else {
+                memvu_ir_on = true;
+            }
+        }
+        memvu_istream_reset();
+        printf("MEMVU ISTREAM: armed (%s%s%s)\n",
+               memvu_op_on ? "OPMIX" : "",
+               (memvu_op_on && memvu_ir_on) ? "+" : "",
+               memvu_ir_on ? "IREUSE" : "");
+    }
+
     // (2) A2GSPU_POKE="<hexPC>:<act>[;<act>...]": one-shot DELIBERATE state injection.
     //     acts: A/X/Y/S/D/P/DBR/PB=<hex> reg/flag; PC=<hex> force-branch;
     //     M<hex24>=<hexbyte> poke mem; RTS/RTL force-return; SKIP=<n> skip bytes.
@@ -3199,6 +3219,7 @@ static void run_headless_spike(GS2AppState *state) {
     memvu_sv_report(stdout);
     if (SDL_getenv("MEMVU_STOREVIS_BANKS")) memvu_sv_report_banks(stdout);
     memvu_lv_report(stdout);
+    memvu_istream_report(stdout);
 
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {

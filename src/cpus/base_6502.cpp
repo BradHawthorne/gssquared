@@ -30,6 +30,7 @@
 #include "generic_tap.hpp" // A2GSPU_TAP: generic title-agnostic PC-hit tap (off => 1 branch)
 #include "a2gspu_coverage.hpp" // A2GSPU_COVERAGE: execution bitmap (off => 1 branch)
 #include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting (off => 1 branch)
+#include "memvu_istream.hpp"   // MEMVU_OPMIX / MEMVU_IREUSE: instruction-stream shape
 
 
 /**
@@ -2430,8 +2431,17 @@ int execute_next(cpu_state *cpu) override {
     // whole point of coverage is to serve 6502 Apple II archaeology.
     if (g_cov_on) a2gspu_cov_step(cpu->full_pc);
 
+    const uint32_t memvu_ipc = cpu->full_pc;   // opcode address, before fetch_pc advances PC
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;
+    // MEMVU_OPMIX / MEMVU_IREUSE (off => 1 branch). The mode context is a
+    // compile-time constant here: this emulator picks a CPU implementation per
+    // (E, M-width, X-width), so recording it costs nothing.
+    if (memvu_op_on || memvu_ir_on)
+        memvu_istream_note(memvu_ipc, (uint8_t)opcode,
+                           (uint8_t)((CPUTraits::e_mode ? 4 : 0)
+                                   | (CPUTraits::m_16   ? 2 : 0)
+                                   | (CPUTraits::x_16   ? 1 : 0)));
 
     switch (opcode) {
 

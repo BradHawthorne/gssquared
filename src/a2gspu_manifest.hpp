@@ -279,6 +279,8 @@ inline void write_env_only_rails(FILE *f) {
     fprintf(f, "MEMVU_STOREVIS\tstore-visibility accounting: what share of stores a non-CPU agent can see\n");
     fprintf(f, "MEMVU_STOREVIS_BANKS\tadd the per-bank store/visible breakdown\n");
     fprintf(f, "MEMVU_LOADVIS\tload-visibility accounting: which loads the machine must serve (device) vs may cache (slow side)\n");
+    fprintf(f, "MEMVU_OPMIX\texecuted-opcode histogram by CPU mode context, plus hand-derived group totals\n");
+    fprintf(f, "MEMVU_IREUSE\tinstruction-line reuse and mode-tag mismatch rate; =<lines>,<linesize>\n");
     fprintf(f, "A2GSPU_WATCH\tbus write-watch ranges (provenance)\n");
     fprintf(f, "A2GSPU_WATCH_READ\talso watch reads\n");
     fprintf(f, "A2GSPU_WATCH_CHANGE\tlog only value changes\n");

@@ -136,6 +136,31 @@ total because they are real bus cycles on silicon, and reported separately so th
 subtracted). `write_word` is dead code and is deliberately untapped; **if it is ever revived it
 must be tapped, or this rail silently undercounts 16-bit stores.**
 
+### Instruction-stream shape
+
+| Rail | Effect | Group | Gated |
+|------|--------|-------|-------|
+| `MEMVU_OPMIX=1` | executed-opcode histogram, split by CPU mode context `(E, M-width, X-width)`, plus hand-derived group totals (branch / RMW / stack / call-return / block-move / mode-switch) and the raw per-opcode counts | observe | env |
+| `MEMVU_IREUSE=<lines>,<linesize>` | instruction-line reuse against a direct-mapped model, reporting hit / miss / **modemiss**, plus the workload's instruction footprint. Both parameters must be powers of two; a bad geometry is REFUSED, not rounded. `=1` takes the 512×64 default | observe | env |
+
+`modemiss` is the one that does not exist in a conventional instruction cache: on this
+ISA an instruction's *length* depends on M and X, so a resident line decoded under one
+mode cannot be reused under another. It bounds the value of caching anything decoded.
+
+Measured on the idle Finder desktop (GS/OS 6.0.1, 300 frames, 3,005,841 instructions):
+
+```
+OPMIX : branch=316216 (10.5%)  stack=511396 (17.0%)  callret=259550 (8.6%)
+        rmw=7264 (0.24%)  blockmove=0  modeswitch=21798 (0.73%)
+CTX   : N/m16/x16=2912856 (96.9%)   N/m8/x8=92985 (3.1%)   emulation mode=0
+IREUSE: 512x64B  hit=98.22%  miss=1.15%  modemiss=0.63%
+        footprint = ~5 KB of distinct executed code
+```
+
+The group table is **hand-derived from the opcode map** and is good enough to steer
+attention, not to quote normatively — which is why the raw per-opcode histogram is
+emitted beside it, so any aggregate can be recomputed from primary data.
+
 **`phantom` near zero on a IIgs is correct, not a dead tap.** Only an NMOS 6502 and a 65816 in
 *emulation* mode write during the RMW modify cycle; a 65C02, and a 65816 in *native* mode, read
 instead. The field therefore tracks time spent in emulation mode — ~83 for a IIgs sitting in ROM
