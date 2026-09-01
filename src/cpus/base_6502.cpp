@@ -29,6 +29,7 @@
 #include "obs_iigs.hpp"   // Observatory boot-fault-context view (obs_view_fault)
 #include "generic_tap.hpp" // A2GSPU_TAP: generic title-agnostic PC-hit tap (off => 1 branch)
 #include "a2gspu_coverage.hpp" // A2GSPU_COVERAGE: execution bitmap (off => 1 branch)
+#include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting (off => 1 branch)
 
 
 /**
@@ -131,6 +132,7 @@ inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
 }
 inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     cpu->mmu->write(addr & 0xFFFFFF, data);
+    if (memvu_sv_on) memvu_sv_note_store(addr & 0xFFFFFF, false);  // MEMVU_STOREVIS (off => 1 branch)
     if (g_watch_on) iigs_watch_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH (off => 1 branch)
     if (g_valtrap_on) iigs_valtrap_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_VALTRAP (off => 1 branch)
     if (g_loadtrace_on) iigs_loadtrace_write(cpu, addr & 0xFFFFFF, data);  // A2GSPU_LOADTRACE (off => 1 branch)
@@ -167,6 +169,7 @@ inline void phantom_read_ign(cpu_state *cpu, uint32_t address) {
 // Phantom write - always performs
 inline void phantom_write(cpu_state *cpu, uint32_t address, uint8_t value) {
     cpu->mmu->write(address, value);
+    if (memvu_sv_on) memvu_sv_note_store(address & 0xFFFFFF, true);  // MEMVU_STOREVIS (off => 1 branch)
     incr_cycles(cpu);
 }
 
@@ -174,6 +177,7 @@ inline void phantom_write(cpu_state *cpu, uint32_t address, uint8_t value) {
 inline void phantom_write_ign(cpu_state *cpu, uint32_t address, uint8_t value) {
     if constexpr (CPUTraits::full_phantom_reads) {
         cpu->mmu->write(address, value);
+        if (memvu_sv_on) memvu_sv_note_store(address & 0xFFFFFF, true);  // MEMVU_STOREVIS
     }
     incr_cycles(cpu);
 }

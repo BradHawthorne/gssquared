@@ -1,5 +1,6 @@
 #include "mmu_iigs.hpp"
 #include "NClock.hpp"
+#include "memvu_storevis.hpp"   // MEMVU_STOREVIS: shadow-decision tap (off => 1 branch)
 #include "devices/languagecard/languagecard.hpp"
 #include "mmus/mmu.hpp"
 #include "memoryspecs.hpp"
@@ -615,6 +616,7 @@ void bank_shadow_write(void *context, uint32_t address, uint8_t value) {
 
     if ( mmu_iigs->shadow_is_enabled(address)) {
         // Shadowed
+        memvu_sv_note_shadowed(address);  // MEMVU_STOREVIS: count at the machine's own decision (off => 1 branch)
         mmu_iigs->megaiiWrite(address & 0x1'FFFF, value); // this will cover case of writing to bank 01 -> shadow to E1
     }
     if (DEBUG(DEBUG_MMUGS)) printf("Write: Effective address: %06X\n", address);

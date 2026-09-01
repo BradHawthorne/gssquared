@@ -49,6 +49,7 @@
 #include "devices/adb/keygloo.hpp"
 #include "house_fnv.hpp"
 #include "bus_trace.hpp"
+#include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting
 #include "io_trace.hpp"
 #include "mmu_state_trace.hpp"
 #include "obs_signal.hpp"    // the Observatory spine (default-OFF; wired in later seams)
@@ -2732,6 +2733,17 @@ static void run_headless_spike(GS2AppState *state) {
         g_save_at_fn = a2gspu_save_at_cb;
         printf("A2GSPU SAVE_AT: snapshot+halt at first PC=$%06X -> '%s'\n", g_save_at_addr, g_saveat_path);
     }
+    // MEMVU_STOREVIS=1 — store-visibility accounting (see src/memvu_storevis.hpp).
+    // The observation model depends on the platform: only a IIgs MMU can shadow, so
+    // the rail is told which model it is running under rather than inferring a zero.
+    if (SDL_getenv("MEMVU_STOREVIS")) {
+        memvu_sv_reset();
+        memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
+        memvu_sv_on = true;
+        printf("MEMVU STOREVIS: armed (model=%s)\n",
+               memvu_sv_have_shadow ? "iigs-shadow-v1" : "iie-basic-v1");
+    }
+
     // (2) A2GSPU_POKE="<hexPC>:<act>[;<act>...]": one-shot DELIBERATE state injection.
     //     acts: A/X/Y/S/D/P/DBR/PB=<hex> reg/flag; PC=<hex> force-branch;
     //     M<hex24>=<hexbyte> poke mem; RTS/RTL force-return; SKIP=<n> skip bytes.
@@ -3176,6 +3188,12 @@ static void run_headless_spike(GS2AppState *state) {
         printf("SPIKE SLOT: wrote spike_slot.bin (%llu Mega-II writes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)sh);
     }
+
+    // ---- (1.65) MEMVU_STOREVIS: store-visibility accounting ----
+    // What fraction of this workload's stores land where a non-CPU agent can see
+    // them? A property of the software, so it is answerable here exactly.
+    memvu_sv_report(stdout);
+    if (SDL_getenv("MEMVU_STOREVIS_BANKS")) memvu_sv_report_banks(stdout);
 
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {

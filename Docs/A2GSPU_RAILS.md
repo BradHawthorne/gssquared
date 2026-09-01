@@ -104,6 +104,41 @@ nonzero/distinct/FNV hash + SCB row), `SPIKE TRACE/SLOT/MMU/OBS/BRACKET:` lines,
 | `A2GSPU_SNAP_PCS=<hex,…>` | up to 8 trigger PCs at which to dump the SNAP window | trace | env |
 | `A2GSPU_SNAP_OUT=<file>` | destination file for the SNAP region-logger (requires LO/HI + PCS) | trace | env |
 
+## MEMVU — memory-behaviour accounting
+
+A second rail family, separate from `A2GSPU_*` because it answers a different kind of
+question: not "what is the machine doing right now" but "what shape does this workload's
+memory behaviour have". Same three invariants (env-gated, isolated, observe-don't-disturb).
+
+| Rail | Effect | Group | Gated |
+|------|--------|-------|-------|
+| `MEMVU_STOREVIS=1` | **store-visibility accounting.** Classifies every CPU store as DEVICE (`$Cxxx` in banks `$00/$01/$E0/$E1`), SLOWSIDE (direct Mega II `$E0/$E1`), SHADOWED (the machine mirrored it per its own `$C035` configuration) or PRIVATE, and prints one summary line at spike end | observe | env |
+| `MEMVU_STOREVIS_BANKS=1` | add the per-bank `stores`/`visible` breakdown (one line per bank that saw traffic) | observe | env |
+
+```
+MEMVU STOREVIS: model=iigs-shadow-v1 stores=1091936 visible=295658 (27.08%) \
+                private=796278 device=155935 slowside=114697 shadowed=25026 phantom=7
+```
+
+**Named observation model.** `model=` states which definition of "observer" produced the
+number. `iigs-shadow-v1` uses the machine's own shadow decision, counted at the MMU decision
+point rather than re-derived — there is no second copy of the shadow rules to drift. On a
+platform that cannot shadow the rail reports `model=iie-basic-v1` and `shadowed=n/a`, never a
+confident `0`.
+
+**What PRIVATE does and does not mean.** It means no non-CPU reader is implied by the
+machine's configuration as this emulator models it. It does not mean provably unobservable: a
+bus-mastering card can read any RAM, and nothing here models that.
+
+**Coverage.** Taps every CPU store funnel in `base_6502.cpp` — `bus_write` (ordinary stores
+and stack pushes) and `phantom_write` / `phantom_write_ign` (RMW dummy writes, counted in the
+total because they are real bus cycles on silicon, and reported separately so they can be
+subtracted). `write_word` is dead code and is deliberately untapped; **if it is ever revived it
+must be tapped, or this rail silently undercounts 16-bit stores.**
+
+**Boot is not a representative workload.** A GS/OS boot is heavily I/O-bound, so `device`
+dominates in a way steady-state application work does not. Compare workloads, not absolutes.
+
 ## Break — breakpoints, watchpoints, provenance traps
 
 | Rail | Effect | Group | Gated |
