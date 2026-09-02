@@ -51,6 +51,10 @@
 //
 // PAYLOADS
 //
+//   (every record)         "sym": the trap PC's name -- an application symbol
+//                          when A2GSPU_SYMBOLS is loaded, else a documented
+//                          firmware entry point (COUT, RDKEY, MLI, ToolDisp...),
+//                          else null. Never a bare address dressed as a name.
 //   regs                   a x y s d dbr pbr pc p e (decimal)
 //   ring[=N]               the last N instruction PCs, oldest first (max 256).
 //                          The trap keeps its own ring; it does not arm BRKMEM.
@@ -116,6 +120,7 @@
 #include "cpu.hpp"
 #include "mmus/mmu.hpp"
 #include "iigs_toolbox.hpp"    // g_iigs_cur_frame (headless frame counter)
+#include "iigs_symbols.hpp"    // a2gspu_name_pc: names by default, null when unnamed
 #include "generic_tap.hpp"     // gtap_page_json (the 40-col text page as JSON)
 
 namespace a2trap {
@@ -574,6 +579,12 @@ inline void emit(Trap &t, cpu_state *cpu, uint64_t cycles, bool is_exit, uint32_
     snprintf(b, sizeof b, "{\"event\":\"trap\",\"trap\":\"%s\",\"t\":\"%s\",\"n\":%u,\"frame\":%d,\"cycles\":%llu,\"pc\":\"",
              t.name.c_str(), is_exit ? "x" : "e", (unsigned)n, g_iigs_cur_frame, (unsigned long long)cycles);
     s += b; pc_str(s, cpu->full_pc & 0xFFFFFF); s += '"';
+    {   // names by default: a documented entry point or an application symbol,
+        // and an explicit null otherwise -- never a bare address passing for a name
+        char sym[96];
+        if (a2gspu_name_pc(cpu->full_pc & 0xFFFFFF, sym, sizeof sym)[0]) { s += ",\"sym\":\""; s += sym; s += '"'; }
+        else s += ",\"sym\":null";
+    }
     snprintf(b, sizeof b, ",\"heavy\":%d", heavy ? 1 : 0); s += b;
     emit_payloads(s, is_exit ? t.pxdo : t.pdo, t, cpu);
     if (heavy) emit_payloads(s, is_exit ? t.pxheavy : t.pheavy, t, cpu);

@@ -1,6 +1,6 @@
 #pragma once
 #include "iigs_ioregs.hpp"     // names for $C000-$C0FF, so a device total is never a bare number
-inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);   // iigs_toolbox.hpp
+inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n);     // iigs_symbols.hpp (names by default)
 // ============================================================================
 // memvu_storevis.hpp — memory access-visibility accounting
 //   MEMVU_STOREVIS : of the stores a workload performs, how many land where an
@@ -416,7 +416,7 @@ inline void memvu_sv_report(FILE *f) {
             if (!bc) break;
             const uint32_t base = bg << MEMVU_BLAME_GRAN;
             char sym[96]; sym[0] = 0;
-            const char *name = iigs_sym_resolve(base, sym, sizeof sym);
+            const char *name = a2gspu_name_pc(base, sym, sizeof sym);
             fprintf(f, " $%02X/%04X=%u (%s)", (base >> 16) & 0xFF, base & 0xFFFF, bc,
                     (name && name[0]) ? name : "unnamed");
             memvu_blame_w_top[rank] = bc;   // keep BLAME's own report intact: restore below

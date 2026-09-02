@@ -307,6 +307,7 @@ bool run_one_frame(computer_t *computer) {
             s_wiz5_armed = true; generic_tap_arm(); wiz5_config_arm(computer); a2gspu_trap_arm();
             // platform from the MMU itself: only a IIgs MMU can see the Mega II image at $E1
             a2gspu_liveness_arm(computer->cpu->mmu->probe_readable(0xE12000));
+            g_a2gspu_cpu_for_names = computer->cpu;
         }
     }
 
@@ -2656,6 +2657,7 @@ static void run_headless_spike(GS2AppState *state) {
     // A malformed spec is fatal here, before a single frame runs.
     a2gspu_trap_arm();
     a2gspu_liveness_arm(state->mmu_iigs != nullptr);
+    g_a2gspu_cpu_for_names = computer->cpu;   // names by default check bank-0 ROM mapping live
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
     g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);

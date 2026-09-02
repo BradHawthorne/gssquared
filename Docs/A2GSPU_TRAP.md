@@ -96,7 +96,9 @@ One JSON object per line:
 
 `t` is `e` for entry, `x` for exit; `n` is the entry's sequence number and the
 exit that pairs with it carries the same `n`. `frame` is the headless frame
-counter and `cycles` the clock's cycle count at the trap.
+counter and `cycles` the clock's cycle count at the trap. `sym` names the trap
+PC — an application symbol when `A2GSPU_SYMBOLS` is loaded, else a documented
+firmware entry point (`COUT`, `RDKEY`, `MLI`, `ToolDisp`…), else `null`.
 
 ## Guarantees
 

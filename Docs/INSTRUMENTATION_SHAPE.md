@@ -226,6 +226,15 @@ moment it is printed.
 
 *Would have prevented F.*
 
+**Status:** the default half is done: the documented Apple II Monitor entry
+points, the IIgs dispatch vectors and ProDOS 8's `MLI` are seeded without any
+env, `STOREVIS writers top:` and `TRAP` records use them (`sym`), and an
+address they do not cover prints as `(unnamed)` / `null`. The old trace
+region tags keep their `A2GSPU_ROM_SYMBOLS` gate so no parser moves. What is
+not done is the table that would name routine *interiors* — a ROM 01/03
+`.dbg` and a GS/OS 6.0.1 table from the published source — so `$FF/4600`
+is still `(unnamed)`, honestly.
+
 ### M8 — Reachability and readback as a registration  (P7) — M
 
 The rail registry gains two columns: `live` (`env`, `ctrl`, `both`) and a

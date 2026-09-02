@@ -19,6 +19,9 @@
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
+#include "cpu.hpp"
+#include "mmus/mmu.hpp"
+#include "a2gspu_pins.hpp"     // g_a2gspu_rom_data / size: the ROM the run actually loaded
 
 struct IigsSym { uint32_t addr; std::string name; };
 inline std::vector<IigsSym> g_iigs_syms;
@@ -114,14 +117,100 @@ inline bool g_iigs_rom_syms_loaded = false;
 // .dbg is supplied). Bank-$Fx ROM INTERIOR routines need a real ROM .dbg; these
 // cover the well-known vectors the boot passes through.
 inline void iigs_rom_symbols_seed() {
+    // IIgs dispatch vectors (bank $E1 RAM, fixed by the firmware) and ProDOS 8's
+    // MLI entry (bank 0 global page).
     static const struct { uint32_t a; const char *n; } seed[] = {
         { 0xE10000, "ToolDisp"      },   // Tool Locator dispatch
         { 0xE10004, "UserToolDisp"  },   // user Tool Locator dispatch
         { 0xE100A8, "GSOS_ProDOS16" },   // GS/OS class-1 (ProDOS 16) dispatch
         { 0xE100B0, "GSOS_Disp"     },   // GS/OS class-0 dispatch
-        { 0xFF69,   "MonitorEntry"  },   // ROM Monitor entry (bank $FF)
+        { 0x00BF00, "MLI"           },   // ProDOS 8 Machine Language Interface
     };
     for (auto &s : seed) g_iigs_rom_syms.push_back({ s.a & 0xFFFFFF, std::string(s.n) });
+    // The Apple II Monitor entry points documented since the Apple II Reference
+    // Manual and kept by every later machine for compatibility. On the IIgs the
+    // same code sits in bank $FF (the last 16 KB of the ROM image) and is seen
+    // in bank $00 when the language card maps ROM, so both forms are named.
+    // Documented entry points only: routine INTERIORS still need a ROM .dbg,
+    // which is the data dependency that keeps a granule like $FF/4600 unnamed.
+    static const struct { uint16_t a; const char *n; } mon[] = {
+        { 0xF800, "PLOT" },     { 0xF819, "HLINE" },    { 0xF828, "VLINE" },   { 0xF832, "CLRSCR" },
+        { 0xF836, "CLRTOP" },   { 0xF847, "GBASCALC" }, { 0xF864, "SETCOL" },  { 0xF871, "SCRN" },
+        { 0xF941, "PRNTAX" },   { 0xF948, "PRBLNK" },   { 0xF94A, "PRBL2" },   { 0xFA62, "RESET" },
+        { 0xFB1E, "PREAD" },
+        { 0xFB2F, "INIT" },     { 0xFB39, "SETTXT" },   { 0xFB40, "SETGR" },   { 0xFB4B, "SETWND" },
+        { 0xFBDD, "BELL1" },    { 0xFC22, "VTAB" },     { 0xFC24, "VTABZ" },   { 0xFC42, "CLREOP" },
+        { 0xFC58, "HOME" },     { 0xFC62, "CR" },       { 0xFC66, "LF" },      { 0xFC70, "SCROLL" },
+        { 0xFC9C, "CLREOL" },   { 0xFCA8, "WAIT" },     { 0xFD0C, "RDKEY" },   { 0xFD1B, "KEYIN" },
+        { 0xFD35, "RDCHAR" },   { 0xFD67, "GETLNZ" },   { 0xFD6A, "GETLN" },   { 0xFD6F, "GETLN1" },
+        { 0xFD8E, "CROUT" },    { 0xFDDA, "PRBYTE" },   { 0xFDE3, "PRHEX" },   { 0xFDED, "COUT" },
+        { 0xFDF0, "COUT1" },    { 0xFE2C, "MOVE" },     { 0xFE80, "SETINV" },  { 0xFE84, "SETNORM" },
+        { 0xFE89, "SETKBD" },   { 0xFE93, "SETVID" },   { 0xFF2D, "PRERR" },   { 0xFF3A, "BELL" },
+        { 0xFF3F, "RESTORE" },  { 0xFF4A, "SAVE" },     { 0xFF58, "IORTS" },   { 0xFF59, "OLDRST" },
+        { 0xFF65, "MON" },      { 0xFF69, "MONZ" },
+    };
+    for (auto &m : mon) {
+        g_iigs_rom_syms.push_back({ (uint32_t)m.a,            std::string(m.n) });
+        g_iigs_rom_syms.push_back({ 0xFF0000u | (uint32_t)m.a, std::string(m.n) });
+    }
+}
+
+// ---- names by default -------------------------------------------------------
+// The ROM seed above is loaded by A2GSPU_ROM_SYMBOLS; without that env the old
+// consumers (ITRACE/TBTRACE region tags) print "<ROM>" exactly as before, so no
+// parser moves. NEW attribution outputs -- the STOREVIS writers line, TRAP
+// records -- go through this instead: the application table when it is loaded,
+// else the documented entry points, seeded on first use. "" means unnamed, and
+// every consumer prints that as unnamed/null rather than as a bare address.
+inline bool g_iigs_default_seeded = false;
+
+// The bank-0 form of a Monitor entry point is only a name when the ROM is
+// mapped there. Under GS/OS bank 0 $D000-$FFFF is language-card RAM holding
+// the kernel, and naming $00/F800 "PLOT" during a GS/OS boot is a false name
+// -- worse than none (the first version of this did exactly that). So a bank-0
+// address at or above $D000 is checked against the ROM the run actually
+// loaded: the $C000-$FFFF window is the image's last 16 KB, and if the four
+// bytes the CPU sees at the PC are not the ROM's bytes, the name is withheld.
+// The check needs the live MMU; gs2.cpp sets the cpu at arm time. Without it,
+// or on a ROM too small to have that window, no bank-0 high name is claimed.
+inline cpu_state *g_a2gspu_cpu_for_names = nullptr;
+inline bool a2gspu_bank0_rom_mapped(uint32_t lo) {
+    if (!g_a2gspu_cpu_for_names || !g_a2gspu_rom_data || g_a2gspu_rom_size < 0x4000 || lo < 0xD000) return false;
+    const uint8_t *win = g_a2gspu_rom_data + g_a2gspu_rom_size - 0x4000;
+    for (uint32_t k = 0; k < 4; k++) {
+        const uint32_t a = lo + k;
+        if (a > 0xFFFF) break;
+        if (g_a2gspu_cpu_for_names->mmu->read(a) != win[a - 0xC000]) return false;
+    }
+    return true;
+}
+
+inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
+    buf[0] = 0;
+    if (g_iigs_syms_loaded && iigs_sym_resolve(full_pc, buf, n)[0]) return buf;
+    if (g_iigs_rom_syms.empty()) {
+        iigs_rom_symbols_seed();
+        std::sort(g_iigs_rom_syms.begin(), g_iigs_rom_syms.end(),
+                  [](const IigsSym &a, const IigsSym &b) { return a.addr < b.addr; });
+        g_iigs_default_seeded = true;
+    }
+    // Same search as iigs_rom_sym_resolve, without the loaded-flag gate, and with
+    // a tighter window: an entry point names the routine it begins, not the
+    // next 8 KB of ROM.
+    const uint32_t pc = full_pc & 0xFFFFFF;
+    int lo = 0, hi = (int)g_iigs_rom_syms.size() - 1, best = -1;
+    while (lo <= hi) {
+        int m = (lo + hi) / 2;
+        if (g_iigs_rom_syms[m].addr <= pc) { best = m; lo = m + 1; } else hi = m - 1;
+    }
+    if (best < 0) return buf;
+    const uint32_t sa = g_iigs_rom_syms[best].addr;
+    if ((sa >> 16) == 0 && (sa & 0xFFFF) >= 0xD000 && !a2gspu_bank0_rom_mapped(pc & 0xFFFF)) return buf;
+    const uint32_t off = pc - sa;
+    if (off > 0x100) return buf;
+    if (off == 0) snprintf(buf, n, "%s", g_iigs_rom_syms[best].name.c_str());
+    else snprintf(buf, n, "%s+$%X", g_iigs_rom_syms[best].name.c_str(), off);
+    return buf;
 }
 
 inline void iigs_rom_symbols_load(const char *path) {

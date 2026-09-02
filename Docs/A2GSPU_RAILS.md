@@ -92,7 +92,7 @@ Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~189
 | `A2GSPU_LIVENESS_OUT=<file>` | NDJSON sink for the samples instead of stdout lines | observe | env |
 | `A2GSPU_ROM=<path>` | ROM image path for the lazy-loaded ROM-vs-kernel PC classifier (default `resources/roms/apple2gs/main.rom`) | observe | env |
 | `A2GSPU_SYMBOLS=<file>` | load a symbol table (annotate trace/PCs with names) | observe | env |
-| `A2GSPU_ROM_SYMBOLS=<file>` | name ROM-resident PCs (else `<ROM>`) | observe | env |
+| `A2GSPU_ROM_SYMBOLS=<file>` | name ROM-resident PCs in the trace region tags (else `<ROM>`). **Names by default:** even without it, the documented firmware entry points (the Apple II Monitor vectors `COUT RDKEY GETLN HOME …` in banks `$00` and `$FF`, the IIgs `ToolDisp`/`GSOS_Disp` vectors, ProDOS 8's `MLI`) name PCs in the new attribution outputs — `STOREVIS writers top:` and `TRAP` records' `sym` — and an address they do not cover is printed as `(unnamed)` / `null`, never as a bare address. Routine interiors (a granule like `$FF/4600`) still need a real ROM `.dbg`; that is the data dependency | observe | env |
 | `A2GSPU_SYM_BASE=<hex>` | pin the symbol-relocation base (disables auto-inference) | observe | env |
 | `A2GSPU_SYM_SUSPECT=1` | append `[SUSPECT reused]` to any symbol whose name resolves at >1 address (advisory only) | observe | env |
 | `A2GSPU_BUS_DUMP=<path>` | `~BUS` cycle dump (source = slot_bus) for the gssquared→card host gate | observe | env |
