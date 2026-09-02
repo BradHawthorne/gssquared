@@ -267,8 +267,6 @@ inline void write_manifest(FILE *f) {
     fprintf(f, "Docs/CLOSED_LOOP_INTEGRATION.md\n");
 }
 
-// Env rails that are still launch-only (not live CTRL). Agents must relaunch
-// with these set — listed here so they are not a black box.
 /* Every env rail this binary reads, emitted from the registry.
  *
  * This used to be ~36 hand-written fprintf lines out of the 128 rails the code
@@ -279,9 +277,26 @@ inline void write_manifest(FILE *f) {
  * Now there is one source of truth (a2gspu_rails_registry.hpp), enforced by
  * tools/a2rail/railparity.ps1, and this prints it. A rail added without a
  * registry entry fails that gate; a rail added with one appears here for free.
+ *
+ * WHAT THIS DOES NOT CLAIM: which rails have a live CTRL substitute. The old
+ * curated list was genuinely launch-only, so it could say "not live CTRL";
+ * printing all 128 makes that false, and the footer below has always named
+ * substitutes that exist.
+ *
+ * A per-rail `live` column was tried and withdrawn, because inferring it from
+ * names produces confident falsehoods: A2GSPU_LOADTRACE is a write-burst
+ * tracker and has nothing to do with the `load` verb, A2GSPU_POKE_NTH fires on
+ * the Nth hit of a PC where live `poke` writes immediately, and -- decisively --
+ * the footer already records that the live watch is a SOFT watch, "not bus
+ * WATCH", so every A2GSPU_WATCH* rail would have been marked substitutable when
+ * it is not. A wrong substitute is worse than none: it sends a caller to a verb
+ * that cannot do the job. If this column is wanted, derive it from the verb
+ * implementations, not from the rail names.
  */
 inline void write_env_only_rails(FILE *f) {
-    fprintf(f, "# env rails (set before process start; not live CTRL)\n");
+    fprintf(f, "# every env rail this binary reads, settable before start.\n");
+    fprintf(f, "# Some have live CTRL substitutes (see the footer); this table\n");
+    fprintf(f, "# does not claim which, because inferring it from names is wrong.\n");
     fprintf(f, "# source of truth: src/a2gspu_rails_registry.hpp"
                " (gate: tools/a2rail/railparity.ps1)\n");
     fprintf(f, "# columns: NAME <tab> FAMILY <tab> SYNOPSIS\n");
