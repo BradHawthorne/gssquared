@@ -28,6 +28,7 @@
 #include "NClock.hpp"
 #include "obs_iigs.hpp"   // Observatory boot-fault-context view (obs_view_fault)
 #include "generic_tap.hpp" // A2GSPU_TAP: generic title-agnostic PC-hit tap (off => 1 branch)
+#include "a2gspu_trap.hpp" // A2GSPU_TRAP: configurable PC traps with a payload spec (off => 1 branch)
 #include "a2gspu_coverage.hpp" // A2GSPU_COVERAGE: execution bitmap (off => 1 branch)
 #include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting (off => 1 branch)
 #include "memvu_istream.hpp"   // MEMVU_OPMIX / MEMVU_IREUSE: instruction-stream shape
@@ -2365,6 +2366,10 @@ int execute_next(cpu_state *cpu) override {
         }
         // A2GSPU_TAP: generic, title-agnostic PC-hit call tap (the merged wiz5 tap).
         if (g_gtap.on) generic_tap_check(cpu, clock->get_cycles());
+        // A2GSPU_TRAP: PC traps from configuration -- trigger, condition, policy and
+        // payload all come from the environment (the general form of PCTRAP and of
+        // the wiz5 traps). Observe-only; one untaken branch when unset.
+        if (g_trap_on) a2gspu_trap_check(cpu, clock->get_cycles());
         // A2GSPU_PCTRAP: one-shot — dump regs + the caller ring the instant execution
         // first enters the trap range (the wild-jump source, before a garbage run
         // scrolls it out of the ring).

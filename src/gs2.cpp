@@ -58,6 +58,7 @@
 #include "iigs_video_summary.hpp"
 #include "iigs_toolbox.hpp"
 #include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
+#include "a2gspu_trap.hpp"   // A2GSPU_TRAP: configurable PC traps (env-gated, off => no-op)
 #include "iigs_diag.hpp"
 #include "a2gspu_coverage.hpp"  // A2GSPU_COVERAGE: execution-coverage bitmap (env-gated)
 #include "a2gspu_png.hpp"       // CTRL `png` / `pngc`: HGR/DHGR agent-readable PNG
@@ -299,7 +300,7 @@ bool run_one_frame(computer_t *computer) {
     // stock emulator is unchanged (dual-mode invariant).
     {
         static bool s_wiz5_armed = false;
-        if (!s_wiz5_armed) { s_wiz5_armed = true; generic_tap_arm(); wiz5_config_arm(computer); }
+        if (!s_wiz5_armed) { s_wiz5_armed = true; generic_tap_arm(); wiz5_config_arm(computer); a2gspu_trap_arm(); }
     }
 
     if (cpu->halt == HLT_USER) { // top of frame.
@@ -2567,6 +2568,10 @@ static void run_headless_spike(GS2AppState *state) {
     // A2GSPU_TAP*: generic title-agnostic PC-hit / session tap (merged wiz5 tap).
     // No-op unless A2GSPU_TAP or A2GSPU_TAP_SESSION is set.
     generic_tap_arm();
+    // A2GSPU_TRAP / A2GSPU_TRAP_FILE / A2GSPU_TRAP_OUT: configurable PC traps.
+    // Idempotent; the run_one_frame lazy arm covers the CTRL and windowed paths.
+    // A malformed spec is fatal here, before a single frame runs.
+    a2gspu_trap_arm();
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
     g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);

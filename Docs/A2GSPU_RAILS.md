@@ -259,6 +259,9 @@ the early-boot figure as the outlier it is.
 | `A2GSPU_VALTRAP_MAX=N` | VALTRAP hit cap (default 64) | break | env |
 | `A2GSPU_PCTRAP="BANK:LO-HI"` | one-shot dump of registers + recent-PC ring on first entry to a PC range | break | env |
 | `A2GSPU_TRAPDUMP="BASE:LEN"` | extra memory region (hex) dumped by PCTRAP (default 48 bytes) | break | env |
+| `A2GSPU_TRAP="<spec>[;<spec>]"` | **PC traps from configuration.** Each spec: `at=PC[-PC]` (`HHHH` any bank, `BB:HHHH` one bank), optional `exit=PC` pairing, `when=` conditions over registers and memory (`z16(30)`, `m8(s16(1)+1)`, `x==1`, `z8(2d)~{4,5,9,a,b,c}`), a policy (`once` default, `every`, `first=N[/key]`), payloads `do=`/`heavy=`/`xdo=`/`xheavy=` from `regs ring zp stack mem=<expr>:<len> field=<name>:<expr> text scan=…`, `cap=N`, `out=<file>`. NDJSON with frame and cycle stamps. Malformed spec = fatal at arm; every spec echoed at arm and summarised at close (`records=0` is printed, never implied). The general form of PCTRAP and of the three wiz5 traps — see [`A2GSPU_TRAP.md`](A2GSPU_TRAP.md) | break | env |
+| `A2GSPU_TRAP_FILE=<file>` | specs one per line, `#` comments; combines with `A2GSPU_TRAP` | break | env |
+| `A2GSPU_TRAP_OUT=<file>` | default sink for specs without `out=`; otherwise records go to stdout as `IIGS TRAP: {…}` | break | env |
 | `A2GSPU_CONDTRAP="BANK:PC@f=v"` | conditional flag-provenance trap: at PC, when flag `f`(c/z/i/d/x/m/v/n)==v, report the PC that last changed that flag | break | env |
 | `A2GSPU_CONDTRAP_MAX=N` | CONDTRAP hit cap | break | env |
 | `A2GSPU_STACKTRAP="LO-HI"` | one-shot dump when S first enters the range | break | env |
