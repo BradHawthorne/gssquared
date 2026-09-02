@@ -705,6 +705,48 @@ class KeyGloo
         uint8_t a2gspu_hold = 0;   // ctrl-rail sticky force-key (see read_key_latch)
         void hold_key(uint8_t ascii) { a2gspu_hold = ascii ? (uint8_t)((ascii & 0x7F) | 0x80) : 0; }
 
+        // ---- A2GSPU snapshot (M5): the micro's variables and registers, then the
+        // bus devices. Not saved: the micro's ROM (loaded from the same file on
+        // every start), the host pointers, and the key intercept, which is the
+        // harness's, not the machine's. A restored micro polls and repeats and
+        // holds exactly where it was.
+        void A2GSPU_snapshot(FILE *f) {
+            fwrite(ram, 1, sizeof ram, f);
+            fwrite(key_mods, 1, sizeof key_mods, f); fwrite(key_codes, 1, sizeof key_codes, f);
+            fwrite(configuration_bytes, 1, 3, f); fwrite(&modes_byte, 1, 1, f);
+            fwrite(cmd, 1, 8, f); fwrite(&cmd_index, 4, 1, f); fwrite(&cmd_bytes, 4, 1, f);
+            fwrite(response, 1, 16, f); fwrite(&response_bytes, 4, 1, f); fwrite(&response_index, 4, 1, f);
+            fwrite(&error_byte, 1, 1, f);
+            uint8_t kl[2] = { key_latch.keycode, key_latch.keymods.value }; fwrite(kl, 1, 2, f);
+            fwrite(&last_key_down, 1, 1, f); fwrite(mouse_data, 1, 2, f);
+            int32_t rc = (int32_t)reset_counter; fwrite(&rc, 4, 1, f);
+            uint8_t fl[3] = { (uint8_t)interrupt_asserted, (uint8_t)data_interrupt_asserted, (uint8_t)send_data_register };
+            fwrite(fl, 1, 3, f);
+            fwrite(&status, 1, 1, f); fwrite(&datareg, 1, 1, f);
+            int32_t kd = (int32_t)keysdown; fwrite(&kd, 4, 1, f);
+            fwrite(&a2gspu_hold, 1, 1, f);
+            adb_host->A2GSPU_snapshot(f);
+        }
+        bool A2GSPU_restore(FILE *f) {
+            if (fread(ram, 1, sizeof ram, f) != sizeof ram) return false;
+            if (fread(key_mods, 1, sizeof key_mods, f) != sizeof key_mods) return false;
+            if (fread(key_codes, 1, sizeof key_codes, f) != sizeof key_codes) return false;
+            if (fread(configuration_bytes, 1, 3, f) != 3 || fread(&modes_byte, 1, 1, f) != 1) return false;
+            if (fread(cmd, 1, 8, f) != 8 || fread(&cmd_index, 4, 1, f) != 1 || fread(&cmd_bytes, 4, 1, f) != 1) return false;
+            if (fread(response, 1, 16, f) != 16 || fread(&response_bytes, 4, 1, f) != 1 || fread(&response_index, 4, 1, f) != 1) return false;
+            if (fread(&error_byte, 1, 1, f) != 1) return false;
+            uint8_t kl[2]; if (fread(kl, 1, 2, f) != 2) return false;
+            key_latch.keycode = kl[0]; key_latch.keymods.value = kl[1];
+            if (fread(&last_key_down, 1, 1, f) != 1 || fread(mouse_data, 1, 2, f) != 2) return false;
+            int32_t rc = 0; if (fread(&rc, 4, 1, f) != 1) return false; reset_counter = rc;
+            uint8_t fl[3]; if (fread(fl, 1, 3, f) != 3) return false;
+            interrupt_asserted = fl[0] != 0; data_interrupt_asserted = fl[1] != 0; send_data_register = fl[2] != 0;
+            if (fread(&status, 1, 1, f) != 1 || fread(&datareg, 1, 1, f) != 1) return false;
+            int32_t kd = 0; if (fread(&kd, 4, 1, f) != 1) return false; keysdown = kd;
+            if (fread(&a2gspu_hold, 1, 1, f) != 1) return false;
+            return adb_host->A2GSPU_restore(f);
+        }
+
         void print_keyboard() {
             printf("KG> KeyGloo: currmod: %02X, prevmod: %02X\n", vars.currmod.value, vars.prevmod.value);
             printf("KG> KeyGloo: key_latch: %02X, key_mods: %02X\n", key_latch.keycode, key_latch.keymods.value);

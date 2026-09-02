@@ -227,4 +227,25 @@ class ADB_Mouse : public ADB_Device
         //if (status) print_registers();
         return status;
     }
+
+    // ---- A2GSPU snapshot (M5): buttons, handler, and the absolute position the
+    // Event Manager injection tracks. The host-window scale factors are the
+    // host's, not the machine's, and are not saved.
+public:
+    void A2GSPU_snapshot(FILE *f) override {
+        ADB_Device::A2GSPU_snapshot(f);
+        uint8_t b[4] = { button_0_down, button_1_down, (uint8_t)has_data, handler }; fwrite(b, 1, 4, f);
+        int32_t xy[2] = { (int32_t)abs_x, (int32_t)abs_y }; fwrite(xy, 4, 2, f);
+        uint8_t m = shr_320_mode ? 1 : 0; fwrite(&m, 1, 1, f);
+    }
+    bool A2GSPU_restore(FILE *f) override {
+        if (!ADB_Device::A2GSPU_restore(f)) return false;
+        uint8_t b[4]; if (fread(b, 1, 4, f) != 4) return false;
+        button_0_down = b[0]; button_1_down = b[1]; has_data = b[2] != 0; handler = b[3];
+        int32_t xy[2]; if (fread(xy, 4, 2, f) != 2) return false;
+        abs_x = xy[0]; abs_y = xy[1];
+        uint8_t m = 0; if (fread(&m, 1, 1, f) != 1) return false;
+        shr_320_mode = m != 0;
+        return true;
+    }
 };

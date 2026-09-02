@@ -1,4 +1,5 @@
 #include <vector>
+#include <cstdio>
 #include <SDL3/SDL.h>
 #include <cassert>
 
@@ -96,5 +97,17 @@ class ADB_Host
         }
     }
 
+
+    // ---- A2GSPU snapshot (M5): every device on the bus, in bus order ----
+    void A2GSPU_snapshot(FILE *f) {
+        uint32_t n = (uint32_t)devices.size(); fwrite(&n, 4, 1, f);
+        for (ADB_Device *d : devices) d->A2GSPU_snapshot(f);
+    }
+    bool A2GSPU_restore(FILE *f) {
+        uint32_t n = 0;
+        if (fread(&n, 4, 1, f) != 1 || n != devices.size()) return false;   // a different bus is a different machine
+        for (ADB_Device *d : devices) if (!d->A2GSPU_restore(f)) return false;
+        return true;
+    }
 };
 

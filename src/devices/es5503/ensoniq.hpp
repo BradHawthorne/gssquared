@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdio>
 #include <cstdint>
 #include <vector>
 #include <functional>
@@ -108,5 +109,34 @@ public:
     Oscillator * get_oscillator(int index) { return &m_oscillators[index]; }
     uint8_t get_rege0() { return m_rege0; }
     uint8_t get_rege1() { return m_rege1; /* m_oscsenabled; */ }
+
+    // ---- A2GSPU snapshot (M5): the registers and the 32 oscillators, field by
+    // field (no struct padding in the file). The wave memory is the GLU's and is
+    // saved there; the mix buffer and the SDL stream are the host's.
+    void A2GSPU_snapshot(FILE *f) {
+        int32_t v[2] = { (int32_t)m_oscsenabled, (int32_t)m_output_channels }; fwrite(v, 4, 2, f);
+        fwrite(&m_channel_strobe, 1, 1, f); fwrite(&m_clock_rate, 4, 1, f); fwrite(&m_sample_rate, 4, 1, f);
+        fwrite(&m_rege0, 1, 1, f); fwrite(&m_rege1, 1, 1, f);
+        for (const Oscillator &o : m_oscillators) {
+            fwrite(&o.freq, 2, 1, f); fwrite(&o.wtsize, 2, 1, f); fwrite(&o.control, 1, 1, f); fwrite(&o.vol, 1, 1, f);
+            fwrite(&o.data, 1, 1, f); fwrite(&o.wavetblpointer, 4, 1, f); fwrite(&o.wavetblsize, 1, 1, f);
+            fwrite(&o.resolution, 1, 1, f); fwrite(&o.accumulator, 4, 1, f); fwrite(&o.irqpend, 1, 1, f);
+        }
+    }
+    bool A2GSPU_restore(FILE *f) {
+        int32_t v[2]; if (fread(v, 4, 2, f) != 2) return false;
+        m_oscsenabled = v[0]; m_output_channels = v[1];
+        if (fread(&m_channel_strobe, 1, 1, f) != 1 || fread(&m_clock_rate, 4, 1, f) != 1 || fread(&m_sample_rate, 4, 1, f) != 1) return false;
+        if (fread(&m_rege0, 1, 1, f) != 1 || fread(&m_rege1, 1, 1, f) != 1) return false;
+        for (Oscillator &o : m_oscillators) {
+            if (fread(&o.freq, 2, 1, f) != 1 || fread(&o.wtsize, 2, 1, f) != 1 || fread(&o.control, 1, 1, f) != 1 ||
+                fread(&o.vol, 1, 1, f) != 1 || fread(&o.data, 1, 1, f) != 1 || fread(&o.wavetblpointer, 4, 1, f) != 1 ||
+                fread(&o.wavetblsize, 1, 1, f) != 1 || fread(&o.resolution, 1, 1, f) != 1 ||
+                fread(&o.accumulator, 4, 1, f) != 1 || fread(&o.irqpend, 1, 1, f) != 1) return false;
+        }
+        if (m_sdl_stream) update_sdl_stream_rate();   // the enabled-oscillator count sets the rate
+        update_irq_status();                           // re-drive the IRQ line from the restored irqpend bits
+        return true;
+    }
     uint8_t get_oscsenabled() { return m_oscsenabled; }
 };

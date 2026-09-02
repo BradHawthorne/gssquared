@@ -550,4 +550,21 @@ class ADB_Keyboard : public ADB_Device
         key.keymods.caps = (SDL_KMOD_CAPS & event.key.mod) ? 1 : 0; */
         enqueue_key(key);
     }
+
+    // ---- A2GSPU snapshot (M5): the key queue the micro has not drained yet ----
+public:
+    void A2GSPU_snapshot(FILE *f) override {
+        ADB_Device::A2GSPU_snapshot(f);
+        for (int i = 0; i < 16; i++) { uint8_t e[2] = { keyqueue[i].keycode, (uint8_t)keyqueue[i].status }; fwrite(e, 1, 2, f); }
+        fwrite(&index_in, 4, 1, f); fwrite(&index_out, 4, 1, f); fwrite(&count, 4, 1, f);
+    }
+    bool A2GSPU_restore(FILE *f) override {
+        if (!ADB_Device::A2GSPU_restore(f)) return false;
+        for (int i = 0; i < 16; i++) {
+            uint8_t e[2]; if (fread(e, 1, 2, f) != 2) return false;
+            keyqueue[i].keycode = e[0]; keyqueue[i].status = (key_status_t)e[1];
+        }
+        if (fread(&index_in, 4, 1, f) != 1 || fread(&index_out, 4, 1, f) != 1 || fread(&count, 4, 1, f) != 1) return false;
+        return true;
+    }
 };

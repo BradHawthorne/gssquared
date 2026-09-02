@@ -343,6 +343,7 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
     st->computer = computer;
     st->clock = computer->clock;
     st->irq_control = computer->irq_control;
+    g_a2gspu_ensoniq = st;   // the snapshot code reaches the sound state through this
 
     // Set up IRQ callback to propagate interrupts to CPU
     st->chip->set_irq_callback([st](bool state) {
@@ -421,4 +422,26 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
         st->c14m_accum = 0;
         return true;
     });
+}
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+void ensoniq_A2GSPU_snapshot(ensoniq_state_t *st, FILE *f) {
+    uint8_t r[4] = { st->soundctl, st->sounddata, st->soundadrl, st->soundadrh };
+    fwrite(r, 1, 4, f);
+    fwrite(st->doc_ram, 1, 0x10000, f);
+    st->chip->A2GSPU_snapshot(f);
+}
+bool ensoniq_A2GSPU_restore(ensoniq_state_t *st, FILE *f) {
+    uint8_t r[4];
+    if (fread(r, 1, 4, f) != 4) return false;
+    st->soundctl = r[0]; st->sounddata = r[1]; st->soundadrl = r[2]; st->soundadrh = r[3];
+    if (fread(st->doc_ram, 1, 0x10000, f) != 0x10000) return false;
+    if (!st->chip->A2GSPU_restore(f)) return false;
+    // Timing is relative to the clock, which the snapshot does not hold: the next
+    // catch-up starts now, with nothing carried and no DOC read in flight.
+    st->last_catchup_c14m = st->clock->get_c14m();
+    st->c14m_accum = 0;
+    st->doc_read_complete_time = 0;
+    st->samples_accumulated = 0.0f;
+    return true;
 }

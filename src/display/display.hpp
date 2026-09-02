@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <cstdio>
 #include "gs2.hpp"
 #include "videosystem.hpp"
 
@@ -199,3 +200,11 @@ void display_update_video_scanner(display_state_t *ds);
 
 void update_vgc_interrupt(display_state_t *ds, bool assert_now);
 void update_megaii_interrupt(display_state_t *ds, bool assert_now);
+
+// ---- A2GSPU snapshot (M5): the Mega II / VGC interrupt registers ($C041 INTEN,
+// $C023 VGCINT, $C046 INTFLAG), the one-second and quarter-second counters,
+// LANGSEL, and the text-flash phase. A snapshot without these restores a machine
+// with every interrupt source disabled: GS/OS's heartbeat (which is what polls
+// the keyboard) never runs again. The restore re-drives the IRQ lines.
+void display_A2GSPU_snapshot(display_state_t *ds, FILE *f);
+bool display_A2GSPU_restore(display_state_t *ds, FILE *f);

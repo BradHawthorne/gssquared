@@ -210,8 +210,30 @@ windowed from a snapshot like everything else.
 **Status:** the S half is done: every snapshot now carries a manifest (class,
 included, excluded, frame, pins, build, executable hash) after its sentinel,
 `SNAP_LOAD` and `restore` print it or say it is absent and what Class A means,
-and `SPIKE_KEYS` into a restored machine is a counted warning. The L half —
-Class B (video/scanner) and Class C (ADB, Ensoniq, IWM) — is not started.
+and `SPIKE_KEYS` into a restored machine is a counted warning. The L half has
+its first two devices: the ADB micro (its variables, registers, the key latch
+and hold, and the keyboard and mouse on its bus) and the Ensoniq (GLU
+registers, the 64 KB DOC RAM, the chip's registers and 32 oscillators) are
+written as named device blocks between the MMU block and the sentinel, each
+with a version and a length so an unknown block is stepped over and named,
+and a snapshot from before device blocks reads exactly as it did. The
+manifest now says `devices=adb,ensoniq` and moves those two from `excluded`
+to `included`; the restore prints `devices restored=… skipped=…`, a skipped
+block is a counted warning, and `SPIKE_KEYS` into a snapshot that holds the
+ADB no longer warns. Sound timing kept as 14M timestamps is rebased to the
+restore instant, not restored. A third block, `vgcint`, came out of the
+smoke test: with the ADB micro restored, a typed key still never reached
+the Finder. The iolog counters showed why — the restored machine polled
+`$C025` (the Finder's main loop) but never `$C000`, because the heartbeat
+that polls the keyboard runs off the VBL interrupt, and the VBL enable
+(`$C041`) lives in the display module, which the snapshot did not hold. Event
+D's "the ADB micro is not in it" was half the cause; a restored machine also
+had every interrupt source disabled. `vgcint` carries INTEN, VGCINT, INTFLAG,
+the one-second and quarter-second counters, LANGSEL and the text-flash phase,
+and the restore re-drives the IRQ lines from them. Still out: the scanner (Class B — the display
+pipeline is in the owner's working tree, so it waits), and the IWM with its
+media (a restored drive is only as good as the image it points at, and under
+`A2GSPU_RAMDISK` that image is not the file on disk).
 
 ### M6 — Artifact discipline and a shared reader  (P4) — S
 

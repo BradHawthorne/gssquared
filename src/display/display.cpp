@@ -645,6 +645,27 @@ void update_megaii_interrupt(display_state_t *ds, bool assert_now) {
     }
 }
 
+// ---- A2GSPU snapshot (M5) --------------------------------------------------
+void display_A2GSPU_snapshot(display_state_t *ds, FILE *f) {
+    uint8_t r[4] = { ds->f_INTEN, ds->f_VGCINT, ds->f_INTFLAG, ds->f_langsel };
+    fwrite(r, 1, 4, f);
+    fwrite(&ds->onesec_counter, 2, 1, f); fwrite(&ds->quartersec_counter, 2, 1, f);
+    int32_t fc = (int32_t)ds->flash_counter; fwrite(&fc, 4, 1, f);
+    uint8_t fs = ds->flash_state ? 1 : 0; fwrite(&fs, 1, 1, f);
+}
+bool display_A2GSPU_restore(display_state_t *ds, FILE *f) {
+    uint8_t r[4];
+    if (fread(r, 1, 4, f) != 4) return false;
+    ds->f_INTEN = r[0]; ds->f_VGCINT = r[1]; ds->f_INTFLAG = r[2]; ds->f_langsel = r[3];
+    if (fread(&ds->onesec_counter, 2, 1, f) != 1 || fread(&ds->quartersec_counter, 2, 1, f) != 1) return false;
+    int32_t fc = 0; if (fread(&fc, 4, 1, f) != 1) return false; ds->flash_counter = fc;
+    uint8_t fs = 0; if (fread(&fs, 1, 1, f) != 1) return false; ds->flash_state = fs != 0;
+    // The IRQ lines follow the registers, as they would after the writes that set them.
+    update_vgc_interrupt(ds, true);
+    update_megaii_interrupt(ds, true);
+    return true;
+}
+
 /* 
 Calculate the video counters (as they would exist in the real video scanner), compose them as they are 
 in the IIgs, and return whichever one was asked-for.

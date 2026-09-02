@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include "util/AudioSystem.hpp"
 #include "ensoniq.hpp"
 #include "util/InterruptController.hpp"
@@ -40,3 +41,10 @@ struct ensoniq_state_t {
 };
 
 void init_ensoniq_slot(computer_t *computer, SlotType_t slot);
+
+// ---- A2GSPU snapshot (M5): the GLU registers, the 64 KB DOC RAM and the chip.
+// Timing kept as 14M timestamps is rebased to the restore instant rather than
+// restored: it is relative to a clock the snapshot does not hold.
+inline ensoniq_state_t *g_a2gspu_ensoniq = nullptr;   // the one instance, for the snapshot code
+void ensoniq_A2GSPU_snapshot(ensoniq_state_t *st, FILE *f);
+bool ensoniq_A2GSPU_restore(ensoniq_state_t *st, FILE *f);

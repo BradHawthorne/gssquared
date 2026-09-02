@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include <cstdint>
+#include <cstdio>
 
 #include "util/DebugFormatter.hpp"
 
@@ -28,6 +29,19 @@ public:
         registers[3].size = 2;
         registers[3].data[0] = 0;
         registers[3].data[1] = id | ADB_SR_ENABLE;
+    }
+
+    // ---- A2GSPU snapshot (M5): the bus address and the four registers; a
+    // device with more state overrides, calls this first, then adds its own.
+    virtual void A2GSPU_snapshot(FILE *f) {
+        fwrite(&id, 1, 1, f); fwrite(&default_id, 1, 1, f);
+        for (int i = 0; i < 4; i++) { fwrite(&registers[i].size, 4, 1, f); fwrite(registers[i].data, 1, 8, f); }
+    }
+    virtual bool A2GSPU_restore(FILE *f) {
+        if (fread(&id, 1, 1, f) != 1 || fread(&default_id, 1, 1, f) != 1) return false;
+        for (int i = 0; i < 4; i++)
+            if (fread(&registers[i].size, 4, 1, f) != 1 || fread(registers[i].data, 1, 8, f) != 8) return false;
+        return true;
     }
 
     /* Restore the power-on address and SRQ state. An ADB Reset is a BROADCAST

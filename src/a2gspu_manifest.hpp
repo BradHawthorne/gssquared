@@ -22,7 +22,7 @@ inline const char *oracle_banner() {
         "NEVER subtract cycles across separate acks (can jump/go backwards).\n"
         "  colour= always named profile (pngc profile=4dot|mono). shot/SDL is human-only.\n"
         "  memory observe= probe_peek / flat-image paths; never toggle RAMRD to look.\n"
-        "  snapshot= Class A (CPU+MMU+softswitches); devices self-heal — not full time travel.\n"
+        "  snapshot= CPU+MMU+softswitches+RAM, plus the ADB micro and the Ensoniq on a IIgs; the manifest names the rest (iwm, media, scanner self-heal).\n"
         "  dual-mode= no A2GSPU_* env => stock windowed emulator.\n"
         "discover: help | help <file> | manifest <file> | oracle\n"
         "docs: Docs/AGENTIC_ORACLE.md Docs/A2GSPU_RAILS.md Docs/DoubleHiRes.md\n";
@@ -88,14 +88,14 @@ inline const char *verb_when(const char *name) {
         {"rail",       "what can be OBSERVED here at all. Verbs are the live surface; rails are the launch-time one, and asking the binary beats reading a catalogue that has drifted before (128 rails read, 96 described, when this was added)"},
         {"read",       "dump guest memory to a host file, including aux as bank 01"},
         {"reset",      "recover a wedged machine; cold with the argument"},
-        {"restore",    "reload a Class A snapshot (CPU+MMU+softswitches). Devices self-heal -- not time travel"},
+        {"restore",    "reload a snapshot: CPU+MMU+softswitches+RAM, and the ADB micro and Ensoniq when the file holds them (the ack says which). IWM, media and scanner self-heal -- not full time travel"},
         {"resume",     "continue past a breakpoint hit without losing the breakpoint"},
         {"run",        "advance N video frames. Use run-until when you can name a destination instead"},
         {"run-until",  "run to a named PC with an instruction budget. THE timing primitive: its cycles= is an in-command delta, the only form the oracle certifies. Arriving proves this run executed that address -- a value in RAM cannot imitate a program counter"},
         {"dhgr-calibrate", "derive the DHGR colour profile from the running machine rather than assuming one"},
         {"dhgr-export",    "write the calibrated DHGR profile out for the art pipeline to compile against"},
         {"dhgr-golden",    "capture or check a DHGR reference frame -- the art oracle for colour work"},
-        {"save",       "take a Class A snapshot before an experiment you expect to be destructive"},
+        {"save",       "take a snapshot before an experiment you expect to be destructive: CPU+MMU+softswitches+RAM, plus the ADB micro and the Ensoniq on a IIgs; the manifest names what it holds"},
         {"screen",     "text-page helper"},
         {"session",    "starting or ending a suite. Ask what is armed before trusting a measurement; reset before handing the machine on, or the next run inherits your probes"},
         {"systems",    "enumerate every platform, built-in configuration, ROM personality and numeric slot-device map from the running binary"},
@@ -169,11 +169,11 @@ inline const Verb *verbs(int *count) {
         {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> | live | read <NAME> | schema [NAME] — enumerate every env rail this binary reads, from the binary; live= which a CTRL verb reaches, read= how its state comes back, schema= the shape of the records it writes", "discover"},
         {"read", "observe", "read <addr> <len> <file> — probe_peek dump (side-effect-free)", "memory-peek"},
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
-        {"restore", "snapshot", "restore <file> — Class A snapshot load", "time-travel-A"},
+        {"restore", "snapshot", "restore <file> — snapshot load; ack names the devices restored", "time-travel-A"},
         {"resume", "manipulate", "resume — clear a user halt (breakpoint/save-at) so the CPU advances again; refuses to paper over a jammed CPU", "force-control"},
         {"run", "run", "run <frames> — advance N frames; ack includes cycles= IN-COMMAND", "cycles-in-cmd"},
         {"run-until", "run", "run-until <addr> [max_instr] — stop at PC; cycles= IN-COMMAND", "cycles-in-cmd"},
-        {"save", "snapshot", "save <file> — Class A CPU+MMU snapshot", "time-travel-A"},
+        {"save", "snapshot", "save <file> — CPU+MMU+RAM snapshot, plus adb and ensoniq on a IIgs", "time-travel-A"},
         {"screen", "observe", "screen — screen/text helper", "text-page"},
         {"setreg", "manipulate", "setreg <reg> <hex> — force CPU register", "force-control"},
         {"shot", "observe", "shot <file> — SDL backbuffer BMP (HUMAN eyeball; not art oracle)", "sdl-human"},
