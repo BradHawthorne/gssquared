@@ -230,10 +230,16 @@ moment it is printed.
 points, the IIgs dispatch vectors and ProDOS 8's `MLI` are seeded without any
 env, `STOREVIS writers top:` and `TRAP` records use them (`sym`), and an
 address they do not cover prints as `(unnamed)` / `null`. The old trace
-region tags keep their `A2GSPU_ROM_SYMBOLS` gate so no parser moves. What is
-not done is the table that would name routine *interiors* — a ROM 01/03
-`.dbg` and a GS/OS 6.0.1 table from the published source — so `$FF/4600`
-is still `(unnamed)`, honestly.
+region tags keep their `A2GSPU_ROM_SYMBOLS` gate so no parser moves. The data
+half followed the same day, from the ROM itself: the Tool Locator reads the
+system tool pointer table's address from `$E1/03C0` (`$FE/012F` in ROM 01),
+and that table yields every ROM tool set's function entry points — 526 for
+ROM 01 — which `tools/a2rail/romfpt.py` writes as
+`assets/symbols/apple2gs/<ROM hash>.sym` and the default namer loads for the
+matching ROM. `$FF/46ED` is `SoundTools.FFStartSound+$2FC`, verified against a
+dispatcher trap. Still open: RAM-resident tool sets (14 and up), GS/OS's own
+kernel and drivers, and shared helpers, which the table names after the
+preceding entry.
 
 ### M8 — Reachability and readback as a registration  (P7) — M
 

@@ -308,6 +308,7 @@ bool run_one_frame(computer_t *computer) {
             // platform from the MMU itself: only a IIgs MMU can see the Mega II image at $E1
             a2gspu_liveness_arm(computer->cpu->mmu->probe_readable(0xE12000));
             g_a2gspu_cpu_for_names = computer->cpu;
+            iigs_toolbox_symbols_load_once();
         }
     }
 
@@ -2658,6 +2659,7 @@ static void run_headless_spike(GS2AppState *state) {
     a2gspu_trap_arm();
     a2gspu_liveness_arm(state->mmu_iigs != nullptr);
     g_a2gspu_cpu_for_names = computer->cpu;   // names by default check bank-0 ROM mapping live
+    iigs_toolbox_symbols_load_once();         // at arm, so its one line prints whole and never inside a report
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
     g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);

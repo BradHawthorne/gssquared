@@ -1991,6 +1991,17 @@ inline bool try_input(const char *line, char *result, size_t rsz,
 
     if (!strncmp(line, "press ", 6)) {
         unsigned int ch = 0; int hold = 15;
+        // press <hex2> [hold] [mods]   mods: letters o (Open-Apple) c (Closed-Apple)
+        // s (shift) k (control), e.g. `press 6F 2 o` is Open-Apple-O. The bits are
+        // adb_mod_key_t's: shift=1 ctrl=2 closed=$40 open=$80 (KEYMODREG order).
+        char modw[16] = {0}; uint8_t mods = 0;
+        if (sscanf(line + 6, "%x %d %15s", &ch, &hold, modw) == 3) {
+            for (const char *p = modw; *p; p++) {
+                if (*p == 'o') mods |= 0x80; else if (*p == 'c') mods |= 0x40;
+                else if (*p == 's') mods |= 0x01; else if (*p == 'k') mods |= 0x02;
+                else { snprintf(result, rsz, "status=FAIL press-mods '%s' -- letters o c s k only", modw); return true; }
+            }
+        }
         if (sscanf(line + 6, "%x %d", &ch, &hold) >= 1) {
             keyboard_state_t *kb =
                 (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
@@ -2012,7 +2023,8 @@ inline bool try_input(const char *line, char *result, size_t rsz,
                 // sticky: the ADB micro auto-repeats inside a single video
                 // frame, so Pascal Execute/Command sees AAAA / XX.
                 // hold<=3 = typing one-shot; hold>=4 = old sticky (games).
-                kg->kg->force_key((uint8_t)ch);
+                if (mods) kg->kg->force_key_mods((uint8_t)ch, mods);
+                else      kg->kg->force_key((uint8_t)ch);
                 keygloo_update_interrupt_status(kg, kg->kg);
                 if (hold <= 3) {
                     int frames = hold < 1 ? 1 : hold;
@@ -2024,6 +2036,7 @@ inline bool try_input(const char *line, char *result, size_t rsz,
                     }
                     kg->kg->hold_key(0);
                     kg->kg->key_up();
+                    if (mods) kg->kg->release_mods(mods);
                 } else {
                     int hk = 3;
                     kg->kg->hold_key((uint8_t)ch);

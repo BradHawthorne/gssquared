@@ -44,6 +44,8 @@
 #include "Module_ID.hpp"
 #include "devices/keyboard/keyboard.hpp"
 #include "generic_tap.hpp"   // g_gtap (on/dir) + g_gtap_ext extension hook
+#include "devices/adb/keygloo.hpp"   // the IIgs key path for schedules and PRESS
+#include "iigs_diag.hpp"             // a2gspu_warn
 
 // UCSD p-code interpreter time base (NClock cycles at ~1.0205 MHz), matching
 // the schema the wiz5_clean Python analysis stack already consumes.
@@ -223,7 +225,9 @@ inline void wiz5_config_step(cpu_state *cpu, uint64_t cycles) {
 // screens). WIZ5_KEYRAM dumps $0800-$BFFF at each injected keystroke.
 // Driven per-frame from run_one_frame (the single windowed+headless funnel).
 // ---------------------------------------------------------------------------
-struct Wiz5KeyEntry { int frame; std::string wait_text; std::string keys; };
+struct Wiz5KeyEntry { int frame; std::string wait_text; std::string keys; int press_key = -1; uint8_t press_mods = 0; };
+inline int g_wiz5_press_release_frame = -1;   // frame at which a PRESS entry's key/mods are released
+inline uint8_t g_wiz5_press_mods_held = 0;
 inline std::vector<Wiz5KeyEntry> g_wiz5_keys;
 inline size_t g_wiz5_keys_next = 0;
 inline int    g_wiz5_key_delay = 0;
@@ -266,16 +270,46 @@ inline void wiz5_keyram_dump(computer_t *computer) {
 
 inline void wiz5_inject(computer_t *computer, const std::string &keys, int frame) {
     keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
+    keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
     if (kb && !keys.empty()) {
         kb->paste_buffer += keys;
         printf("WIZ5_KEYS: frame %d injected %d chars\n", frame, (int)keys.size());
         wiz5_keyram_dump(computer);
+    } else if (kg && kg->kg && !keys.empty()) {
+        // A IIgs has no MODULE_KEYBOARD and no paste buffer: its keys arrive over
+        // ADB. Same one-force_key-per-char sequence as SPIKE_KEYS and the CTRL
+        // `keys` verb, so the three paths cannot diverge. Until this existed a
+        // schedule on the IIgs did nothing and said nothing.
+        for (char c : keys) { kg->kg->force_key((uint8_t)c); keygloo_update_interrupt_status(kg, kg->kg); }
+        kg->kg->key_up();
+        printf("WIZ5_KEYS: frame %d injected %d chars (ADB path)\n", frame, (int)keys.size());
+        wiz5_keyram_dump(computer);
+    } else if (!keys.empty()) {
+        a2gspu_warn("WIZ5_KEYS", "no keyboard AND no KeyGloo -- schedule entry skipped");
     }
+}
+
+// PRESS <hex2> [mods]: one key with modifiers, through the ADB path (the IIgs
+// Finder opens a selected icon on Open-Apple-O; typing 'o' at it starts a
+// rename). Held two frames, then the modifiers are released.
+inline void wiz5_press(computer_t *computer, int key, uint8_t mods, int frame) {
+    keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
+    if (!(kg && kg->kg)) { a2gspu_warn("WIZ5_KEYS", "PRESS needs the IIgs KeyGloo path -- entry skipped"); return; }
+    if (mods) kg->kg->force_key_mods((uint8_t)key, mods); else kg->kg->force_key((uint8_t)key);
+    keygloo_update_interrupt_status(kg, kg->kg);
+    g_wiz5_press_release_frame = frame + 2;
+    g_wiz5_press_mods_held = mods;
+    printf("WIZ5_KEYS: frame %d PRESS $%02X mods=$%02X (ADB path)\n", frame, key, mods);
 }
 
 // Called once per executed frame from run_one_frame (env-gated: no keys loaded
 // => returns immediately). `frame` is the shared executed-frame counter.
 inline void wiz5_keys_tick(computer_t *computer, int frame) {
+    if (g_wiz5_press_release_frame >= 0 && frame >= g_wiz5_press_release_frame) {
+        keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
+        if (kg && kg->kg) { kg->kg->key_up(); if (g_wiz5_press_mods_held) kg->kg->release_mods(g_wiz5_press_mods_held); }
+        g_wiz5_press_release_frame = -1; g_wiz5_press_mods_held = 0;
+    }
     if (g_wiz5_keys.empty() && g_wiz5_key_pending.empty()) return;
     // Paced-injection: drain the current entry one key per delay window.
     if (g_wiz5_key_delay > 0 && !g_wiz5_key_pending.empty()) {
@@ -309,7 +343,8 @@ inline void wiz5_keys_tick(computer_t *computer, int frame) {
                    frame, (int)e.keys.size(), g_wiz5_key_delay);
             return;
         }
-        wiz5_inject(computer, e.keys, frame);
+        if (e.press_key >= 0) wiz5_press(computer, e.press_key, e.press_mods, frame);
+        else wiz5_inject(computer, e.keys, frame);
         g_wiz5_keys_next++;
     }
 }
@@ -377,6 +412,20 @@ inline void wiz5_config_arm(computer_t *computer) {
                 long frame = strtol(line, &end, 10);
                 if (end == line) continue;
                 while (*end == ' ' || *end == '\t') end++;
+                if (!strncmp(end, "PRESS ", 6)) {
+                    // <frame> PRESS <hex2> [mods]   mods letters: o Open-Apple, c Closed-Apple, s shift, k control
+                    unsigned key = 0; char modw[16] = {0}; uint8_t mods = 0;
+                    int got = sscanf(end + 6, "%x %15s", &key, modw);
+                    if (got < 1) { fprintf(stderr, "%s: FAIL bad PRESS line '%s' -- aborting (exit 2)\n", kf_label, line); exit(2); }
+                    for (const char *p = modw; got == 2 && *p; p++) {
+                        if (*p == 'o') mods |= 0x80; else if (*p == 'c') mods |= 0x40;
+                        else if (*p == 's') mods |= 0x01; else if (*p == 'k') mods |= 0x02;
+                        else if (*p != '\n' && *p != '\r') { fprintf(stderr, "%s: FAIL PRESS mods '%s' -- letters o c s k only (exit 2)\n", kf_label, modw); exit(2); }
+                    }
+                    Wiz5KeyEntry pe{(int)frame, "", ""}; pe.press_key = (int)(key & 0x7F); pe.press_mods = mods;
+                    g_wiz5_keys.push_back(pe);
+                    continue;
+                }
                 std::string text = decode(end);
                 if (!text.empty()) g_wiz5_keys.push_back({(int)frame, "", text});
             }

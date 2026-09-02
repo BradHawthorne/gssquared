@@ -164,6 +164,34 @@ inline void iigs_rom_symbols_seed() {
 // every consumer prints that as unnamed/null rather than as a bare address.
 inline bool g_iigs_default_seeded = false;
 
+// The ROM's toolbox function entry points, read out of the ROM by
+// tools/a2rail/romfpt.py and shipped as assets/symbols/apple2gs/<house-FNV of
+// the ROM>.sym, so a different ROM gets no wrong names. Loaded on first use
+// beside the Monitor seed. A PC between two entries is named after the
+// preceding one: right for a function body, wrong for a shared helper (the
+// boot's DOC clear is one, inside SoundBootInit but after GetTableAddress's
+// entry); a dispatcher trap is the authority when it matters.
+inline bool g_iigs_toolbox_tried = false;
+inline int  g_iigs_toolbox_loaded = 0;
+inline void iigs_toolbox_symbols_load_once() {
+    if (g_iigs_toolbox_tried) return;
+    g_iigs_toolbox_tried = true;
+    if (!g_a2gspu_rom_data || !g_a2gspu_rom_size) return;
+    char path[128];
+    snprintf(path, sizeof path, "assets/symbols/apple2gs/%016llX.sym",
+             (unsigned long long)a2gspu_fnv_bytes(g_a2gspu_rom_data, g_a2gspu_rom_size));
+    FILE *f = fopen(path, "rb");
+    if (!f) { printf("IIGS SYMS: no toolbox table for this ROM (%s absent); toolbox PCs stay unnamed\n", path); return; }
+    char line[256];
+    while (fgets(line, sizeof line, f)) {
+        unsigned a; char nm[128];
+        if (line[0] == '#') continue;
+        if (sscanf(line, "%x %127s", &a, nm) == 2) { g_iigs_rom_syms.push_back({ a & 0xFFFFFF, std::string(nm) }); g_iigs_toolbox_loaded++; }
+    }
+    fclose(f);
+    printf("IIGS SYMS: %d toolbox entry points from %s\n", g_iigs_toolbox_loaded, path);
+}
+
 // The bank-0 form of a Monitor entry point is only a name when the ROM is
 // mapped there. Under GS/OS bank 0 $D000-$FFFF is language-card RAM holding
 // the kernel, and naming $00/F800 "PLOT" during a GS/OS boot is a false name
@@ -190,8 +218,9 @@ inline bool a2gspu_bank0_rom_mapped(uint32_t lo) {
 inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     buf[0] = 0;
     if (g_iigs_syms_loaded && iigs_sym_resolve(full_pc, buf, n)[0]) return buf;
-    if (g_iigs_rom_syms.empty()) {
-        iigs_rom_symbols_seed();
+    if (g_iigs_rom_syms.empty() || !g_iigs_toolbox_tried) {
+        if (g_iigs_rom_syms.empty()) iigs_rom_symbols_seed();
+        iigs_toolbox_symbols_load_once();
         std::sort(g_iigs_rom_syms.begin(), g_iigs_rom_syms.end(),
                   [](const IigsSym &a, const IigsSym &b) { return a.addr < b.addr; });
         g_iigs_default_seeded = true;
@@ -209,7 +238,10 @@ inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     const uint32_t sa = g_iigs_rom_syms[best].addr;
     if ((sa >> 16) == 0 && (sa & 0xFFFF) >= 0xD000 && !a2gspu_bank0_rom_mapped(pc & 0xFFFF)) return buf;
     const uint32_t off = pc - sa;
-    if (off > 0x100) return buf;
+    // Monitor entry points are dense and short; toolbox functions are not. A
+    // longer reach names a function body while a shared helper past its end
+    // still resolves to the preceding entry, which the table header warns of.
+    if (off > 0x800) return buf;
     if (off == 0) snprintf(buf, n, "%s", g_iigs_rom_syms[best].name.c_str());
     else snprintf(buf, n, "%s+$%X", g_iigs_rom_syms[best].name.c_str(), off);
     return buf;

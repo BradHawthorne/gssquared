@@ -687,6 +687,19 @@ class KeyGloo
             store_key_to_buffer((uint8_t)(ascii & 0x7F), 0);
             keysdown = 1;   // assert AKD ($C010 b7): AP1.3 reads $C000 bit7 (fine at
         }                   // keysdown=0) but RTSTRP may gate the read on any-key-down.
+        // The same, with modifiers travelling WITH the key: they land in the key's
+        // keymods, which is what $C025 reports while that key is in the latch and
+        // what the Event Manager puts in the event record. Without this the Finder
+        // could be told to select an icon but never to Open it -- Open is
+        // Open-Apple-O, and a bare 'o' typed at a selected icon starts a rename
+        // (measured: it renamed a volume). currmod is set for the duration too, so
+        // a live read of the modifier state agrees with the event.
+        void force_key_mods(uint8_t ascii, uint8_t mods) {
+            vars.currmod.value = (uint8_t)(vars.currmod.value | mods);
+            store_key_to_buffer((uint8_t)(ascii & 0x7F), mods);
+            keysdown = 1;
+        }
+        void release_mods(uint8_t mods) { vars.currmod.value = (uint8_t)(vars.currmod.value & ~mods); }
         void key_up() { keysdown = 0; }   // release AKD after the poll window
 
         uint8_t a2gspu_hold = 0;   // ctrl-rail sticky force-key (see read_key_latch)
