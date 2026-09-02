@@ -215,16 +215,26 @@ inline bool a2gspu_bank0_rom_mapped(uint32_t lo) {
     return true;
 }
 
+// The default table, ready to search: the documented entry points seeded, the
+// ROM's own toolbox table loaded, and the whole thing SORTED -- in that order,
+// once, whichever caller arrives first (main() at arm, so the loader's one
+// line prints whole; or the first lookup, on a path that never armed). The
+// first version keyed this on the loader's own flag, so an arm-time load left
+// the vector unseeded and unsorted for every lookup after it: a binary search
+// over an unsorted table named the Tool Locator dispatch null.
+inline void iigs_names_ready() {
+    if (g_iigs_default_seeded) return;
+    if (g_iigs_rom_syms.empty()) iigs_rom_symbols_seed();
+    iigs_toolbox_symbols_load_once();
+    std::sort(g_iigs_rom_syms.begin(), g_iigs_rom_syms.end(),
+              [](const IigsSym &a, const IigsSym &b) { return a.addr < b.addr; });
+    g_iigs_default_seeded = true;
+}
+
 inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     buf[0] = 0;
     if (g_iigs_syms_loaded && iigs_sym_resolve(full_pc, buf, n)[0]) return buf;
-    if (g_iigs_rom_syms.empty() || !g_iigs_toolbox_tried) {
-        if (g_iigs_rom_syms.empty()) iigs_rom_symbols_seed();
-        iigs_toolbox_symbols_load_once();
-        std::sort(g_iigs_rom_syms.begin(), g_iigs_rom_syms.end(),
-                  [](const IigsSym &a, const IigsSym &b) { return a.addr < b.addr; });
-        g_iigs_default_seeded = true;
-    }
+    iigs_names_ready();
     // Same search as iigs_rom_sym_resolve, without the loaded-flag gate, and with
     // a tighter window: an entry point names the routine it begins, not the
     // next 8 KB of ROM.

@@ -253,7 +253,13 @@ ROM 01 — which `tools/a2rail/romfpt.py` writes as
 matching ROM. `$FF/46ED` is `SoundTools.FFStartSound+$2FC`, verified against a
 dispatcher trap. Still open: RAM-resident tool sets (14 and up), GS/OS's own
 kernel and drivers, and shared helpers, which the table names after the
-preceding entry.
+preceding entry. One correction after the fact: moving the toolbox load to
+arm time left the lookup's seed-and-sort step keyed on the loader's own flag,
+so every search ran over an unseeded, unsorted table and the Tool Locator
+dispatch at `$E1/0000` named null — caught by the record contract's smoke
+test, not by the gate, which has no naming check. `iigs_names_ready()` now
+seeds, loads and sorts before anything searches, whichever side arrives
+first.
 
 ### M8 — Reachability and readback as a registration  (P7) — M
 
