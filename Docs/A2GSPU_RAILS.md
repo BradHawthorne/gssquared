@@ -304,7 +304,7 @@ the early-boot figure as the outlier it is.
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
 | `A2GSPU_SNAP_SAVE=<file>` | at spike end, save CPU regs + full MMU snapshot (128K + page tables + soft-switch state) + trailing sentinel + a **manifest** naming what the file holds (`class=A included=cpu,mmu,softswitches,ram,rom-map,megaii`), what it omits (`excluded=adb,ensoniq,iwm,scanner,rtc,serial,clock`), the frame, the pins and the binary | snapshot | env |
-| `A2GSPU_SNAP_LOAD=<file>` | restore that snapshot at start and skip the ~1200-frame boot (the ADB micro and the Ensoniq restore from the snapshot when it holds them; IWM, media, scanner and clock self-heal). Prints the manifest, or that it is absent and what Class A means. `SPIKE_KEYS` into a restored machine is a `WARNING`: the ADB micro is not in the snapshot and a restored desktop never polls `$C000` again (measured) | snapshot | env |
+| `A2GSPU_SNAP_LOAD=<file>` | restore that snapshot at start and skip the ~1200-frame boot (the ADB micro, the Ensoniq, the interrupt registers and the disk controller restore from the snapshot when it holds them; media, scanner and clock self-heal). Prints the manifest, or that it is absent and what Class A means. `SPIKE_KEYS` into a restored machine is a `WARNING`: the ADB micro is not in the snapshot and a restored desktop never polls `$C000` again (measured) | snapshot | env |
 | `A2GSPU_RESTORE=<file>` | alias for `SNAP_LOAD` (load-at-start) | snapshot | env |
 
 *(File-format tokens `A2GSPU_SNAP_MAGIC/_VER/_END/_FREAD` are snapshot on-disk constants, not env rails.)*

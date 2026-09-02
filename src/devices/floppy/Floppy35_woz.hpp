@@ -204,6 +204,7 @@ public:
         "diskReady",
         "",
         "driveInstalled",
+
     };
     static constexpr const char *controlNames[16] = {
         "stepDirectionInward",
@@ -239,4 +240,28 @@ public:
 /*         f->addLine("Position: Head: %llu  Read: %llu", head_position >> 3, read_position >> 3);
         f->addLine("inPlace: %d  switched: %d step_dir: %s", disk_in_place, disk_switched, step_dir ? "out" : "in");
  */    }
+    // ---- A2GSPU snapshot (M5): the control lines, the track and side, the
+    // motor and the ready/stepping state. Cycle-stamped timers are relative to
+    // a clock the snapshot does not hold: they restore as expired.
+public:
+    void A2GSPU_snapshot(FILE *f) override {
+        Floppy_woz::A2GSPU_snapshot(f);
+        uint8_t b[12] = { ca0, ca1, ca2, hdsel, lstrb, step_dir, (uint8_t)motor_on, (uint8_t)disk_in_place,
+                          (uint8_t)disk_switched, (uint8_t)double_sided, sense_out, (uint8_t)disk_ready };
+        fwrite(b, 1, 12, f);
+        int32_t ts[2] = { (int32_t)track_num, (int32_t)side }; fwrite(ts, 4, 2, f);
+    }
+    bool A2GSPU_restore(FILE *f, int *media_mismatch) override {
+        if (!Floppy_woz::A2GSPU_restore(f, media_mismatch)) return false;
+        uint8_t b[12]; if (fread(b, 1, 12, f) != 12) return false;
+        int32_t ts[2]; if (fread(ts, 4, 2, f) != 2) return false;
+        if (!a2gspu_restore_apply) return true;
+        ca0 = b[0]; ca1 = b[1]; ca2 = b[2]; hdsel = b[3]; lstrb = b[4]; step_dir = b[5];
+        motor_on = b[6] != 0; disk_in_place = b[7] != 0; disk_switched = b[8] != 0; double_sided = b[9] != 0;
+        sense_out = b[10]; disk_ready = b[11] != 0;
+        track_num = ts[0]; side = ts[1];
+        ready_cycles_end = 0; stepping_cycles_end = 0;
+        update_track_ptr();   // the bit stream follows the head
+        return true;
+    }
 };

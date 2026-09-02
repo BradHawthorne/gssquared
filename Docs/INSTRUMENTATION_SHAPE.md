@@ -230,10 +230,15 @@ that polls the keyboard runs off the VBL interrupt, and the VBL enable
 D's "the ADB micro is not in it" was half the cause; a restored machine also
 had every interrupt source disabled. `vgcint` carries INTEN, VGCINT, INTFLAG,
 the one-second and quarter-second counters, LANGSEL and the text-flash phase,
-and the restore re-drives the IRQ lines from them. Still out: the scanner (Class B — the display
-pipeline is in the owner's working tree, so it waits), and the IWM with its
-media (a restored drive is only as good as the image it points at, and under
-`A2GSPU_RAMDISK` that image is not the file on disk).
+and the restore re-drives the IRQ lines from them. A fourth block, `iwm`, carries the disk
+controller (switches, registers, sequencer, the motor-off timer restarted at
+the restore instant) and each drive's head: position, phases and quarter-track
+for a 5.25, control lines, track, side and motor for a 3.5. Not the media: a
+drive's block names the image it had mounted and is applied only when the
+same image is mounted now, and a mismatch is a counted warning — under
+`A2GSPU_RAMDISK` the image's contents are not the file on disk either, and the
+manifest says `media` is excluded. Still out: the scanner (Class B — the
+display pipeline is in the owner's working tree, so it waits).
 
 ### M6 — Artifact discipline and a shared reader  (P4) — S
 

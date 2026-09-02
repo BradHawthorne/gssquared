@@ -99,4 +99,24 @@ public:
         f->addLine("Last Cycle: %llu", (unsigned long long)last_cycle);
         f->addLine("Modified: %d", modified);
     }
+
+    // ---- A2GSPU snapshot (M5): the stepper phases and the quarter-track ----
+public:
+    void A2GSPU_snapshot(FILE *f) override {
+        Floppy_woz::A2GSPU_snapshot(f);
+        uint8_t b[5] = { rw_mode, phase0, phase1, phase2, phase3 }; fwrite(b, 1, 5, f);
+        int16_t t[2] = { track, max_tracks }; fwrite(t, 2, 2, f);
+        fwrite(&image_index, 2, 1, f);
+    }
+    bool A2GSPU_restore(FILE *f, int *media_mismatch) override {
+        if (!Floppy_woz::A2GSPU_restore(f, media_mismatch)) return false;
+        uint8_t b[5]; if (fread(b, 1, 5, f) != 5) return false;
+        int16_t t[2]; if (fread(t, 2, 2, f) != 2) return false;
+        uint16_t ii = 0; if (fread(&ii, 2, 1, f) != 1) return false;
+        if (!a2gspu_restore_apply) return true;
+        rw_mode = b[0]; phase0 = b[1]; phase1 = b[2]; phase2 = b[3]; phase3 = b[4];
+        track = t[0]; max_tracks = t[1]; image_index = ii;
+        update_track_ptr();   // the bit stream follows the head
+        return true;
+    }
 };

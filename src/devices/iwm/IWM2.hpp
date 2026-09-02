@@ -66,6 +66,7 @@ class IWM : public StorageDevice {
                 uint8_t iwm_select;
                 uint8_t iwm_q6;
                 uint8_t iwm_q7;
+
             };        
         };
 
@@ -779,6 +780,45 @@ class IWM : public StorageDevice {
         }
     }
 
+    // ---- A2GSPU snapshot (M5): the controller's switches, registers and
+    // sequencer, then each drive's head state (Floppy_woz). Not the media. The
+    // motor-off timer is relative to a clock the snapshot does not hold: when it
+    // was running it restarts at the restore instant.
+public:
+    void A2GSPU_snapshot(FILE *f) {
+        fwrite(switches, 1, IWM_SWITCH_COUNT, f);
+        uint8_t r[8] = { sense_input, disk_register, reg_mode, reg_handshake, data_register, internal_data_register,
+                         async_shift_reg, async_bits_remaining };
+        fwrite(r, 1, 8, f);
+        uint8_t fl[5] = { async_buffer_register, (uint8_t)async_buffer_valid, (uint8_t)sequencer_state,
+                          (uint8_t)enable_asserted, (uint8_t)diskii_running_last };
+        fwrite(fl, 1, 5, f);
+        int32_t i2[2] = { (int32_t)running_chunknumber, (int32_t)start_track_movement }; fwrite(i2, 4, 2, f);
+        uint64_t off = mark_cycles_turnoff; fwrite(&off, 8, 1, f);
+        for (int k = 0; k < 2; k++) for (int d = 0; d < 2; d++) {
+            uint8_t present = drives[k][d] ? 1 : 0; fwrite(&present, 1, 1, f);
+            if (drives[k][d]) drives[k][d]->A2GSPU_snapshot(f);
+        }
+    }
+    bool A2GSPU_restore(FILE *f, int *media_mismatch) {
+        if (fread(switches, 1, IWM_SWITCH_COUNT, f) != IWM_SWITCH_COUNT) return false;
+        uint8_t r[8]; if (fread(r, 1, 8, f) != 8) return false;
+        sense_input = r[0]; disk_register = r[1]; reg_mode = r[2]; reg_handshake = r[3];
+        data_register = r[4]; internal_data_register = r[5]; async_shift_reg = r[6]; async_bits_remaining = r[7];
+        uint8_t fl[5]; if (fread(fl, 1, 5, f) != 5) return false;
+        async_buffer_register = fl[0]; async_buffer_valid = fl[1] != 0; sequencer_state = fl[2] != 0;
+        enable_asserted = fl[3] != 0; diskii_running_last = fl[4] != 0;
+        int32_t i2[2]; if (fread(i2, 4, 2, f) != 2) return false;
+        running_chunknumber = i2[0]; start_track_movement = i2[1];
+        uint64_t off = 0; if (fread(&off, 8, 1, f) != 1) return false;
+        mark_cycles_turnoff = off ? clock->get_cycles() : 0;
+        for (int k = 0; k < 2; k++) for (int d = 0; d < 2; d++) {
+            uint8_t present = 0; if (fread(&present, 1, 1, f) != 1) return false;
+            if (present && !drives[k][d]) return false;          // a different drive complement is a different machine
+            if (present && !drives[k][d]->A2GSPU_restore(f, media_mismatch)) return false;
+        }
+        return true;
+    }
 };
 
 

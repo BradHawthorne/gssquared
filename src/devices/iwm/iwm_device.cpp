@@ -45,6 +45,7 @@ void init_iwm_slot(computer_t *computer, SlotType_t slot) {
     iwm_state_t *st = new iwm_state_t();
     st->computer = computer;
     st->iwm = new IWM(computer->sound_effect, computer->clock, computer->event_timer);
+    g_a2gspu_iwm = st;   // the snapshot code reaches the controller through this
 
     for (uint32_t i = 0xC0E0; i <= 0xC0EF; i++) {
         computer->mmu->set_C0XX_write_handler(i, { iwm_write_C0xx, st });
@@ -97,4 +98,17 @@ void init_iwm_slot(computer_t *computer, SlotType_t slot) {
             return true;
         });
 
+}
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+void iwm_A2GSPU_snapshot(iwm_state_t *st, FILE *f) {
+    uint8_t r[3] = { st->status, st->control, st->data };
+    fwrite(r, 1, 3, f);
+    st->iwm->A2GSPU_snapshot(f);
+}
+bool iwm_A2GSPU_restore(iwm_state_t *st, FILE *f, int *media_mismatch) {
+    uint8_t r[3];
+    if (fread(r, 1, 3, f) != 3) return false;
+    st->status = r[0]; st->control = r[1]; st->data = r[2];
+    return st->iwm->A2GSPU_restore(f, media_mismatch);
 }

@@ -31,6 +31,7 @@
 #include "paths.hpp"
 #include "cpu.hpp"
 #include "display/display.hpp"
+#include "devices/iwm/iwm_device.hpp"      // the disk controller's snapshot functions (M5)
 #include "devices/speaker/speaker.hpp"
 #include "platforms.hpp"
 #include "util/dialog.hpp"
@@ -1049,6 +1050,10 @@ static std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "vgcint", 1); display_A2GSPU_snapshot(ds, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "vgcint" : ",vgcint";
     }
+    if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
+        long at = a2gspu_snap_dev_begin(f, "iwm", 1); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "iwm" : ",iwm";
+    }
     return names;
 }
 // Reads device blocks up to the sentinel, which it leaves for the caller. A block
@@ -1076,6 +1081,14 @@ static bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
         } else if (!strcmp(nm, "vgcint") && ver == 1) {
             display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
             if (ds && ds->video_scanner_type == Scanner_AppleIIgs) r = display_A2GSPU_restore(ds, f) ? RESTORED : FAILED;
+        } else if (!strcmp(nm, "iwm") && ver == 1) {
+            if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
+                int mismatch = 0;
+                r = iwm_A2GSPU_restore(g_a2gspu_iwm, f, &mismatch) ? RESTORED : FAILED;
+                if (r == RESTORED && mismatch)
+                    a2gspu_warn("A2GSPU SNAP", "iwm: a drive holds a different image than the snapshot's; its head state was left alone "
+                                "(the media is not in the snapshot -- mount what the manifest's run mounted)");
+            }
         }
         if (r == FAILED) return false;
         std::string &list = (r == RESTORED) ? g_snap_dev_restored : g_snap_dev_skipped;

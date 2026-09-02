@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include "SlotData.hpp"
 
 class computer_t;
@@ -16,3 +17,10 @@ struct iwm_state_t {
 };
 
 void init_iwm_slot(computer_t *computer, SlotType_t slot);
+
+// ---- A2GSPU snapshot (M5): the controller and the drives' head state; not the
+// media. `media_mismatch` counts drives whose mounted image differs from the
+// snapshot's and were therefore left alone.
+inline iwm_state_t *g_a2gspu_iwm = nullptr;   // the one instance, for the snapshot code
+void iwm_A2GSPU_snapshot(iwm_state_t *st, FILE *f);
+bool iwm_A2GSPU_restore(iwm_state_t *st, FILE *f, int *media_mismatch);
