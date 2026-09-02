@@ -513,7 +513,7 @@ inline int  g_milestones_unhit = 0;   // milestones not yet reached; enables an 
 // stray stdout line would corrupt the captured golden stream.
 inline void iigs_milestones_load(const char *path) {
     FILE *f = fopen(path, "rb");
-    if (!f) { fprintf(stderr, "IIGS MILESTONES: cannot open '%s'\n", path); return; }
+    if (!f) { fprintf(stderr, "IIGS MILESTONES: FAIL cannot open '%s' -- aborting (exit 2)\n", path); exit(2); }
     char line[256];
     while (fgets(line, sizeof(line), f)) {
         char nm[128]; unsigned a;

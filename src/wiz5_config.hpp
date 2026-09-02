@@ -349,7 +349,8 @@ inline void wiz5_config_arm(computer_t *computer) {
     if (const char *kf = kf_env) {
         FILE *f = fopen(kf, "r");
         if (!f) {
-            fprintf(stderr, "%s: cannot open '%s'\n", kf_label, kf);
+            fprintf(stderr, "%s: FAIL cannot open '%s' -- aborting (exit 2)\n", kf_label, kf);
+            exit(2);
         } else {
             auto decode = [](const char *p) {
                 std::string text;
@@ -413,20 +414,20 @@ inline void wiz5_config_arm(computer_t *computer) {
         g_wiz5_ec19_lines = 0; g_wiz5_ec19_cur = -1;
         for (int i = 0; i < 256; i++) g_wiz5_ec19_subseen[i] = 0;
         if (g_wiz5_ec19_out) { printf("WIZ5_EC19_OUT: SCREENDEV driver trap -> %s\n", ep); any_pc_trap = true; }
-        else fprintf(stderr, "WIZ5_EC19_OUT: cannot open '%s'\n", ep);
+        else { fprintf(stderr, "WIZ5_EC19_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", ep); exit(2); }
     }
     if (const char *dp = getenv("WIZ5_DISKWR_OUT")) {
         g_wiz5_diskwr_out = fopen(dp, "w");
         g_wiz5_diskwr_n = 0; g_wiz5_diskrd_pblk = -1;
         for (int i = 0; i < 2048; i++) g_wiz5_diskrd_seen[i] = false;
         if (g_wiz5_diskwr_out) { printf("WIZ5_DISKWR_OUT: disk block-write capture -> %s\n", dp); any_pc_trap = true; }
-        else fprintf(stderr, "WIZ5_DISKWR_OUT: cannot open '%s'\n", dp);
+        else { fprintf(stderr, "WIZ5_DISKWR_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", dp); exit(2); }
     }
     if (const char *cp = getenv("WIZ5_CSP6_OUT")) {
         g_wiz5_csp6_out = fopen(cp, "w");
         g_wiz5_csp6_n = 0;
         if (g_wiz5_csp6_out) { printf("WIZ5_CSP6_OUT: UNITWRITE eval-stack trap -> %s\n", cp); any_pc_trap = true; }
-        else fprintf(stderr, "WIZ5_CSP6_OUT: cannot open '%s'\n", cp);
+        else { fprintf(stderr, "WIZ5_CSP6_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", cp); exit(2); }
     }
     if (any_pc_trap) {
         g_gtap_ext = wiz5_config_step;   // register the per-instruction extension

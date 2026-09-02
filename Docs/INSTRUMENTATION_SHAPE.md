@@ -123,6 +123,10 @@ different shapes; the writer makes them one shape.
 
 *Would have prevented C.*
 
+**Status:** not started. The rule half is in force from this commit onward (no
+new rail prints mid-line; `A2GSPU_TRAP` and the coverage writer emit whole
+lines); the shared writer is not.
+
 ### M2 — Attribution in every summary  (P1) — S
 
 `MEMVU_STOREVIS` prints, when armed, the top five device addresses and the
@@ -133,6 +137,11 @@ and for `SEAM`'s stalls. The rule generalises: a rail that reports a total
 over addresses reports its top contributors in the same line group.
 
 *Would have prevented A, and the wrong first draft.*
+
+**Status:** done for stores (commit after this note): `MEMVU STOREVIS device
+top:` names the five most-written I/O registers from `src/iigs_ioregs.hpp`, and
+`writers top:` names the five heaviest code granules, `(unnamed)` when no
+symbol resolves. Loads and the seam model still report bare totals.
 
 ### M3 — Inputs that cannot be honoured are fatal  (P2) — S
 
@@ -145,6 +154,13 @@ exit. The harness stops being the only line of defence (the sweep now checks
 its inputs; it should not have needed to).
 
 *Would have prevented B (first case).*
+
+**Status:** done: a missing disk image under `-n`, `RUN_BIN`, `SNAP_LOAD`,
+`KEYSCHED`, `MILESTONES` or `TRAP_FILE`, and an unopenable `WATCH_OUT`,
+`CALLSTREAM`, `ITRACE_OUT`, `TRAP_OUT` or WIZ5 sink, abort at arm with exit 2.
+`GSDIAG:` carries `warnings=N`; `A2GSPU_STRICT=1` exits 3 on any. The
+remaining "skipped" paths (`SPIKE_KEYS` with no keyboard, `RUN_BIN` on a
+II-family machine, `SAVE_AT` without a IIgs MMU) are warnings.
 
 ### M4 — A liveness record  (P9) — M
 
@@ -178,6 +194,12 @@ the harnesses import, and it refuses unknown magic and re-derives the count.
 A consumer's sweep harness grew this check by hand this week; it belongs in the fork.
 
 *Would have prevented E.*
+
+**Status:** done for coverage: the `wrote` line carries the range and the
+body's house-FNV hash, and `tools/a2rail/artifacts.py` is the reader — it
+refuses a wrong magic or a short body, re-derives the count and the hash, and
+has a self-test. Snapshots get a header check only; the other `spike_*.bin`
+artifacts are not yet covered.
 
 ### M7 — Symbols by default  (P10) — M
 

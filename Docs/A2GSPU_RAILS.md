@@ -136,7 +136,7 @@ memory behaviour have". Same three invariants (env-gated, isolated, observe-don'
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `MEMVU_STOREVIS=1` | **store-visibility accounting.** Classifies every CPU store as DEVICE (`$Cxxx` in banks `$00/$01/$E0/$E1`), SLOWSIDE (direct Mega II `$E0/$E1`), SHADOWED (the machine mirrored it per its own `$C035` configuration) or PRIVATE, and prints one summary line at spike end | observe | env |
+| `MEMVU_STOREVIS=1` | **store-visibility accounting.** Classifies every CPU store as DEVICE (`$Cxxx` in banks `$00/$01/$E0/$E1`), SLOWSIDE (direct Mega II `$E0/$E1`), SHADOWED (the machine mirrored it per its own `$C035` configuration) or PRIVATE, and prints one summary line at spike end, followed by `device top:` — the five most-written I/O registers, named from `iigs_ioregs.hpp` — and `writers top:` — the five code granules that generated the most visible stores, symbolized when a symbol table is loaded, `(unnamed)` otherwise. A total never travels without its causes | observe | env |
 | `MEMVU_STOREVIS_BANKS=1` | add the per-bank `stores`/`visible` breakdown (one line per bank that saw traffic) | observe | env |
 
 ```
@@ -312,12 +312,19 @@ the early-boot figure as the outlier it is.
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
 | `A2GSPU_ASSERT="name OP val[;…]"` | `;`/`,`-separated `name OP value` checks (`OP` ∈ `== != <= >= < >`); the spike exits non-zero if any fails. Fields: `scb_mode`, `qd_carry/qd_err`, `lt_carry`, `cs_carry/pr_carry`, `gsos_err`, `nonzero/distinct`, `idxN` (N=0..15), and `peek:HHHHHH` (observation-free 24-bit byte read) | assert | env |
+| `A2GSPU_STRICT=1` | exit 3 at spike end if the run printed any `WARNING` line (see `GSDIAG: warnings=N` below). Missing inputs and unopenable sinks are already fatal (exit 2) without it | assert | env |
 | `A2GSPU_GOLDEN=<file>` | hash the SHR window (`$E1:2000-9FFF`, house FNV-1a-64); if the file exists compare (DIFF ⇒ gate fail; corrupt/empty file ⇒ hard fail); if absent, bless it | assert | env |
 
 *Always-on:* at spike end `iigs_emit_status` prints one machine-readable line —
 `GSDIAG: status=<OK\|GATE_FAIL\|CRASH_BRK\|HANG\|GSOS_ERROR\|STALLED> rc=N gate=<PASS\|FAIL\|none>
-gsos_err=$XXXX brk=N scb=NNN hash=................`. The **process exit code** stays
+gsos_err=$XXXX brk=N scb=NNN hash=................ warnings=N`. The **process exit code** stays
 golden/assert-gate-driven (`0`/`1`) for harness compatibility; `status` is the richer category.
+`warnings=N` counts every `WARNING` line the run printed — a skipped injection, a rail that could
+not do what it was asked — and `A2GSPU_STRICT=1` turns a non-zero count into exit code 3. A missing
+input file (a disk image under `-n`, `RUN_BIN`, `SNAP_LOAD`, `KEYSCHED`, `MILESTONES`, `TRAP_FILE`) or
+an output sink that cannot be opened (`WATCH_OUT`, `CALLSTREAM`, `ITRACE_OUT`, `TRAP_OUT`, the WIZ5
+sinks) is not a warning: it aborts at arm with exit code 2, because a run that measured something
+other than what it was asked to is worse than no run.
 
 ## Device / determinism — reproducible oracle knobs
 

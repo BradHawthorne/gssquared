@@ -1,4 +1,6 @@
 #pragma once
+#include "iigs_ioregs.hpp"     // names for $C000-$C0FF, so a device total is never a bare number
+inline const char *iigs_sym_resolve(uint32_t full_pc, char *buf, size_t n);   // iigs_toolbox.hpp
 // ============================================================================
 // memvu_storevis.hpp — memory access-visibility accounting
 //   MEMVU_STOREVIS : of the stores a workload performs, how many land where an
@@ -138,6 +140,7 @@ inline bool     memvu_blame_on = false;
 inline uint32_t memvu_blame_pc = 0;            // opcode address of the current instruction
 inline uint32_t *memvu_blame_w = nullptr;      // visible stores per 256-byte granule
 inline uint32_t *memvu_blame_r = nullptr;      // routed reads per 256-byte granule
+inline uint32_t  memvu_blame_w_top[5] = {}, memvu_blame_w_topg[5] = {};   // scratch for the STOREVIS top-writers line
 
 static constexpr uint32_t MEMVU_BLAME_GRAN = 8;                 // log2(256)
 static constexpr uint32_t MEMVU_BLAME_N    = 1u << (24 - MEMVU_BLAME_GRAN);   // 65536
@@ -166,6 +169,16 @@ inline uint64_t memvu_sv_shadowed = 0;   // machine mirrored it (its own decisio
 inline uint64_t memvu_sv_bank_total[256]   = {};
 inline uint64_t memvu_sv_bank_visible[256] = {};
 
+// Per-register device stores: 4 I/O banks x 4096 addresses. "device=469605"
+// told a reader a number and withheld the fact that would let them read it
+// (it was one register, $C03D, the sound GLU data port, written by ROM). The
+// summary now names its top registers, and the writers, beside the totals.
+inline uint32_t memvu_sv_dev[4][4096] = {};
+inline int memvu_io_bank_index(uint32_t bank) {
+    return bank == 0x00 ? 0 : bank == 0x01 ? 1 : bank == 0xE0 ? 2 : 3;
+}
+inline const uint8_t memvu_io_bank_of[4] = { 0x00, 0x01, 0xE0, 0xE1 };
+
 // ---- load counters -----------------------------------------------------------
 enum memvu_kind_t { MEMVU_K_FETCH = 0, MEMVU_K_DATA, MEMVU_K_VECTOR, MEMVU_K_PHANTOM, MEMVU_K__N };
 inline const char *memvu_kind_name[MEMVU_K__N] = { "fetch", "data", "vector", "phantom" };
@@ -178,6 +191,7 @@ inline void memvu_reset() {
     memvu_sv_total = memvu_sv_phantom = 0;
     memvu_sv_device = memvu_sv_slowside = memvu_sv_shadowed = 0;
     for (int i = 0; i < 256; i++) { memvu_sv_bank_total[i] = 0; memvu_sv_bank_visible[i] = 0; }
+    memset(memvu_sv_dev, 0, sizeof memvu_sv_dev);
     for (int k = 0; k < MEMVU_K__N; k++) {
         memvu_lv_kind_total[k] = memvu_lv_kind_device[k] = memvu_lv_kind_slowside[k] = 0;
     }
@@ -279,6 +293,7 @@ inline void memvu_sv_note_store(uint32_t addr, bool phantom) {
     switch (memvu_classify(addr)) {
         case MEMVU_DEVICE:
             memvu_sv_device++;   memvu_sv_bank_visible[bank]++;
+            memvu_sv_dev[memvu_io_bank_index(bank)][addr & 0xFFF]++;
             if (memvu_blame_on) memvu_blame_note(true);
             break;
         case MEMVU_SLOWSIDE:
@@ -375,6 +390,42 @@ inline void memvu_sv_report(FILE *f) {
             (unsigned long long)memvu_sv_slowside,
             shadow_field,
             (unsigned long long)memvu_sv_phantom);
+
+    // Attribution rides with the total. Top device registers, named; top writer
+    // granules from the blame table, which STOREVIS arms for exactly this.
+    if (memvu_sv_device) {
+        fprintf(f, "MEMVU STOREVIS device top:");
+        for (int rank = 0; rank < 5; rank++) {
+            int bb = -1, ba = 0; uint32_t bc = 0;
+            for (int b = 0; b < 4; b++)
+                for (int a = 0; a < 4096; a++)
+                    if (memvu_sv_dev[b][a] > bc) { bc = memvu_sv_dev[b][a]; bb = b; ba = a; }
+            if (bb < 0) break;
+            const uint16_t a16 = (uint16_t)(0xC000 | ba);
+            fprintf(f, " $%02X:%04X=%u (%s)", memvu_io_bank_of[bb], a16, bc, iigs_io_reg_name_or(a16));
+            memvu_sv_dev[bb][ba] = 0;   // consumed; the report is a one-shot at spike end
+        }
+        fprintf(f, "\n");
+    }
+    if (memvu_blame_w) {
+        fprintf(f, "MEMVU STOREVIS writers top:");
+        for (int rank = 0; rank < 5; rank++) {
+            uint32_t bg = 0, bc = 0;
+            for (uint32_t g = 0; g < MEMVU_BLAME_N; g++)
+                if (memvu_blame_w[g] > bc) { bc = memvu_blame_w[g]; bg = g; }
+            if (!bc) break;
+            const uint32_t base = bg << MEMVU_BLAME_GRAN;
+            char sym[96]; sym[0] = 0;
+            const char *name = iigs_sym_resolve(base, sym, sizeof sym);
+            fprintf(f, " $%02X/%04X=%u (%s)", (base >> 16) & 0xFF, base & 0xFFFF, bc,
+                    (name && name[0]) ? name : "unnamed");
+            memvu_blame_w_top[rank] = bc;   // keep BLAME's own report intact: restore below
+            memvu_blame_w_topg[rank] = bg;
+            memvu_blame_w[bg] = 0;
+        }
+        for (int rank = 0; rank < 5; rank++) if (memvu_blame_w_top[rank]) memvu_blame_w[memvu_blame_w_topg[rank]] = memvu_blame_w_top[rank];
+        fprintf(f, "\n");
+    }
 }
 
 inline void memvu_sv_report_banks(FILE *f) {

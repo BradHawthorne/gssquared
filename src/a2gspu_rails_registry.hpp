@@ -114,6 +114,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_SPIKE_KEYS",          "run",         "inject keystrokes via the keyboard paste buffer (\\n->\\r), paced by the guest's own $C000 polls"},
     {"A2GSPU_SPIKE_KEYS_AT",       "run",         "frame at which SPIKE_KEYS is injected (default spike_frames/2)"},
     {"A2GSPU_SP_NDEV",             "device",      "override the SmartPort device count (A/B faithfulness; 32 reproduces pre-fix enumeration)"},
+    {"A2GSPU_STRICT",              "assert",      "exit 3 at spike end if the run printed any WARNING (a skipped injection, an unmountable disk in windowed mode, a rail that could not do what it was asked). GSDIAG carries warnings=N either way"},
     {"A2GSPU_STACKTRAP",           "break",       "one-shot dump when S first enters the range"},
     {"A2GSPU_STACKWATCH",          "observe",     "\"LO-HI\"`"},
     {"A2GSPU_STACKWATCH_JUMP",     "break",       "imbalance threshold (single-step S delta that trips STACKWATCH)"},

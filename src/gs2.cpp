@@ -57,6 +57,7 @@
 #include "obs_iigs.hpp"      // IIgs LEVEL bindings + the boot-fault-context view
 #include "iigs_video_summary.hpp"
 #include "iigs_toolbox.hpp"
+#include <filesystem>
 #include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
 #include "a2gspu_trap.hpp"   // A2GSPU_TRAP: configurable PC traps (env-gated, off => no-op)
 #include "iigs_diag.hpp"
@@ -756,7 +757,22 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
 
     // mount disks - AFTER device init.
     for (const auto& disk_mount : state->disks_to_mount) {
-        computer->mounts->mount_media(disk_mount);
+        // A headless run whose disk is not there boots something else under the
+        // right name and reports OK. A missing image is fatal when nobody is
+        // watching (-n); windowed, it is a warning and the machine boots empty.
+        const bool present = std::filesystem::exists(disk_mount.filename);
+        const bool mounted = present && computer->mounts->mount_media(disk_mount);
+        if (!mounted) {
+            char msg[1200];
+            snprintf(msg, sizeof msg, "%s '%s' (slot %u drive %u)",
+                     present ? "could not mount" : "no such disk image",
+                     disk_mount.filename.c_str(), (unsigned)disk_mount.slot, (unsigned)disk_mount.drive);
+            if (gs2_app_values.no_input) {
+                fprintf(stderr, "A2GSPU MOUNT: FAIL %s -- aborting (exit 2)\n", msg);
+                exit(2);
+            }
+            a2gspu_warn("A2GSPU MOUNT", msg);
+        }
     }
 
     osd = new OSD(computer, vs->renderer, vs->window, computer->slot_manager, 1120, 768, state->aa);
@@ -958,7 +974,7 @@ static char      g_saveat_path[512] = "snap_at.bin";
 static void a2gspu_save_at_cb(cpu_state *cpu) {
     FILE *sf = fopen(g_saveat_path, "wb");
     if (!sf) { printf("A2GSPU SAVE_AT: could not open '%s' for save\n", g_saveat_path); return; }
-    if (!g_saveat_mmu) { printf("A2GSPU SAVE_AT: no IIgs MMU (use -p 5) -- skipped\n"); fclose(sf); return; }
+    if (!g_saveat_mmu) { a2gspu_warn("A2GSPU SAVE_AT", "no IIgs MMU (use -p 5) -- skipped"); fclose(sf); return; }
     a2gspu_cpu_save(sf, cpu);
     g_saveat_mmu->A2GSPU_snapshot(sf);
     a2gspu_snap_write_sentinel(sf);
@@ -2632,6 +2648,7 @@ static void run_headless_spike(GS2AppState *state) {
     if (const char *wo = SDL_getenv("A2GSPU_WATCH_OUT")) {
         g_watch_out = fopen(wo, "wb");
         printf("A2GSPU_WATCH_OUT: %s -> '%s'\n", g_watch_out ? "NDJSON" : "OPEN-FAILED", wo);
+        if (!g_watch_out) { fprintf(stderr, "A2GSPU_WATCH_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", wo); exit(2); }
     }
     if (g_watch_on && (g_watch_max != 256 || g_watch_change_only || g_watch_read_on || g_watch_out))
         printf("A2GSPU_WATCH v2: max=%d change_only=%d read=%d out=%d\n",
@@ -2658,6 +2675,7 @@ static void run_headless_spike(GS2AppState *state) {
         g_callstream_out = fopen(cs, "wb");
         g_callstream_on  = (g_callstream_out != nullptr);
         printf("A2GSPU_CALLSTREAM: %s -> '%s'\n", g_callstream_on ? "NDJSON" : "OPEN-FAILED", cs);
+        if (!g_callstream_on) { fprintf(stderr, "A2GSPU_CALLSTREAM: FAIL cannot open '%s' -- aborting (exit 2)\n", cs); exit(2); }
     }
     // A2GSPU_CONDTRAP="bank:pc@f=v" — conditional flag-provenance trap: at PC, when flag f
     // (c/z/i/d/x/m/v/n) == v, report the PC that last changed that flag. Answers "who set
@@ -2778,6 +2796,10 @@ static void run_headless_spike(GS2AppState *state) {
         memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
         memvu_sv_on = (SDL_getenv("MEMVU_STOREVIS") != nullptr);
         memvu_lv_on = (SDL_getenv("MEMVU_LOADVIS")  != nullptr);
+        // STOREVIS names its top writers in its own summary, which needs the
+        // per-granule write table BLAME keeps. Arm it; BLAME's full report still
+        // prints only when MEMVU_BLAME is set.
+        if (memvu_sv_on && memvu_blame_init()) { memvu_blame_reset(); memvu_blame_on = true; }
         printf("MEMVU: armed (%s%s%s, model=%s)\n",
                memvu_sv_on ? "STOREVIS" : "",
                (memvu_sv_on && memvu_lv_on) ? "+" : "",
@@ -2970,6 +2992,7 @@ static void run_headless_spike(GS2AppState *state) {
     if (const char *io = SDL_getenv("A2GSPU_ITRACE_OUT")) {
         g_iigs_itrace_out = fopen(io, "wb");
         fprintf(stderr, "IIGS ITRACE_OUT: %s -> '%s'\n", g_iigs_itrace_out ? "file" : "OPEN-FAILED", io);
+        if (!g_iigs_itrace_out) { fprintf(stderr, "IIGS ITRACE_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", io); exit(2); }
     }
     if (g_iigs_itrace_enabled)
         fprintf(stderr, "IIGS ITRACE: enabled (from=%s$%06X frame=%d n=%d)\n",
@@ -3059,8 +3082,10 @@ static void run_headless_spike(GS2AppState *state) {
     // the (intentionally excluded) scanner/clock/device state before $E1 is read.
     if (snap_load) {
         FILE *sf = fopen(snap_load, "rb");
-        if (!sf) { printf("A2GSPU SNAP: could not open '%s' for load\n", snap_load); }
-        else {
+        if (!sf) {
+            fprintf(stderr, "A2GSPU SNAP: FAIL could not open '%s' for load -- aborting SPIKE (exit 2)\n", snap_load);
+            exit(2);
+        } else {
             bool cpu_ok = a2gspu_cpu_load(sf, computer->cpu);
             bool mmu_ok = (cpu_ok && state->mmu_iigs) ? state->mmu_iigs->A2GSPU_restore(sf) : false;
             bool end_ok = (cpu_ok && mmu_ok) ? a2gspu_snap_check_sentinel(sf) : false;
@@ -3158,9 +3183,12 @@ static void run_headless_spike(GS2AppState *state) {
             printf("A2GSPU RUN: injected %d bytes at $%06X after %d boot frames; PC set.\n",
                    n, loadaddr, spike_i);
         } else if (!state->mmu_iigs) {
-            printf("A2GSPU RUN: no IIgs MMU on this platform -- skipped (use -p 5)\n");
+            a2gspu_warn("A2GSPU RUN", "no IIgs MMU on this platform -- skipped (use -p 5)");
         } else {
-            printf("A2GSPU RUN: could not open binary '%s'\n", binpath);
+            // A run whose binary did not load is the boot disk wearing the
+            // binary's name. It measured as a healthy row once. Refuse.
+            fprintf(stderr, "A2GSPU RUN: FAIL could not open binary '%s' -- aborting SPIKE (exit 2)\n", binpath);
+            exit(2);
         }
         for (; spike_i < state->spike_frames; spike_i++) {
             iigs_itrace_frame_tick(spike_i);
@@ -3214,7 +3242,7 @@ static void run_headless_spike(GS2AppState *state) {
                     printf("A2GSPU SPIKE KEYS: injected %d chars at frame %d (ADB path)\n",
                            nkeys, i);
                 } else {
-                    printf("A2GSPU SPIKE KEYS: no keyboard AND no KeyGloo -- skipped\n");
+                    a2gspu_warn("A2GSPU SPIKE KEYS", "no keyboard AND no KeyGloo -- skipped");
                 }
             }
             if (!run_one_frame(computer)) {
@@ -3461,6 +3489,10 @@ static void run_headless_spike(GS2AppState *state) {
             iigs_emit_status(st, any_gate ? gate_rc : 0,
                              any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
                              g_iigs_last_gsos_err, g_iigs_brk_count, scb, h);
+            if (SDL_getenv("A2GSPU_STRICT") && g_a2gspu_warnings) {
+                printf("A2GSPU_STRICT: %d warning(s) during the run -> exit 3\n", g_a2gspu_warnings);
+                exit(3);
+            }
             if (any_gate) {
                 printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
                 exit(gate_rc);
@@ -3594,6 +3626,10 @@ static void run_headless_spike(GS2AppState *state) {
             iigs_emit_status(st, any_gate ? gate_rc : 0,
                              any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
                              0, g_iigs_brk_count, 0, h);
+            if (SDL_getenv("A2GSPU_STRICT") && g_a2gspu_warnings) {
+                printf("A2GSPU_STRICT: %d warning(s) during the run -> exit 3\n", g_a2gspu_warnings);
+                exit(3);
+            }
             if (any_gate) {
                 printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
                 exit(gate_rc);

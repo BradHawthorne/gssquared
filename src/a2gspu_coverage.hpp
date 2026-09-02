@@ -30,6 +30,7 @@
 //  * Off by default: one predictable untaken branch per instruction when unset.
 
 #pragma once
+#include "house_fnv.hpp"   // the artifact hash uses the house basis, like every golden
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -159,8 +160,14 @@ static inline bool a2gspu_cov_write(const char *path) {
     fwrite(g_cov_bits, 1, g_cov_nbytes, f);
     fclose(f);
     uint32_t span = g_cov_hi - g_cov_lo + 1;
-    fprintf(stderr, "A2GSPU COVERAGE: wrote %s -- %llu/%u bytes executed (%.1f%%)\n",
+    // The body's house-FNV hash goes on the line, so a reader can prove it read
+    // what was written (tools/a2rail/artifacts.py recomputes it). A reader once
+    // counted this file's header as coverage for a week; nothing compared.
+    uint64_t h = HOUSE_FNV_BASIS;
+    for (size_t i = 0; i < g_cov_nbytes; i++) { h ^= g_cov_bits[i]; h *= HOUSE_FNV_PRIME; }
+    fprintf(stderr, "A2GSPU COVERAGE: wrote %s -- %llu/%u bytes executed (%.1f%%) range=$%06X-$%06X hash=%016llX\n",
             path, (unsigned long long)g_cov_marked, span,
-            span ? (100.0 * (double)g_cov_marked / (double)span) : 0.0);
+            span ? (100.0 * (double)g_cov_marked / (double)span) : 0.0,
+            g_cov_lo, g_cov_hi, (unsigned long long)h);
     return true;
 }
