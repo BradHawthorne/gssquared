@@ -193,6 +193,12 @@ windowed from a snapshot like everything else.
 
 *Would have prevented D, and the previous session's day of ADB debugging.*
 
+**Status:** the S half is done: every snapshot now carries a manifest (class,
+included, excluded, frame, pins, build, executable hash) after its sentinel,
+`SNAP_LOAD` and `restore` print it or say it is absent and what Class A means,
+and `SPIKE_KEYS` into a restored machine is a counted warning. The L half —
+Class B (video/scanner) and Class C (ADB, Ensoniq, IWM) — is not started.
+
 ### M6 — Artifact discipline and a shared reader  (P4) — S
 
 Every binary artifact (`A2COV1`, snapshots, `spike_*.bin`, `vram-raw`) has a

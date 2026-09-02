@@ -296,8 +296,8 @@ the early-boot figure as the outlier it is.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `A2GSPU_SNAP_SAVE=<file>` | at spike end, save CPU regs + full MMU snapshot (128K + page tables + soft-switch state) + trailing sentinel | snapshot | env |
-| `A2GSPU_SNAP_LOAD=<file>` | restore that snapshot at start and skip the ~1200-frame boot (the frame loops self-heal excluded device/scanner/clock state) | snapshot | env |
+| `A2GSPU_SNAP_SAVE=<file>` | at spike end, save CPU regs + full MMU snapshot (128K + page tables + soft-switch state) + trailing sentinel + a **manifest** naming what the file holds (`class=A included=cpu,mmu,softswitches,ram,rom-map,megaii`), what it omits (`excluded=adb,ensoniq,iwm,scanner,rtc,serial,clock`), the frame, the pins and the binary | snapshot | env |
+| `A2GSPU_SNAP_LOAD=<file>` | restore that snapshot at start and skip the ~1200-frame boot (the frame loops self-heal excluded device/scanner/clock state). Prints the manifest, or that it is absent and what Class A means. `SPIKE_KEYS` into a restored machine is a `WARNING`: the ADB micro is not in the snapshot and a restored desktop never polls `$C000` again (measured) | snapshot | env |
 | `A2GSPU_RESTORE=<file>` | alias for `SNAP_LOAD` (load-at-start) | snapshot | env |
 
 *(File-format tokens `A2GSPU_SNAP_MAGIC/_VER/_END/_FREAD` are snapshot on-disk constants, not env rails.)*
@@ -376,8 +376,8 @@ protocol authority.
 | `shot <file>` | update the display and save a screenshot to `<file>` | CTRL-verb (observe) |
 | `read <hexaddr> <len> <file>` | dump `len` bytes from `<addr>` via `probe_peek` (side-effect-free, bank-correct on `-p 5`) to `<file>` | CTRL-verb (observe) |
 | `mount sXdY <path>` | runtime media swap (save-and-unmount the drive first so writes persist) | CTRL-verb (manipulate) |
-| `save <file>` | CPU regs + full MMU snapshot + sentinel (take at a quiescent point) | CTRL-verb (snapshot) |
-| `restore <file>` | restore a `save`d snapshot and force-run | CTRL-verb (snapshot) |
+| `save <file>` | CPU regs + full MMU snapshot + sentinel + manifest (take at a quiescent point) | CTRL-verb (snapshot) |
+| `restore <file>` | restore a `save`d snapshot and force-run; the ack says `manifest=present\|absent class=A` and the manifest itself goes to the session log | CTRL-verb (snapshot) |
 | `quit` | ack and end the session | CTRL-verb (run) |
 | `oracle` | north-star contracts (cycles/colour/snapshot/dual-mode) | CTRL-verb (meta) |
 | `help` / `help <file>` | list CTRL verbs; optional full catalog to file | CTRL-verb (meta) |

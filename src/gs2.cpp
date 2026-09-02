@@ -961,6 +961,51 @@ static bool a2gspu_cpu_load(FILE *f, cpu_state *cpu) {
 }
 #undef A2GSPU_FREAD
 
+// ---- A2GSPU snapshot manifest: what the file holds, and what it does not ----
+// A Class A snapshot is CPU + MMU + soft switches + RAM. Docs/AGENTIC_ORACLE.md says
+// so; the file and the restore did not. A restored desktop never polls the keyboard
+// again (the ADB micro is not in it) and a workload that needs the Ensoniq cannot be
+// windowed from one at all -- both were learned the slow way. So the save appends,
+// after the sentinel, a manifest naming the included and excluded state, the frame,
+// the pins and the binary; the restore prints it, or prints that it is absent and
+// what Class A means. Optional on read, so every existing snapshot still loads.
+static const uint32_t A2GSPU_SNAP_MANIFEST = 0x4D505347;  // 'GSPM'
+static std::string a2gspu_snap_manifest_text(int frame) {
+    const char *seed = getenv("A2GSPU_SEED"), *ft = getenv("A2GSPU_FAKETIME");
+    uint64_t eh = 0; char exe[24];
+    if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
+    else snprintf(exe, sizeof exe, "unreadable");
+    char buf[512];
+    snprintf(buf, sizeof buf,
+             "class=A included=cpu,mmu,softswitches,ram,rom-map,megaii "
+             "excluded=adb,ensoniq,iwm,scanner,rtc,serial,clock "
+             "frame=%d seed=%s faketime=%s ramdisk=%d build=%s exe=%s",
+             frame, seed ? seed : "unset", ft ? ft : "unset", getenv("A2GSPU_RAMDISK") ? 1 : 0,
+             BUILD_VERSION, exe);
+    return buf;
+}
+static void a2gspu_snap_write_manifest(FILE *f, const std::string &m) {
+    uint32_t magic = A2GSPU_SNAP_MANIFEST, n = (uint32_t)m.size();
+    fwrite(&magic, 4, 1, f); fwrite(&n, 4, 1, f); fwrite(m.data(), 1, n, f);
+}
+// Empty when the snapshot predates manifests (or the trailer is damaged).
+static std::string a2gspu_snap_read_manifest(FILE *f) {
+    uint32_t magic = 0, n = 0;
+    if (fread(&magic, 4, 1, f) != 1 || magic != A2GSPU_SNAP_MANIFEST) return std::string();
+    if (fread(&n, 4, 1, f) != 1 || n == 0 || n > 4096) return std::string();
+    std::string m(n, '\0');
+    if (fread(&m[0], 1, n, f) != n) return std::string();
+    return m;
+}
+static void a2gspu_snap_print_manifest(const std::string &m) {
+    if (m.empty())
+        printf("A2GSPU SNAP: manifest absent (pre-manifest snapshot) -- class A assumed: cpu, mmu, soft switches, "
+               "RAM; every device excluded (adb, ensoniq, iwm, scanner, rtc, serial, clock). A restored machine "
+               "does not poll the keyboard and has no sound state.\n");
+    else
+        printf("A2GSPU SNAP: manifest %s\n", m.c_str());
+}
+
 // Trailing snapshot sentinel: a magic word written LAST (after the cpu + mmu blocks)
 // on save, and required to read back exactly on load. The per-field checked-fread above
 // catches a truncation that lands inside a known field; the sentinel additionally catches
@@ -2378,7 +2423,10 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 a2gspu_cpu_save(sf, computer->cpu);
                 if (state->mmu_iigs) { state->mmu_iigs->A2GSPU_snapshot(sf); ok = true; }
                 else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(rail_mmu(computer))) { m->A2GSPU_snapshot(sf); ok = true; }
-                if (ok) a2gspu_snap_write_sentinel(sf);
+                if (ok) {
+                    a2gspu_snap_write_sentinel(sf);
+                    a2gspu_snap_write_manifest(sf, a2gspu_snap_manifest_text(g_iigs_cur_frame));
+                }
                 fclose(sf);
                 if (!ok) remove(line + 5);
             }
@@ -2387,6 +2435,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
         } else if (!strncmp(line, "restore ", 8)) {
             FILE *sf = fopen(line + 8, "rb");
             bool ok = false;
+            std::string manifest;
             if (sf) {
                 ok = a2gspu_cpu_load(sf, computer->cpu);
                 if (ok) {
@@ -2395,11 +2444,14 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                     else ok = false;
                 }
                 if (ok) ok = a2gspu_snap_check_sentinel(sf);
+                if (ok) manifest = a2gspu_snap_read_manifest(sf);
                 fclose(sf);
             }
             if (ok) {
                 computer->cpu->halt = 0;   // force-run after restore
-                snprintf(result, sizeof result, "status=OK restore %s", line + 8);
+                a2gspu_snap_print_manifest(manifest);   // to the session log; the ack says present/absent
+                snprintf(result, sizeof result, "status=OK restore %s manifest=%s class=A", line + 8,
+                         manifest.empty() ? "absent" : "present");
             } else snprintf(result, sizeof result, "status=FAIL restore-fail");
         } else if (!strncmp(line, "vid", 3)) {
             // vid -- the live video mode, read from the VIDEO SCANNER's own state.
@@ -3105,6 +3157,7 @@ static void run_headless_spike(GS2AppState *state) {
             bool cpu_ok = a2gspu_cpu_load(sf, computer->cpu);
             bool mmu_ok = (cpu_ok && state->mmu_iigs) ? state->mmu_iigs->A2GSPU_restore(sf) : false;
             bool end_ok = (cpu_ok && mmu_ok) ? a2gspu_snap_check_sentinel(sf) : false;
+            const std::string manifest = end_ok ? a2gspu_snap_read_manifest(sf) : std::string();
             fclose(sf);
             if (!cpu_ok || !mmu_ok || !end_ok) {
                 printf("A2GSPU SNAP: restore FAILED from '%s' (cpu=%s mmu=%s end=%s) -- bad/stale magic, "
@@ -3118,6 +3171,7 @@ static void run_headless_spike(GS2AppState *state) {
             // the inject re-arm on the runbin path)
             bus_trace_reset(); slot_bus_reset(); mmu_state_trace_reset();
             printf("A2GSPU SNAP: restored from '%s'; skipping boot.\n", snap_load);
+            a2gspu_snap_print_manifest(manifest);
         }
     }
 
@@ -3227,6 +3281,9 @@ static void run_headless_spike(GS2AppState *state) {
             int i = spike_i;
             iigs_itrace_frame_tick(i);
             if (spike_keys && i == spike_keys_at) {
+                if (snap_load)
+                    a2gspu_warn("A2GSPU SPIKE KEYS", "the machine was restored from a snapshot that excludes the ADB "
+                                "micro; injected keys may never be collected (a restored desktop never polls $C000 again)");
                 keyboard_state_t *kb = (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
                 keygloo_state_t *kg = (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
                 if (kb) {
@@ -3281,8 +3338,11 @@ static void run_headless_spike(GS2AppState *state) {
             a2gspu_cpu_save(sf, computer->cpu);
             state->mmu_iigs->A2GSPU_snapshot(sf);
             a2gspu_snap_write_sentinel(sf);   // trailing magic -> truncation is detectable on load
+            const std::string manifest = a2gspu_snap_manifest_text(spike_i);
+            a2gspu_snap_write_manifest(sf, manifest);
             fclose(sf);
             printf("A2GSPU SNAP: saved machine state to '%s'\n", snap_save);
+            a2gspu_snap_print_manifest(manifest);
         }
     }
 

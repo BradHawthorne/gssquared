@@ -65,15 +65,34 @@ def read_cov(path):
     return lo, hi, body, marked, house_fnv(body)
 
 
+SNAP_MANIFEST = b'GSPM'
+
+
 def read_snap_header(path):
-    """Return (magic_ok, version, size) for a GSPS snapshot. Content is not parsed."""
+    """Return (magic_ok, version, size, manifest) for a GSPS snapshot.
+
+    The manifest is the trailer the emulator appends after its sentinel
+    (class, included, excluded, frame, pins, build, exe); None when the file
+    predates manifests. Body content is not parsed.
+    """
+    size = os.path.getsize(path)
     with open(path, 'rb') as f:
         head = f.read(8)
-    size = os.path.getsize(path)
-    if len(head) < 8:
-        raise ArtifactError('%s: too short to be a snapshot' % path)
-    magic, ver = struct.unpack('<II', head)
-    return magic == SNAP_MAGIC, ver, size
+        if len(head) < 8:
+            raise ArtifactError('%s: too short to be a snapshot' % path)
+        magic, ver = struct.unpack('<II', head)
+        manifest = None
+        if size > 8 + 4 + 4:
+            # The manifest is the last thing in the file: scan the tail for the
+            # marker whose declared length reaches exactly to EOF.
+            f.seek(max(0, size - 4096))
+            tail = f.read()
+            i = tail.rfind(SNAP_MANIFEST)
+            if i >= 0 and i + 8 <= len(tail):
+                n = struct.unpack('<I', tail[i + 4:i + 8])[0]
+                if i + 8 + n == len(tail):
+                    manifest = tail[i + 8:].decode('ascii', 'replace')
+    return magic == SNAP_MAGIC, ver, size, manifest
 
 
 def _selftest():
@@ -116,8 +135,9 @@ def main(argv):
             print('A2COV1 %s range=$%06X-$%06X bytes_executed=%d of %d (%.2f%%) hash=%016X'
                   % (path, lo, hi, marked, span, 100.0 * marked / span, h))
         elif cmd == 'snap':
-            ok, ver, size = read_snap_header(path)
-            print('GSPS %s magic=%s version=%d size=%d' % (path, 'ok' if ok else 'BAD', ver, size))
+            ok, ver, size, manifest = read_snap_header(path)
+            print('GSPS %s magic=%s version=%d size=%d manifest=%s' % (path, 'ok' if ok else 'BAD', ver, size,
+                  manifest if manifest else 'absent (pre-manifest snapshot; class A assumed, every device excluded)'))
             if not ok: return 1
         elif cmd == 'fnv':
             print('%016X  %s' % (house_fnv(open(path, 'rb').read()), path))
