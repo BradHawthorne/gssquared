@@ -135,6 +135,7 @@ file(GLOB_RECURSE GS2_ASSET_FILES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/assets/roms/*"
     "${CMAKE_SOURCE_DIR}/assets/sounds/*"
     "${CMAKE_SOURCE_DIR}/assets/fonts/*"
+    "${CMAKE_SOURCE_DIR}/assets/symbols/*"
 )
 list(APPEND GS2_ASSET_FILES
     "${CMAKE_SOURCE_DIR}/assets/img/atlas.png"
@@ -152,6 +153,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/sounds
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/img
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/fonts
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/symbols
 
     # Copy static resources
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/assets/img/atlas.png ${CMAKE_BINARY_DIR}/resources/img/atlas.png
@@ -160,6 +162,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/roms ${CMAKE_BINARY_DIR}/resources/roms
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/sounds ${CMAKE_BINARY_DIR}/resources/sounds
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/fonts ${CMAKE_BINARY_DIR}/resources/fonts
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/symbols ${CMAKE_BINARY_DIR}/resources/symbols
 
     COMMAND ${CMAKE_COMMAND} -E touch "${GS2_RESOURCES_STAMP}"
     DEPENDS ${GS2_ASSET_FILES}

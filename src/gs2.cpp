@@ -3914,6 +3914,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     Paths::initialize(gs2_app_values.console_mode);
 
     gs2_app_values.base_path = get_base_path(gs2_app_values.console_mode);
+    g_a2gspu_base_path = gs2_app_values.base_path;   // the symbol tables live beside the ROMs (a2gspu_pins.hpp)
     printf("base_path: %s\n", gs2_app_values.base_path.c_str());
     gs2_app_values.pref_path = get_pref_path();
     printf("pref_path: %s\n", gs2_app_values.pref_path.c_str());

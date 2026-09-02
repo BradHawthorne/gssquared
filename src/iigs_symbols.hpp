@@ -165,7 +165,7 @@ inline void iigs_rom_symbols_seed() {
 inline bool g_iigs_default_seeded = false;
 
 // The ROM's toolbox function entry points, read out of the ROM by
-// tools/a2rail/romfpt.py and shipped as assets/symbols/apple2gs/<house-FNV of
+// tools/a2rail/romfpt.py, shipped as assets/symbols/apple2gs/<house-FNV of
 // the ROM>.sym, so a different ROM gets no wrong names. Loaded on first use
 // beside the Monitor seed. A PC between two entries is named after the
 // preceding one: right for a function body, wrong for a shared helper (the
@@ -177,11 +177,18 @@ inline void iigs_toolbox_symbols_load_once() {
     if (g_iigs_toolbox_tried) return;
     g_iigs_toolbox_tried = true;
     if (!g_a2gspu_rom_data || !g_a2gspu_rom_size) return;
-    char path[128];
-    snprintf(path, sizeof path, "assets/symbols/apple2gs/%016llX.sym",
-             (unsigned long long)a2gspu_fnv_bytes(g_a2gspu_rom_data, g_a2gspu_rom_size));
+    // Installed beside the ROMs (build/resources/symbols/, through the same base
+    // path ResourceFile uses), else the source tree for a run from the fork root
+    // before the build assembled resources. The gate runs the emulator from its
+    // own directory, where a cwd-relative path found nothing and every toolbox
+    // PC went unnamed without a word about why.
+    const unsigned long long h = a2gspu_fnv_bytes(g_a2gspu_rom_data, g_a2gspu_rom_size);
+    char path[640], src[128];
+    snprintf(path, sizeof path, "%ssymbols/apple2gs/%016llX.sym", g_a2gspu_base_path.c_str(), h);
+    snprintf(src, sizeof src, "assets/symbols/apple2gs/%016llX.sym", h);
     FILE *f = fopen(path, "rb");
-    if (!f) { printf("IIGS SYMS: no toolbox table for this ROM (%s absent); toolbox PCs stay unnamed\n", path); return; }
+    if (!f) { f = fopen(src, "rb"); if (f) snprintf(path, sizeof path, "%s", src); }
+    if (!f) { printf("IIGS SYMS: no toolbox table for this ROM (%s and %s absent); toolbox PCs stay unnamed\n", path, src); return; }
     char line[256];
     while (fgets(line, sizeof line, f)) {
         unsigned a; char nm[128];

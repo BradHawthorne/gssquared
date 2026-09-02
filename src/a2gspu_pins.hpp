@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 // ============================================================================
 // a2gspu_pins.hpp -- the identity of a headless run, printed before it starts.
@@ -39,6 +40,7 @@ inline const char    *g_a2gspu_argv0    = nullptr;
 inline const uint8_t *g_a2gspu_rom_data = nullptr;
 inline size_t         g_a2gspu_rom_size = 0;
 inline const char    *g_a2gspu_build_version = "unknown";   // set by main() from the generated version.h
+inline std::string    g_a2gspu_base_path;                    // set by main(): where roms/ and assets/ live (ResourceFile's base)
 
 inline uint64_t a2gspu_fnv_bytes(const uint8_t *p, size_t n) {
     uint64_t h = HOUSE_FNV_BASIS;

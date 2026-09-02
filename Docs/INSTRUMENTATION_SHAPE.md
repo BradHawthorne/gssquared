@@ -271,8 +271,9 @@ half followed the same day, from the ROM itself: the Tool Locator reads the
 system tool pointer table's address from `$E1/03C0` (`$FE/012F` in ROM 01),
 and that table yields every ROM tool set's function entry points — 526 for
 ROM 01 — which `tools/a2rail/romfpt.py` writes as
-`assets/symbols/apple2gs/<ROM hash>.sym` and the default namer loads for the
-matching ROM. `$FF/46ED` is `SoundTools.FFStartSound+$2FC`, verified against a
+`assets/symbols/apple2gs/<ROM hash>.sym`, installed by the build beside the
+ROMs so it loads from any working directory (the gate's sessions had run
+unnamed from theirs), and the default namer loads for the matching ROM. `$FF/46ED` is `SoundTools.FFStartSound+$2FC`, verified against a
 dispatcher trap. Still open: RAM-resident tool sets (14 and up), GS/OS's own
 kernel and drivers, and shared helpers, which the table names after the
 preceding entry. One correction after the fact: moving the toolbox load to
