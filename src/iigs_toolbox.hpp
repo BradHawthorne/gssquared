@@ -942,6 +942,7 @@ inline void iigs_snap_step(cpu_state *cpu) {
 // single PC is known. Idempotent; only opens, never closes.
 inline void iigs_itrace_frame_tick(int frame) {
     g_iigs_cur_frame = frame;
+    iigs_syms_flush_note();   // a line the live-table walk left for a line boundary
     if (!g_iigs_itrace_armed && g_iigs_itrace_frame >= 0 &&
         frame >= g_iigs_itrace_frame) {
         g_iigs_itrace_armed = true;

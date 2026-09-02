@@ -18,6 +18,7 @@
 #include <string>
 #include <algorithm>
 #include <unordered_map>
+#include "a2record.hpp"   // frame_now(): the live-table walk is asked at most once per frame
 #include <unordered_set>
 #include "cpu.hpp"
 #include "mmus/mmu.hpp"
@@ -222,6 +223,135 @@ inline bool a2gspu_bank0_rom_mapped(uint32_t lo) {
     return true;
 }
 
+// ---- RAM-resident tool sets, from the LIVE tool pointer table ---------------
+// The ROM table above names ROM entry points. Under GS/OS that is the minority:
+// System 6 on ROM 01 moves the system TPT into RAM ($7E/F599 on the measured
+// desktop), patches most ROM tool sets (their FPTs are in RAM, entries pointing
+// into RAM for the patched functions and back into ROM for the rest), and
+// loads the RAM-only sets (Window, Menu, Control, Dialog, ... 26 of 35 sets
+// on that desktop) wherever the Memory Manager puts them on this boot. No file
+// can hold those addresses; the machine has to be asked. So the namer walks the
+// live TPT -- pointer at $E1/03C0, a count, one long per set to its FPT, a
+// count, one long per function, each the function's address minus one for
+// the dispatcher's RTL -- through probe_peek (no side effects), keeps
+// the RAM entry points in a second sorted table, and walks again only when a
+// RAM address misses and the TPT has moved or grown since the last walk (an
+// application loading a tool set does exactly that). Names come from
+// toolbox.names, written by tools/a2rail/romfpt.py --names; a function not
+// listed is fnXX and a set not listed is ToolNN, both true statements.
+inline std::vector<IigsSym> g_iigs_live_syms;
+inline uint32_t g_iigs_live_tpt = 0, g_iigs_live_count = 0;
+inline int      g_iigs_live_checked_frame = -2;
+
+// The walk happens at the first RAM lookup, which can be in the middle of a
+// report, so it never prints; it leaves one line here, and the line goes out at
+// the next boundary: the frame tick, the start of the STOREVIS report, or exit.
+inline std::string g_iigs_syms_note;
+inline void iigs_syms_flush_note() {
+    if (g_iigs_syms_note.empty()) return;
+    fputs(g_iigs_syms_note.c_str(), stdout);
+    g_iigs_syms_note.clear();
+}
+inline std::unordered_map<uint32_t, std::string> g_iigs_toolnames;   // (tool << 8) | func; func 0 = the set's name
+inline bool     g_iigs_toolnames_tried = false;
+
+inline void iigs_toolnames_load_once() {
+    if (g_iigs_toolnames_tried) return;
+    g_iigs_toolnames_tried = true;
+    char path[640];
+    snprintf(path, sizeof path, "%ssymbols/apple2gs/toolbox.names", g_a2gspu_base_path.c_str());
+    FILE *f = fopen(path, "rb");
+    if (!f) f = fopen("assets/symbols/apple2gs/toolbox.names", "rb");
+    if (!f) { printf("IIGS SYMS: toolbox.names absent; RAM tool sets are named ToolNN.fnXX\n"); return; }
+    char line[256];
+    while (fgets(line, sizeof line, f)) {
+        unsigned t, fn; char nm[128];
+        if (line[0] == '#') continue;
+        if (sscanf(line, "%u %u %127s", &t, &fn, nm) == 3 && t < 256 && fn < 256) g_iigs_toolnames[(t << 8) | fn] = nm;
+    }
+    fclose(f);
+}
+
+inline std::string iigs_tool_func_name(unsigned tool, unsigned fn) {
+    static const char *housekeeping[7] = { "", "BootInit", "StartUp", "ShutDown", "Version", "Reset", "Status" };
+    std::string set = "Tool" + std::to_string(tool);
+    auto it = g_iigs_toolnames.find(tool << 8);
+    if (it != g_iigs_toolnames.end()) set = it->second;
+    std::string func;
+    auto jt = g_iigs_toolnames.find((tool << 8) | fn);
+    if (jt != g_iigs_toolnames.end()) func = jt->second;
+    else if (fn >= 1 && fn <= 6) func = housekeeping[fn];
+    else { char b[16]; snprintf(b, sizeof b, "fn%02X", fn); func = b; }
+    return set + "." + func;
+}
+
+// Walk the live TPT if it has moved or grown since the last walk. Returns true
+// when the live table changed. Costs a few thousand peeks when it walks and two
+// when it does not; it is asked at most once per frame.
+inline bool iigs_live_toolsets_refresh() {
+    cpu_state *cpu = g_a2gspu_cpu_for_names;
+    if (!cpu || !cpu->mmu) return false;
+    const int frame = a2record::frame_now();
+    if (g_iigs_live_checked_frame == frame) return false;
+    g_iigs_live_checked_frame = frame;
+    auto peek32 = [&](uint32_t a) {
+        uint32_t v = 0;
+        for (int i = 0; i < 4; i++) v |= (uint32_t)cpu->mmu->probe_peek((a + i) & 0xFFFFFF) << (8 * i);
+        return v & 0xFFFFFF;
+    };
+    const uint32_t tpt = peek32(0xE103C0);
+    if (tpt == 0 || tpt >= 0xFE0000) return false;            // no table yet, or the ROM's own: the static table covers it
+    const uint32_t count = peek32(tpt);
+    if (count == 0 || count > 64) return false;
+    if (tpt == g_iigs_live_tpt && count == g_iigs_live_count) return false;
+    iigs_toolnames_load_once();
+    std::vector<IigsSym> live;
+    int sets = 0;
+    for (uint32_t t = 1; t <= count; t++) {
+        const uint32_t fpt = peek32(tpt + 4 * t);
+        if (fpt == 0 || fpt >= 0xFE0000) continue;            // absent, or in ROM: the static table names it
+        const uint32_t fc = peek32(fpt);
+        if (fc == 0 || fc > 300) continue;
+        sets++;
+        for (uint32_t fn = 1; fn <= fc; fn++) {
+            const uint32_t e = peek32(fpt + 4 * fn);
+            if (e == 0 || e >= 0xFE0000) continue;            // a ROM entry the patch left alone
+            // An entry is the function's address MINUS ONE: the dispatcher pushes
+            // it and executes RTL, which lands one byte later.
+            live.push_back({ (e + 1) & 0xFFFFFF, iigs_tool_func_name(t, fn) });
+        }
+    }
+    std::sort(live.begin(), live.end(), [](const IigsSym &a, const IigsSym &b) { return a.addr < b.addr; });
+    live.erase(std::unique(live.begin(), live.end(), [](const IigsSym &a, const IigsSym &b) { return a.addr == b.addr; }), live.end());
+    g_iigs_live_syms.swap(live);
+    g_iigs_live_tpt = tpt; g_iigs_live_count = count;
+    char note[200];
+    snprintf(note, sizeof note, "IIGS SYMS: live tool pointer table at $%02X/%04X: %u tool sets, %d with RAM function tables, %zu RAM entry points named\n",
+             (tpt >> 16) & 0xFF, tpt & 0xFFFF, count, sets, g_iigs_live_syms.size());
+    g_iigs_syms_note += note;
+    static bool at_exit_registered = false;
+    if (!at_exit_registered) { at_exit_registered = true; atexit(iigs_syms_flush_note); }
+    return true;
+}
+
+// The live table's answer for a RAM address, or empty. Same window as the ROM
+// table: an entry names the function it begins, not the next 8 KB.
+inline const char *iigs_live_name_pc(uint32_t pc, char *buf, size_t n) {
+    buf[0] = 0;
+    if (g_iigs_live_syms.empty()) return buf;
+    int lo = 0, hi = (int)g_iigs_live_syms.size() - 1, best = -1;
+    while (lo <= hi) {
+        int m = (lo + hi) / 2;
+        if (g_iigs_live_syms[m].addr <= pc) { best = m; lo = m + 1; } else hi = m - 1;
+    }
+    if (best < 0) return buf;
+    const uint32_t off = pc - g_iigs_live_syms[best].addr;
+    if (off > 0x800) return buf;
+    if (off == 0) snprintf(buf, n, "%s", g_iigs_live_syms[best].name.c_str());
+    else snprintf(buf, n, "%s+$%X", g_iigs_live_syms[best].name.c_str(), off);
+    return buf;
+}
+
 // The default table, ready to search: the documented entry points seeded, the
 // ROM's own toolbox table loaded, and the whole thing SORTED -- in that order,
 // once, whichever caller arrives first (main() at arm, so the loader's one
@@ -242,6 +372,12 @@ inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     buf[0] = 0;
     if (g_iigs_syms_loaded && iigs_sym_resolve(full_pc, buf, n)[0]) return buf;
     iigs_names_ready();
+    // RAM first, from the live tool pointer table: a patched ROM function or a
+    // RAM-only tool set lives here, and no static table can know where.
+    if ((full_pc & 0xFFFFFF) < 0xFE0000) {
+        if (iigs_live_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
+        if (iigs_live_toolsets_refresh() && iigs_live_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
+    }
     // Same search as iigs_rom_sym_resolve, without the loaded-flag gate, and with
     // a tighter window: an entry point names the routine it begins, not the
     // next 8 KB of ROM.

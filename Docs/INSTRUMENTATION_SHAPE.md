@@ -274,9 +274,21 @@ ROM 01 — which `tools/a2rail/romfpt.py` writes as
 `assets/symbols/apple2gs/<ROM hash>.sym`, installed by the build beside the
 ROMs so it loads from any working directory (the gate's sessions had run
 unnamed from theirs), and the default namer loads for the matching ROM. `$FF/46ED` is `SoundTools.FFStartSound+$2FC`, verified against a
-dispatcher trap. Still open: RAM-resident tool sets (14 and up), GS/OS's own
-kernel and drivers, and shared helpers, which the table names after the
-preceding entry. One correction after the fact: moving the toolbox load to
+dispatcher trap. RAM-resident tool sets followed, and turned out to be most of them:
+under System 6 on ROM 01 the system TPT itself is in RAM (`$7E/F599` on the
+measured desktop) and 26 of 35 sets have RAM function tables — System 6
+patches the ROM sets and loads the rest wherever the Memory Manager puts
+them on that boot — so no file can hold their addresses. The namer now walks
+the live TPT through `probe_peek` when a RAM address misses and the table has
+moved or grown since the last walk (an application loading a tool set does
+exactly that), keeps the RAM entry points in a second sorted table, and
+names them from `toolbox.names` (`romfpt.py --names`, installed with the
+resources). Proving it with a trap found an off-by-one in both tables: an
+FPT entry is the function's address *minus one* — the dispatcher pushes it
+and executes RTL — so every toolbox name had been a byte early, and a trap
+on an entry never fired. Both tables add one now. Still open: GS/OS's own kernel and drivers, which are not tool
+sets and need the published source, and shared helpers, which either table
+names after the preceding entry. One correction after the fact: moving the toolbox load to
 arm time left the lookup's seed-and-sort step keyed on the loader's own flag,
 so every search ran over an unseeded, unsorted table and the Tool Locator
 dispatch at `$E1/0000` named null — caught by the record contract's smoke

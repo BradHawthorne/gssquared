@@ -10,9 +10,12 @@ Tool Locator dispatches every call through the system Tool Pointer Table --
 the address it reads from $E1/03C0 at run time; $FE/012F in ROM 01 -- a count
 followed by one long per tool set, each the address of that set's Function
 Pointer Table: a count, then one long per function, function N at FPT+4N.
-Everything below $FE0000 is a RAM tool set and is skipped. So the ROM yields
-"tool set T, function F, begins at $BB/AAAA", and the Toolbox Reference names
-the functions.
+Each entry is the function's address MINUS ONE: the dispatcher pushes it and
+executes RTL, which lands one byte later (the first version of this took the
+entry as the address, and every name was one byte early -- caught when a trap
+set on an entry never fired). Everything below $FE0000 is a RAM tool set and
+is skipped. So the ROM yields "tool set T, function F, begins at $BB/AAAA",
+and the Toolbox Reference names the functions.
 
 Verified 2026-09-02 against dispatcher traps: the Dealer Demo's DOC-RAM
 writer at $FF/46ED resolves to SoundTools.FFStartSound, and the call word the
@@ -29,6 +32,10 @@ USAGE
             the long at $03C0 (works for any ROM version)
     --sym   write "HHHHHH name" lines, the format A2GSPU_ROM_SYMBOLS and the
             names-by-default loader read
+    --names write the tool-set and function names as "T F name" lines (F=0 is
+            the set's name): the emulator reads this to name a RAM-resident
+            tool set's functions from the LIVE tool pointer table, since those
+            load wherever the Memory Manager puts them on each boot
 
 Names are given for the sets whose call lists are transcribed here (Tool
 Locator, Memory Manager, Misc Tools, Event Manager, Sound); every other
@@ -87,9 +94,27 @@ def fname(tool, f):
     return NAMES.get(tool, {}).get(f, 'fn%02X' % f)
 
 
+def write_names(out):
+    with open(out, 'w', encoding='ascii') as fh:
+        fh.write('# Apple IIgs toolbox names: "T F name" (T tool set, F function; F=0 names the set), written by\n')
+        fh.write('# tools/a2rail/romfpt.py --names. Read by the emulator to name RAM-resident tool sets from the\n')
+        fh.write('# live tool pointer table. A function not listed is named fnXX; a set not listed, ToolNN.\n')
+        n = 0
+        for t in sorted(TOOLS):
+            fh.write('%d 0 %s\n' % (t, TOOLS[t])); n += 1
+        for t in sorted(set(list(NAMES) + list(PREFIX))):
+            for f in sorted(HOUSEKEEPING):
+                fh.write('%d %d %s\n' % (t, f, fname(t, f))); n += 1
+            for f in sorted(NAMES.get(t, {})):
+                fh.write('%d %d %s\n' % (t, f, NAMES[t][f])); n += 1
+    print('wrote %d names to %s' % (n, out))
+
+
 def main(argv):
     if len(argv) < 2 or argv[1] in ('-h', '--help'):
         print(__doc__); return 2
+    if argv[1] == '--names':
+        write_names(argv[2]); return 0
     rom = open(argv[1], 'rb').read()
     n = len(rom); base = 0x1000000 - n
     def L(a):
@@ -117,7 +142,7 @@ def main(argv):
         for f in range(1, fc + 1):
             e = L(fpt + 4 * f)
             if e and base <= e < 0x1000000:
-                syms.append((e, '%s.%s' % (name, fname(tool, f)))); got += 1
+                syms.append((e + 1, '%s.%s' % (name, fname(tool, f)))); got += 1   # entry = address - 1 (RTL lands at +1)
         print('  %2d %-13s FPT $%06X: %d functions, %d in ROM' % (tool, name, fpt, fc, got))
     syms = sorted(set(syms))
     if '--sym' in argv:
@@ -126,6 +151,7 @@ def main(argv):
             fh.write('# Apple IIgs ROM toolbox function entry points, read from the ROM image by tools/a2rail/romfpt.py\n')
             fh.write('# source TPT $%06X, %d tool sets, %d entries. A PC between two entries is named after the\n' % (tpt, count, len(syms)))
             fh.write('# preceding entry: right for a function body, wrong for a shared helper (use a dispatcher trap).\n')
+            fh.write('# Each address is the table entry plus one: the entry is the function minus one, for the RTL.\n')
             for e, nm in syms:
                 fh.write('%06X %s\n' % (e, nm))
         print('wrote %d symbols to %s' % (len(syms), out))

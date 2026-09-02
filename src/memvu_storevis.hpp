@@ -2,6 +2,7 @@
 #include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include "iigs_ioregs.hpp"     // names for $C000-$C0FF, so a device total is never a bare number
 inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n);     // iigs_symbols.hpp (names by default)
+inline void iigs_syms_flush_note();                                             // iigs_symbols.hpp: a pending one-line note
 // ============================================================================
 // memvu_storevis.hpp — memory access-visibility accounting
 //   MEMVU_STOREVIS : of the stores a workload performs, how many land where an
@@ -354,6 +355,7 @@ inline void memvu_lv_note_load(uint32_t addr, memvu_kind_t kind) {
 
 // ---- reports -----------------------------------------------------------------
 inline void memvu_sv_report(FILE *f) {
+    iigs_syms_flush_note();   // never inside this report's lines
     if (!memvu_sv_on) return;
 
     const uint64_t shadowed = memvu_sv_have_shadow ? memvu_sv_shadowed : 0;
