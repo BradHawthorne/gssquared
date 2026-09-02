@@ -151,9 +151,13 @@ inline void a2gspu_warn(const char *rail, const char *what) {
     printf("%s: WARNING %s\n", rail, what);
 }
 
+// cycles= is the run's other determinism witness beside hash=: two runs whose
+// A2GSPU PINS lines agree must agree on both, and a harness that differences
+// two runs should refuse to subtract when they do not.
 inline void iigs_emit_status(const char *status, int rc, const char *gate,
-                             long gsos_err, int brk, long scb, uint64_t hash) {
-    printf("GSDIAG: status=%s rc=%d gate=%s gsos_err=$%04lX brk=%d scb=%ld hash=%016llX warnings=%d%s\n",
+                             long gsos_err, int brk, long scb, uint64_t hash, uint64_t cycles) {
+    printf("GSDIAG: status=%s rc=%d gate=%s gsos_err=$%04lX brk=%d scb=%ld hash=%016llX warnings=%d cycles=%llu%s\n",
            status, rc, gate, (unsigned long)(gsos_err & 0xFFFF), brk, scb,
-           (unsigned long long)hash, g_a2gspu_warnings, g_gsdiag_extra ? g_gsdiag_extra() : "");
+           (unsigned long long)hash, g_a2gspu_warnings, (unsigned long long)cycles,
+           g_gsdiag_extra ? g_gsdiag_extra() : "");
 }

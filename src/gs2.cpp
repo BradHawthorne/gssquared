@@ -61,6 +61,7 @@
 #include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
 #include "a2gspu_trap.hpp"   // A2GSPU_TRAP: configurable PC traps (env-gated, off => no-op)
 #include "a2gspu_liveness.hpp" // A2GSPU_LIVENESS: screen-hash progress proof every N frames (env-gated)
+#include "a2gspu_pins.hpp"     // A2GSPU PINS: the identity of a headless run, printed before it starts
 #include "iigs_diag.hpp"
 #include "a2gspu_coverage.hpp"  // A2GSPU_COVERAGE: execution-coverage bitmap (env-gated)
 #include "a2gspu_png.hpp"       // CTRL `png` / `pngc`: HGR/DHGR agent-readable PNG
@@ -664,6 +665,9 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
     
     // TODO: load platform roms - this info should get stored in the 'computer'
     rom_data *rd = load_platform_roms(platform, system_config->rom_dir);
+    // Kept for the PINS line: the ROM actually loaded is part of a run's identity.
+    g_a2gspu_rom_data = rd ? (const uint8_t *)rd->main_rom_data : nullptr;
+    g_a2gspu_rom_size = (rd && rd->main_rom_file) ? (size_t)rd->main_rom_file->size() : 0;
     if (!rd) {
         system_failure("Failed to load platform roms, exiting.");
         return;
@@ -2556,8 +2560,10 @@ static void run_headless_spike(GS2AppState *state) {
         exit(rc);
     }
 
-    if (!a2gspu_ctrl_mode)
+    if (!a2gspu_ctrl_mode) {
         printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
+        a2gspu_pins_print(state->platform_id, state->spike_frames, BUILD_VERSION);
+    }
 
     computer->execution_mode = EXEC_NORMAL;
 
@@ -3481,6 +3487,17 @@ static void run_headless_spike(GS2AppState *state) {
                     printf("IIGS GOLDEN: blessed %s = %016llX\n", gf, (unsigned long long)h);
                 }
             }
+            if (const char *eh = SDL_getenv("A2GSPU_EXPECT_HASH")) {
+                // The inline form of GOLDEN: a hash pinned in the invocation
+                // rather than in a file. A harness that differences two runs
+                // can demand the shorter one reproduce before it subtracts.
+                any_gate = true;
+                const uint64_t want = strtoull(eh, nullptr, 16);
+                const bool match = (want == h);
+                printf("A2GSPU EXPECT_HASH: %s (cur=%016llX want=%016llX)\n",
+                       match ? "MATCH" : "MISMATCH", (unsigned long long)h, (unsigned long long)want);
+                if (!match) gate_rc = 1;
+            }
             if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
                 any_gate = true;
                 gate_rc |= iigs_eval_asserts(as, computer->cpu, e1a, nz, nd);
@@ -3498,7 +3515,8 @@ static void run_headless_spike(GS2AppState *state) {
                            : iigs_boot_incomplete()  ? "STALLED" : "OK";
             iigs_emit_status(st, any_gate ? gate_rc : 0,
                              any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
-                             g_iigs_last_gsos_err, g_iigs_brk_count, scb, h);
+                             g_iigs_last_gsos_err, g_iigs_brk_count, scb, h,
+                             computer->clock->get_cycles());
             if (SDL_getenv("A2GSPU_STRICT") && g_a2gspu_warnings) {
                 printf("A2GSPU_STRICT: %d warning(s) during the run -> exit 3\n", g_a2gspu_warnings);
                 exit(3);
@@ -3623,6 +3641,17 @@ static void run_headless_spike(GS2AppState *state) {
                     printf("HGR GOLDEN: blessed %s = %016llX\n", gf, (unsigned long long)h);
                 }
             }
+            if (const char *eh = SDL_getenv("A2GSPU_EXPECT_HASH")) {
+                // The inline form of GOLDEN: a hash pinned in the invocation
+                // rather than in a file. A harness that differences two runs
+                // can demand the shorter one reproduce before it subtracts.
+                any_gate = true;
+                const uint64_t want = strtoull(eh, nullptr, 16);
+                const bool match = (want == h);
+                printf("A2GSPU EXPECT_HASH: %s (cur=%016llX want=%016llX)\n",
+                       match ? "MATCH" : "MISMATCH", (unsigned long long)h, (unsigned long long)want);
+                if (!match) gate_rc = 1;
+            }
             if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
                 any_gate = true;
                 // peek:/nonzero/distinct are machine-independent; the SHR-only fields
@@ -3635,7 +3664,8 @@ static void run_headless_spike(GS2AppState *state) {
             // scb is an SHR concept; report 0 on the II family rather than a fake mode.
             iigs_emit_status(st, any_gate ? gate_rc : 0,
                              any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
-                             0, g_iigs_brk_count, 0, h);
+                             0, g_iigs_brk_count, 0, h,
+                             computer->clock->get_cycles());
             if (SDL_getenv("A2GSPU_STRICT") && g_a2gspu_warnings) {
                 printf("A2GSPU_STRICT: %d warning(s) during the run -> exit 3\n", g_a2gspu_warnings);
                 exit(3);
@@ -3677,6 +3707,7 @@ static void run_headless_spike(GS2AppState *state) {
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     std::cout << "Booting GSSquared!" << std::endl;
 
+    g_a2gspu_argv0 = argv[0];   // so the spike can hash the executable it is running in
     SDL_SetAppMetadata("GSSquared", VERSION_STRING, "Copyright 2025-2026 by Jawaid Bazyar");
     SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING, "Copyright 2025-2026 by Jawaid Bazyar");
     SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING, "Jawaid Bazyar");

@@ -61,6 +61,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_DHGR_PAGE",           "observe",     "2`"},
     {"A2GSPU_DUMP",                "observe",     "hexdump memory ranges (hex). $E0/$E1 read the Mega II image directly (side-effect-free); other banks via the MMU"},
     {"A2GSPU_ERRHOOK",             "trace",       "surface carry-set GS/OS dispatch errors (<-- SYSTEM/LOADER ERROR)"},
+    {"A2GSPU_EXPECT_HASH",         "assert",      "hex hash the SHR window (IIgs) or HGR page (II-family) must equal at spike end; MATCH/MISMATCH printed, mismatch is a gate failure (exit 1). The inline form of GOLDEN, for harnesses that pin a value per row"},
     {"A2GSPU_FAKETIME",            "determinism", "freeze the RTC at that instant (bypasses localtime/timezone) so RTC-derived OS state is run-to-run stable"},
     {"A2GSPU_FORCE_KEY",           "manipulate",  "force the ADB $C000 keyboard latch to return this key (drives a $C000-polling guest headlessly)"},
     {"A2GSPU_GOLDEN",              "assert",      "hash the SHR window ($E1:2000-9FFF, house FNV-1a-64); if the file exists compare (DIFF => gate fail; corrupt/empty file => hard fail); if absent, bless it"},

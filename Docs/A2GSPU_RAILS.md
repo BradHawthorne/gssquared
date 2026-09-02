@@ -101,6 +101,12 @@ Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~189
 *Always-on spike output (no env needed):* the spike prints `SPIKE E1:` (SHR-window
 nonzero/distinct/FNV hash + SCB row), `SPIKE TRACE/SLOT/MMU/OBS/BRACKET:` lines, writes
 `spike_e1.bin` / `spike_trace.bin` / `spike_frame.bmp`, and the `GSDIAG:` status line (below).
+It also prints, first, an `A2GSPU PINS:` line — the identity of the run: `seed= faketime= ramdisk=`
+as the rails read them (`unset` when unset), `platform= frames=`, the loaded ROM's size and
+house-FNV, the configure-time build version (labelled, because it lags the tree), and the house-FNV
+of the running executable, which cannot lag. With `GSDIAG:`'s `cycles=` and `hash=` this is what
+makes a number traceable to the binary and inputs that produced it, and what a harness checks before
+it differences two runs.
 
 ## Trace — execution / dispatch / load / mode streams
 
@@ -316,11 +322,12 @@ the early-boot figure as the outlier it is.
 |------|--------|-------|-------|
 | `A2GSPU_ASSERT="name OP val[;…]"` | `;`/`,`-separated `name OP value` checks (`OP` ∈ `== != <= >= < >`); the spike exits non-zero if any fails. Fields: `scb_mode`, `qd_carry/qd_err`, `lt_carry`, `cs_carry/pr_carry`, `gsos_err`, `nonzero/distinct`, `idxN` (N=0..15), and `peek:HHHHHH` (observation-free 24-bit byte read) | assert | env |
 | `A2GSPU_STRICT=1` | exit 3 at spike end if the run printed any `WARNING` line (see `GSDIAG: warnings=N` below). Missing inputs and unopenable sinks are already fatal (exit 2) without it | assert | env |
+| `A2GSPU_EXPECT_HASH=<hex16>` | the SHR-window (IIgs) or HGR-page (II-family) hash the run must end on; prints `MATCH`/`MISMATCH` with both values and gates the exit like `GOLDEN`, without a file. The way a harness pins a row, and the way a differencing harness proves the shorter run reproduced before subtracting | assert | env |
 | `A2GSPU_GOLDEN=<file>` | hash the SHR window (`$E1:2000-9FFF`, house FNV-1a-64); if the file exists compare (DIFF ⇒ gate fail; corrupt/empty file ⇒ hard fail); if absent, bless it | assert | env |
 
 *Always-on:* at spike end `iigs_emit_status` prints one machine-readable line —
 `GSDIAG: status=<OK\|GATE_FAIL\|CRASH_BRK\|HANG\|GSOS_ERROR\|STALLED> rc=N gate=<PASS\|FAIL\|none>
-gsos_err=$XXXX brk=N scb=NNN hash=................ warnings=N`. The **process exit code** stays
+gsos_err=$XXXX brk=N scb=NNN hash=................ warnings=N cycles=N`. The **process exit code** stays
 golden/assert-gate-driven (`0`/`1`) for harness compatibility; `status` is the richer category.
 `warnings=N` counts every `WARNING` line the run printed — a skipped injection, a rail that could
 not do what it was asked — and `A2GSPU_STRICT=1` turns a non-zero count into exit code 3. A missing

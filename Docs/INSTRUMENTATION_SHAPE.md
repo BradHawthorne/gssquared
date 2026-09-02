@@ -239,6 +239,12 @@ exits non-zero on mismatch. A sweep harness's differencing technique currently
 closes a consumer report's open item (a figure without the build that
 produced it).
 
+**Status:** done: `A2GSPU PINS:` prints seed, faketime, ramdisk, platform,
+frames, the ROM's size and hash, the configure-time build string (labelled)
+and the executable's own hash; `GSDIAG:` carries `cycles=`; `A2GSPU_EXPECT_HASH`
+is the inline gate. The build string still lags the tree between configures;
+the executable hash is the field to trust.
+
 ### M10 — Configuration over code, continued  (P6) — M
 
 `A2GSPU_TRAP` (this commit) makes PC traps a spec. The same shape should

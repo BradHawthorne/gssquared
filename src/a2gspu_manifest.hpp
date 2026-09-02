@@ -232,7 +232,7 @@ inline void write_manifest(FILE *f) {
     fprintf(f, "break: BREAK WATCH VALTRAP PCTRAP TRAP TRAP_FILE TRAP_OUT CONDTRAP STACKTRAP STACKWATCH SAVE_AT RETGUARD\n");
     fprintf(f, "manipulate: POKE FORCE_KEY\n");
     fprintf(f, "snapshot: SNAP_SAVE SNAP_LOAD RESTORE\n");
-    fprintf(f, "assert: ASSERT GOLDEN\n");
+    fprintf(f, "assert: ASSERT GOLDEN EXPECT_HASH STRICT\n");
     fprintf(f, "determinism: SEED FAKETIME RAMDISK\n");
     fprintf(f, "ctrl: CTRL CTRL_TIMEOUT\n");
     fprintf(f, "copilot: COPILOT (windowed read-only cmd.N/ack.N)\n");
