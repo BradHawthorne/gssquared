@@ -184,6 +184,88 @@ inline void memvu_reset() {
 }
 inline void memvu_sv_reset() { memvu_reset(); }   // name kept for the store-only caller
 
+/* ---- live readback (CTRL `memvu` verb) --------------------------------------
+ *
+ * These counters were previously readable only as a summary line printed at
+ * spike end, which forces a whole measurement to be one process lifetime: to
+ * measure a phase you relaunched from a snapshot and took the run's total.
+ *
+ * Read live, plus `memvu reset`, they answer a different and better question --
+ * run to a steady state, zero, run a bounded window, read. That is the
+ * difference between measuring "a boot that happened to end in the Finder" and
+ * measuring the Finder.
+ *
+ * Every formatter REFUSES when its rail is unarmed rather than reporting zeros.
+ * An unarmed counter is not a measurement of nothing; it is the absence of a
+ * measurement, and the two must not look alike (AGENTS.md rule 3).
+ */
+inline void memvu_format_status(char *buf, size_t bufsz) {
+    /* memvu_sv_have_shadow is only set when a rail arms, so reporting it as
+     * "none" while unarmed would tell a caller on a IIgs that the machine
+     * cannot shadow -- false, and indistinguishable from the true answer on a
+     * IIe. Unarmed, the honest value is "not yet determined". */
+    const char *shadow = !(memvu_sv_on || memvu_lv_on)
+                             ? "unknown(no rail armed; determined at arm time)"
+                             : (memvu_sv_have_shadow
+                                    ? "iigs-mmu"
+                                    : "none(non-shadowing platform)");
+    snprintf(buf, bufsz,
+             "status=OK storevis=%s loadvis=%s blame=%s shadow_model=%s "
+             "stores=%llu loads=%llu | memvu store|load|reset",
+             memvu_sv_on ? "armed" : "off",
+             memvu_lv_on ? "armed" : "off",
+             memvu_blame_on ? "armed" : "off",
+             shadow,
+             (unsigned long long)memvu_sv_total,
+             (unsigned long long)(memvu_lv_kind_total[MEMVU_K_FETCH] +
+                                  memvu_lv_kind_total[MEMVU_K_DATA] +
+                                  memvu_lv_kind_total[MEMVU_K_VECTOR] +
+                                  memvu_lv_kind_total[MEMVU_K_PHANTOM]));
+}
+
+inline void memvu_format_store(char *buf, size_t bufsz) {
+    if (!memvu_sv_on) {
+        snprintf(buf, bufsz,
+                 "status=FAIL memvu-storevis-not-armed -- set MEMVU_STOREVIS "
+                 "before launch. Unarmed counters read zero, which is not a "
+                 "measurement of zero visible stores");
+        return;
+    }
+    const unsigned long long vis = (unsigned long long)
+        (memvu_sv_device + memvu_sv_slowside + memvu_sv_shadowed);
+    const unsigned long long tot = (unsigned long long)memvu_sv_total;
+    snprintf(buf, bufsz,
+             "status=OK total=%llu phantom=%llu device=%llu slowside=%llu "
+             "shadowed=%llu visible=%llu visible_pct=%.2f shadow_model=%s",
+             tot, (unsigned long long)memvu_sv_phantom,
+             (unsigned long long)memvu_sv_device,
+             (unsigned long long)memvu_sv_slowside,
+             (unsigned long long)memvu_sv_shadowed, vis,
+             tot ? (100.0 * (double)vis / (double)tot) : 0.0,
+             memvu_sv_have_shadow ? "iigs-mmu" : "none");
+}
+
+inline void memvu_format_load(char *buf, size_t bufsz) {
+    if (!memvu_lv_on) {
+        snprintf(buf, bufsz,
+                 "status=FAIL memvu-loadvis-not-armed -- set MEMVU_LOADVIS "
+                 "before launch");
+        return;
+    }
+    size_t off = 0;
+    int m = snprintf(buf, bufsz, "status=OK");
+    if (m > 0) off = (size_t)m;
+    for (int k = 0; k < MEMVU_K__N && off + 32 < bufsz; k++) {
+        m = snprintf(buf + off, bufsz - off, " %s=%llu/dev=%llu/slow=%llu",
+                     memvu_kind_name[k],
+                     (unsigned long long)memvu_lv_kind_total[k],
+                     (unsigned long long)memvu_lv_kind_device[k],
+                     (unsigned long long)memvu_lv_kind_slowside[k]);
+        if (m < 0) break;
+        off += (size_t)m;
+    }
+}
+
 // ---- the CPU-side store tap --------------------------------------------------
 inline void memvu_seam_store(uint32_t addr);   // defined below; same classifier
 

@@ -1,7 +1,31 @@
 # A2GSPU rails — the instrumentation contract catalog
 
-This is the **accurate, current** catalog of every `A2GSPU_*` instrumentation rail in this
-gssquared fork. It supersedes the stale "Gaps" table in `../A2GSPU_INSTRUMENTATION.md`
+> **Which rails exist is answered by the binary, not by this file.**
+>
+> `src/a2gspu_rails_registry.hpp` is the source of truth for the *set* of rails;
+> this document carries their *semantics* — the groups, invariants, worked
+> combinations and gotchas that a one-line synopsis cannot hold.
+>
+> Ask the running process instead of trusting a list:
+>
+> ```
+> rail                      # count, families, discovery syntax
+> rail list [family|PREFIX] # names, e.g. `rail list memvu`, `rail list A2GSPU_TAP`
+> rail find <NAME>          # one rail's family and synopsis
+> rail env-only <file>      # the whole table, tab-separated (schema a2rails-v1)
+> ```
+>
+> `tools/a2rail/railparity.ps1` (run by `dualsmoke.ps1`) fails if the code reads a
+> rail the registry does not declare, or declares one no code reads.
+>
+> This warning exists because the file earned it: it described **96** of the
+> **128** rails the code actually read. The 32 it omitted included `MEMVU_LOADVIS`,
+> `MEMVU_BLAME`, the whole `A2GSPU_TAP_*` family and `A2GSPU_COVERAGE` — which
+> feeds the deasmiigs code/data split. A hand-maintained list in
+> `a2gspu_manifest.hpp` had drifted separately to 36. Three copies of one fact,
+> and both copies a client could reach were short.
+
+This document supersedes the stale "Gaps" table in `../A2GSPU_INSTRUMENTATION.md`
 (most of those gaps are now implemented — see that file's appended note).
 
 ## What this fork is (the contract)

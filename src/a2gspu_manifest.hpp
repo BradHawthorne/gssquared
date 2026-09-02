@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include "systemconfig.hpp"
+#include "a2gspu_rails_registry.hpp"
 
 namespace a2manifest {
 
@@ -73,6 +74,7 @@ inline const char *verb_when(const char *name) {
         {"load",       "write a host file into guest memory, including aux as bank 01"},
         {"limitations","enumerate known fidelity gaps from the running binary so unsupported hardware cannot be mistaken for working"},
         {"manifest",   "the full machine-readable capability record, for a client discovering this rail cold"},
+        {"memvu",      "how much of a workload's memory traffic an agent OUTSIDE the CPU can see. Read it live and zero it, so a measurement can be a bounded window instead of a whole process lifetime"},
         {"mount",      "swap media at runtime. FAILS on a missing path and does not eject the current disk to find out"},
         {"oracle",     "the contracts governing every other verb. Read FIRST -- especially the cycles= rule"},
         {"paddle",     "inject an analogue paddle value; seeds the 558 decay so PREAD counts the value back"},
@@ -83,7 +85,7 @@ inline const char *verb_when(const char *name) {
         {"poke",       "write bytes at an address. The fastest way to plant a stub and drive it"},
         {"press",      "press a key with modifiers held, where a bare key injection is not enough"},
         {"quit",       "end the session. A suite that does not is a paused machine that reads as a hang"},
-        {"rail",       "the rail's own state"},
+        {"rail",       "what can be OBSERVED here at all. Verbs are the live surface; rails are the launch-time one, and asking the binary beats reading a catalogue that has drifted before (128 rails read, 96 described, when this was added)"},
         {"read",       "dump guest memory to a host file, including aux as bank 01"},
         {"reset",      "recover a wedged machine; cold with the argument"},
         {"restore",    "reload a Class A snapshot (CPU+MMU+softswitches). Devices self-heal -- not time travel"},
@@ -148,6 +150,7 @@ inline const Verb *verbs(int *count) {
         {"load", "manipulate", "load <addr> <file> — splice binary into RAM via mmu->write", "inject-ram"},
         {"limitations", "meta", "limitations [file] — machine-readable known fidelity gaps and status", "discover"},
         {"manifest", "meta", "manifest <file> — full capability dump for agents", "discover"},
+        {"memvu", "observe", "memvu [status]|store|load|reset — live memory-visibility counters (MEMVU_STOREVIS / MEMVU_LOADVIS). Refuses rather than reporting zeros when a rail is unarmed", "memory-visibility"},
         {"mount", "manipulate", "mount sXdY <path> — runtime media swap", "inject-media"},
         {"oracle", "meta", "oracle — north-star contracts (cycles/colour/snapshot)", "discover"},
         {"paddle", "manipulate", "paddle <0-3> <0-255> | paddle off — analogue paddle; seeds the 558 decay so PREAD counts the value back", "force-control"},
@@ -163,7 +166,7 @@ inline const Verb *verbs(int *count) {
         {"shr-golden", "calibrate", "shr-golden <file> [bless] — live FNV of $E1:2000-$9FFF", "shr-window"},
         {"press", "manipulate", "press <hex> [hold] — physical key edge (no consume proof)", "inject-key"},
         {"quit", "run", "quit — end CTRL session", "-"},
-        {"rail", "meta", "rail list|env-only — discover env rails still launch-only (L4 gap)", "discover"},
+        {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> — enumerate every env rail this binary reads, from the binary", "discover"},
         {"read", "observe", "read <addr> <len> <file> — probe_peek dump (side-effect-free)", "memory-peek"},
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
         {"restore", "snapshot", "restore <file> — Class A snapshot load", "time-travel-A"},
@@ -266,42 +269,28 @@ inline void write_manifest(FILE *f) {
 
 // Env rails that are still launch-only (not live CTRL). Agents must relaunch
 // with these set — listed here so they are not a black box.
+/* Every env rail this binary reads, emitted from the registry.
+ *
+ * This used to be ~36 hand-written fprintf lines out of the 128 rails the code
+ * actually reads, with a footer pointing at Docs/A2GSPU_RAILS.md -- which was
+ * itself describing only 96. Three copies of one fact, drifting independently,
+ * and the two a client could reach were both short.
+ *
+ * Now there is one source of truth (a2gspu_rails_registry.hpp), enforced by
+ * tools/a2rail/railparity.ps1, and this prints it. A rail added without a
+ * registry entry fails that gate; a rail added with one appears here for free.
+ */
 inline void write_env_only_rails(FILE *f) {
-    fprintf(f, "# env-only rails (set before process start; not live CTRL)\n");
-    fprintf(f, "# See Docs/A2GSPU_RAILS.md for full semantics.\n");
-    fprintf(f, "A2GSPU_SPIKE_FRAMES\tbatch headless run\n");
-    fprintf(f, "A2GSPU_SPIKE_KEYS\tkey inject at spike\n");
-    fprintf(f, "A2GSPU_RUN_BIN\tinject+exec flat binary (IIgs default $7E0000)\n");
-    fprintf(f, "A2GSPU_LOAD\tmulti-file RAM splice file@HEX or HEX@file (;/, sep); no PC change\n");
-    fprintf(f, "A2GSPU_LOAD_BOOT\tframes before A2GSPU_LOAD (default 0)\n");
-    fprintf(f, "A2GSPU_VRAM_LOAD\t16K aux||main vram-raw into page (a2tile paint offline)\n");
-    fprintf(f, "A2GSPU_VRAM_PAGE\t1|2 for VRAM_LOAD (default 1)\n");
-    fprintf(f, "MEMVU_STOREVIS\tstore-visibility accounting: what share of stores a non-CPU agent can see\n");
-    fprintf(f, "MEMVU_STOREVIS_BANKS\tadd the per-bank store/visible breakdown\n");
-    fprintf(f, "MEMVU_LOADVIS\tload-visibility accounting: which loads the machine must serve (device) vs may cache (slow side)\n");
-    fprintf(f, "MEMVU_OPMIX\texecuted-opcode histogram by CPU mode context, plus hand-derived group totals\n");
-    fprintf(f, "MEMVU_IREUSE\tinstruction-line reuse and mode-tag mismatch rate; =<lines>,<linesize>\n");
-    fprintf(f, "MEMVU_WORKSET\tdirect-page access count, live direct-page count, and stack depth range\n");
-    fprintf(f, "MEMVU_SEAM\tMODEL (not a counter): cost of routing some memory traffic to the machine; upper bound, parameters required\n");
-    fprintf(f, "MEMVU_BLAME\twhich code generates externally-visible traffic, by opcode address; =<topN>\n");
-    fprintf(f, "A2GSPU_WATCH\tbus write-watch ranges (provenance)\n");
-    fprintf(f, "A2GSPU_WATCH_READ\talso watch reads\n");
-    fprintf(f, "A2GSPU_WATCH_CHANGE\tlog only value changes\n");
-    fprintf(f, "A2GSPU_VALTRAP\twho stored value V\n");
-    fprintf(f, "A2GSPU_ITRACE_FROM\tper-instruction trace arm PC\n");
-    fprintf(f, "A2GSPU_TBTRACE\ttoolbox/GSOS dispatch trace\n");
-    fprintf(f, "A2GSPU_CALLSTREAM\tNDJSON call sequence\n");
-    fprintf(f, "A2GSPU_ASSERT\tspike-end assert clauses\n");
-    fprintf(f, "A2GSPU_GOLDEN\tSHR window (IIgs) or HGR main (IIe) golden hash\n");
-    fprintf(f, "A2GSPU_DHGR_GOLDEN\tIIe SPIKE gate: FNV hash of DHGR page\n");
-    fprintf(f, "A2GSPU_DHGR_PAGE\t1|2 which HGR page for DHGR golden (default 1)\n");
-    fprintf(f, "A2GSPU_DHGR_GOLDEN_PROFILE\tvram-raw (bits) | 4dot (discrete RGB); default vram-raw\n");
-    fprintf(f, "A2GSPU_HGR_PAGE\t1|2|both for main-only HGR SPIKE hash\n");
-    fprintf(f, "A2GSPU_SEED\tdeterministic cold boot\n");
-    fprintf(f, "A2GSPU_FAKETIME\tfrozen RTC\n");
-    fprintf(f, "A2GSPU_POKE\tlaunch-time PC poke (use CTRL poke for live)\n");
-    fprintf(f, "A2GSPU_BREAK\theadless PC breakpoint\n");
-    fprintf(f, "A2GSPU_TAP\tgeneric PC hit NDJSON tap\n");
+    fprintf(f, "# env rails (set before process start; not live CTRL)\n");
+    fprintf(f, "# source of truth: src/a2gspu_rails_registry.hpp"
+               " (gate: tools/a2rail/railparity.ps1)\n");
+    fprintf(f, "# columns: NAME <tab> FAMILY <tab> SYNOPSIS\n");
+    fprintf(f, "schema\ta2rails-v1\n");
+    fprintf(f, "count\t%d\n", a2rails::rail_count());
+    int n = 0;
+    const a2rails::Rail *r = a2rails::rails(n);
+    for (int i = 0; i < n; i++)
+        fprintf(f, "%s\t%s\t%s\n", r[i].name, r[i].family, r[i].synopsis);
     fprintf(f, "# CTRL live substitutes where available:\n");
     fprintf(f, "#   soft watch -> watch add peek:ADDR (not bus WATCH)\n");
     fprintf(f, "#   assert -> assert peek:ADDR==VAL\n");
@@ -309,6 +298,7 @@ inline void write_env_only_rails(FILE *f) {
     fprintf(f, "#   load/poke/setreg -> live inject-ram\n");
     fprintf(f, "#   A2GSPU_LOAD -> SPIKE multi-file bank inject (IIe tiles.bin@6000)\n");
 }
+
 
 inline void write_limitations(FILE *f) {
     fprintf(f,"# a2gspu known limitations\n");
@@ -322,10 +312,56 @@ inline void write_limitations(FILE *f) {
 
 inline void format_rail_ack(char *buf, size_t bufsz) {
     snprintf(buf, bufsz,
-             "status=OK rail env-only listed in Docs/A2GSPU_RAILS.md | "
-             "rail env-only <file> writes catalog | "
-             "live: watch soft|bus valtrap itrace tbtrace callstream assert load poke dhgr-golden | "
-             "not-yet-live: GOLDEN(SPIKE SHR) ASSERT(env) SPIKE_*");
+             "status=OK rails=%d families=run,observe,trace,break,manipulate,"
+             "snapshot,assert,device,determinism,meta,calibrate,tap,memvu,wiz5,"
+             "alias,ctrl | rail list [family|PREFIX] names them | "
+             "rail find <NAME> gives one | rail env-only <file> writes the full "
+             "table | source: src/a2gspu_rails_registry.hpp | "
+             "live: watch soft|bus valtrap itrace tbtrace callstream assert load "
+             "poke dhgr-golden | not-yet-live: GOLDEN(SPIKE SHR) ASSERT(env) SPIKE_*",
+             a2rails::rail_count());
+}
+
+/* `rail list [family|PREFIX]` -- names only, because 128 synopses do not fit an
+ * ack. A filter that matches nothing answers FAIL rather than an empty OK: an
+ * agent asking for a family that does not exist has made an error, and a bare
+ * "status=OK" with no names would read as "this family is empty". */
+inline void format_rail_list(char *buf, size_t bufsz, const char *filter) {
+    int n = 0, shown = 0;
+    const a2rails::Rail *r = a2rails::rails(n);
+    bool all = !filter || !*filter || !strcmp(filter, "all");
+    size_t flen = filter ? strlen(filter) : 0;
+    size_t off = 0;
+    int m = snprintf(buf, bufsz, "status=OK rail list %s",
+                     all ? "all" : filter);
+    if (m > 0) off = (size_t)m;
+    for (int i = 0; i < n && off + 24 < bufsz; i++) {
+        bool hit = all || !strcmp(r[i].family, filter) ||
+                   (flen && !strncmp(r[i].name, filter, flen));
+        if (!hit) continue;
+        m = snprintf(buf + off, bufsz - off, " %s", r[i].name);
+        if (m < 0) break;
+        off += (size_t)m;
+        shown++;
+    }
+    if (!shown)
+        snprintf(buf, bufsz,
+                 "status=FAIL rail-list-no-match '%s' -- not a family or name "
+                 "prefix; try: rail list (bare) for all %d",
+                 filter ? filter : "", a2rails::rail_count());
+    else
+        snprintf(buf + off, bufsz > off ? bufsz - off : 0, " count=%d", shown);
+}
+
+inline void format_rail_find(char *buf, size_t bufsz, const char *name) {
+    const a2rails::Rail *r = a2rails::rail_find(name);
+    if (!r)
+        snprintf(buf, bufsz,
+                 "status=FAIL rail-unknown '%s' -- this binary reads %d rails; "
+                 "rail list names them", name ? name : "", a2rails::rail_count());
+    else
+        snprintf(buf, bufsz, "status=OK rail=%s family=%s synopsis=%s",
+                 r->name, r->family, r->synopsis);
 }
 
 // Fill buf with short help (truncated safely). Returns bytes written conceptually.

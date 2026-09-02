@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "a2gspu_manifest.hpp"
+#include "memvu_storevis.hpp"
 #include "a2gspu_dhgr.hpp"
 #include "a2gspu_png.hpp"
 #include "computer.hpp"
@@ -1081,11 +1082,55 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
         }
         return true;
     }
+    /* memvu -- read the memory-visibility counters LIVE, and zero them.
+     *
+     * Without this the counters are readable only as a spike-end summary, so a
+     * measurement is one process lifetime and "the Finder desktop" really means
+     * "a boot that ended in the Finder". reset makes a bounded window possible:
+     * run-until steady state, memvu reset, run N, memvu store. */
+    if (!strncmp(line, "memvu", 5) && (line[5] == 0 || line[5] == ' ')) {
+        const char *rest = line[5] ? line + 6 : "";
+        while (*rest == ' ') rest++;
+        if (!*rest || !strncmp(rest, "status", 6)) {
+            memvu_format_status(result, rsz);
+        } else if (!strncmp(rest, "store", 5)) {
+            memvu_format_store(result, rsz);
+        } else if (!strncmp(rest, "load", 4)) {
+            memvu_format_load(result, rsz);
+        } else if (!strncmp(rest, "reset", 5)) {
+            if (!memvu_sv_on && !memvu_lv_on) {
+                snprintf(result, rsz,
+                         "status=FAIL memvu-not-armed -- nothing to reset; set "
+                         "MEMVU_STOREVIS and/or MEMVU_LOADVIS before launch");
+            } else {
+                memvu_reset();
+                snprintf(result, rsz,
+                         "status=OK memvu reset -- counters zeroed; the next "
+                         "read measures from here");
+            }
+        } else {
+            snprintf(result, rsz,
+                     "status=FAIL memvu-need: status|store|load|reset");
+        }
+        return true;
+    }
+
     if (!strncmp(line, "rail", 4) && (line[4] == 0 || line[4] == ' ')) {
         const char *rest = line[4] ? line + 5 : "";
         while (*rest == ' ') rest++;
-        if (!*rest || !strncmp(rest, "list", 4)) {
+        if (!*rest) {
             a2manifest::format_rail_ack(result, rsz);
+        } else if (!strncmp(rest, "list", 4) &&
+                   (rest[4] == 0 || rest[4] == ' ')) {
+            const char *filt = rest + 4;
+            while (*filt == ' ') filt++;
+            a2manifest::format_rail_list(result, rsz, filt);
+        } else if (!strncmp(rest, "find", 4) &&
+                   (rest[4] == 0 || rest[4] == ' ')) {
+            const char *nm = rest + 4;
+            while (*nm == ' ') nm++;
+            if (!*nm) snprintf(result, rsz, "status=FAIL rail-need: find <NAME>");
+            else      a2manifest::format_rail_find(result, rsz, nm);
         } else if (!strncmp(rest, "env-only", 8)) {
             const char *path = rest + 8;
             while (*path == ' ') path++;
@@ -1671,8 +1716,28 @@ inline bool try_input(const char *line, char *result, size_t rsz,
     if (!strncmp(line, "keys ", 5)) {
         keyboard_state_t *kb =
             (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
-        if (kb) kb->paste_buffer += (line + 5);
-        else snprintf(result, rsz, "status=FAIL no-keyboard");
+        keygloo_state_t *kg =
+            (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
+        const char *s = line + 5;
+        if (kb) {
+            kb->paste_buffer += s;
+        } else if (kg && kg->kg) {
+            // IIgs has no MODULE_KEYBOARD paste path. One force_key per
+            // char, no hold_key (ADB would repeat).
+            for (; *s; s++) {
+                uint8_t ch = (uint8_t)*s;
+                if (ch == '\n') ch = '\r';
+                kg->kg->force_key(ch);
+                keygloo_update_interrupt_status(kg, kg->kg);
+                for (int i = 0; i < 2; i++) {
+                    if (!run_one_frame(computer)) break;
+                }
+                kg->kg->hold_key(0);
+                kg->kg->key_up();
+            }
+        } else {
+            snprintf(result, rsz, "status=FAIL no-keyboard");
+        }
         return true;
     }
     /* devstate [name|all [file]] -- the per-device state the emulator already
@@ -1908,19 +1973,35 @@ inline bool try_input(const char *line, char *result, size_t rsz,
                 }
                 kb->key_down_count--;
             } else if (kg && kg->kg) {
+                // force_key queues exactly one ADB buffer byte. hold_key is
+                // sticky: the ADB micro auto-repeats inside a single video
+                // frame, so Pascal Execute/Command sees AAAA / XX.
+                // hold<=3 = typing one-shot; hold>=4 = old sticky (games).
                 kg->kg->force_key((uint8_t)ch);
                 keygloo_update_interrupt_status(kg, kg->kg);
-                int hk = hold < 3 ? hold : 3;
-                kg->kg->hold_key((uint8_t)ch);
-                for (int i = 0; i < hold; i++) {
-                    if (i == hk) kg->kg->hold_key(0);
-                    if (!run_one_frame(computer)) {
-                        snprintf(result, rsz, "halted@%d", i);
-                        break;
+                if (hold <= 3) {
+                    int frames = hold < 1 ? 1 : hold;
+                    for (int i = 0; i < frames; i++) {
+                        if (!run_one_frame(computer)) {
+                            snprintf(result, rsz, "halted@%d", i);
+                            break;
+                        }
                     }
+                    kg->kg->hold_key(0);
+                    kg->kg->key_up();
+                } else {
+                    int hk = 3;
+                    kg->kg->hold_key((uint8_t)ch);
+                    for (int i = 0; i < hold; i++) {
+                        if (i == hk) kg->kg->hold_key(0);
+                        if (!run_one_frame(computer)) {
+                            snprintf(result, rsz, "halted@%d", i);
+                            break;
+                        }
+                    }
+                    kg->kg->hold_key(0);
+                    kg->kg->key_up();
                 }
-                kg->kg->hold_key(0);
-                kg->kg->key_up();
             } else {
                 snprintf(result, rsz, "status=FAIL no-keyboard");
             }
@@ -1935,15 +2016,28 @@ inline bool try_input(const char *line, char *result, size_t rsz,
             keyboard_state_t *kb =
                 (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
             if (!kb) {
-                /* status=FAIL, which this did not say. It is a genuine
-                   failure -- the key never reaches the guest -- but it announced
-                   itself as bare prose, so a caller testing for FAIL saw none and
-                   carried on believing the keystroke had landed. Silent failure
-                   dressed as a message is worse than either. */
-                snprintf(result, rsz,
-                         "status=FAIL key-unsupported-on-this-machine "
-                         "(no MODULE_KEYBOARD; this machine routes the keyboard "
-                         "through the ADB microcontroller -- use 'press' instead)");
+                keygloo_state_t *kg =
+                    (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
+                if (kg && kg->kg) {
+                    kg->kg->force_key((uint8_t)ch);
+                    keygloo_update_interrupt_status(kg, kg->kg);
+                    int f = 0;
+                    bool halted = false;
+                    for (; f < 2; f++) {
+                        if (!run_one_frame(computer)) { halted = true; break; }
+                    }
+                    kg->kg->hold_key(0);
+                    kg->kg->key_up();
+                    snprintf(result, rsz,
+                             halted ? "status=OK key $%02X halted@%d"
+                                    : "status=OK key $%02X one-shot %d frame(s)",
+                             ch, f + 1);
+                } else {
+                    snprintf(result, rsz,
+                             "status=FAIL key-unsupported-on-this-machine "
+                             "(no MODULE_KEYBOARD; this machine routes the keyboard "
+                             "through the ADB microcontroller -- use 'press' instead)");
+                }
             } else {
                 if (maxf < 1) maxf = 1;
                 kb->kb_key_strobe = (uint8_t)(ch | 0x80);

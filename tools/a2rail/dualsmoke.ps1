@@ -80,6 +80,9 @@ if (-not $SkipOffline) {
         & ctest --output-on-failure
         Pop-Location
     }
+    # Rails must be discoverable (AGENTS.md rule 6). Nothing checked that, and
+    # the catalogue drifted to 96 of 128 -- so the gate is here, not in habit.
+    Run-One "rail parity (offline)" { & (Join-Path $here "railparity.ps1") }
 }
 
 Run-One "railcheck (IIe / platform 3)"  { & (Join-Path $here "railcheck.ps1") -Platform 3 -Dir $Dir }
