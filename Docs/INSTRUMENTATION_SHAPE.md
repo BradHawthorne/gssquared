@@ -280,6 +280,18 @@ should resolve handler pages to their backing RAM for the probe path. Until
 then every "observe" rail on the IIgs is choosing between a lie and a side
 effect on those two banks.
 
+**Status: this was already done before the note was written, and the note
+was wrong.** `MMU_IIgs::probe_peek` resolves banks `$00/$01` through the
+aux and language-card mapping the CPU uses (`calc_aux_read`, LC bank/ROM
+state), answers `$C100–$CFFF` from the Mega II's page table, and returns
+floating bus only for `$C0xx`, where no observation-free answer exists;
+`probe_readable` tracks it exactly. The paragraph above was written from a
+comment describing the *old* behaviour that sits above the code that fixed
+it — a black box of the documentation kind. `A2GSPU_TRAP` and the
+names-by-default check now read through the probe everywhere. What remains
+of M11 is only the rule: an observe rail reads through the probe, never
+through the CPU's read path.
+
 ### M12 — The manifest carries record schemas  (P3, P7) — S
 
 `manifest <file>` already enumerates verbs and rails. Add, per rail, the

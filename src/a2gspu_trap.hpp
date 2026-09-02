@@ -87,11 +87,10 @@
 //
 //   * Off by default. With no A2GSPU_TRAP* set, g_trap_on is false and the CPU
 //     loop pays one untaken branch. Stock behaviour is byte-identical.
-//   * Observe-don't-disturb. Reads of I/O space ($C000-$CFFF in banks 00/01/E0/E1)
-//     go through probe_peek and never fire a soft switch; every other read is
-//     mmu->read, which is the true content of RAM (probe_peek returns floating
-//     bus for the handler-paged banks $00/$01 on the IIgs, see mmu_iigs.hpp).
-//     A trap never writes.
+//   * Observe-don't-disturb. Every read goes through the MMU probe (probe_peek):
+//     no soft switch is ever thrown ($C0xx reads as floating bus), banks $00/$01
+//     resolve through the CPU's own aux/language-card mapping, $E0/$E1 come from
+//     the Mega II image. A trap never writes.
 //   * Loud. A malformed spec is fatal at arm time, with the spec and the reason
 //     on stderr -- an instrument that silently ignores its configuration is the
 //     failure mode this fork exists to remove. Every armed spec is echoed at
@@ -132,12 +131,15 @@ namespace a2trap {
     exit(2);
 }
 
+// Every trap read goes through the MMU's probe: observation-free by contract,
+// and on the IIgs it resolves banks $00/$01 through the aux and language-card
+// mapping the CPU itself uses (mmu_iigs.hpp probe_peek), answers $E0/$E1 from
+// the Mega II image, and returns floating bus for $C0xx rather than throw a
+// soft switch. An earlier version of this file read RAM through mmu->read in
+// the belief that the probe returned floating bus for banks $00/$01; that was
+// once true and is not, and a trap has no business on the CPU's path at all.
 inline uint8_t peek(cpu_state *cpu, uint32_t a) {
-    a &= 0xFFFFFF;
-    const uint32_t bank = a >> 16, lo = a & 0xFFFF;
-    const bool io_bank = (bank == 0x00 || bank == 0x01 || bank == 0xE0 || bank == 0xE1);
-    if (io_bank && lo >= 0xC000 && lo <= 0xCFFF) return cpu->mmu->probe_peek(a);   // never fire a soft switch
-    return cpu->mmu->read(a);
+    return cpu->mmu->probe_peek(a & 0xFFFFFF);
 }
 
 // Address of the k-th byte above S, with the same wrap rule everywhere.

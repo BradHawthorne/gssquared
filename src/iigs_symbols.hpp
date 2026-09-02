@@ -171,8 +171,10 @@ inline bool g_iigs_default_seeded = false;
 // address at or above $D000 is checked against the ROM the run actually
 // loaded: the $C000-$FFFF window is the image's last 16 KB, and if the four
 // bytes the CPU sees at the PC are not the ROM's bytes, the name is withheld.
-// The check needs the live MMU; gs2.cpp sets the cpu at arm time. Without it,
-// or on a ROM too small to have that window, no bank-0 high name is claimed.
+// The check reads through the MMU probe (side-effect-free; it resolves the
+// language-card state the way the CPU sees it); gs2.cpp sets the cpu at arm
+// time. Without it, or on a ROM too small to have that window, no bank-0 high
+// name is claimed.
 inline cpu_state *g_a2gspu_cpu_for_names = nullptr;
 inline bool a2gspu_bank0_rom_mapped(uint32_t lo) {
     if (!g_a2gspu_cpu_for_names || !g_a2gspu_rom_data || g_a2gspu_rom_size < 0x4000 || lo < 0xD000) return false;
@@ -180,7 +182,7 @@ inline bool a2gspu_bank0_rom_mapped(uint32_t lo) {
     for (uint32_t k = 0; k < 4; k++) {
         const uint32_t a = lo + k;
         if (a > 0xFFFF) break;
-        if (g_a2gspu_cpu_for_names->mmu->read(a) != win[a - 0xC000]) return false;
+        if (g_a2gspu_cpu_for_names->mmu->probe_peek(a) != win[a - 0xC000]) return false;
     }
     return true;
 }

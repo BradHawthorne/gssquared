@@ -105,11 +105,13 @@ firmware entry point (`COUT`, `RDKEY`, `MLI`, `ToolDisp`…), else `null`.
 - **Off by default.** With no `A2GSPU_TRAP*` set, `g_trap_on` is false and the
   CPU loop pays one untaken branch. Stock behaviour is byte-identical (the
   unarmed SHR hash is part of the gate).
-- **Observe-don't-disturb.** Reads of I/O space (`$C000–$CFFF` in banks
-  `00 01 E0 E1`) go through `probe_peek` and never fire a soft switch. Every
-  other read is `mmu->read`, which is the true content of RAM (on the IIgs
-  `probe_peek` returns floating bus for the handler-paged banks `$00/$01`, see
-  `mmu_iigs.hpp`). A trap never writes.
+- **Observe-don't-disturb.** Every read goes through the MMU probe
+  (`probe_peek`): no soft switch is ever thrown (`$C0xx` reads as floating
+  bus), banks `$00/$01` resolve through the CPU's own aux and language-card
+  mapping, `$E0/$E1` come from the Mega II image. A trap never writes. (An
+  earlier revision of this page said the probe returned floating bus for
+  banks `$00/$01`; that was once true of the fork and is not — see the
+  resolution in `mmu_iigs.hpp`.)
 - **Loud.** A malformed spec is fatal at arm time, with the spec and the reason
   on stderr and exit code 2. Every armed spec is echoed with its resolved
   trigger and sink. Every spec prints a close-out line —
