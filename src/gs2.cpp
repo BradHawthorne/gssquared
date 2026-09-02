@@ -1626,15 +1626,44 @@ static int microtest_vid_640_offset(MMU_IIgs *m) {
     return ok ? 0 : 1;
 }
 
+// --- video: 320 fill-mode nibble repeat (SCB bit 5 = $20) ---------------------
+// Hardware: a 0 nibble repeats the previous color on that line. SCB $20 is FILL;
+// SCB $40 is scanline IRQ and must NOT expand. Byte0=$11 (two colour-1 pixels),
+// rest 0, all 200 lines. Fill on -> 64000 idx1; fill off ($40) -> 400 idx1 + 63600 idx0.
+static int microtest_vid_fill_mode(MMU_IIgs *m) {
+    uint8_t *m2 = m->get_megaii_memory_base();
+    if (!m2) { printf("MMUTEST vid_fill_mode: no Mega-II image -- FAIL\n"); return 1; }
+    uint8_t *e1 = m2 + iigs_shr::MEGAII_E1;
+    for (int i = 0; i < iigs_shr::LINES * iigs_shr::BYTES_PER_LINE; i++)
+        e1[iigs_shr::PIX + i] = 0;
+    for (int vc = 0; vc < iigs_shr::LINES; vc++)
+        e1[iigs_shr::PIX + vc * iigs_shr::BYTES_PER_LINE] = 0x11;
+    long hist[16];
+    long h1_fill = 0, h0_fill = 0;
+    for (int i = 0; i < iigs_shr::LINES; i++) e1[iigs_shr::SCB + i] = iigs_shr::SCB_FILL;
+    iigs_shr::histogram(e1, hist);
+    h1_fill = hist[1]; h0_fill = hist[0];
+    long want_fill = (long)iigs_shr::LINES * 320;
+    int ok_fill = (h1_fill == want_fill && h0_fill == 0);
+    for (int i = 0; i < iigs_shr::LINES; i++) e1[iigs_shr::SCB + i] = iigs_shr::SCB_IRQ;
+    iigs_shr::histogram(e1, hist);
+    long want_stripe = (long)iigs_shr::LINES * 2;
+    long want_zero = (long)iigs_shr::LINES * 318;
+    int ok_irq = (hist[1] == want_stripe && hist[0] == want_zero);
+    int ok = ok_fill && ok_irq;
+    printf("MMUTEST vid_fill_mode: fill h1=%ld h0=%ld irq-stripe h1=%ld h0=%ld -- %s\n",
+           h1_fill, h0_fill, hist[1], hist[0], ok ? "PASS" : "FAIL");
+    return ok ? 0 : 1;
+}
+
 // NOTE on a deliberately-OMITTED video case (honesty): the $0RGB-palette-word ->
 // RGB888 (*0x11 nibble-replication) expansion is golden-relevant, but it lives
 // INLINE inside the printf-only iigs_video_summary() (no returnable function), so a
 // standalone test would have to re-derive the formula rather than call production
 // code — giving it NO teeth (a revert of the real *0x11 would not flip it). Rather
 // than ship a brittle self-referential check or refactor the summary just to test
-// it, that case is skipped here. The two video cases that ARE present (scb_mode,
-// 640_offset) drive the SHARED production decode iigs_shr::histogram(), so they DO
-// have teeth on the mode/offset contracts the golden actually depends on.
+// it, that case is skipped here. The video cases that ARE present (scb_mode,
+// 640_offset, vid_fill_mode) drive the SHARED production decode iigs_shr::histogram().
 
 // Dispatcher: A2GSPU_MMUTEST=<name>. "all" runs every case (the CI entry point).
 static int run_mmu_microtest(GS2AppState *state, const char *which) {
@@ -1647,6 +1676,7 @@ static int run_mmu_microtest(GS2AppState *state, const char *which) {
     if (strcmp(which, "mmu_lc_bank")    == 0) return microtest_mmu_lc_bank(m);
     if (strcmp(which, "vid_scb_mode")   == 0) return microtest_vid_scb_mode(m);
     if (strcmp(which, "vid_640_offset") == 0) return microtest_vid_640_offset(m);
+    if (strcmp(which, "vid_fill_mode")  == 0) return microtest_vid_fill_mode(m);
 
     if (strcmp(which, "all") == 0) {
         int fails = 0;
@@ -1656,6 +1686,7 @@ static int run_mmu_microtest(GS2AppState *state, const char *which) {
         fails += (microtest_mmu_lc_bank(m)    != 0);
         fails += (microtest_vid_scb_mode(m)   != 0);
         fails += (microtest_vid_640_offset(m) != 0);
+        fails += (microtest_vid_fill_mode(m)  != 0);
         printf("MMUTEST all: %d failure(s)\n", fails);
         return fails == 0 ? 0 : 1;
     }
@@ -3569,7 +3600,13 @@ static void run_headless_spike(GS2AppState *state) {
     // the in-memory (possibly game-modified) disks to their FILES at spike end.
     // OFF by default (mutation-guard discipline) — use ONLY on writable scratch
     // images to capture an on-disk save. Suppressed when WIZ5_NO_WRITEBACK is set.
-    if (getenv("WIZ5_WRITEBACK") && !getenv("WIZ5_NO_WRITEBACK")) {
+    // Canonical A2GSPU_* with the WIZ5_* originals as aliases: writing modified
+    // disks back is not Pascal-specific. Suppression stays OR-ed across both
+    // spellings, so setting either NO_WRITEBACK still wins over either WRITEBACK
+    // -- a guard that can be bypassed by using the other name is not a guard.
+    const bool wb_on  = getenv("A2GSPU_WRITEBACK")    || getenv("WIZ5_WRITEBACK");
+    const bool wb_off = getenv("A2GSPU_NO_WRITEBACK") || getenv("WIZ5_NO_WRITEBACK");
+    if (wb_on && !wb_off) {
         for (const auto &dm : state->disks_to_mount) {
             storage_key_t k{}; k.slot = dm.slot; k.drive = dm.drive;
             k.partition = 0; k.subunit = 0;

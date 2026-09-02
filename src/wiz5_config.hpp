@@ -332,10 +332,24 @@ inline void wiz5_config_arm(computer_t *computer) {
     // --- KEYS / KEY_DELAY ---
     g_wiz5_keys.clear(); g_wiz5_keys_next = 0;
     g_wiz5_key_delay = 0; g_wiz5_key_pending.clear(); g_wiz5_key_last = -100000;
-    if (const char *kf = getenv("WIZ5_KEYS")) {
+    /* Canonical A2GSPU_* names with the WIZ5_* originals kept as aliases, the
+     * same way generic_tap.hpp already treats A2GSPU_TAP / WIZ5_TAP. Scheduled
+     * keystroke injection and per-keystroke RAM dumps are not Pascal-specific;
+     * the product name was history, not scope. Existing scripts keep working.
+     *
+     * KEYSCHED rather than KEYS: A2GSPU_SPIKE_KEYS already exists and is a
+     * literal string injected at a frame, where this is a FILE of scheduled
+     * entries. Two rails a letter apart meaning different things is how a
+     * caller reaches for the wrong one. */
+    const char *kf_env = getenv("A2GSPU_KEYSCHED");
+    // Report the name the caller actually set. A diagnostic that names the other
+    // spelling sends them looking at a variable they did not touch.
+    const char *kf_label = "A2GSPU_KEYSCHED";
+    if (!kf_env) { kf_env = getenv("WIZ5_KEYS"); kf_label = "WIZ5_KEYS"; }
+    if (const char *kf = kf_env) {
         FILE *f = fopen(kf, "r");
         if (!f) {
-            fprintf(stderr, "WIZ5_KEYS: cannot open '%s'\n", kf);
+            fprintf(stderr, "%s: cannot open '%s'\n", kf_label, kf);
         } else {
             auto decode = [](const char *p) {
                 std::string text;
@@ -366,13 +380,17 @@ inline void wiz5_config_arm(computer_t *computer) {
                 if (!text.empty()) g_wiz5_keys.push_back({(int)frame, "", text});
             }
             fclose(f);
-            printf("WIZ5_KEYS: %d scheduled entries from %s\n", (int)g_wiz5_keys.size(), kf);
+            printf("%s: %d scheduled entries from %s\n",
+                   kf_label, (int)g_wiz5_keys.size(), kf);
         }
     }
-    if (const char *kd = getenv("WIZ5_KEY_DELAY")) { int n = atoi(kd); if (n > 0) g_wiz5_key_delay = n; }
+    const char *kd_env = getenv("A2GSPU_KEYSCHED_DELAY");
+    if (!kd_env) kd_env = getenv("WIZ5_KEY_DELAY");
+    if (const char *kd = kd_env) { int n = atoi(kd); if (n > 0) g_wiz5_key_delay = n; }
 
     // --- KEYRAM (per-keystroke RAM dump; needs a session dir to write into) ---
-    g_wiz5_keyram_on = (getenv("WIZ5_KEYRAM") != nullptr);
+    g_wiz5_keyram_on = (getenv("A2GSPU_KEYRAM") != nullptr) ||
+                       (getenv("WIZ5_KEYRAM") != nullptr);
     g_wiz5_session_dir.clear();
     if (const char *sd = getenv("WIZ5_SESSION"))          g_wiz5_session_dir = sd;
     else if (const char *sd2 = getenv("A2GSPU_TAP_SESSION")) g_wiz5_session_dir = sd2;
