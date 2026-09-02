@@ -107,6 +107,36 @@ if ($undocumented.Count -or $phantom.Count) {
     exit 1
 }
 
-Write-Host 'railparity: PASS - every rail the code reads is discoverable, and'
-Write-Host '                   every declared rail exists.'
+# --- the record contract (Docs/INSTRUMENTATION_SHAPE.md, M1) ---------------
+# A rail's machine-readable output goes through src/a2record.hpp, so every
+# record has one shape and is written whole. A JSON literal printed anywhere
+# else is a record outside the contract. Exemptions are named, with a reason.
+$recordExempt = @{
+    'a2record.hpp'         = 'the writer itself'
+    'a2gspu_ctrl_json.hpp' = 'the CTRL reply envelope is protocol, not a rail record'
+    'wiz5_config.hpp'      = 'title-specific streams (WIZ5_EC19_OUT, WIZ5_CSP6_OUT) predate the contract; they convert when their readers do'
+}
+$outside = @()
+Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp, *.h, *.cc |
+    Where-Object { $_.FullName -notmatch '\\imgui\\' -and -not $recordExempt.ContainsKey($_.Name) } |
+    ForEach-Object {
+        $text = [IO.File]::ReadAllText($_.FullName)
+        foreach ($m in [regex]::Matches($text, '(?<![A-Za-z_])f?printf\s*\((?:[^;"]*?,)?\s*"\{\\"')) {
+            $line = ($text.Substring(0, $m.Index) -split "`n").Count
+            $outside += ('  {0}:{1}' -f $_.FullName.Substring($srcDir.Length + 1), $line)
+        }
+    }
+if ($outside.Count) {
+    Write-Host ''
+    Write-Host 'OUTSIDE THE RECORD CONTRACT - JSON printed by a rail without a2record.hpp:' -ForegroundColor Red
+    $outside | ForEach-Object { Write-Host $_ }
+    Write-Host '  (write it with a2record::Record, or name the exemption and its reason in railparity.ps1)'
+    Write-Host ''
+    Write-Host ("railparity: FAIL - {0} record(s) outside the contract" -f $outside.Count) -ForegroundColor Red
+    exit 1
+}
+
+Write-Host 'railparity: PASS - every rail the code reads is discoverable,'
+Write-Host '                   every declared rail exists, and every record'
+Write-Host '                   is written by the contract.'
 exit 0

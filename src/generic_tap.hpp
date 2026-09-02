@@ -1,4 +1,5 @@
 #pragma once
+#include "a2record.hpp"   // the record contract: one writer, one shape, one global sink
 // ============================================================================
 // generic_tap.hpp — A2GSPU_TAP: ONE title-AGNOSTIC PC-hit / session tap.
 //
@@ -37,7 +38,7 @@
 //
 // ---- (2) periodic capture session -------------------------------------------
 //   A2GSPU_TAP_SESSION=<dir>     arms the session; writes into <dir>:
-//     zp_stream.ndjson           {"ts_ms":N,"zp":"<512 hex>"} every ZP_EVERY s
+//     zp_stream.ndjson           {"event":"tap.zp",...,"ts_ms":N,"zp":"<512 hex>"} every ZP_EVERY s
 //     ram_dump_periodic_tNNN.bin $0400-$BFFF every DUMP_EVERY s
 //     hgr_dump_periodic_tNNN.bin $2000-$5FFF (+ .meta soft-switch sidecar)
 //     text_pages.ndjson          40x24 text page snapshot each dump
@@ -166,32 +167,30 @@ inline void generic_tap_check(cpu_state *cpu, uint64_t cycles) {
     if (!g_gtap.out) return;
 
     const double ts_ms = gtap_ts_ms(cycles);
-    fprintf(g_gtap.out,
-            "{\"ts_ms\":%.0f,\"ts_wall\":%lld,\"op\":\"%s\",\"pc\":%u,"
-            "\"a\":%u,\"x\":%u,\"y\":%u,\"sp\":%u",
-            ts_ms, (long long)time(nullptr), w->label, (unsigned)pc,
-            (unsigned)(cpu->a & 0xFF), (unsigned)(cpu->x & 0xFF),
-            (unsigned)(cpu->y & 0xFF), (unsigned)(cpu->sp & 0xFFFF));
+    a2record::Record rec("tap", "hit", a2record::frame_now(), (unsigned long long)cycles);
+    rec.f0("ts_ms", ts_ms).i("ts_wall", (long long)time(nullptr)).str("op", w->label).u("pc", pc)
+       .u("a", cpu->a & 0xFF).u("x", cpu->x & 0xFF).u("y", cpu->y & 0xFF).u("sp", cpu->sp & 0xFFFF);
     // extra named ZP-pointer fields (mp / mp2 / ipc / np ...)
     for (int i = 0; i < g_gtap.nptr; i++) {
         uint8_t z = g_gtap.ptrs[i].zp;
         uint16_t v = (uint16_t)(cpu->mmu->read(z) | (cpu->mmu->read((uint8_t)(z + 1)) << 8));
-        fprintf(g_gtap.out, ",\"%s\":%u", g_gtap.ptrs[i].name, (unsigned)v);
+        rec.u(g_gtap.ptrs[i].name, v);
     }
     // operand bytes following the p-code IPC pointer
     uint8_t op0 = 0;
     if (w->nops > 0) {
         uint16_t ipc = (uint16_t)(cpu->mmu->read(w->zp) |
                                   (cpu->mmu->read((uint8_t)(w->zp + 1)) << 8));
-        fprintf(g_gtap.out, ",\"operands\":[");
+        std::string ops = "[";
         for (int k = 1; k <= w->nops; k++) {
             uint8_t b = cpu->mmu->read((uint16_t)(ipc + k));
             if (k == 1) op0 = b;
-            fprintf(g_gtap.out, "%s%u", k > 1 ? "," : "", (unsigned)b);
+            char d[8]; snprintf(d, sizeof d, "%s%u", k > 1 ? "," : "", (unsigned)b); ops += d;
         }
-        fprintf(g_gtap.out, "]");
+        ops += ']';
+        rec.raw("operands", ops.c_str());
     }
-    fprintf(g_gtap.out, "}\n");
+    rec.write(g_gtap.out, false);
     g_gtap.count++;
 
     // DUMP_ON: capture a resident full-RAM image the first time this label's
@@ -222,8 +221,8 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
         g_gtap.next_zp_s = sec + g_gtap.zp_every_s;
         char hex[513];
         for (int i = 0; i < 256; i++) snprintf(hex + i * 2, 3, "%02x", cpu->mmu->read((uint16_t)i));
-        fprintf(g_gtap.zp_f, "{\"ts_ms\":%.0f,\"zp\":\"%s\"}\n", gtap_ts_ms(cycles), hex);
-        fflush(g_gtap.zp_f);
+        a2record::Record("tap", "zp", a2record::frame_now(), (unsigned long long)cycles)
+            .f0("ts_ms", gtap_ts_ms(cycles)).str("zp", hex).write(g_gtap.zp_f, true);
     }
 
     if (sec >= g_gtap.next_dump_s) {
@@ -241,19 +240,20 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
         }
         snprintf(p, sizeof(p), "%s/hgr_dump_periodic_t%03d.bin.meta", g_gtap.dir.c_str(), sec);
         if (FILE *f = fopen(p, "wb")) {
-            fprintf(f, "{\"emu_t\":%d,\"page2_active\":%d,\"hires_on\":%d,"
-                       "\"text_on\":%d,\"mixed_on\":%d}\n", sec,
-                    (cpu->mmu->read(0xC01C) & 0x80) ? 1 : 0,
-                    (cpu->mmu->read(0xC01D) & 0x80) ? 1 : 0,
-                    (cpu->mmu->read(0xC01A) & 0x80) ? 1 : 0,
-                    (cpu->mmu->read(0xC01B) & 0x80) ? 1 : 0);
+            a2record::Record("tap", "dumpmeta", a2record::frame_now(), (unsigned long long)cycles)
+                .i("emu_t", sec)
+                .u("page2_active", (cpu->mmu->read(0xC01C) & 0x80) ? 1 : 0)
+                .u("hires_on",     (cpu->mmu->read(0xC01D) & 0x80) ? 1 : 0)
+                .u("text_on",      (cpu->mmu->read(0xC01A) & 0x80) ? 1 : 0)
+                .u("mixed_on",     (cpu->mmu->read(0xC01B) & 0x80) ? 1 : 0)
+                .write(f, false);
             fclose(f);
         }
         if (g_gtap.pages_f) {
             std::string page; gtap_page_json(cpu, page);
-            fprintf(g_gtap.pages_f, "{\"ts_ms\":%.0f,\"text_page_ascii\":\"%s\"}\n",
-                    gtap_ts_ms(cycles), page.c_str());
-            fflush(g_gtap.pages_f);
+            a2record::Record("tap", "page", a2record::frame_now(), (unsigned long long)cycles)
+                .f0("ts_ms", gtap_ts_ms(cycles)).raw("text_page_ascii", ("\"" + page + "\"").c_str())
+                .write(g_gtap.pages_f, true);
         }
     }
 }
@@ -264,11 +264,11 @@ inline void generic_tap_keypress(cpu_state *cpu, uint8_t key) {
     g_gtap.key_seq++;
     std::string page; gtap_page_json(cpu, page);
     char chr = (key >= 32 && key < 127) ? (char)key : '.';
-    fprintf(g_gtap.keys_f,
-            "{\"seq\":%d,\"ascii\":%u,\"chr\":\"%c\",\"ts_wall\":%lld,"
-            "\"text_page_pre\":\"%s\"}\n",
-            g_gtap.key_seq, (unsigned)key, chr, (long long)time(nullptr), page.c_str());
-    fflush(g_gtap.keys_f);
+    const char chrs[2] = { chr, 0 };
+    a2record::Record("tap", "key", a2record::frame_now(), a2record::cycles_now())
+        .i("seq", g_gtap.key_seq).u("ascii", key).str("chr", chrs).i("ts_wall", (long long)time(nullptr))
+        .raw("text_page_pre", ("\"" + page + "\"").c_str())
+        .write(g_gtap.keys_f, true);
 }
 inline void generic_tap_disk_write(int qtrack) {
     if (!g_gtap.disk_f) return;
@@ -276,8 +276,8 @@ inline void generic_tap_disk_write(int qtrack) {
     if (sec != g_gtap.disk_seen_sec) { memset(g_gtap.disk_seen, 0, sizeof(g_gtap.disk_seen)); g_gtap.disk_seen_sec = sec; }
     if (qtrack < 0 || qtrack >= 160 || g_gtap.disk_seen[qtrack]) return;
     g_gtap.disk_seen[qtrack] = 1;
-    fprintf(g_gtap.disk_f, "{\"op\":\"DISKWR\",\"qtrack\":%d,\"track\":%.2f}\n", qtrack, qtrack / 4.0);
-    fflush(g_gtap.disk_f);
+    a2record::Record("tap", "diskwr", a2record::frame_now(), a2record::cycles_now())
+        .str("op", "DISKWR").i("qtrack", qtrack).f2("track", qtrack / 4.0).write(g_gtap.disk_f, true);
 }
 
 // ---- env parsing / arm / close ----------------------------------------------

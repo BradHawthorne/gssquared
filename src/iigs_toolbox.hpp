@@ -1,4 +1,5 @@
 #pragma once
+#include "a2record.hpp"   // the record contract: one writer, one shape, one global sink
 // ============================================================================
 // iigs_toolbox.hpp — headless Apple IIgs Tool Locator / GS-OS call trace +
 // closed-loop hooks (result retention, trace scoping, stop-on-fault, headless
@@ -164,7 +165,8 @@ extern int g_iigs_cur_frame;   // fwd (defined below with ITRACE): early decl so
 inline void iigs_watch_emit(cpu_state *cpu, uint32_t addr, uint8_t data, const char *kind) {
     if (g_watch_max && g_watch_hits >= g_watch_max) {
         if (g_watch_hits == g_watch_max) {
-            if (g_watch_out) fprintf(g_watch_out, "{\"event\":\"suppressed\"}\n");
+            if (FILE *sink = a2record::sink(g_watch_out))
+                a2record::Record("watch", "suppressed", g_iigs_cur_frame, a2record::cycles_now()).write(sink, true);
             else printf("IIGS WATCH: (further hits suppressed)\n");
             g_watch_hits++;
         }
@@ -185,17 +187,15 @@ inline void iigs_watch_emit(cpu_state *cpu, uint32_t addr, uint8_t data, const c
         const char *e = getenv("A2GSPU_WATCH_IPC_ZP");
         return e ? (int)strtol(e, nullptr, 16) : 0;
     }();
-    const unsigned w_ipc = (g_watch_out && ipc_zp)
+    const unsigned w_ipc = (a2record::sink(g_watch_out) && ipc_zp)
         ? (unsigned)(cpu->mmu->probe_peek(ipc_zp) |
                      (cpu->mmu->probe_peek((ipc_zp + 1) & 0xFFFF) << 8)) : 0u;
-    if (g_watch_out)
-        fprintf(g_watch_out,
-                "{\"event\":\"watch\",\"kind\":\"%s\",\"pc\":%u,\"addr\":%u,"
-                "\"data\":%u,\"s\":%u,\"d\":%u,\"dbr\":%u,\"ipc\":%u,\"ts\":%u}\n",
-                kind, (unsigned)(cpu->full_pc & 0xFFFFFF), (unsigned)addr,
-                (unsigned)data, (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db,
-                w_ipc, (unsigned)g_iigs_cur_frame);
-    else
+    if (FILE *sink = a2record::sink(g_watch_out)) {
+        a2record::Record rec("watch", kind, g_iigs_cur_frame, a2record::cycles_now());
+        rec.str("kind", kind).u("pc", cpu->full_pc & 0xFFFFFF).u("addr", addr).u("data", data)
+           .u("s", cpu->sp).u("d", cpu->d).u("dbr", cpu->db).u("ipc", w_ipc).u("ts", (unsigned)g_iigs_cur_frame);
+        rec.write(sink, false);
+    } else
         printf("IIGS WATCH: PC=%02X/%04X %s $%02X %s %02X/%04X  S=$%04X D=$%04X DBR=$%02X\n",
                (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF),
                kind[0] == 'w' ? "wrote" : "read ", data,
@@ -923,18 +923,17 @@ inline void iigs_snap_step(cpu_state *cpu) {
     for (int i = 0; i < g_snap_npc; i++) if (g_snap_pcs[i] == pc) { hit = true; break; }
     if (!hit) return;
     auto rd = [&](uint32_t a){ return cpu->mmu->read(a & 0xFFFFFF); };
-    fprintf(g_snap_out,
-        "{\"seq\":%d,\"pc\":%u,\"a\":%u,\"x\":%u,\"y\":%u,\"s\":%u,\"d\":%u,"
-        "\"dbr\":%u,\"lo\":%u,\"data\":\"",
-        g_snap_count, (unsigned)pc, (unsigned)cpu->a, (unsigned)cpu->x,
-        (unsigned)cpu->y, (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db,
-        (unsigned)g_snap_lo);
+    a2record::Record rec("snap", "hit", g_iigs_cur_frame, a2record::cycles_now());
+    rec.i("seq", g_snap_count).u("pc", pc).u("a", cpu->a).u("x", cpu->x).u("y", cpu->y)
+       .u("s", cpu->sp).u("d", cpu->d).u("dbr", cpu->db).u("lo", g_snap_lo);
+    std::string hex; hex.reserve((g_snap_hi - g_snap_lo + 1) * 2 + 2); hex += '"';
     for (uint32_t a = g_snap_lo; a <= g_snap_hi; a++) {
         uint16_t lo16 = a & 0xFFFF;
         uint8_t v = (lo16 >= 0xC000 && lo16 <= 0xC0FF) ? 0 : rd(a);  // skip soft-switch I/O
-        fprintf(g_snap_out, "%02x", v);
+        char b[4]; snprintf(b, sizeof b, "%02x", v); hex += b;
     }
-    fprintf(g_snap_out, "\"}\n");
+    hex += '"';
+    rec.raw("data", hex.c_str()).write(g_snap_out, false);
     g_snap_count++;
 }
 
@@ -1132,8 +1131,9 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
         uint16_t aval = m8 ? (uint16_t)(cpu->a & 0xFF) : cpu->a;
         bool carry = (cpu->p & FLAG_C) != 0;
         if (g_callstream_on)
-            fprintf(g_callstream_out, "{\"ev\":\"r\",\"word\":%u,\"kind\":%u,\"carry\":%d,\"err\":%u}\n",
-                    pend.callword, pend.kind, carry ? 1 : 0, aval);
+            a2record::Record("callstream", "ret", g_iigs_cur_frame, a2record::cycles_now())
+                .str("ev", "r").u("word", pend.callword).u("kind", pend.kind).u("carry", carry ? 1 : 0).u("err", aval)
+                .write(g_callstream_out, false);
         bool bank_ok = (g_iigs_tbtrace_bank < 0) || (pend.caller_bank == g_iigs_tbtrace_bank);
         if (pend.kind == 0) {
             g_iigs_last_result[pend.callword] = {carry, aval};   // for the assert gate
@@ -1221,10 +1221,10 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
         printf("IIGS GSOS: call class-%d dispatch @ $%06X\n", kind == 1 ? 1 : 0, lpc);
     }
     if (g_callstream_on)
-        fprintf(g_callstream_out,
-                "{\"ev\":\"c\",\"seq\":%d,\"word\":%u,\"kind\":%u,\"caller\":%u,\"s\":%u,\"d\":%u,\"dbr\":%u}\n",
-                g_callstream_seq++, callword, kind, (unsigned)((ret - 1) & 0xFFFFFF),
-                (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)caller_bank);
+        a2record::Record("callstream", "call", g_iigs_cur_frame, a2record::cycles_now())
+            .str("ev", "c").i("seq", g_callstream_seq++).u("word", callword).u("kind", kind)
+            .u("caller", (ret - 1) & 0xFFFFFF).u("s", cpu->sp).u("d", cpu->d).u("dbr", caller_bank)
+            .write(g_callstream_out, false);
     g_iigs_pending.push_back({ret, callword, kind, caller_bank});
     if (g_iigs_pending.size() > 128) g_iigs_pending.erase(g_iigs_pending.begin());
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include "a2record.hpp"   // the record contract: one writer, one shape, one global sink
 // ============================================================================
 // a2gspu_liveness.hpp -- A2GSPU_LIVENESS=N: a progress proof every N frames.
 //
@@ -162,12 +163,13 @@ inline void a2gspu_liveness_tick(computer_t *computer) {
     a2gspu_liveness_track(first, tch, g_liveness_text_last, g_liveness_text_run, g_liveness_text_since);
     g_liveness_prev_screen = screen; g_liveness_prev_text = text; g_liveness_samples++;
 
-    if (g_liveness_out) {
-        fprintf(g_liveness_out,
-                "{\"event\":\"liveness\",\"frame\":%d,\"cycles\":%llu,\"screen\":\"%016llX\",\"text\":\"%016llX\",\"kbd\":%s%llu,\"changed\":\"%s\"}\n",
-                g_liveness_frame, (unsigned long long)cycles, (unsigned long long)screen, (unsigned long long)text,
-                g_liveness_is_iigs ? "" : "null,\"kbd_note\":\"n/a on II-family\",\"kbd_zero\":", (unsigned long long)kbd, changed);
-        fflush(g_liveness_out);
+    if (FILE *sink = a2record::sink(g_liveness_out)) {
+        a2record::Record rec("liveness", "sample", g_liveness_frame, (unsigned long long)cycles);
+        rec.hex16("screen", (unsigned long long)screen).hex16("text", (unsigned long long)text);
+        if (g_liveness_is_iigs) rec.u("kbd", (unsigned long long)kbd);
+        else rec.null("kbd").str("kbd_note", "n/a on II-family").u("kbd_zero", (unsigned long long)kbd);
+        rec.str("changed", changed);
+        rec.write(sink, true);
     } else {
         if (g_liveness_is_iigs)
             printf("A2GSPU LIVENESS: frame=%d cycles=%llu screen=%016llX text=%016llX kbd=%llu changed=%s\n",

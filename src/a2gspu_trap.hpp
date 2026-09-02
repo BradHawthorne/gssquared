@@ -1,4 +1,5 @@
 #pragma once
+#include "a2record.hpp"   // the record contract: one writer, one shape, one global sink
 // ============================================================================
 // a2gspu_trap.hpp -- A2GSPU_TRAP: PC traps that are configuration, not code.
 //
@@ -606,21 +607,25 @@ inline void emit_payloads(std::string &s, const std::vector<Payload> &ps, Trap &
     if (!f.empty()) { s += ",\"f\":{"; s += f; s += '}'; }
 }
 
-inline void write_record(Trap &t, const std::string &body) {
-    if (t.out) { fputs(body.c_str(), t.out); fputc('\n', t.out); fflush(t.out); }
-    else { printf("IIGS TRAP: %s\n", body.c_str()); }
+inline void write_record(Trap &t, a2record::Record &rec) {
+    // The spec's own sink (A2GSPU_TRAP_OUT is already folded into t.out), else
+    // the global A2GSPU_RECORDS sink, else the stdout line as always.
+    if (FILE *f = a2record::sink(t.out)) rec.write(f, true);
+    else printf("IIGS TRAP: %s\n", rec.done().c_str());
 }
 
 inline void emit(Trap &t, cpu_state *cpu, uint64_t cycles, bool is_exit, uint32_t n, bool heavy,
                  const char *extra = nullptr, uint32_t pc_override = 0xFFFFFFFFu) {
-    std::string s; s.reserve(512);
+    // The record contract: the envelope first, the rail's fields after it, the
+    // payload fragments appended to the same buffer, one whole line at the end.
+    a2record::Record rec("trap", is_exit ? "exit" : "entry", g_iigs_cur_frame, (unsigned long long)cycles);
+    std::string &s = rec.s;
     char b[160];
     // A store trap fires mid-instruction, when full_pc has already moved on:
     // its record names the STORING instruction's opcode address instead.
     const uint32_t pc = (pc_override != 0xFFFFFFFFu) ? pc_override : (cpu->full_pc & 0xFFFFFF);
-    snprintf(b, sizeof b, "{\"event\":\"trap\",\"trap\":\"%s\",\"t\":\"%s\",\"n\":%u,\"frame\":%d,\"cycles\":%llu,\"pc\":\"",
-             t.name.c_str(), is_exit ? "x" : "e", (unsigned)n, g_iigs_cur_frame, (unsigned long long)cycles);
-    s += b; pc_str(s, pc); s += '"';
+    rec.str("trap", t.name.c_str()).str("t", is_exit ? "x" : "e").u("n", n);
+    s += ",\"pc\":\""; pc_str(s, pc); s += '"';
     {   // names by default: a documented entry point or an application symbol,
         // and an explicit null otherwise -- never a bare address passing for a name
         char sym[96];
@@ -631,8 +636,7 @@ inline void emit(Trap &t, cpu_state *cpu, uint64_t cycles, bool is_exit, uint32_
     snprintf(b, sizeof b, ",\"heavy\":%d", heavy ? 1 : 0); s += b;
     emit_payloads(s, is_exit ? t.pxdo : t.pdo, t, cpu);
     if (heavy) emit_payloads(s, is_exit ? t.pxheavy : t.pheavy, t, cpu);
-    s += '}';
-    write_record(t, s);
+    write_record(t, rec);
 }
 
 // ------------------------------------------------------------- the check ---
@@ -734,7 +738,7 @@ inline void describe(const Trap &t) {
     printf(" when=%zu policy=%s", t.when.size(), t.policy == Trap::ONCE ? "once" : t.policy == Trap::EVERY ? "every" : "first");
     if (t.policy == Trap::FIRST) printf("(%u%s)", (unsigned)t.first_n, t.has_key ? "/key" : "");
     printf(" cap=%u do=%zu heavy=%zu xdo=%zu xheavy=%zu out=%s\n", (unsigned)t.cap, t.pdo.size(), t.pheavy.size(),
-           t.pxdo.size(), t.pxheavy.size(), t.out ? (t.own_out ? t.out_path.c_str() : "A2GSPU_TRAP_OUT") : "stdout");
+           t.pxdo.size(), t.pxheavy.size(), t.out ? (t.own_out ? t.out_path.c_str() : "A2GSPU_TRAP_OUT") : (a2record::g_global ? "A2GSPU_RECORDS" : "stdout"));
 }
 
 inline void close_all() {

@@ -3,6 +3,7 @@
 // and makes live L4 arms easier to extend without more god-file mass.
 
 #pragma once
+#include "a2record.hpp"   // the record contract: one writer, one shape, one global sink
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1159,6 +1160,8 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
                 snprintf(result, rsz, "status=OK warnings=%d strict=%d", g_a2gspu_warnings, getenv("A2GSPU_STRICT") ? 1 : 0);
             } else if (!strcmp(rc->read, "fn:pins")) {
                 { char pins[320]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version); snprintf(result, rsz, "status=OK %s", pins); }
+            } else if (!strcmp(rc->read, "fn:records")) {
+                a2record::format_status(result, rsz);
             } else {
                 snprintf(result, rsz, "status=FAIL reach-table-inconsistent %s read=%s has no formatter", nm, rc->read);
             }

@@ -61,6 +61,17 @@
 #include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
 #include "a2gspu_trap.hpp"   // A2GSPU_TRAP: configurable PC traps (env-gated, off => no-op)
 #include "a2gspu_liveness.hpp" // A2GSPU_LIVENESS: screen-hash progress proof every N frames (env-gated)
+#include "a2record.hpp"        // the record contract: one writer, one shape, one global sink (A2GSPU_RECORDS)
+
+// The record contract's clock and frame, registered at arm so a rail that holds
+// only a cpu_state (WATCH, CALLSTREAM) can still stamp every record.
+static NClock *s_a2record_clock = nullptr;
+static void a2record_register(NClock *clk) {
+    s_a2record_clock = clk;
+    a2record::g_cycles_fn = [] { return (unsigned long long)s_a2record_clock->get_cycles(); };
+    a2record::g_frame_fn  = [] { return g_iigs_cur_frame; };
+    a2record::arm();   // opens A2GSPU_RECORDS; fatal if it cannot
+}
 #include "a2gspu_pins.hpp"     // A2GSPU PINS: the identity of a headless run, printed before it starts
 #include "iigs_diag.hpp"
 #include "a2gspu_coverage.hpp"  // A2GSPU_COVERAGE: execution-coverage bitmap (env-gated)
@@ -304,7 +315,7 @@ bool run_one_frame(computer_t *computer) {
     {
         static bool s_wiz5_armed = false;
         if (!s_wiz5_armed) {
-            s_wiz5_armed = true; generic_tap_arm(); wiz5_config_arm(computer); a2gspu_trap_arm();
+            s_wiz5_armed = true; a2record_register(computer->clock); generic_tap_arm(); wiz5_config_arm(computer); a2gspu_trap_arm();
             // platform from the MMU itself: only a IIgs MMU can see the Mega II image at $E1
             a2gspu_liveness_arm(computer->cpu->mmu->probe_readable(0xE12000));
             g_a2gspu_cpu_for_names = computer->cpu;
@@ -2652,6 +2663,7 @@ static void run_headless_spike(GS2AppState *state) {
     // Arm the headless GS/OS app-bringup diagnostics (env-gated, stdout-only).
     // A2GSPU_TAP*: generic title-agnostic PC-hit / session tap (merged wiz5 tap).
     // No-op unless A2GSPU_TAP or A2GSPU_TAP_SESSION is set.
+    a2record_register(computer->clock);
     generic_tap_arm();
     // A2GSPU_TRAP / A2GSPU_TRAP_FILE / A2GSPU_TRAP_OUT: configurable PC traps.
     // Idempotent; the run_one_frame lazy arm covers the CTRL and windowed paths.

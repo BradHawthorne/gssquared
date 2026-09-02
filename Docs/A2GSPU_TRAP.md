@@ -92,7 +92,7 @@ block.
 One JSON object per line:
 
 ```
-{"event":"trap","trap":"mli","t":"e","n":12,"frame":900,"cycles":15306622,"pc":"00:BF00","heavy":1,
+{"event":"trap.entry","frame":900,"cycles":15306622,"trap":"mli","t":"e","n":12,"pc":"00:BF00","sym":"MLI","heavy":1,
  "regs":{…},"f":{"cmd":200},"mem":{"at":8448,"expr":"m16(m16(s16(1)+2)+1)","d":"0b2f5344312f42494e2f4541474c45…"}}
 ```
 

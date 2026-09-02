@@ -123,9 +123,23 @@ different shapes; the writer makes them one shape.
 
 *Would have prevented C.*
 
-**Status:** not started. The rule half is in force from this commit onward (no
-new rail prints mid-line; `A2GSPU_TRAP` and the coverage writer emit whole
-lines); the shared writer is not.
+**Status:** done. `src/a2record.hpp` is the one writer: a `Record` opens
+with `{"event":"<rail>.<kind>","frame":N,"cycles":N`, takes the rail's fields
+by typed setters (or a pre-built fragment, for the trap's payloads), and
+`write()` closes it and puts one whole line on the sink. `TRAP`, `LIVENESS`,
+`WATCH`, `CALLSTREAM` and `TAP` (its five session streams included) write
+through it; their field names are unchanged, so `calldiff.py` and every
+reader keyed on fields keeps working, and only the `event` values moved
+(`trap` → `trap.entry|exit`, `watch` → `watch.<kind>`, `callstream` gains one,
+`tap` gains one). `A2GSPU_RECORDS=<file>` is the global sink a rail without
+its own falls to; with nothing set every rail prints the stdout line it
+always did, so the dual-mode hash is untouched. `rail read A2GSPU_RECORDS`
+counts records per rail; `rail schema` carries the envelope as its first
+row. The rule is in `railparity.ps1`: a JSON literal printed outside the
+writer fails the gate, with two named exemptions (the CTRL reply envelope,
+which is protocol; the WIZ5 title streams, which convert when their readers
+do). Not done: the coverage bitmap and the snapshot stay binary artifacts
+with a manifest, which is the right shape for them.
 
 ### M2 — Attribution in every summary  (P1) — S
 
