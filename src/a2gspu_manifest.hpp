@@ -166,7 +166,7 @@ inline const Verb *verbs(int *count) {
         {"shr-golden", "calibrate", "shr-golden <file> [bless] — live FNV of $E1:2000-$9FFF", "shr-window"},
         {"press", "manipulate", "press <hex> [hold] — physical key edge (no consume proof)", "inject-key"},
         {"quit", "run", "quit — end CTRL session", "-"},
-        {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> | live | read <NAME> — enumerate every env rail this binary reads, from the binary; live= which a CTRL verb reaches, read= how its state comes back", "discover"},
+        {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> | live | read <NAME> | schema [NAME] — enumerate every env rail this binary reads, from the binary; live= which a CTRL verb reaches, read= how its state comes back, schema= the shape of the records it writes", "discover"},
         {"read", "observe", "read <addr> <len> <file> — probe_peek dump (side-effect-free)", "memory-peek"},
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
         {"restore", "snapshot", "restore <file> — Class A snapshot load", "time-travel-A"},
@@ -209,6 +209,84 @@ inline void write_help_short(FILE *f) {
     }
 }
 
+// ---- record schemas ------------------------------------------------------------
+// Every rail that writes machine-readable records declares their shape here:
+// the tag that names the record and the fields a consumer may rely on. A
+// consumer can validate what it reads against this instead of against the C++,
+// and a change of shape is a diff in one table. Optional fields carry '?'.
+// Declared beside the writers, checked by `rail schema` against the registry.
+struct RecordSchema { const char *rail; const char *tag; const char *fields; const char *note; };
+
+inline const RecordSchema *record_schemas(int &n) {
+    static const RecordSchema r[] = {
+    {"A2GSPU_TRAP",       "event=trap",
+     "trap t(e|x) n frame cycles pc sym|null store{addr,value}? sp? heavy regs{a,x,y,s,d,dbr,pbr,p,e}? ring[]? zp? stack? mem{at,expr,d}? f{...}? text? scan[{at,ptr,d}]?",
+     "one line per trigger; pc is the storing instruction for store= traps; sink A2GSPU_TRAP_OUT or per-spec out=, else stdout prefixed 'IIGS TRAP:'"},
+    {"A2GSPU_LIVENESS",   "event=liveness",
+     "frame cycles screen text kbd|null changed(first|screen|text|both|none) kbd_note? kbd_zero?",
+     "A2GSPU_LIVENESS_OUT sink; otherwise one stdout line per sample prefixed 'A2GSPU LIVENESS:'"},
+    {"A2GSPU_WATCH_OUT",  "event=watch|suppressed",
+     "kind(write|read) pc addr data s d dbr ipc ts",
+     "ts is the headless frame; ipc is the 16-bit word at A2GSPU_WATCH_IPC_ZP or 0; a 'suppressed' record marks the WATCH_MAX cap"},
+    {"A2GSPU_CALLSTREAM", "ev=c|r",
+     "c: seq word kind caller s d dbr | r: word kind carry err",
+     "toolbox/GS-OS call (c) and its return (r); word is the call number, kind 0=toolbox 1=GS/OS class-1 2=class-0"},
+    {"A2GSPU_TAP",        "(no tag)",
+     "ts_ms ts_wall op pc a x y sp <A2GSPU_TAP_PTRS names>* operands[]?",
+     "one line per PC hit from A2GSPU_TAP_PCS; ts_ms from A2GSPU_TAP_CYC_PER_MS"},
+    {"WIZ5_EC19_OUT",     "t=e|x",
+     "e: n sub src dst srcw? tbl? | x: n dst outidx dstw?",
+     "SCREENDEV driver trap; the general form is Docs/A2GSPU_TRAP.md's ec19 spec"},
+    {"WIZ5_DISKWR_OUT",   "op=BLKWR|BLKRD",
+     "ts_ms op unit block len data",
+     "UNITWRITE at $DF09 with X==1; UNITREAD logged once per block at $DF04"},
+    {"WIZ5_CSP6_OUT",     "(no tag)",
+     "ipc ts_ms sp page1 zp bufs[{at,ptr,d}]",
+     "CSP-6 eval-stack dump; the general form is Docs/A2GSPU_TRAP.md's csp6 spec"},
+    };
+    n = (int)(sizeof(r) / sizeof(r[0]));
+    return r;
+}
+
+inline const RecordSchema *record_schema_find(const char *rail) {
+    int n = 0;
+    const RecordSchema *r = record_schemas(n);
+    for (int i = 0; i < n; i++) if (!strcmp(r[i].rail, rail)) return &r[i];
+    return nullptr;
+}
+
+/* `rail schema [NAME]` -- bare lists the rails that write records; with a name,
+ * that rail's record shape. Every row must name a registered rail, or the ack
+ * is FAIL: a schema for a rail that does not exist is a stale claim. A rail
+ * that writes no records says so, rather than answering with nothing. */
+inline void format_rail_schema(char *buf, size_t bufsz, const char *name) {
+    int n = 0;
+    const RecordSchema *r = record_schemas(n);
+    for (int i = 0; i < n; i++)
+        if (!a2rails::rail_find(r[i].rail)) {
+            snprintf(buf, bufsz, "status=FAIL schema-table-inconsistent rail=%s is not in the registry", r[i].rail);
+            return;
+        }
+    if (!name || !*name) {
+        size_t off = 0;
+        int m = snprintf(buf, bufsz, "status=OK record-writing rails=%d |", n);
+        if (m > 0) off = (size_t)m;
+        for (int i = 0; i < n && off + 40 < bufsz; i++) {
+            m = snprintf(buf + off, bufsz - off, " %s(%s)", r[i].rail, r[i].tag);
+            if (m < 0) break;
+            off += (size_t)m;
+        }
+        return;
+    }
+    if (!a2rails::rail_find(name)) {
+        snprintf(buf, bufsz, "status=FAIL rail-unknown '%s' -- rail list names the %d this binary reads", name, a2rails::rail_count());
+        return;
+    }
+    const RecordSchema *s = record_schema_find(name);
+    if (!s) { snprintf(buf, bufsz, "status=FAIL no-records %s -- this rail writes no NDJSON records; its output is stdout lines or a binary artifact", name); return; }
+    snprintf(buf, bufsz, "status=OK rail=%s tag=%s fields=%s note=%s", s->rail, s->tag, s->fields, s->note);
+}
+
 inline void write_manifest(FILE *f) {
     fprintf(f, "# gssquared a2gspu capability manifest\n");
     fprintf(f, "version: 1\n");
@@ -248,6 +326,14 @@ inline void write_manifest(FILE *f) {
     fprintf(f, "ctrl-tbtrace: LIVE toolbox/GSOS trace mid-session\n");
     fprintf(f, "ctrl-dhgr-golden: vram-raw|4dot FNV (live; same as A2GSPU_DHGR_GOLDEN)\n");
     fprintf(f, "spike-dhgr-golden: A2GSPU_DHGR_GOLDEN + PAGE + GOLDEN_PROFILE (IIe batch gate)\n");
+    fprintf(f, "\n## record_schemas\n");
+    fprintf(f, "# rail\ttag\tfields ('?' = optional)\tnote\n");
+    {
+        int ns = 0;
+        const RecordSchema *rs = record_schemas(ns);
+        for (int i = 0; i < ns; i++)
+            fprintf(f, "%s\t%s\t%s\t%s\n", rs[i].rail, rs[i].tag, rs[i].fields, rs[i].note);
+    }
     fprintf(f, "\n## ctrl_verbs\n");
     int n = 0;
     const Verb *v = verbs(&n);

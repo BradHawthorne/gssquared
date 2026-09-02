@@ -17,6 +17,8 @@
 >                           # declared per rail and CHECKED against the verb table
 > rail read <NAME>          # a rail's state now (MEMVU_*, A2GSPU_TRAP, A2GSPU_LIVENESS,
 >                           # A2GSPU_STRICT, the determinism pins), or the verb that reads it
+> rail schema [NAME]        # the shape of the NDJSON records a rail writes (tag + fields),
+>                           # declared once beside the writers; `manifest <file>` carries the table
 > ```
 >
 > `tools/a2rail/railparity.ps1` (run by `dualsmoke.ps1`) fails if the code reads a
@@ -407,6 +409,7 @@ protocol authority.
 | `rail find <NAME>` | one rail's family, synopsis, `live=<verb>` or `launch-only`, and `read=fn:…\|verb:…\|none` | CTRL-verb (meta) |
 | `rail live` | the declared reachability table, checked: every row names a registered rail and an implemented verb, or the ack is `FAIL reach-table-inconsistent` | CTRL-verb (meta) |
 | `rail read <NAME>` | the rail's state now: counters for `MEMVU_*`, per-spec hits/records for `A2GSPU_TRAP`, the liveness sample state, the warning count, the determinism pins and binary identity; `read-via-verb` when a CTRL verb owns the readback; `FAIL no-readback` when the rail speaks only at spike end | CTRL-verb (meta) |
+| `rail schema [NAME]` | bare: the rails that write NDJSON records and their tags; with a name: `tag=` and `fields=` (`?` marks optional fields) and a note. `FAIL no-records` for a rail that writes none. The same table is the `record_schemas` section of `manifest <file>`, so a consumer validates against the binary, not the C++ | CTRL-verb (meta) |
 | `valtrap set <hex>[:w]` / `clear` / `status` | LIVE value-provenance trap (A2GSPU_VALTRAP) | CTRL-verb (break) |
 | `itrace from <pc>` / `now` / `n` / `clear` | LIVE per-instruction trace | CTRL-verb (trace) |
 | `tbtrace on\|off\|bank` | LIVE toolbox/GSOS dispatch trace | CTRL-verb (trace) |

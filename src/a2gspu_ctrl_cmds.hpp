@@ -1162,6 +1162,10 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
             } else {
                 snprintf(result, rsz, "status=FAIL reach-table-inconsistent %s read=%s has no formatter", nm, rc->read);
             }
+        } else if (!strncmp(rest, "schema", 6) && (rest[6] == 0 || rest[6] == ' ')) {
+            const char *nm = rest + 6;
+            while (*nm == ' ') nm++;
+            a2manifest::format_rail_schema(result, rsz, nm);
         } else if (!strncmp(rest, "env-only", 8)) {
             const char *path = rest + 8;
             while (*path == ' ') path++;
@@ -1178,7 +1182,7 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
                 }
             }
         } else {
-            snprintf(result, rsz, "status=FAIL rail-need: list|find <NAME>|live|read <NAME>|env-only [file]");
+            snprintf(result, rsz, "status=FAIL rail-need: list|find <NAME>|live|read <NAME>|schema [NAME]|env-only [file]");
         }
         return true;
     }

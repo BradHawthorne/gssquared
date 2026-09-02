@@ -318,6 +318,16 @@ event names it emits and their fields, generated from the same table M1's
 writer uses. A consumer can then validate records against the schema and a
 schema change is a visible diff.
 
+**Status:** done as a declared table rather than one generated from the
+writer (M1's writer does not exist yet): `record_schemas` in
+`a2gspu_manifest.hpp` lists, for every rail that writes NDJSON — TRAP,
+LIVENESS, WATCH_OUT, CALLSTREAM, TAP and the three WIZ5 sinks — the tag that
+names a record and the fields a consumer may rely on, optional ones marked.
+`rail schema [NAME]` serves it live and checks every row against the
+registry; `manifest <file>` carries it as a section. The eight shapes are
+visibly eight different conventions (`event=`, `ev=`, `t=`, `op=`, none),
+which is the argument for M1 written down where a consumer will read it.
+
 ---
 
 ## 4. Order
