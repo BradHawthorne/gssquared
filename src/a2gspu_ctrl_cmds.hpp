@@ -8,6 +8,9 @@
 #include <cstring>
 
 #include "a2gspu_manifest.hpp"
+#include "a2gspu_trap.hpp"       // a2trap::format_status  (rail read A2GSPU_TRAP)
+#include "a2gspu_liveness.hpp"   // a2gspu_liveness_format (rail read A2GSPU_LIVENESS)
+#include "a2gspu_pins.hpp"       // a2gspu_pins_format     (rail read A2GSPU_SEED ...)
 #include "memvu_storevis.hpp"
 #include "a2gspu_dhgr.hpp"
 #include "a2gspu_png.hpp"
@@ -1131,6 +1134,34 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
             while (*nm == ' ') nm++;
             if (!*nm) snprintf(result, rsz, "status=FAIL rail-need: find <NAME>");
             else      a2manifest::format_rail_find(result, rsz, nm);
+        } else if (!strncmp(rest, "live", 4) && (rest[4] == 0 || rest[4] == ' ')) {
+            a2manifest::format_rail_live(result, rsz);
+        } else if (!strncmp(rest, "read", 4) && (rest[4] == 0 || rest[4] == ' ')) {
+            const char *nm = rest + 4;
+            while (*nm == ' ') nm++;
+            if (!*nm) { snprintf(result, rsz, "status=FAIL rail-need: read <NAME>"); return true; }
+            const a2rails::Rail *rl = a2rails::rail_find(nm);
+            const a2rails::Reach *rc = rl ? a2rails::reach_find(nm) : nullptr;
+            if (!rl) {
+                snprintf(result, rsz, "status=FAIL rail-unknown '%s' -- rail list names the %d this binary reads", nm, a2rails::rail_count());
+            } else if (!rc || !rc->read[0]) {
+                snprintf(result, rsz, "status=FAIL no-readback %s -- launch-only; it reports on stdout at spike end%s%s",
+                         nm, (rc && rc->verb[0]) ? "; live equivalent: " : "", (rc && rc->verb[0]) ? rc->verb : "");
+            } else if (!strncmp(rc->read, "verb:", 5)) {
+                snprintf(result, rsz, "status=OK read-via-verb %s -- ask: %s", nm, rc->read + 5);
+            } else if (!strcmp(rc->read, "fn:memvu")) {
+                memvu_format_status(result, rsz);
+            } else if (!strcmp(rc->read, "fn:trap")) {
+                a2trap::format_status(result, rsz);
+            } else if (!strcmp(rc->read, "fn:liveness")) {
+                a2gspu_liveness_format(result, rsz);
+            } else if (!strcmp(rc->read, "fn:warnings")) {
+                snprintf(result, rsz, "status=OK warnings=%d strict=%d", g_a2gspu_warnings, getenv("A2GSPU_STRICT") ? 1 : 0);
+            } else if (!strcmp(rc->read, "fn:pins")) {
+                { char pins[320]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version); snprintf(result, rsz, "status=OK %s", pins); }
+            } else {
+                snprintf(result, rsz, "status=FAIL reach-table-inconsistent %s read=%s has no formatter", nm, rc->read);
+            }
         } else if (!strncmp(rest, "env-only", 8)) {
             const char *path = rest + 8;
             while (*path == ' ') path++;
@@ -1147,7 +1178,7 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
                 }
             }
         } else {
-            snprintf(result, rsz, "status=FAIL rail-need: list|env-only [file]");
+            snprintf(result, rsz, "status=FAIL rail-need: list|find <NAME>|live|read <NAME>|env-only [file]");
         }
         return true;
     }

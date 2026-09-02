@@ -634,6 +634,22 @@ inline void check(cpu_state *cpu, uint64_t cycles) {
     }
 }
 
+// ---- readback: `rail read A2GSPU_TRAP` --------------------------------------
+inline void format_status(char *buf, size_t n) {
+    if (!g_on) { snprintf(buf, n, "status=FAIL trap-not-armed -- set A2GSPU_TRAP or A2GSPU_TRAP_FILE before launch"); return; }
+    size_t off = 0;
+    int m = snprintf(buf, n, "status=OK traps=%zu |", g_traps.size());
+    if (m > 0) off = (size_t)m;
+    for (const Trap &t : g_traps) {
+        if (off + 48 >= n) break;
+        m = snprintf(buf + off, n - off, " %s:hits=%u,records=%u,entries=%u,exits=%u%s%s",
+                     t.name.c_str(), (unsigned)t.hits, (unsigned)t.n, (unsigned)t.entries, (unsigned)t.exits,
+                     t.capped ? ",CAPPED" : "", t.hits == 0 ? ",never-reached" : "");
+        if (m < 0) break;
+        off += (size_t)m;
+    }
+}
+
 // ------------------------------------------------------------ arm / close ---
 inline void describe(const Trap &t) {
     printf("A2GSPU_TRAP: armed %s at=", t.name.c_str());

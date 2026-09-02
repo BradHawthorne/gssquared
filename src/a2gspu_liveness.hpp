@@ -104,6 +104,17 @@ inline void a2gspu_liveness_close() {
     fflush(stdout);
 }
 
+// ---- readback: `rail read A2GSPU_LIVENESS` ----------------------------------
+inline void a2gspu_liveness_format(char *buf, size_t n) {
+    if (!g_liveness_armed) { snprintf(buf, n, "status=FAIL liveness-not-armed -- set A2GSPU_LIVENESS=N before launch"); return; }
+    char a[16], b[16];
+    a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
+    a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
+    snprintf(buf, n, "status=OK every=%d stall=%d samples=%d frames=%d screen_last_changed=%d screen_unchanged_since=%s text_last_changed=%d text_unchanged_since=%s",
+             g_liveness_every, g_liveness_stall, g_liveness_samples, g_liveness_frame,
+             g_liveness_screen_last, a, g_liveness_text_last, b);
+}
+
 // Called once, with the platform known. Idempotent.
 inline void a2gspu_liveness_arm(bool is_iigs) {
     if (g_liveness_armed) return;

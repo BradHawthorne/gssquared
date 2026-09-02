@@ -166,7 +166,7 @@ inline const Verb *verbs(int *count) {
         {"shr-golden", "calibrate", "shr-golden <file> [bless] — live FNV of $E1:2000-$9FFF", "shr-window"},
         {"press", "manipulate", "press <hex> [hold] — physical key edge (no consume proof)", "inject-key"},
         {"quit", "run", "quit — end CTRL session", "-"},
-        {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> — enumerate every env rail this binary reads, from the binary", "discover"},
+        {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> | live | read <NAME> — enumerate every env rail this binary reads, from the binary; live= which a CTRL verb reaches, read= how its state comes back", "discover"},
         {"read", "observe", "read <addr> <len> <file> — probe_peek dump (side-effect-free)", "memory-peek"},
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
         {"restore", "snapshot", "restore <file> — Class A snapshot load", "time-travel-A"},
@@ -331,9 +331,9 @@ inline void format_rail_ack(char *buf, size_t bufsz) {
              "snapshot,assert,device,determinism,meta,calibrate,tap,memvu,wiz5,"
              "alias,ctrl | rail list [family|PREFIX] names them | "
              "rail find <NAME> gives one | rail env-only <file> writes the full "
-             "table | source: src/a2gspu_rails_registry.hpp | "
-             "live: watch soft|bus valtrap itrace tbtrace callstream assert load "
-             "poke dhgr-golden | not-yet-live: GOLDEN(SPIKE SHR) ASSERT(env) SPIKE_*",
+             "table | rail live lists which rails a CTRL verb reaches and which read "
+             "back, checked against the verb table | rail read <NAME> reads one | "
+             "source: src/a2gspu_rails_registry.hpp",
              a2rails::rail_count());
 }
 
@@ -374,9 +374,64 @@ inline void format_rail_find(char *buf, size_t bufsz, const char *name) {
         snprintf(buf, bufsz,
                  "status=FAIL rail-unknown '%s' -- this binary reads %d rails; "
                  "rail list names them", name ? name : "", a2rails::rail_count());
-    else
-        snprintf(buf, bufsz, "status=OK rail=%s family=%s synopsis=%s",
-                 r->name, r->family, r->synopsis);
+    else {
+        const a2rails::Reach *rc = a2rails::reach_find(r->name);
+        snprintf(buf, bufsz, "status=OK rail=%s family=%s live=%s read=%s synopsis=%s",
+                 r->name, r->family,
+                 (rc && rc->verb[0]) ? rc->verb : "launch-only",
+                 (rc && rc->read[0]) ? rc->read : "none",
+                 r->synopsis);
+    }
+}
+
+// Is `name` the first word of a verb this binary implements?
+inline bool verb_exists(const char *name) {
+    int n = 0;
+    const Verb *v = verbs(&n);
+    for (int i = 0; i < n; i++) if (!strcmp(v[i].name, name)) return true;
+    return false;
+}
+
+/* `rail live` -- the reach table, checked. Every row must name a rail the
+ * registry declares and (when it names one) a verb the verb table implements;
+ * one bad row fails the whole ack, because a reachability claim that might be
+ * stale is the black box this table exists to remove. */
+inline void format_rail_live(char *buf, size_t bufsz) {
+    int n = 0, live = 0, readable = 0;
+    const a2rails::Reach *r = a2rails::reach(n);
+    for (int i = 0; i < n; i++) {
+        if (!a2rails::rail_find(r[i].rail)) {
+            snprintf(buf, bufsz, "status=FAIL reach-table-inconsistent rail=%s is not in the registry", r[i].rail);
+            return;
+        }
+        if (r[i].verb[0] && !verb_exists(r[i].verb)) {
+            snprintf(buf, bufsz, "status=FAIL reach-table-inconsistent rail=%s names verb '%s' which this binary does not implement",
+                     r[i].rail, r[i].verb);
+            return;
+        }
+        if (!strncmp(r[i].read, "verb:", 5)) {
+            char first[32]; size_t k = 0;
+            for (const char *p = r[i].read + 5; *p && *p != ' ' && k + 1 < sizeof first; p++) first[k++] = *p;
+            first[k] = 0;
+            if (!verb_exists(first)) {
+                snprintf(buf, bufsz, "status=FAIL reach-table-inconsistent rail=%s read via verb '%s' which this binary does not implement",
+                         r[i].rail, first);
+                return;
+            }
+        }
+        if (r[i].verb[0]) live++;
+        if (r[i].read[0]) readable++;
+    }
+    size_t off = 0;
+    int m = snprintf(buf, bufsz, "status=OK rails=%d live=%d readable=%d launch-only=%d |",
+                     a2rails::rail_count(), live, readable, a2rails::rail_count() - live);
+    if (m > 0) off = (size_t)m;
+    for (int i = 0; i < n && off + 40 < bufsz; i++) {
+        m = snprintf(buf + off, bufsz - off, " %s:%s%s%s", r[i].rail,
+                     r[i].verb[0] ? r[i].verb : "-", r[i].read[0] ? "/" : "", r[i].read);
+        if (m < 0) break;
+        off += (size_t)m;
+    }
 }
 
 // Fill buf with short help (truncated safely). Returns bytes written conceptually.

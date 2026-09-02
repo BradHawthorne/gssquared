@@ -194,6 +194,72 @@ inline const Rail *rail_find(const char *name) {
     return nullptr;
 }
 
+// ---- reachability, declared -----------------------------------------------------
+// Which CTRL verb reaches the same capability live, and how a rail's state is
+// read back while the machine runs. Declared per rail by someone who read the
+// verb's implementation, never inferred from names: inferring it produced
+// three confident falsehoods in one afternoon (2026-09-02). `rail live`
+// checks every row against the rail table and the verb table at runtime, so a
+// rename fails loud instead of leaving a stale claim. A rail absent from this
+// table is launch-only with no readback, and `rail find` says exactly that.
+//
+//   verb : the CTRL verb (its first word) that arms or drives the same thing
+//          live, or "" when there is none
+//   read : "fn:<key>"    a formatter this binary implements (`rail read NAME`)
+//          "verb:<text>" the CTRL verb that reads it back
+//          ""            no readback; the rail speaks only at spike end
+struct Reach { const char *rail; const char *verb; const char *read; };
+
+inline const Reach *reach(int &n) {
+    static const Reach r[] = {
+    {"A2GSPU_ASSERT",        "assert",      ""},
+    {"A2GSPU_BREAK",         "bp",          "verb:bp"},
+    {"A2GSPU_CALLSTREAM",    "callstream",  "verb:callstream status"},
+    {"A2GSPU_COVERAGE",      "cov",         "verb:cov status"},
+    {"A2GSPU_COVERAGE_OUT",  "cov",         ""},
+    {"A2GSPU_DHGR_GOLDEN",   "dhgr-golden", ""},
+    {"A2GSPU_DUMP",          "read",        ""},
+    {"A2GSPU_EXPECT_HASH",   "shr-golden",  ""},
+    {"A2GSPU_FAKETIME",      "",            "fn:pins"},
+    {"A2GSPU_FORCE_KEY",     "holdkey",     ""},
+    {"A2GSPU_GOLDEN",        "shr-golden",  ""},
+    {"A2GSPU_ITRACE_FROM",   "itrace",      ""},
+    {"A2GSPU_ITRACE_N",      "itrace",      ""},
+    {"A2GSPU_LIVENESS",      "",            "fn:liveness"},
+    {"A2GSPU_LOAD",          "load",        ""},
+    {"A2GSPU_POKE",          "poke",        ""},
+    {"A2GSPU_RAMDISK",       "",            "fn:pins"},
+    {"A2GSPU_RESTORE",       "restore",     ""},
+    {"A2GSPU_SEED",          "",            "fn:pins"},
+    {"A2GSPU_SNAP_LOAD",     "restore",     ""},
+    {"A2GSPU_SNAP_SAVE",     "save",        ""},
+    {"A2GSPU_SPIKE_KEYS",    "keys",        ""},
+    {"A2GSPU_STRICT",        "",            "fn:warnings"},
+    {"A2GSPU_TBTRACE",       "tbtrace",     ""},
+    {"A2GSPU_TBTRACE_BANK",  "tbtrace",     ""},
+    {"A2GSPU_TEXT40",        "text",        ""},
+    {"A2GSPU_TEXTDUMP",      "text",        ""},
+    {"A2GSPU_TRAP",          "",            "fn:trap"},
+    {"A2GSPU_TRAP_FILE",     "",            "fn:trap"},
+    {"A2GSPU_TRAP_OUT",      "",            "fn:trap"},
+    {"A2GSPU_VALTRAP",       "valtrap",     "verb:valtrap status"},
+    {"A2GSPU_VRAM_LOAD",     "vram",        ""},
+    {"A2GSPU_WATCH",         "watch",       "verb:watch bus hits"},
+    {"MEMVU_LOADVIS",        "",            "fn:memvu"},
+    {"MEMVU_STOREVIS",       "",            "fn:memvu"},
+    };
+    n = (int)(sizeof(r) / sizeof(r[0]));
+    return r;
+}
+
+inline const Reach *reach_find(const char *rail) {
+    int n = 0;
+    const Reach *r = reach(n);
+    for (int i = 0; i < n; i++)
+        if (!strcmp(r[i].rail, rail)) return &r[i];
+    return nullptr;
+}
+
 // Enumerate to `out`. `family` filters (nullptr / "" / "all" = everything);
 // `prefix` filters by name prefix, so a client can ask for just MEMVU_ or the
 // A2GSPU_TAP_ family. Returns the row count so a caller can fail loud on zero

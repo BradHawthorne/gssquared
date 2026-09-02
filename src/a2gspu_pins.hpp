@@ -37,6 +37,7 @@
 inline const char    *g_a2gspu_argv0    = nullptr;
 inline const uint8_t *g_a2gspu_rom_data = nullptr;
 inline size_t         g_a2gspu_rom_size = 0;
+inline const char    *g_a2gspu_build_version = "unknown";   // set by main() from the generated version.h
 
 inline uint64_t a2gspu_fnv_bytes(const uint8_t *p, size_t n) {
     uint64_t h = HOUSE_FNV_BASIS;
@@ -59,11 +60,13 @@ inline bool a2gspu_fnv_file(const char *path, uint64_t &out) {
     return true;
 }
 
-inline void a2gspu_pins_print(int platform_id, int frames, const char *build_version) {
+// The identity fields, formatted once for both the spike's PINS line and the
+// CTRL readback (`rail read A2GSPU_SEED`). platform/frames < 0 omit those two.
+inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames, const char *build_version) {
     const char *seed = getenv("A2GSPU_SEED");
     const char *ft   = getenv("A2GSPU_FAKETIME");
     const bool  ram  = getenv("A2GSPU_RAMDISK") != nullptr;
-    char rom[48], exe[40];
+    char rom[48], exe[40], pf[48];
     if (g_a2gspu_rom_data && g_a2gspu_rom_size)
         snprintf(rom, sizeof rom, "%zu/%016llX", g_a2gspu_rom_size,
                  (unsigned long long)a2gspu_fnv_bytes(g_a2gspu_rom_data, g_a2gspu_rom_size));
@@ -72,8 +75,16 @@ inline void a2gspu_pins_print(int platform_id, int frames, const char *build_ver
     uint64_t eh = 0;
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    printf("A2GSPU PINS: seed=%s faketime=%s ramdisk=%d platform=%d frames=%d rom=%s build=%s(configure-time) exe=%s\n",
-           seed ? seed : "unset", ft ? ft : "unset", ram ? 1 : 0, platform_id, frames, rom,
-           build_version ? build_version : "unknown", exe);
+    if (platform_id >= 0 && frames >= 0) snprintf(pf, sizeof pf, " platform=%d frames=%d", platform_id, frames);
+    else pf[0] = 0;
+    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d%s rom=%s build=%s(configure-time) exe=%s",
+             seed ? seed : "unset", ft ? ft : "unset", ram ? 1 : 0, pf, rom,
+             build_version ? build_version : "unknown", exe);
+}
+
+inline void a2gspu_pins_print(int platform_id, int frames, const char *build_version) {
+    char line[320];
+    a2gspu_pins_format(line, sizeof line, platform_id, frames, build_version);
+    printf("A2GSPU PINS: %s\n", line);
     fflush(stdout);
 }

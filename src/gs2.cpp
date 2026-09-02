@@ -3770,6 +3770,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     std::cout << "Booting GSSquared!" << std::endl;
 
     g_a2gspu_argv0 = argv[0];   // so the spike can hash the executable it is running in
+    g_a2gspu_build_version = BUILD_VERSION;
     SDL_SetAppMetadata("GSSquared", VERSION_STRING, "Copyright 2025-2026 by Jawaid Bazyar");
     SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING, "Copyright 2025-2026 by Jawaid Bazyar");
     SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING, "Jawaid Bazyar");

@@ -245,6 +245,17 @@ lists it; the parity gate fails a rail that registers without one. The
 previous session's three confident falsehoods came from inferring `live` from
 names; this makes it a declaration the code has to make.
 
+**Status:** the declaration half is done. `src/a2gspu_rails_registry.hpp`
+carries a reach table (rail → live verb, readback), `rail live` checks every
+row against the rail and verb tables and fails the whole ack on one stale
+entry, `rail find` reports `live=`/`read=`, and `rail read <NAME>` returns a
+rail's state now for `MEMVU_*`, `A2GSPU_TRAP`, `A2GSPU_LIVENESS`,
+`A2GSPU_STRICT` and the pins, or names the verb that reads it, or says
+`no-readback`. The hand-written "live:" sentence in the `rail` ack is gone.
+What is not done is the registration half — a reader supplied with the rail
+rather than a table maintained beside it — which is what would make a rail
+without readback impossible to add.
+
 ### M9 — Determinism, asserted  (P8) — S
 
 Every spike prints `PINS: seed= faketime= ramdisk= rom= build=` and a run hash

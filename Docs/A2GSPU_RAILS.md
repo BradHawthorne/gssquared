@@ -13,6 +13,10 @@
 > rail list [family|PREFIX] # names, e.g. `rail list memvu`, `rail list A2GSPU_TAP`
 > rail find <NAME>          # one rail's family and synopsis
 > rail env-only <file>      # the whole table, tab-separated (schema a2rails-v1)
+> rail live                 # which rails a CTRL verb reaches live, and which read back --
+>                           # declared per rail and CHECKED against the verb table
+> rail read <NAME>          # a rail's state now (MEMVU_*, A2GSPU_TRAP, A2GSPU_LIVENESS,
+>                           # A2GSPU_STRICT, the determinism pins), or the verb that reads it
 > ```
 >
 > `tools/a2rail/railparity.ps1` (run by `dualsmoke.ps1`) fails if the code reads a
@@ -400,6 +404,9 @@ protocol authority.
 | `watch bus add bank:lo-hi` | **LIVE** bus write-watch (same as A2GSPU_WATCH, mid-session) | CTRL-verb (break) |
 | `watch bus list\|hits\|clear\|read\|change` | bus watch control | CTRL-verb (break) |
 | `rail list` / `rail env-only [file]` | discover launch-only env rails (L4 gap, not a black box) | CTRL-verb (meta) |
+| `rail find <NAME>` | one rail's family, synopsis, `live=<verb>` or `launch-only`, and `read=fn:…\|verb:…\|none` | CTRL-verb (meta) |
+| `rail live` | the declared reachability table, checked: every row names a registered rail and an implemented verb, or the ack is `FAIL reach-table-inconsistent` | CTRL-verb (meta) |
+| `rail read <NAME>` | the rail's state now: counters for `MEMVU_*`, per-spec hits/records for `A2GSPU_TRAP`, the liveness sample state, the warning count, the determinism pins and binary identity; `read-via-verb` when a CTRL verb owns the readback; `FAIL no-readback` when the rail speaks only at spike end | CTRL-verb (meta) |
 | `valtrap set <hex>[:w]` / `clear` / `status` | LIVE value-provenance trap (A2GSPU_VALTRAP) | CTRL-verb (break) |
 | `itrace from <pc>` / `now` / `n` / `clear` | LIVE per-instruction trace | CTRL-verb (trace) |
 | `tbtrace on\|off\|bank` | LIVE toolbox/GSOS dispatch trace | CTRL-verb (trace) |
