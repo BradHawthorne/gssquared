@@ -227,7 +227,7 @@ inline void write_manifest(FILE *f) {
     fprintf(f, "cpu-state,cycles-in-cmd,cycles-absolute-warn,shr-window,memory-peek,sdl-human\n");
     fprintf(f, "\n## env_rail_groups (see Docs/A2GSPU_RAILS.md)\n");
     fprintf(f, "run: SPIKE_FRAMES SPIKE_KEYS RUN_BIN LOAD LOAD_BOOT CPUTEST MMUTEST HANG_THRESHOLD\n");
-    fprintf(f, "observe: DUMP TEXTDUMP TEXT40 VIDEOSUM VIDEOMAP SYMBOLS BUS_DUMP\n");
+    fprintf(f, "observe: DUMP TEXTDUMP TEXT40 VIDEOSUM VIDEOMAP SYMBOLS BUS_DUMP LIVENESS LIVENESS_OUT LIVENESS_STALL\n");
     fprintf(f, "trace: TBTRACE ITRACE CALLTRACE CALLSTREAM LOADTRACE LCTRACE MODETRACE INTLOG TAP\n");
     fprintf(f, "break: BREAK WATCH VALTRAP PCTRAP TRAP TRAP_FILE TRAP_OUT CONDTRAP STACKTRAP STACKWATCH SAVE_AT RETGUARD\n");
     fprintf(f, "manipulate: POKE FORCE_KEY\n");

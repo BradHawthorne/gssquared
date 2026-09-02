@@ -142,6 +142,10 @@ inline int iigs_eval_asserts(const char *spec, cpu_state *cpu, const uint8_t *e1
 // OK. A rail that skips silently -- or loudly, on a line nobody parses -- is
 // how a missing blit binary measured the idle desktop as a healthy row.
 inline int g_a2gspu_warnings = 0;
+// A rail that has something to say on the GSDIAG line registers a function
+// here; the text it returns (leading space, key=value) is appended. Absent when
+// no rail registered, so the field's presence says the rail ran.
+inline const char *(*g_gsdiag_extra)(void) = nullptr;
 inline void a2gspu_warn(const char *rail, const char *what) {
     g_a2gspu_warnings++;
     printf("%s: WARNING %s\n", rail, what);
@@ -149,7 +153,7 @@ inline void a2gspu_warn(const char *rail, const char *what) {
 
 inline void iigs_emit_status(const char *status, int rc, const char *gate,
                              long gsos_err, int brk, long scb, uint64_t hash) {
-    printf("GSDIAG: status=%s rc=%d gate=%s gsos_err=$%04lX brk=%d scb=%ld hash=%016llX warnings=%d\n",
+    printf("GSDIAG: status=%s rc=%d gate=%s gsos_err=$%04lX brk=%d scb=%ld hash=%016llX warnings=%d%s\n",
            status, rc, gate, (unsigned long)(gsos_err & 0xFFFF), brk, scb,
-           (unsigned long long)hash, g_a2gspu_warnings);
+           (unsigned long long)hash, g_a2gspu_warnings, g_gsdiag_extra ? g_gsdiag_extra() : "");
 }

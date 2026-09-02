@@ -87,6 +87,9 @@ Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~189
 | `A2GSPU_TEXT40=1` | at spike end, ASCII-decode the 40-col text page (`$E0:0400-07FF`) to stdout | observe | env |
 | `A2GSPU_VIDEOSUM=1` | per-line SCB (320/640) + palette histogram (RGB888) + mode-correct pixel-index histogram | observe | env |
 | `A2GSPU_VIDEOMAP=1` | a 40×25 ASCII dominant-index map of the Super Hi-Res window (SEE layout headless) | observe | env |
+| `A2GSPU_LIVENESS=N` | **progress proof.** Every `N` frames hash the screen (IIgs: SHR `$E1:2000-9FFF` from the Mega II image; II-family: HGR `$2000-3FFF`) and the text page, side-effect-free, and print `frame= cycles= screen= text= kbd= changed=<first\|screen\|text\|both\|none>`. Close-out gives `screen_last_changed=` / `screen_unchanged_since=<frame>\|none` and the same for `text_`, tracked separately (a halted SHR workload keeps redrawing its text page from its wait loop — measured), and both `_unchanged_since` fields are appended to `GSDIAG:` while armed. A **signal, not a verdict**: an idle desktop is static too; what it rules out is a run that halted on an error screen while its counters kept climbing (the one-disk Dealer Demo measured as a workload until its hash was seen not to move) | observe | env |
+| `A2GSPU_LIVENESS_STALL=K` | unchanged samples in a row before the screen counts as static (default 3) | observe | env |
+| `A2GSPU_LIVENESS_OUT=<file>` | NDJSON sink for the samples instead of stdout lines | observe | env |
 | `A2GSPU_ROM=<path>` | ROM image path for the lazy-loaded ROM-vs-kernel PC classifier (default `resources/roms/apple2gs/main.rom`) | observe | env |
 | `A2GSPU_SYMBOLS=<file>` | load a symbol table (annotate trace/PCs with names) | observe | env |
 | `A2GSPU_ROM_SYMBOLS=<file>` | name ROM-resident PCs (else `<ROM>`) | observe | env |

@@ -173,6 +173,14 @@ three runs.
 *Would have prevented B (second case), and makes the MEMVU campaign's rule ("quote a
 workload only after its screen hash has changed between lengths") a gate.*
 
+**Status:** done as `A2GSPU_LIVENESS=N` (+ `_STALL`, `_OUT`): screen and text
+hashes every N frames, `changed=` per sample, `screen_unchanged_since=` and
+`text_unchanged_since=` in the close-out and on `GSDIAG:` while armed — two
+fields, because the first run showed the halted demo's text page cycling under
+a static SHR window, and one field would have hidden it. Named for what it measures rather than
+`stalled_since`, because an idle desktop is static too; `last_visible_write`
+and an instruction count are not in the sample yet.
+
 ### M5 — Snapshot manifests, then snapshot classes  (P5) — S then L
 
 `save` writes a manifest — class, the devices included, the devices excluded

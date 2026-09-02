@@ -60,6 +60,7 @@
 #include <filesystem>
 #include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
 #include "a2gspu_trap.hpp"   // A2GSPU_TRAP: configurable PC traps (env-gated, off => no-op)
+#include "a2gspu_liveness.hpp" // A2GSPU_LIVENESS: screen-hash progress proof every N frames (env-gated)
 #include "iigs_diag.hpp"
 #include "a2gspu_coverage.hpp"  // A2GSPU_COVERAGE: execution-coverage bitmap (env-gated)
 #include "a2gspu_png.hpp"       // CTRL `png` / `pngc`: HGR/DHGR agent-readable PNG
@@ -301,7 +302,11 @@ bool run_one_frame(computer_t *computer) {
     // stock emulator is unchanged (dual-mode invariant).
     {
         static bool s_wiz5_armed = false;
-        if (!s_wiz5_armed) { s_wiz5_armed = true; generic_tap_arm(); wiz5_config_arm(computer); a2gspu_trap_arm(); }
+        if (!s_wiz5_armed) {
+            s_wiz5_armed = true; generic_tap_arm(); wiz5_config_arm(computer); a2gspu_trap_arm();
+            // platform from the MMU itself: only a IIgs MMU can see the Mega II image at $E1
+            a2gspu_liveness_arm(computer->cpu->mmu->probe_readable(0xE12000));
+        }
     }
 
     if (cpu->halt == HLT_USER) { // top of frame.
@@ -568,6 +573,10 @@ bool run_one_frame(computer_t *computer) {
         clock->next_frame(); // TODO: now redundant to above.
         computer->last_start_frame_c14m = clock->get_frame_start_c14M();
     }
+
+    // A2GSPU_LIVENESS: hash the screen every N frames so a run that stopped
+    // progressing is visible in its own output. One untaken branch when unset.
+    if (g_liveness_every) a2gspu_liveness_tick(computer);
 
     return true;
 }
@@ -2588,6 +2597,7 @@ static void run_headless_spike(GS2AppState *state) {
     // Idempotent; the run_one_frame lazy arm covers the CTRL and windowed paths.
     // A malformed spec is fatal here, before a single frame runs.
     a2gspu_trap_arm();
+    a2gspu_liveness_arm(state->mmu_iigs != nullptr);
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
     g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
     g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);
