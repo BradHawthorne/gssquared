@@ -281,6 +281,14 @@ the WIZ5 traps themselves, retired when their consumers read the new records.
 The test of P6 is simple: the next project that needs to observe its
 interpreter adds zero lines of C++.
 
+**Status:** two trigger kinds added to `A2GSPU_TRAP` beyond the PC:
+`store=ADDR[-ADDR]` (one branch in the CPU's store funnel; the record names
+the storing instruction and the byte) and `sp=LO-HI` (S entering a range,
+edge-triggered). Both share the condition, policy and payload machinery, so
+"who feeds `$E1:C03D`, with registers and the PC ring" is one spec where it
+was three rails. Read triggers and `KEYSCHED` conditions are not done; the
+WIZ5 traps still stand until their consumers move.
+
 ### M11 — A peek that works everywhere  (P5) — M
 
 `probe_peek` returns floating bus for the IIgs handler-paged banks `$00/$01`

@@ -136,6 +136,7 @@ inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
 inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     cpu->mmu->write(addr & 0xFFFFFF, data);
     if (memvu_sv_on) memvu_sv_note_store(addr & 0xFFFFFF, false);  // MEMVU_STOREVIS (off => 1 branch)
+    if (g_trap_store_on) a2gspu_trap_store(cpu, addr & 0xFFFFFF, data);  // A2GSPU_TRAP store= (off => 1 branch)
     if (g_watch_on) iigs_watch_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH (off => 1 branch)
     if (g_valtrap_on) iigs_valtrap_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_VALTRAP (off => 1 branch)
     if (g_loadtrace_on) iigs_loadtrace_write(cpu, addr & 0xFFFFFF, data);  // A2GSPU_LOADTRACE (off => 1 branch)

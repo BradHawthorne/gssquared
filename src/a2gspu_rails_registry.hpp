@@ -142,7 +142,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_TEXTDUMP",            "observe",     "dump text page 1 (2KB): main $0400-07FF via probe_peek (no $C0xx side effects) + aux $0400-07FF (80-col even columns)"},
     {"A2GSPU_TRACE_EXT",           "trace",       "append DBR/DP/cycle-delta/scanline columns to 65816 trace lines"},
     {"A2GSPU_TRACE_FROM",          "trace",       "arm tracing only once full_pc first hits this 24-bit PC"},
-    {"A2GSPU_TRAP",                "break",       "PC traps from configuration: ';'-separated specs of trigger (at=PC[-PC], exit=PC), condition (when=), policy (once|every|first=N/key), payload (do=/heavy=/xdo=/xheavy= regs,ring,zp,stack,mem,field,text,scan) and sink (out=). NDJSON. The general form of PCTRAP and the wiz5 traps; grammar in Docs/A2GSPU_TRAP.md"},
+    {"A2GSPU_TRAP",                "break",       "traps from configuration: ';'-separated specs of trigger (at=PC[-PC] with exit=PC, store=ADDR[-ADDR] for a byte written there, sp=LO-HI for S entering a range), condition (when=), policy (once|every|first=N/key), payload (do=/heavy=/xdo=/xheavy= regs,ring,zp,stack,mem,field,text,scan) and sink (out=). NDJSON. The general form of PCTRAP and the wiz5 traps; grammar in Docs/A2GSPU_TRAP.md"},
     {"A2GSPU_TRAPDUMP",            "break",       "extra memory region (hex) dumped by PCTRAP (default 48 bytes)"},
     {"A2GSPU_TRAP_FILE",           "break",       "file of A2GSPU_TRAP specs, one per line, '#' comments"},
     {"A2GSPU_TRAP_OUT",            "break",       "default NDJSON sink for A2GSPU_TRAP specs that give no out=; without it records go to stdout prefixed 'IIGS TRAP:'"},

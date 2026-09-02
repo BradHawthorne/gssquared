@@ -37,7 +37,9 @@ split on spaces, which is why the set operator is `~{…}` and not `in {…}`.
 |-------|---------|
 | `name=<id>` | tag carried on every record (default `trapN`) |
 | `at=<pc>[-<pc>]` | entry trigger, PC or range. `HHHH` matches that 16-bit PC in **any** bank (interpreter traps are bank-agnostic); `BB:HHHH` matches one bank |
-| `exit=<pc>` | paired exit trigger. The exit record carries the entry's `n`. One outstanding entry at a time; a second entry before the exit replaces it |
+| `store=<addr>[-<addr>]` | trigger: a byte is **written** into the range (same bank syntax). The record's `pc`/`sym` name the storing instruction, and `store:{addr,value}` says what landed where. Real stores only, not the dummy write of a read-modify-write. The any-bank form matches that offset in **every** bank, RAM included — measured: `store=C03D` on the Dealer Demo caught 199,978 writes through `$E1` and a handful of plain-RAM writes to `$02:C03D` and friends — so name the bank for an I/O port: `store=E1:C03D` is "who feeds the sound GLU, with registers and ring" in one spec |
+| `sp=<lo>-<hi>` | trigger: the **effective** stack address (page 1 for an 8-bit or emulation-mode S, so `01F0-01FF` means the same on every machine) **enters** the range — an edge, one record per entry, not one per instruction spent inside. STACKTRAP's job with payloads; the record carries `sp` |
+| `exit=<pc>` | paired exit trigger (`at=` traps only). The exit record carries the entry's `n`. One outstanding entry at a time; a second entry before the exit replaces it |
 | `when=<cond>[,<cond>]` | all must hold at entry. `<expr>OP<expr>` with `OP` one of `== != < > <= >=`, or `<expr>~{v,v,…}` ("is one of") |
 | `once` | record the first qualifying hit only — the default, and `A2GSPU_PCTRAP`'s behaviour |
 | `every` | record every qualifying hit |
@@ -121,9 +123,8 @@ firmware entry point (`COUT`, `RDKEY`, `MLI`, `ToolDisp`…), else `null`.
 
 ## Not yet
 
-- Triggers other than a PC (a store to an address, S entering a range): use
-  `A2GSPU_WATCH` / `A2GSPU_STACKTRAP`. The parser treats `at=` as one trigger
-  kind so others can be added.
+- Read triggers (a byte read from a range), and `exit=` pairing for `store=`
+  and `sp=` traps. `A2GSPU_WATCH_READ` covers the first for now.
 - Live (CTRL) arming. Launch-time only, like the other trace rails.
 - `A2GSPU_PCTRAP` is untouched and still works; `once do=regs,ring` is its
   equivalent here.

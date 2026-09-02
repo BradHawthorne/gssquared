@@ -28,9 +28,21 @@
 //   at=<pc>[-<pc>]         entry trigger: PC or range.  <pc> is HHHH (any bank,
 //                          16-bit compare -- interpreter traps are bank-agnostic)
 //                          or BB:HHHH (that bank only)
-//   exit=<pc>              paired exit trigger; the exit record carries the
-//                          entry's sequence number. One outstanding entry at a
-//                          time: a second entry before the exit replaces it.
+//   store=<addr>[-<addr>]  trigger: a byte is WRITTEN into the range (same bank
+//                          syntax as at=; note the any-bank form matches that
+//                          offset in EVERY bank, RAM included -- name the bank
+//                          for an I/O port). The record's pc is the storing
+//                          instruction's opcode address; "store":{addr,value}
+//                          says what landed where. Real stores only, not the
+//                          dummy write of a read-modify-write.
+//   sp=<lo>-<hi>           trigger: the EFFECTIVE stack address (page 1 for an
+//                          8-bit or emulation-mode S) ENTERS the range -- an edge,
+//                          one record per entry, not one per instruction inside.
+//                          STACKTRAP's job, with payloads. "sp":N in the record.
+//   exit=<pc>              paired exit trigger (at= traps only); the exit record
+//                          carries the entry's sequence number. One outstanding
+//                          entry at a time: a second entry before the exit
+//                          replaces it.
 //   when=<cond>[,<cond>]   all must hold at entry.  cond = <expr>OP<expr>
 //                          with OP one of == != < > <= >=, or <expr>~{v,v,..}
 //                          ("is one of"). No spaces anywhere in a value.
@@ -100,9 +112,8 @@
 //
 // WHAT IT DOES NOT DO (yet)
 //
-//   * Triggers other than PC (a store to an address, S entering a range): use
-//     A2GSPU_WATCH / STACKTRAP. Adding trigger kinds here is the natural next
-//     step and the parser is written so `at=` is one of several.
+//   * Read triggers (a byte READ from a range), and exit= pairing for store=/sp=
+//     traps. A2GSPU_WATCH_READ covers the first for now.
 //   * Live (CTRL) arming. Launch-time only, like the other trace rails.
 //   * The A2GSPU_PCTRAP one-shot is untouched and still works; `once do=regs,ring`
 //     is its equivalent here.
@@ -394,7 +405,9 @@ inline Payload parse_payload(const std::string &item, const std::string &spec) {
 // ------------------------------------------------------------------ specs ---
 struct Trap {
     std::string name, src;
-    bool any_bank = true; uint32_t lo = 0, hi = 0;          // entry trigger
+    enum Kind { PC, STORE, SP } kind = PC;
+    bool any_bank = true; uint32_t lo = 0, hi = 0;          // entry trigger (PC or STORE range)
+    uint32_t sp_lo = 0, sp_hi = 0; bool sp_inside = false;  // SP trigger
     bool has_exit = false, exit_any_bank = true; uint32_t exit_pc = 0;
     std::vector<Cond> when;
     enum Policy { ONCE, EVERY, FIRST } policy = ONCE;
@@ -411,6 +424,9 @@ struct Trap {
 };
 
 inline bool g_on = false;
+inline bool g_store_on = false;              // any store= trap: the store funnel pays one branch
+inline uint32_t g_ipc = 0;                   // opcode address of the instruction executing now
+inline uint64_t g_ipc_cycles = 0;            // the clock at that instruction's start
 inline std::vector<Trap> g_traps;
 inline bool g_ring_on = false;
 inline uint32_t g_ring[256];
@@ -461,6 +477,24 @@ inline void parse_spec(const std::string &raw, int index) {
                 if (t.hi < t.lo) fail(raw, "at= range end below start");
             }
         }
+        else if (key == "store") {
+            have_at = true; t.kind = Trap::STORE;
+            size_t d = val.find('-');
+            std::string a = (d == std::string::npos) ? val : val.substr(0, d);
+            bool ab; uint32_t lo; parse_pc(a, raw, ab, lo);
+            t.any_bank = ab; t.lo = lo; t.hi = lo;
+            if (d != std::string::npos) {
+                uint32_t hi = hex(val.substr(d + 1), raw, "range end") & 0xFFFF;
+                t.hi = ab ? hi : ((lo & 0xFF0000) | hi);
+                if (t.hi < t.lo) fail(raw, "store= range end below start");
+            }
+        }
+        else if (key == "sp") {
+            have_at = true; t.kind = Trap::SP;
+            size_t d = val.find('-'); if (d == std::string::npos) fail(raw, "sp= wants LO-HI");
+            t.sp_lo = hex(val.substr(0, d), raw, "sp low") & 0xFFFF; t.sp_hi = hex(val.substr(d + 1), raw, "sp high") & 0xFFFF;
+            if (t.sp_hi < t.sp_lo) fail(raw, "sp= range end below start");
+        }
         else if (key == "exit") { t.has_exit = true; parse_pc(val, raw, t.exit_any_bank, t.exit_pc); }
         else if (key == "when") { for (auto &c : split_top(val, ',')) if (!c.empty()) t.when.push_back(parse_cond(c, raw)); }
         else if (key == "once") t.policy = Trap::ONCE;
@@ -491,7 +525,9 @@ inline void parse_spec(const std::string &raw, int index) {
         }
         else fail(raw, "unknown key '" + key + "'");
     }
-    if (!have_at) fail(raw, "a spec needs at=<pc>");
+    if (!have_at) fail(raw, "a spec needs a trigger: at=<pc>, store=<addr>, or sp=<lo>-<hi>");
+    if (t.has_exit && t.kind != Trap::PC) fail(raw, "exit= pairs only with an at= trigger");
+    if (t.kind == Trap::STORE) g_store_on = true;
     if (t.pdo.empty() && t.pheavy.empty()) { Payload r; r.kind = Payload::REGS; t.pdo.push_back(r); }   // never a bare "it fired"
     if (!t.out) { t.out = g_default_out; }
     g_traps.push_back(std::move(t));
@@ -575,18 +611,23 @@ inline void write_record(Trap &t, const std::string &body) {
     else { printf("IIGS TRAP: %s\n", body.c_str()); }
 }
 
-inline void emit(Trap &t, cpu_state *cpu, uint64_t cycles, bool is_exit, uint32_t n, bool heavy) {
+inline void emit(Trap &t, cpu_state *cpu, uint64_t cycles, bool is_exit, uint32_t n, bool heavy,
+                 const char *extra = nullptr, uint32_t pc_override = 0xFFFFFFFFu) {
     std::string s; s.reserve(512);
     char b[160];
+    // A store trap fires mid-instruction, when full_pc has already moved on:
+    // its record names the STORING instruction's opcode address instead.
+    const uint32_t pc = (pc_override != 0xFFFFFFFFu) ? pc_override : (cpu->full_pc & 0xFFFFFF);
     snprintf(b, sizeof b, "{\"event\":\"trap\",\"trap\":\"%s\",\"t\":\"%s\",\"n\":%u,\"frame\":%d,\"cycles\":%llu,\"pc\":\"",
              t.name.c_str(), is_exit ? "x" : "e", (unsigned)n, g_iigs_cur_frame, (unsigned long long)cycles);
-    s += b; pc_str(s, cpu->full_pc & 0xFFFFFF); s += '"';
+    s += b; pc_str(s, pc); s += '"';
     {   // names by default: a documented entry point or an application symbol,
         // and an explicit null otherwise -- never a bare address passing for a name
         char sym[96];
-        if (a2gspu_name_pc(cpu->full_pc & 0xFFFFFF, sym, sizeof sym)[0]) { s += ",\"sym\":\""; s += sym; s += '"'; }
+        if (a2gspu_name_pc(pc, sym, sizeof sym)[0]) { s += ",\"sym\":\""; s += sym; s += '"'; }
         else s += ",\"sym\":null";
     }
+    if (extra) s += extra;
     snprintf(b, sizeof b, ",\"heavy\":%d", heavy ? 1 : 0); s += b;
     emit_payloads(s, is_exit ? t.pxdo : t.pdo, t, cpu);
     if (heavy) emit_payloads(s, is_exit ? t.pxheavy : t.pheavy, t, cpu);
@@ -600,37 +641,66 @@ inline bool matches(bool any_bank, uint32_t lo, uint32_t hi, uint32_t fpc) {
     return v >= lo && v <= hi;
 }
 
+// The trigger has matched; apply policy and condition, then record.
+inline void fire(Trap &t, cpu_state *cpu, uint64_t cycles, const char *extra, uint32_t pc_override) {
+    t.hits++;
+    if (t.capped) return;
+    if (t.policy == Trap::ONCE && t.fired) return;
+    for (const Cond &c : t.when) if (!holds(c, cpu)) return;
+    bool heavy;
+    if (t.policy == Trap::FIRST) {
+        uint32_t key = t.has_key ? eval(t.key, cpu) : 0;
+        uint32_t &cnt = t.keycount[key];
+        heavy = cnt < t.first_n;
+        if (heavy) cnt++;
+    } else heavy = true;
+    const uint32_t n = t.n++;
+    t.entries++; t.fired = true;
+    emit(t, cpu, cycles, false, n, heavy, extra, pc_override);
+    if (t.has_exit) { t.open_entry = (long)n; t.open_heavy = heavy; }
+    if (t.n >= t.cap) {
+        t.capped = true;
+        printf("A2GSPU_TRAP: %s reached cap=%u; further hits are counted but not recorded\n", t.name.c_str(), (unsigned)t.cap);
+    }
+}
+
+// Per instruction, before it executes (the CPU-loop hook site): PC and SP triggers.
 inline void check(cpu_state *cpu, uint64_t cycles) {
     const uint32_t fpc = cpu->full_pc & 0xFFFFFF;
+    g_ipc = fpc; g_ipc_cycles = cycles;          // for store records: the instruction about to run
     if (g_ring_on) { g_ring[g_ring_i & 255] = fpc; g_ring_i++; }
     for (Trap &t : g_traps) {
+        if (t.kind == Trap::SP) {
+            // The EFFECTIVE stack address, by the same rule as the stack payload:
+            // a 6502 core keeps S as 8 bits and emulation mode pins it to page 1,
+            // so sp=01F0-01FF means what it says on every machine. (The first
+            // version compared the raw register and never fired on a IIe.)
+            const uint32_t effsp = stack_addr(cpu, 0);
+            const bool inside = effsp >= t.sp_lo && effsp <= t.sp_hi;
+            if (inside && !t.sp_inside) {
+                char ex[32]; snprintf(ex, sizeof ex, ",\"sp\":%u", (unsigned)effsp);
+                fire(t, cpu, cycles, ex, 0xFFFFFFFFu);
+            }
+            t.sp_inside = inside;
+            continue;
+        }
+        if (t.kind != Trap::PC) continue;
         if (t.has_exit && t.open_entry >= 0 && matches(t.exit_any_bank, t.exit_pc, t.exit_pc, fpc)) {
             t.exits++;
             emit(t, cpu, cycles, true, (uint32_t)t.open_entry, t.open_heavy);
             t.open_entry = -1;
         }
         if (!matches(t.any_bank, t.lo, t.hi, fpc)) continue;
-        t.hits++;
-        if (t.capped) continue;
-        if (t.policy == Trap::ONCE && t.fired) continue;
-        bool ok = true;
-        for (const Cond &c : t.when) if (!holds(c, cpu)) { ok = false; break; }
-        if (!ok) continue;
-        bool heavy;
-        if (t.policy == Trap::FIRST) {
-            uint32_t key = t.has_key ? eval(t.key, cpu) : 0;
-            uint32_t &cnt = t.keycount[key];
-            heavy = cnt < t.first_n;
-            if (heavy) cnt++;
-        } else heavy = true;
-        const uint32_t n = t.n++;
-        t.entries++; t.fired = true;
-        emit(t, cpu, cycles, false, n, heavy);
-        if (t.has_exit) { t.open_entry = (long)n; t.open_heavy = heavy; }
-        if (t.n >= t.cap) {
-            t.capped = true;
-            printf("A2GSPU_TRAP: %s reached cap=%u; further hits are counted but not recorded\n", t.name.c_str(), (unsigned)t.cap);
-        }
+        fire(t, cpu, cycles, nullptr, 0xFFFFFFFFu);
+    }
+}
+
+// From the CPU's store funnel (bus_write), gated by g_store_on: STORE triggers.
+inline void store_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
+    for (Trap &t : g_traps) {
+        if (t.kind != Trap::STORE || !matches(t.any_bank, t.lo, t.hi, addr)) continue;
+        char ex[64]; snprintf(ex, sizeof ex, ",\"store\":{\"addr\":%u,\"value\":%u}", (unsigned)addr, (unsigned)data);
+        fire(t, cpu, g_ipc_cycles, ex, g_ipc);
     }
 }
 
@@ -652,9 +722,14 @@ inline void format_status(char *buf, size_t n) {
 
 // ------------------------------------------------------------ arm / close ---
 inline void describe(const Trap &t) {
-    printf("A2GSPU_TRAP: armed %s at=", t.name.c_str());
-    if (t.any_bank) printf("*:%04X", t.lo & 0xFFFF); else printf("%02X:%04X", (t.lo >> 16) & 0xFF, t.lo & 0xFFFF);
-    if (t.hi != t.lo) printf("-%04X", t.hi & 0xFFFF);
+    printf("A2GSPU_TRAP: armed %s ", t.name.c_str());
+    if (t.kind == Trap::SP) {
+        printf("sp=%04X-%04X", t.sp_lo, t.sp_hi);
+    } else {
+        printf("%s=", t.kind == Trap::STORE ? "store" : "at");
+        if (t.any_bank) printf("*:%04X", t.lo & 0xFFFF); else printf("%02X:%04X", (t.lo >> 16) & 0xFF, t.lo & 0xFFFF);
+        if (t.hi != t.lo) printf("-%04X", t.hi & 0xFFFF);
+    }
     if (t.has_exit) { if (t.exit_any_bank) printf(" exit=*:%04X", t.exit_pc); else printf(" exit=%02X:%04X", (t.exit_pc >> 16) & 0xFF, t.exit_pc & 0xFFFF); }
     printf(" when=%zu policy=%s", t.when.size(), t.policy == Trap::ONCE ? "once" : t.policy == Trap::EVERY ? "every" : "first");
     if (t.policy == Trap::FIRST) printf("(%u%s)", (unsigned)t.first_n, t.has_key ? "/key" : "");
@@ -710,5 +785,7 @@ inline void arm() {
 // The two names the rest of the tree uses. Kept flat so the CPU-loop gate reads
 // like its neighbours: `if (g_trap_on) a2gspu_trap_check(cpu, cycles);`
 inline bool &g_trap_on = a2trap::g_on;
+inline bool &g_trap_store_on = a2trap::g_store_on;
 inline void a2gspu_trap_arm() { a2trap::arm(); }
 inline void a2gspu_trap_check(cpu_state *cpu, uint64_t cycles) { a2trap::check(cpu, cycles); }
+inline void a2gspu_trap_store(cpu_state *cpu, uint32_t addr, uint8_t data) { a2trap::store_check(cpu, addr, data); }
