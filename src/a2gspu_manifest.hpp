@@ -501,6 +501,11 @@ inline void format_rail_live(char *buf, size_t bufsz) {
                      r[i].rail, r[i].verb);
             return;
         }
+        if (!strcmp(r[i].read, "fn") && !a2rails::reader_find(r[i].rail)) {
+            snprintf(buf, bufsz, "status=FAIL reach-table-inconsistent rail=%s declares a reader (fn) that no a2rails::Registrar registered",
+                     r[i].rail);
+            return;
+        }
         if (!strncmp(r[i].read, "verb:", 5)) {
             char first[32]; size_t k = 0;
             for (const char *p = r[i].read + 5; *p && *p != ' ' && k + 1 < sizeof first; p++) first[k++] = *p;
@@ -514,9 +519,19 @@ inline void format_rail_live(char *buf, size_t bufsz) {
         if (r[i].verb[0]) live++;
         if (r[i].read[0]) readable++;
     }
+    // The other direction: a reader registered for a rail the table does not
+    // declare readable is a reader nobody can find.
+    for (int j = 0; j < a2rails::g_nreaders; j++) {
+        const char *rail = a2rails::g_readers[j].rail;
+        const a2rails::Reach *rc = a2rails::reach_find(rail);
+        if (!a2rails::rail_find(rail) || !rc || strcmp(rc->read, "fn")) {
+            snprintf(buf, bufsz, "status=FAIL reach-table-inconsistent a reader is registered for %s but the reach table does not declare fn for it", rail);
+            return;
+        }
+    }
     size_t off = 0;
-    int m = snprintf(buf, bufsz, "status=OK rails=%d live=%d readable=%d launch-only=%d |",
-                     a2rails::rail_count(), live, readable, a2rails::rail_count() - live);
+    int m = snprintf(buf, bufsz, "status=OK rails=%d live=%d readable=%d readers=%d launch-only=%d |",
+                     a2rails::rail_count(), live, readable, a2rails::g_nreaders, a2rails::rail_count() - live);
     if (m > 0) off = (size_t)m;
     for (int i = 0; i < n && off + 40 < bufsz; i++) {
         m = snprintf(buf + off, bufsz - off, " %s:%s%s%s", r[i].rail,

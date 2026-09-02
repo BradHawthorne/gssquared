@@ -72,6 +72,12 @@ static void a2record_register(NClock *clk) {
     a2record::g_frame_fn  = [] { return g_iigs_cur_frame; };
     a2record::arm();   // opens A2GSPU_RECORDS; fatal if it cannot
 }
+
+// Strict mode's readback (M8). The warnings counter lives with the diagnostics
+// in iigs_diag.hpp; the rail is judged here, at spike end, so it registers here.
+static a2rails::Registrar s_reader_strict{"A2GSPU_STRICT", [](char *b, size_t n) {
+    snprintf(b, n, "status=OK warnings=%d strict=%d", g_a2gspu_warnings, getenv("A2GSPU_STRICT") ? 1 : 0);
+}};
 #include "a2gspu_pins.hpp"     // A2GSPU PINS: the identity of a headless run, printed before it starts
 #include "iigs_diag.hpp"
 #include "a2gspu_coverage.hpp"  // A2GSPU_COVERAGE: execution-coverage bitmap (env-gated)

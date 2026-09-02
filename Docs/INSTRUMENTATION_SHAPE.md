@@ -278,9 +278,18 @@ entry, `rail find` reports `live=`/`read=`, and `rail read <NAME>` returns a
 rail's state now for `MEMVU_*`, `A2GSPU_TRAP`, `A2GSPU_LIVENESS`,
 `A2GSPU_STRICT` and the pins, or names the verb that reads it, or says
 `no-readback`. The hand-written "live:" sentence in the `rail` ack is gone.
-What is not done is the registration half — a reader supplied with the rail
-rather than a table maintained beside it — which is what would make a rail
-without readback impossible to add.
+The registration half followed: a rail that can be read back registers its
+reader with itself — `a2rails::Registrar{"A2GSPU_TRAP", a2trap::format_status}`
+in the trap's own header, and likewise LIVENESS, the MEMVU accounting, the
+pins, RECORDS, and STRICT — so the reach table now says only `fn`, and `rail
+read` dispatches through the registry with no formatter chain to drift. Both
+directions are checked: `rail live` fails a `fn` row nothing registered and a
+registration the table does not declare, and `railparity.ps1` does the same
+offline from the source, so a rail cannot gain a reader the surface does not
+show or claim one it does not have. What "impossible to add without" still
+does not cover is a new *launch-only* rail: absence from the reach table is a
+declared state (`rail find` says launch-only), and forcing an explicit row for
+every one of the 142 would be noise, not information.
 
 ### M9 — Determinism, asserted  (P8) — S
 

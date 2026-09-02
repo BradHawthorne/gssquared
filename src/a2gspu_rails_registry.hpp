@@ -206,10 +206,34 @@ inline const Rail *rail_find(const char *name) {
 //
 //   verb : the CTRL verb (its first word) that arms or drives the same thing
 //          live, or "" when there is none
-//   read : "fn:<key>"    a formatter this binary implements (`rail read NAME`)
+//   read : "fn"          the rail registers its own reader (a2rails::Registrar
+//                        in the rail's header); `rail read NAME` calls it, and
+//                        `rail live` fails a row whose rail registered none
 //          "verb:<text>" the CTRL verb that reads it back
 //          ""            no readback; the rail speaks only at spike end
 struct Reach { const char *rail; const char *verb; const char *read; };
+
+// ---- readback, registered by the rail itself ------------------------------
+// A rail that can be read back supplies the function WITH the rail, in its own
+// header, so a reader cannot be declared here and left unimplemented, and a
+// rename fails at `rail live` (and offline in railparity.ps1) on both sides: a
+// "fn" row with no registration, or a registration with no "fn" row. The
+// first version kept "fn:<key>" strings here and a string-compare chain in the
+// CTRL verb -- a table beside the rail, which is the shape that drifts.
+using Reader = void (*)(char *buf, size_t n);
+struct ReaderReg { const char *rail; Reader fn; };
+inline ReaderReg g_readers[48] = {};
+inline int       g_nreaders = 0;
+struct Registrar {
+    Registrar(const char *rail, Reader fn) {
+        if (g_nreaders < (int)(sizeof g_readers / sizeof g_readers[0])) g_readers[g_nreaders++] = {rail, fn};
+    }
+};
+inline Reader reader_find(const char *rail) {
+    for (int i = 0; i < g_nreaders; i++)
+        if (!strcmp(g_readers[i].rail, rail)) return g_readers[i].fn;
+    return nullptr;
+}
 
 inline const Reach *reach(int &n) {
     static const Reach r[] = {
@@ -221,34 +245,34 @@ inline const Reach *reach(int &n) {
     {"A2GSPU_DHGR_GOLDEN",   "dhgr-golden", ""},
     {"A2GSPU_DUMP",          "read",        ""},
     {"A2GSPU_EXPECT_HASH",   "shr-golden",  ""},
-    {"A2GSPU_FAKETIME",      "",            "fn:pins"},
+    {"A2GSPU_FAKETIME",      "",            "fn"},
     {"A2GSPU_FORCE_KEY",     "holdkey",     ""},
     {"A2GSPU_GOLDEN",        "shr-golden",  ""},
     {"A2GSPU_ITRACE_FROM",   "itrace",      ""},
     {"A2GSPU_ITRACE_N",      "itrace",      ""},
-    {"A2GSPU_LIVENESS",      "",            "fn:liveness"},
+    {"A2GSPU_LIVENESS",      "",            "fn"},
     {"A2GSPU_LOAD",          "load",        ""},
     {"A2GSPU_POKE",          "poke",        ""},
-    {"A2GSPU_RAMDISK",       "",            "fn:pins"},
-    {"A2GSPU_RECORDS",       "",            "fn:records"},
+    {"A2GSPU_RAMDISK",       "",            "fn"},
+    {"A2GSPU_RECORDS",       "",            "fn"},
     {"A2GSPU_RESTORE",       "restore",     ""},
-    {"A2GSPU_SEED",          "",            "fn:pins"},
+    {"A2GSPU_SEED",          "",            "fn"},
     {"A2GSPU_SNAP_LOAD",     "restore",     ""},
     {"A2GSPU_SNAP_SAVE",     "save",        ""},
     {"A2GSPU_SPIKE_KEYS",    "keys",        ""},
-    {"A2GSPU_STRICT",        "",            "fn:warnings"},
+    {"A2GSPU_STRICT",        "",            "fn"},
     {"A2GSPU_TBTRACE",       "tbtrace",     ""},
     {"A2GSPU_TBTRACE_BANK",  "tbtrace",     ""},
     {"A2GSPU_TEXT40",        "text",        ""},
     {"A2GSPU_TEXTDUMP",      "text",        ""},
-    {"A2GSPU_TRAP",          "",            "fn:trap"},
-    {"A2GSPU_TRAP_FILE",     "",            "fn:trap"},
-    {"A2GSPU_TRAP_OUT",      "",            "fn:trap"},
+    {"A2GSPU_TRAP",          "",            "fn"},
+    {"A2GSPU_TRAP_FILE",     "",            "fn"},
+    {"A2GSPU_TRAP_OUT",      "",            "fn"},
     {"A2GSPU_VALTRAP",       "valtrap",     "verb:valtrap status"},
     {"A2GSPU_VRAM_LOAD",     "vram",        ""},
     {"A2GSPU_WATCH",         "watch",       "verb:watch bus hits"},
-    {"MEMVU_LOADVIS",        "",            "fn:memvu"},
-    {"MEMVU_STOREVIS",       "",            "fn:memvu"},
+    {"MEMVU_LOADVIS",        "",            "fn"},
+    {"MEMVU_STOREVIS",       "",            "fn"},
     };
     n = (int)(sizeof(r) / sizeof(r[0]));
     return r;

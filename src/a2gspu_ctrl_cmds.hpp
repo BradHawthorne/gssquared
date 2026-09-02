@@ -1150,20 +1150,14 @@ inline bool try_meta(const char *line, char *result, size_t rsz) {
                          nm, (rc && rc->verb[0]) ? "; live equivalent: " : "", (rc && rc->verb[0]) ? rc->verb : "");
             } else if (!strncmp(rc->read, "verb:", 5)) {
                 snprintf(result, rsz, "status=OK read-via-verb %s -- ask: %s", nm, rc->read + 5);
-            } else if (!strcmp(rc->read, "fn:memvu")) {
-                memvu_format_status(result, rsz);
-            } else if (!strcmp(rc->read, "fn:trap")) {
-                a2trap::format_status(result, rsz);
-            } else if (!strcmp(rc->read, "fn:liveness")) {
-                a2gspu_liveness_format(result, rsz);
-            } else if (!strcmp(rc->read, "fn:warnings")) {
-                snprintf(result, rsz, "status=OK warnings=%d strict=%d", g_a2gspu_warnings, getenv("A2GSPU_STRICT") ? 1 : 0);
-            } else if (!strcmp(rc->read, "fn:pins")) {
-                { char pins[320]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version); snprintf(result, rsz, "status=OK %s", pins); }
-            } else if (!strcmp(rc->read, "fn:records")) {
-                a2record::format_status(result, rsz);
+            } else if (!strcmp(rc->read, "fn")) {
+                // The rail registered its reader with itself (a2rails::Registrar);
+                // nothing here knows one formatter from another, so nothing here
+                // can drift when a rail is renamed or added.
+                if (a2rails::Reader rd = a2rails::reader_find(nm)) rd(result, rsz);
+                else snprintf(result, rsz, "status=FAIL reader-not-registered %s -- the reach table declares a reader the rail never registered (a2rails::Registrar)", nm);
             } else {
-                snprintf(result, rsz, "status=FAIL reach-table-inconsistent %s read=%s has no formatter", nm, rc->read);
+                snprintf(result, rsz, "status=FAIL reach-table-inconsistent %s read=%s is neither fn nor verb:", nm, rc->read);
             }
         } else if (!strncmp(rest, "schema", 6) && (rest[6] == 0 || rest[6] == ' ')) {
             const char *nm = rest + 6;

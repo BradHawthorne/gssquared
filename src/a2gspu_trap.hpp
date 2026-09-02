@@ -1,4 +1,5 @@
 #pragma once
+#include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include "a2record.hpp"   // the record contract: one writer, one shape, one global sink
 // ============================================================================
 // a2gspu_trap.hpp -- A2GSPU_TRAP: PC traps that are configuration, not code.
@@ -793,3 +794,8 @@ inline bool &g_trap_store_on = a2trap::g_store_on;
 inline void a2gspu_trap_arm() { a2trap::arm(); }
 inline void a2gspu_trap_check(cpu_state *cpu, uint64_t cycles) { a2trap::check(cpu, cycles); }
 inline void a2gspu_trap_store(cpu_state *cpu, uint32_t addr, uint8_t data) { a2trap::store_check(cpu, addr, data); }
+
+// The trap's readback, supplied with the rail (M8): `rail read A2GSPU_TRAP`.
+inline a2rails::Registrar g_reader_trap     {"A2GSPU_TRAP",      a2trap::format_status};
+inline a2rails::Registrar g_reader_trap_file{"A2GSPU_TRAP_FILE", a2trap::format_status};
+inline a2rails::Registrar g_reader_trap_out {"A2GSPU_TRAP_OUT",  a2trap::format_status};

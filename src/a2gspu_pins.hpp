@@ -1,4 +1,5 @@
 #pragma once
+#include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 // ============================================================================
 // a2gspu_pins.hpp -- the identity of a headless run, printed before it starts.
 //
@@ -88,3 +89,13 @@ inline void a2gspu_pins_print(int platform_id, int frames, const char *build_ver
     printf("A2GSPU PINS: %s\n", line);
     fflush(stdout);
 }
+
+// The pins' readback, supplied with the rails (M8): `rail read A2GSPU_SEED` (and
+// FAKETIME, RAMDISK) answers with the whole PINS line, since they are one fact.
+inline void a2gspu_pins_read(char *buf, size_t n) {
+    char pins[320]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version);
+    snprintf(buf, n, "status=OK %s", pins);
+}
+inline a2rails::Registrar g_reader_seed    {"A2GSPU_SEED",     a2gspu_pins_read};
+inline a2rails::Registrar g_reader_faketime{"A2GSPU_FAKETIME", a2gspu_pins_read};
+inline a2rails::Registrar g_reader_ramdisk {"A2GSPU_RAMDISK",  a2gspu_pins_read};

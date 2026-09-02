@@ -136,7 +136,45 @@ if ($outside.Count) {
     exit 1
 }
 
-Write-Host 'railparity: PASS - every rail the code reads is discoverable,'
-Write-Host '                   every declared rail exists, and every record'
-Write-Host '                   is written by the contract.'
+# --- readback registration (Docs/INSTRUMENTATION_SHAPE.md, M8) -------------
+# A reach-table row that says "fn" is a promise the rail keeps by registering
+# its reader (a2rails::Registrar) in its own header; a registration without
+# the row is a reader nobody can find. Both directions, offline, so the gate
+# needs no running process to catch either.
+$fnRows  = [System.Collections.Generic.HashSet[string]]::new()
+$inReach = $false
+foreach ($line in [IO.File]::ReadAllLines($registry)) {
+    if ($line -match 'static const Reach r\[\]') { $inReach = $true; continue }
+    if ($inReach -and $line -match '^\s*\};') { break }
+    if ($inReach -and $line -match '^\s*\{"([A-Z0-9_]+)",\s*"[^"]*",\s*"fn"\}') { [void]$fnRows.Add($matches[1]) }
+}
+$registered = @{}
+Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp, *.h, *.cc |
+    Where-Object { $_.FullName -notmatch '\\imgui\\' } |
+    ForEach-Object {
+        $file = $_
+        foreach ($m in [regex]::Matches([IO.File]::ReadAllText($file.FullName), 'Registrar\s+\w+\s*\{\s*"([A-Z0-9_]+)"')) {
+            $registered[$m.Groups[1].Value] = $file.FullName.Substring($srcDir.Length + 1)
+        }
+    }
+$unkept  = @($fnRows | Where-Object { -not $registered.ContainsKey($_) } | Sort-Object)
+$unfound = @($registered.Keys | Where-Object { -not $fnRows.Contains($_) } | Sort-Object)
+if ($unkept.Count -or $unfound.Count) {
+    Write-Host ''
+    if ($unkept.Count) {
+        Write-Host 'UNKEPT - the reach table says fn, but no a2rails::Registrar registers a reader:' -ForegroundColor Red
+        $unkept | ForEach-Object { Write-Host "  $_" }
+    }
+    if ($unfound.Count) {
+        Write-Host 'UNFINDABLE - a reader is registered, but the reach table does not say fn:' -ForegroundColor Red
+        $unfound | ForEach-Object { Write-Host ("  {0,-24} {1}" -f $_, $registered[$_]) }
+    }
+    Write-Host ''
+    Write-Host ("railparity: FAIL - {0} unkept, {1} unfindable reader(s)" -f $unkept.Count, $unfound.Count) -ForegroundColor Red
+    exit 1
+}
+
+Write-Host ("railparity: PASS - every rail the code reads is discoverable, every declared rail")
+Write-Host ("                   exists, every record is written by the contract, and all {0}" -f $fnRows.Count)
+Write-Host ("                   declared readers are registered by their rails.")
 exit 0

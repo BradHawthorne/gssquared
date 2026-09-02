@@ -1,4 +1,5 @@
 #pragma once
+#include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include "iigs_ioregs.hpp"     // names for $C000-$C0FF, so a device total is never a bare number
 inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n);     // iigs_symbols.hpp (names by default)
 // ============================================================================
@@ -501,3 +502,7 @@ inline void memvu_lv_report(FILE *f) {
     }
     fprintf(f, "   (total/mustserve/cacheable_slow)\n");
 }
+
+// The accounting's readback, supplied with the rails (M8): `rail read MEMVU_STOREVIS`.
+inline a2rails::Registrar g_reader_storevis{"MEMVU_STOREVIS", memvu_format_status};
+inline a2rails::Registrar g_reader_loadvis {"MEMVU_LOADVIS",  memvu_format_status};

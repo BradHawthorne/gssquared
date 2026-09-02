@@ -1,4 +1,5 @@
 #pragma once
+#include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include "a2record.hpp"   // the record contract: one writer, one shape, one global sink
 // ============================================================================
 // a2gspu_liveness.hpp -- A2GSPU_LIVENESS=N: a progress proof every N frames.
@@ -180,3 +181,6 @@ inline void a2gspu_liveness_tick(computer_t *computer) {
                    g_liveness_frame, (unsigned long long)cycles, (unsigned long long)screen, (unsigned long long)text, changed);
     }
 }
+
+// The liveness readback, supplied with the rail (M8): `rail read A2GSPU_LIVENESS`.
+inline a2rails::Registrar g_reader_liveness{"A2GSPU_LIVENESS", a2gspu_liveness_format};

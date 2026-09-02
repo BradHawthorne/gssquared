@@ -23,6 +23,7 @@
 //
 // `rail read A2GSPU_RECORDS` reports the sink and the records written per rail.
 #pragma once
+#include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -141,3 +142,6 @@ inline void format_status(char *buf, size_t n) {
 }
 
 } // namespace a2record
+
+// The sink's readback, supplied with the rail (M8): `rail read A2GSPU_RECORDS`.
+inline a2rails::Registrar g_reader_records{"A2GSPU_RECORDS", a2record::format_status};
