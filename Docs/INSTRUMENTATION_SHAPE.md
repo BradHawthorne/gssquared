@@ -246,7 +246,14 @@ disk. The image stays out; a unit's block names its image and block count and
 is applied only when the same image is mounted now and only in RAM mode (the
 host file is never written from a snapshot), and anything else is a counted
 warning. Still out: the scanner (Class B — the display pipeline is in the
-owner's working tree, so it waits), and floppy media.
+owner's working tree, so it waits), and floppy media. The test the roadmap
+named passes: the Dealer Demo, saved at frame 1200 and restored for 1200
+frames with STOREVIS armed, reports 3,517,548 stores, 851,529 visible,
+469,605 device, 46,494 slow-side, 335,430 shadowed; the cold-run difference
+the report had to use instead is 3,517,553 / 851,529 / 469,605 / 46,494 /
+335,430 — every visible class exact, five stores and 157 instructions apart
+in 3.5 million and 14 million, which is the rebased sound and motor timers.
+Event D is closed for the machine the corpus measures.
 
 ### M6 — Artifact discipline and a shared reader  (P4) — S
 
