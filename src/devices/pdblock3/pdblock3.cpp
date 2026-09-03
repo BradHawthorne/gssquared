@@ -15,7 +15,9 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//#include <stdio.h>
+//#include <algorithm>
+#include <cstring>
+#include <stdio.h>
 #include <iostream>
 #include <cstring>      // memset, for Format
 #include "gs2.hpp"
@@ -135,6 +137,7 @@ public:
         // A short read is fine (image may be exactly data-sized); zero-fill the rest.
         if (got == 0) return;
         drv.ram = std::move(buf);
+        drv.dirty.assign((media->block_count + 7) / 8, 0);
         if (DEBUG(DEBUG_PD_BLOCK))
             std::cout << "PDB3 RAMDISK: loaded " << got << " bytes for " << media->filestub << std::endl;
     }
@@ -210,6 +213,7 @@ public:
         std::vector<uint8_t> &ram = drives[drive].ram;
         if (!ram.empty()) {
             // In-RAM COW path: write stays in RAM, host file is never modified.
+            if (!drives[drive].dirty.empty()) drives[drive].dirty[block >> 3] |= (uint8_t)(1 << (block & 7));
             for (int i = 0; i < media->block_size; i++) {
                 if (off + i < ram.size()) ram[off + i] = mmu->read(addr + i);
             }
@@ -258,6 +262,7 @@ public:
         if (!ram.empty()) {
             // In-RAM COW path: the format stays in RAM, exactly as writes do,
             // so a formatted --ram-disk never touches the host file.
+            if (!drives[drive].dirty.empty()) std::fill(drives[drive].dirty.begin(), drives[drive].dirty.end(), (uint8_t)0xFF);
             uint64_t start = media->data_offset;
             uint64_t len   = (uint64_t)media->block_count * media->block_size;
             if (start < ram.size()) {
@@ -734,7 +739,93 @@ public:
         return cmd_buffer.status2;
     }
 
+
+    // ---- A2GSPU snapshot (M5): the command buffer and each unit's state, and
+    // the volume OVERLAY of a unit served from its RAM copy: every block
+    // written since the image was loaded. The image is not in the file; a
+    // unit's block names its image and block count and is applied only when
+    // the same image is mounted now, and only in RAM mode -- without it the
+    // host file is the volume, and it is never written from a snapshot.
+public:
+    void A2GSPU_snapshot(FILE *f) {
+        fwrite(&cmd_buffer.index, 1, 1, f); fwrite(cmd_buffer.cmd, 1, MAX_PD_BUFFER_SIZE, f);
+        fwrite(&cmd_buffer.error, 1, 1, f); fwrite(&cmd_buffer.status1, 1, 1, f); fwrite(&cmd_buffer.status2, 1, 1, f);
+        uint32_t units = PDB3_MAX_UNITS; fwrite(&units, 4, 1, f);
+        for (uint32_t u = 0; u < PDB3_MAX_UNITS; u++) {
+            media_t &d = drives[u];
+            const bool present = d.file && d.media;
+            uint8_t hdr[3] = { (uint8_t)present, (uint8_t)disk_switched[u], (uint8_t)!d.ram.empty() };
+            fwrite(hdr, 1, 3, f);
+            if (!present) continue;
+            const std::string name = d.media->filename;
+            uint32_t n = (uint32_t)name.size(); fwrite(&n, 4, 1, f); if (n) fwrite(name.data(), 1, n, f);
+            uint32_t bc = d.media->block_count; uint16_t bs = (uint16_t)d.media->block_size;
+            fwrite(&bc, 4, 1, f); fwrite(&bs, 2, 1, f);
+            int32_t lba = (int32_t)d.last_block_accessed; fwrite(&lba, 4, 1, f);
+            uint64_t lat = d.last_block_access_time; fwrite(&lat, 8, 1, f);
+            uint32_t ndirty = 0;
+            if (!d.ram.empty() && !d.dirty.empty())
+                for (uint32_t b = 0; b < bc; b++) if (d.dirty[b >> 3] & (1 << (b & 7))) ndirty++;
+            fwrite(&ndirty, 4, 1, f);
+            if (!d.ram.empty())
+                printf("A2GSPU SNAP: pdblock unit %u %s: %u of %u blocks written since load, carried as the overlay\n",
+                       u, name.c_str(), ndirty, bc);
+            if (ndirty)
+                for (uint32_t b = 0; b < bc; b++) if (d.dirty[b >> 3] & (1 << (b & 7))) {
+                    const uint64_t off = d.media->data_offset + (uint64_t)b * bs;
+                    fwrite(&b, 4, 1, f);
+                    if (off + bs <= d.ram.size()) fwrite(&d.ram[off], 1, bs, f);
+                    else { uint8_t z[512] = {0}; fwrite(z, 1, bs, f); }
+                }
+        }
+    }
+    // `mismatch` counts units whose overlay was not applied: a different image,
+    // a different size, or a unit not in RAM mode. The block is always read whole.
+    bool A2GSPU_restore(FILE *f, int *mismatch) {
+        if (fread(&cmd_buffer.index, 1, 1, f) != 1 || fread(cmd_buffer.cmd, 1, MAX_PD_BUFFER_SIZE, f) != MAX_PD_BUFFER_SIZE) return false;
+        if (fread(&cmd_buffer.error, 1, 1, f) != 1 || fread(&cmd_buffer.status1, 1, 1, f) != 1 || fread(&cmd_buffer.status2, 1, 1, f) != 1) return false;
+        uint32_t units = 0; if (fread(&units, 4, 1, f) != 1 || units != PDB3_MAX_UNITS) return false;
+        for (uint32_t u = 0; u < units; u++) {
+            uint8_t hdr[3]; if (fread(hdr, 1, 3, f) != 3) return false;
+            if (!hdr[0]) continue;
+            uint32_t n = 0; if (fread(&n, 4, 1, f) != 1 || n > 4096) return false;
+            std::string name(n, '\0'); if (n && fread(&name[0], 1, n, f) != n) return false;
+            uint32_t bc = 0; uint16_t bs = 0; int32_t lba = 0; uint64_t lat = 0; uint32_t ndirty = 0;
+            if (fread(&bc, 4, 1, f) != 1 || fread(&bs, 2, 1, f) != 1 || fread(&lba, 4, 1, f) != 1 ||
+                fread(&lat, 8, 1, f) != 1 || fread(&ndirty, 4, 1, f) != 1) return false;
+            if (bs == 0 || bs > 512 || ndirty > bc) return false;
+            media_t &d = drives[u];
+            const bool same = d.file && d.media && d.media->filename == name && d.media->block_count == bc &&
+                              d.media->block_size == bs;
+            const bool apply = same && !d.ram.empty();
+            if (!apply) { if (mismatch) (*mismatch)++; }
+            else {
+                // The RAM copy may hold this session's writes: back to the image
+                // (the host file is never modified in RAM mode), then the overlay.
+                if (fseek(d.file, 0, SEEK_SET) == 0) {
+                    size_t got = fread(d.ram.data(), 1, d.ram.size(), d.file);
+                    if (got < d.ram.size()) memset(d.ram.data() + got, 0, d.ram.size() - got);
+                }
+                std::fill(d.dirty.begin(), d.dirty.end(), (uint8_t)0);
+                disk_switched[u] = hdr[1] != 0;
+                d.last_block_accessed = lba;
+                d.last_block_access_time = lat ? (clock ? clock->get_cycles() : 0) : 0;   // the motor window is relative to the clock
+            }
+            for (uint32_t k = 0; k < ndirty; k++) {
+                uint32_t b = 0; uint8_t data[512];
+                if (fread(&b, 4, 1, f) != 1 || fread(data, 1, bs, f) != bs) return false;
+                if (!apply || b >= bc) continue;
+                const uint64_t off = d.media->data_offset + (uint64_t)b * bs;
+                if (off + bs <= d.ram.size()) { memcpy(&d.ram[off], data, bs); d.dirty[b >> 3] |= (uint8_t)(1 << (b & 7)); }
+            }
+        }
+        return true;
+    }
 };
+
+// The one instance, for the snapshot code (set by init_pdblock3).
+static PDBlock3 *g_a2gspu_pdblock3 = nullptr;
+
 
 void pdblock3_write_C0x0(void *context, uint32_t addr, uint8_t data) {
     pdblock3_data * pdblock_d = (pdblock3_data *)context;
@@ -810,6 +901,7 @@ void init_pdblock3(computer_t *computer, SlotType_t slot)
     // register drives with mounts for status reporting
     PDBlock3 *pd3 = new PDBlock3(slot, pdblock_d->mmu);
     pdblock_d->pdb = pd3;
+    g_a2gspu_pdblock3 = pd3;   // the snapshot code reaches the block device through this
     pd3->clock = computer->clock; // deterministic disk timing (see PDB3_MOTOR_CYCLES)
 
     storage_key_t key;
@@ -832,3 +924,8 @@ void init_pdblock3(computer_t *computer, SlotType_t slot)
     computer->mmu->set_C8xx_handler(slot, map_rom_pdblock3, pdblock_d);
 
 }
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+void pdblock3_A2GSPU_snapshot(FILE *f) { if (g_a2gspu_pdblock3) g_a2gspu_pdblock3->A2GSPU_snapshot(f); }
+bool pdblock3_A2GSPU_restore(FILE *f, int *mismatch) { return g_a2gspu_pdblock3 ? g_a2gspu_pdblock3->A2GSPU_restore(f, mismatch) : false; }
+bool pdblock3_A2GSPU_present() { return g_a2gspu_pdblock3 != nullptr; }

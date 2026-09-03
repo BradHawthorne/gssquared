@@ -237,8 +237,16 @@ for a 5.25, control lines, track, side and motor for a 3.5. Not the media: a
 drive's block names the image it had mounted and is applied only when the
 same image is mounted now, and a mismatch is a counted warning — under
 `A2GSPU_RAMDISK` the image's contents are not the file on disk either, and the
-manifest says `media` is excluded. Still out: the scanner (Class B — the
-display pipeline is in the owner's working tree, so it waits).
+manifest says `media` is excluded. A fifth, `pdblock`, carries the slot 7
+block device — the corpus's own volumes — with its command buffer, each unit's
+state, and, for a unit served from its RAM copy (`A2GSPU_RAMDISK`), the
+volume's overlay as dirty blocks: every block written since the image was
+loaded, so a restored GS/OS sees the volume it left rather than the file on
+disk. The image stays out; a unit's block names its image and block count and
+is applied only when the same image is mounted now and only in RAM mode (the
+host file is never written from a snapshot), and anything else is a counted
+warning. Still out: the scanner (Class B — the display pipeline is in the
+owner's working tree, so it waits), and floppy media.
 
 ### M6 — Artifact discipline and a shared reader  (P4) — S
 

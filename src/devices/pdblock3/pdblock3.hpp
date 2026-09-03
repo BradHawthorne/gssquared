@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <cstdio>
 #include "gs2.hpp"
 #include "util/media.hpp"
 #include "util/mount.hpp"
@@ -39,3 +40,11 @@
 #include "devices/pdblock2/pdb_structures.hpp"
 
 void init_pdblock3(computer_t *computer, SlotType_t slot);
+
+// ---- A2GSPU snapshot (M5): the block device's state and, for a unit served
+// from its RAM copy (A2GSPU_RAMDISK), the volume's overlay as dirty blocks.
+// `mismatch` counts units whose overlay was not applied (a different image, a
+// different size, or not in RAM mode).
+bool pdblock3_A2GSPU_present();
+void pdblock3_A2GSPU_snapshot(FILE *f);
+bool pdblock3_A2GSPU_restore(FILE *f, int *mismatch);

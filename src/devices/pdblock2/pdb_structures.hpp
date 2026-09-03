@@ -41,6 +41,9 @@ struct media_t {
     // modified -> COW), and per-block fseek/fread/fwrite are eliminated. This is
     // the in-memory disk lever that lets a dev loop skip the slow re-mint/re-read.
     std::vector<uint8_t> ram;
+    // One bit per block written since the RAM copy was loaded: the overlay a
+    // snapshot carries (A2GSPU snapshot, M5). Empty when not in RAM mode.
+    std::vector<uint8_t> dirty;
 };
 
 struct pdblock_cmd_v1 {

@@ -32,6 +32,7 @@
 #include "cpu.hpp"
 #include "display/display.hpp"
 #include "devices/iwm/iwm_device.hpp"      // the disk controller's snapshot functions (M5)
+#include "devices/pdblock3/pdblock3.hpp"   // the block device's snapshot functions (M5)
 #include "devices/speaker/speaker.hpp"
 #include "platforms.hpp"
 #include "util/dialog.hpp"
@@ -1000,7 +1001,7 @@ static std::string a2gspu_snap_manifest_text(int frame, const std::string &devic
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "media", "scanner", "rtc", "serial", "clock" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "pdblock", "media", "scanner", "rtc", "serial", "clock" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     for (const char *d : all) {
@@ -1054,6 +1055,10 @@ static std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "iwm", 1); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "iwm" : ",iwm";
     }
+    if (pdblock3_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "pdblock", 1); pdblock3_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "pdblock" : ",pdblock";
+    }
     return names;
 }
 // Reads device blocks up to the sentinel, which it leaves for the caller. A block
@@ -1088,6 +1093,14 @@ static bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 if (r == RESTORED && mismatch)
                     a2gspu_warn("A2GSPU SNAP", "iwm: a drive holds a different image than the snapshot's; its head state was left alone "
                                 "(the media is not in the snapshot -- mount what the manifest's run mounted)");
+            }
+        } else if (!strcmp(nm, "pdblock") && ver == 1) {
+            if (pdblock3_A2GSPU_present()) {
+                int mismatch = 0;
+                r = pdblock3_A2GSPU_restore(f, &mismatch) ? RESTORED : FAILED;
+                if (r == RESTORED && mismatch)
+                    a2gspu_warn("A2GSPU SNAP", "pdblock: a unit's overlay was not applied -- a different image or size than the "
+                                "snapshot's, or the unit is not in RAM mode (A2GSPU_RAMDISK); the volume is what the file holds");
             }
         }
         if (r == FAILED) return false;
