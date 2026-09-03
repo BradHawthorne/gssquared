@@ -65,6 +65,10 @@
 //
 // PAYLOADS
 //
+//   (every record)         "incall": the toolbox call in progress when the trap
+//                          fired (SoundTools.FFStartSound), or null -- the fact
+//                          that names a shared helper the entry-point table
+//                          attributes to whatever entry precedes it
 //   (every record)         "sym": the trap PC's name -- an application symbol
 //                          when A2GSPU_SYMBOLS is loaded, else a documented
 //                          firmware entry point (COUT, RDKEY, MLI, ToolDisp...),
@@ -633,6 +637,11 @@ inline void emit(Trap &t, cpu_state *cpu, uint64_t cycles, bool is_exit, uint32_
         if (a2gspu_name_pc(pc, sym, sizeof sym)[0]) { s += ",\"sym\":\""; s += sym; s += '"'; }
         else s += ",\"sym\":null";
     }
+    {   // the toolbox call in progress: the fact that names a shared helper
+        char ic[128];
+        if (iigs_call_context(ic, sizeof ic)[0]) { s += ",\"incall\":\""; s += ic; s += '"'; }
+        else s += ",\"incall\":null";
+    }
     if (extra) s += extra;
     snprintf(b, sizeof b, ",\"heavy\":%d", heavy ? 1 : 0); s += b;
     emit_payloads(s, is_exit ? t.pxdo : t.pdo, t, cpu);
@@ -782,6 +791,7 @@ inline void arm() {
     if (g_traps.empty()) fail(env ? env : file, "no trap specs found");
     for (const Trap &t : g_traps) describe(t);
     g_on = true;
+    iigs_callctx_arm();   // records carry the toolbox call in progress (incall)
     atexit(close_all);
 }
 

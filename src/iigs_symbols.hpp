@@ -274,6 +274,7 @@ inline void iigs_toolnames_load_once() {
 
 inline std::string iigs_tool_func_name(unsigned tool, unsigned fn) {
     static const char *housekeeping[7] = { "", "BootInit", "StartUp", "ShutDown", "Version", "Reset", "Status" };
+    iigs_toolnames_load_once();   // whoever asks first: the live walk, a call context, a report
     std::string set = "Tool" + std::to_string(tool);
     auto it = g_iigs_toolnames.find(tool << 8);
     if (it != g_iigs_toolnames.end()) set = it->second;

@@ -223,7 +223,7 @@ inline const RecordSchema *record_schemas(int &n) {
      "event(<rail>.<kind>) frame cycles + the rail's own fields",
      "the record contract (src/a2record.hpp): every rail record below has this shape, written whole; the global sink takes a record whose rail has no sink of its own"},
     {"A2GSPU_TRAP",       "event=trap.entry|trap.exit",
-     "frame cycles trap t(e|x) n pc sym|null store{addr,value}? sp? heavy regs{a,x,y,s,d,dbr,pbr,p,e}? ring[]? zp? stack? mem{at,expr,d}? f{...}? text? scan[{at,ptr,d}]?",
+     "frame cycles trap t(e|x) n pc sym|null incall|null store{addr,value}? sp? heavy regs{a,x,y,s,d,dbr,pbr,p,e}? ring[]? zp? stack? mem{at,expr,d}? f{...}? text? scan[{at,ptr,d}]?",
      "one line per trigger; pc is the storing instruction for store= traps; sink: per-spec out=, else A2GSPU_TRAP_OUT, else A2GSPU_RECORDS, else stdout prefixed 'IIGS TRAP:'"},
     {"A2GSPU_LIVENESS",   "event=liveness.sample",
      "frame cycles screen text kbd|null changed(first|screen|text|both|none) kbd_note? kbd_zero?",

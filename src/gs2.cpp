@@ -2999,7 +2999,7 @@ static void run_headless_spike(GS2AppState *state) {
         // STOREVIS names its top writers in its own summary, which needs the
         // per-granule write table BLAME keeps. Arm it; BLAME's full report still
         // prints only when MEMVU_BLAME is set.
-        if (memvu_sv_on && memvu_blame_init()) { memvu_blame_reset(); memvu_blame_on = true; }
+        if (memvu_sv_on && memvu_blame_init()) { memvu_blame_reset(); memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word; }
         printf("MEMVU: armed (%s%s%s, model=%s)\n",
                memvu_sv_on ? "STOREVIS" : "",
                (memvu_sv_on && memvu_lv_on) ? "+" : "",
@@ -3060,7 +3060,7 @@ static void run_headless_spike(GS2AppState *state) {
             fprintf(stderr, "MEMVU_BLAME: ** REFUSED ** allocation failed\n");
         } else {
             memvu_blame_reset();
-            memvu_blame_on = true;
+            memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word;
             memvu_sv_on = true;   // blame rides the store/load classification
             memvu_lv_on = true;
             memvu_sv_have_shadow = (state->mmu_iigs != nullptr);

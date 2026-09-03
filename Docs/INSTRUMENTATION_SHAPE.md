@@ -291,9 +291,13 @@ names them from `toolbox.names` (`romfpt.py --names`, installed with the
 resources). Proving it with a trap found an off-by-one in both tables: an
 FPT entry is the function's address *minus one* — the dispatcher pushes it
 and executes RTL — so every toolbox name had been a byte early, and a trap
-on an entry never fired. Both tables add one now. Still open: GS/OS's own kernel and drivers, which are not tool
-sets and need the published source, and shared helpers, which either table
-names after the preceding entry. One correction after the fact: moving the toolbox load to
+on an entry never fired. Both tables add one now. Shared helpers followed: the call tracker's pending
+stack is kept whenever BLAME or TRAP is armed (not only for TBTRACE and
+CALLSTREAM), `TRAP` records carry `incall`, and BLAME's writers and granule
+lines carry the dominant call per granule (`; in SoundTools.FFStartSound
+98%`), so a helper is named by the call that used it and the entry-point
+table's guess stands beside it rather than alone. Still open: GS/OS's own
+kernel and drivers, which are not tool sets and need the published source. One correction after the fact: moving the toolbox load to
 arm time left the lookup's seed-and-sort step keyed on the loader's own flag,
 so every search ran over an unseeded, unsorted table and the Tool Locator
 dispatch at `$E1/0000` named null — caught by the record contract's smoke

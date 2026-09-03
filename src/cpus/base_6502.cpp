@@ -2343,7 +2343,7 @@ int execute_next(cpu_state *cpu) override {
     // $E0/$E1 Mega-II memory dump inside PCTRAP, since those banks do not exist
     // on a II-family machine.
     {
-        if (g_iigs_tbtrace_enabled || g_iigs_break_enabled || g_save_at_enabled || g_poke_on || g_callstream_on) iigs_tb_on_landing(cpu);
+        if (g_iigs_tbtrace_enabled || g_iigs_break_enabled || g_save_at_enabled || g_poke_on || g_callstream_on || g_iigs_callctx_on) iigs_tb_on_landing(cpu);
         // A2GSPU_ITRACE: additive per-instruction crash post-mortem trace (off by
         // default; one cheap branch when off). Mirrors the BRKDUMP gating.
         if (g_iigs_itrace_enabled) iigs_itrace_step(cpu);

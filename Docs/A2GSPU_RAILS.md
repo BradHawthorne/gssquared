@@ -214,7 +214,7 @@ emitted beside it, so any aggregate can be recomputed from primary data.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `MEMVU_BLAME[=<topN>]` | attributes every externally-visible store and machine-served read to the **opcode address** of the instruction responsible, and reports the worst code granules | observe | env |
+| `MEMVU_BLAME[=<topN>]` | attributes every externally-visible store and machine-served read to the **opcode address** of the instruction responsible, and reports the worst code granules, each named, with the toolbox call in progress when its stores had one (`; in SoundTools.FFStartSound 98%`) — a shared helper is named by the call that used it, not by the entry point that precedes it | observe | env |
 | `MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads>` | **a MODEL, not a counter** — cost of routing part of a workload's memory traffic to the machine. Parameters are mandatory; an incomplete set is REFUSED. Output is an upper bound | observe | env |
 
 `MEMVU_BLAME` turns the visibility rails around. They say how much a workload costs;

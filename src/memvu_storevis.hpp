@@ -2,6 +2,7 @@
 #include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include "iigs_ioregs.hpp"     // names for $C000-$C0FF, so a device total is never a bare number
 inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n);     // iigs_symbols.hpp (names by default)
+inline std::string iigs_tool_func_name(unsigned tool, unsigned fn);            // iigs_symbols.hpp: a call word's name (report path only)
 inline void iigs_syms_flush_note();                                             // iigs_symbols.hpp: a pending one-line note
 // ============================================================================
 // memvu_storevis.hpp — memory access-visibility accounting
@@ -115,6 +116,7 @@ inline void iigs_syms_flush_note();                                             
 // ============================================================================
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include "memvu_seam.hpp"   // MEMVU_SEAM feeds off these same taps rather than adding its own
 
 // ---- arm bits + observation model -------------------------------------------
@@ -143,6 +145,14 @@ inline uint32_t memvu_blame_pc = 0;            // opcode address of the current 
 inline uint32_t *memvu_blame_w = nullptr;      // visible stores per 256-byte granule
 inline uint32_t *memvu_blame_r = nullptr;      // routed reads per 256-byte granule
 inline uint32_t  memvu_blame_w_top[5] = {}, memvu_blame_w_topg[5] = {};   // scratch for the STOREVIS top-writers line
+// The toolbox call in progress at each visible store, per granule: the top three
+// call words and the rest, so a writer that is a shared helper is named by the
+// call that used it rather than by the entry point that happens to precede it.
+struct MemvuBlameCall { uint16_t word[3]; uint32_t n[3]; uint32_t other; };
+inline MemvuBlameCall *memvu_blame_call = nullptr;
+// The call in progress, asked through a pointer main() sets when BLAME is armed:
+// the tap is linked into binaries (iigsmmutest) that have no toolbox tracker.
+inline uint16_t (*memvu_callctx_fn)() = nullptr;
 
 static constexpr uint32_t MEMVU_BLAME_GRAN = 8;                 // log2(256)
 static constexpr uint32_t MEMVU_BLAME_N    = 1u << (24 - MEMVU_BLAME_GRAN);   // 65536
@@ -150,15 +160,50 @@ static constexpr uint32_t MEMVU_BLAME_N    = 1u << (24 - MEMVU_BLAME_GRAN);   //
 inline bool memvu_blame_init() {
     if (!memvu_blame_w) memvu_blame_w = (uint32_t *)calloc(MEMVU_BLAME_N, sizeof(uint32_t));
     if (!memvu_blame_r) memvu_blame_r = (uint32_t *)calloc(MEMVU_BLAME_N, sizeof(uint32_t));
+    if (!memvu_blame_call) memvu_blame_call = (MemvuBlameCall *)calloc(MEMVU_BLAME_N, sizeof(MemvuBlameCall));
     return memvu_blame_w && memvu_blame_r;
 }
 inline void memvu_blame_reset() {
     if (memvu_blame_w) memset(memvu_blame_w, 0, MEMVU_BLAME_N * sizeof(uint32_t));
     if (memvu_blame_r) memset(memvu_blame_r, 0, MEMVU_BLAME_N * sizeof(uint32_t));
+    if (memvu_blame_call) memset(memvu_blame_call, 0, MEMVU_BLAME_N * sizeof(MemvuBlameCall));
 }
+// "; in CALL nn%" for a granule's dominant toolbox call, or "" when its stores
+// happened outside any call (or nothing counted them).
+inline const char *memvu_blame_call_suffix(uint32_t g, char *buf, size_t n) {
+    buf[0] = 0;
+    if (!memvu_blame_call) return buf;
+    const MemvuBlameCall &c = memvu_blame_call[g];
+    uint64_t total = c.other; int best = -1;
+    for (int i = 0; i < 3; i++) { total += c.n[i]; if (c.n[i] && (best < 0 || c.n[i] > c.n[best])) best = i; }
+    if (!total) return buf;
+    const unsigned pct = best < 0 ? 0 : (unsigned)(100 * (uint64_t)c.n[best] / total);
+    const unsigned outside = (unsigned)(100 * (uint64_t)c.other / total);
+    // The dominant call when it is at least 1%; and when most of the traffic
+    // happened outside any call -- an interrupt handler, a stray helper -- say
+    // so, because that is the cause a reader would otherwise have to guess.
+    size_t off = 0;
+    if (pct >= 1) {
+        int m = snprintf(buf, n, "; in %s %u%%", iigs_tool_func_name(c.word[best] & 0xFF, c.word[best] >> 8).c_str(), pct);
+        if (m > 0) off = (size_t)m < n ? (size_t)m : n - 1;
+    }
+    if (outside >= 50 && off < n) snprintf(buf + off, n - off, "%s outside any call %u%%", off ? "," : ";", outside);
+    return buf;
+}
+
 inline void memvu_blame_note(bool write) {
     uint32_t *t = write ? memvu_blame_w : memvu_blame_r;
     if (t) t[(memvu_blame_pc & 0xFFFFFF) >> MEMVU_BLAME_GRAN]++;
+    if (write && memvu_blame_call) {
+        MemvuBlameCall &c = memvu_blame_call[(memvu_blame_pc & 0xFFFFFF) >> MEMVU_BLAME_GRAN];
+        const uint16_t w = memvu_callctx_fn ? memvu_callctx_fn() : 0;
+        if (!w) { c.other++; return; }
+        for (int i = 0; i < 3; i++) {
+            if (c.word[i] == w) { c.n[i]++; return; }
+            if (c.n[i] == 0) { c.word[i] = w; c.n[i] = 1; return; }
+        }
+        c.other++;
+    }
 }
 
 // ---- store counters ----------------------------------------------------------
@@ -420,8 +465,9 @@ inline void memvu_sv_report(FILE *f) {
             const uint32_t base = bg << MEMVU_BLAME_GRAN;
             char sym[96]; sym[0] = 0;
             const char *name = a2gspu_name_pc(base, sym, sizeof sym);
-            fprintf(f, " $%02X/%04X=%u (%s)", (base >> 16) & 0xFF, base & 0xFFFF, bc,
-                    (name && name[0]) ? name : "unnamed");
+            char ic[160]; memvu_blame_call_suffix(bg, ic, sizeof ic);
+            fprintf(f, " $%02X/%04X=%u (%s%s)", (base >> 16) & 0xFF, base & 0xFFFF, bc,
+                    (name && name[0]) ? name : "unnamed", ic);
             memvu_blame_w_top[rank] = bc;   // keep BLAME's own report intact: restore below
             memvu_blame_w_topg[rank] = bg;
             memvu_blame_w[bg] = 0;
@@ -465,8 +511,12 @@ inline void memvu_blame_report(FILE *f, int topn) {
             nr, topn < nr ? topn : nr);
     for (int i = 0; i < topn && i < nr; i++) {
         const uint32_t base = rows[i].g << MEMVU_BLAME_GRAN;
-        fprintf(f, "MEMVU BLAME: $%02X/%04X  visible_writes=%u  routed_reads=%u\n",
-                (base >> 16) & 0xFF, base & 0xFFFF, rows[i].w, rows[i].r);
+        char sym[96]; sym[0] = 0;
+        const char *name = a2gspu_name_pc(base, sym, sizeof sym);
+        char ic[160]; memvu_blame_call_suffix(rows[i].g, ic, sizeof ic);
+        fprintf(f, "MEMVU BLAME: $%02X/%04X  visible_writes=%u  routed_reads=%u  (%s%s)\n",
+                (base >> 16) & 0xFF, base & 0xFFFF, rows[i].w, rows[i].r,
+                (name && name[0]) ? name : "unnamed", ic);
     }
     free(rows);
 }

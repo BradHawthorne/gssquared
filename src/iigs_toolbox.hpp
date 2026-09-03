@@ -958,6 +958,27 @@ struct IigsPendingCall {
 };
 inline std::vector<IigsPendingCall> g_iigs_pending;
 
+// The call in progress, for attribution (M7's shared-helper question): the
+// innermost pending toolbox call, as a word and as a name. The stack is kept
+// when TBTRACE or CALLSTREAM is armed, and whenever a consumer of the context
+// (BLAME, TRAP) is: a PC between two entry points is named after the
+// preceding entry, which is wrong for a shared helper, and the call that used
+// the helper is the fact that names it.
+inline bool g_iigs_callctx_on = false;
+// Arm the context: the landing hook that keeps the stack runs only when a's
+// rail that needs it is armed (base_6502.cpp), and this flag is one of them.
+inline void iigs_callctx_arm() { g_iigs_callctx_on = true; }
+inline uint16_t iigs_call_context_word() { return g_iigs_pending.empty() ? 0 : g_iigs_pending.back().callword; }
+inline const char *iigs_call_context(char *buf, size_t n) {
+    buf[0] = 0;
+    if (g_iigs_pending.empty()) return buf;
+    const IigsPendingCall &pc = g_iigs_pending.back();
+    if (pc.kind != 0 || pc.callword == 0) { snprintf(buf, n, "GSOS.class%d", pc.kind == 1 ? 1 : 0); return buf; }
+    iigs_toolnames_load_once();
+    snprintf(buf, n, "%s", iigs_tool_func_name(pc.callword & 0xFF, pc.callword >> 8).c_str());
+    return buf;
+}
+
 // Last (carry, A) result per tool word — consumed by the assertion gate.
 inline std::map<uint16_t, std::pair<bool, uint16_t>> g_iigs_last_result;
 // Last GS/OS dispatch carry-set error code (surfaces $1104 / $110A loader errors).
@@ -1115,7 +1136,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
         }
     }
 
-    if (!g_iigs_tbtrace_enabled && !g_callstream_on) return;
+    if (!g_iigs_tbtrace_enabled && !g_callstream_on && !g_iigs_callctx_on) return;
 
     // trace_from: begin logging only once PC first reaches the trigger address.
     if (g_iigs_trace_from && !g_iigs_trace_armed && lpc == g_iigs_trace_from)
