@@ -702,6 +702,13 @@ class KeyGloo
         void release_mods(uint8_t mods) { vars.currmod.value = (uint8_t)(vars.currmod.value & ~mods); }
         void key_up() { keysdown = 0; }   // release AKD after the poll window
 
+        // Observation-free AKD for the CTRL `cpu` ack. keysdown is private, and
+        // the only other way to see it is read_key_strobe(), which CONSUMES:
+        // it clears the strobe bit and pulls the next key out of the buffer.
+        // An instrument that has to eat a keypress to report one is not an
+        // instrument, so the ack reads this instead.
+        int any_key_down() const { return keysdown; }
+
         uint8_t a2gspu_hold = 0;   // ctrl-rail sticky force-key (see read_key_latch)
         void hold_key(uint8_t ascii) { a2gspu_hold = ascii ? (uint8_t)((ascii & 0x7F) | 0x80) : 0; }
 

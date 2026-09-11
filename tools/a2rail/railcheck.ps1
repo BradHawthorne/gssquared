@@ -36,11 +36,53 @@ param(
     [int]$Platform = 3,
     [switch]$All,
     [string]$Dir  = $(if ($env:A2RAIL_DIR) { $env:A2RAIL_DIR } else { Join-Path $env:TEMP 'a2rail' }),
-    [string]$Root = (Split-Path $PSScriptRoot -Parent),
-    [string]$BootDisk = "D:\Projects\a2vga\reference\A2DVI-Firmware\configutil\templates\DOS3.3_MASTER.dsk"
+    [string]$Root = "",
+    # Empty means "search". Resolved in the body -- see $bootSearch below -- and
+    # NOT defaulted to one absolute path on one developer's machine, which is how
+    # the widest check in this suite came to be skipped everywhere else.
+    [string]$BootDisk = ""
 )
 
 $ErrorActionPreference = "Stop"
+# $PSScriptRoot is empty inside param() defaults under `pwsh -File`, so anything
+# derived from the script's location is resolved here, in the body.
+$here = $PSScriptRoot
+# The old default was `Split-Path $PSScriptRoot -Parent`, which is <repo>\tools,
+# not the repo root -- this script lives in tools\a2rail, two levels down. It was
+# unused, so nothing noticed; it is used now. Same derivation as railparity.ps1.
+if (-not $Root) { $Root = (Resolve-Path (Join-Path $here '..\..')).Path }
+
+# BOOT DISK RESOLUTION. A candidate LIST, not one absolute path on one
+# developer's machine -- that is how the widest check in this suite came to be
+# skipped (and scored green) everywhere but here.
+#
+# ORDER IS BY EVIDENCE, not by convenience. The assertion below is a banner
+# match on the text page, so a candidate only counts if it is known to reach
+# that banner on BOTH platform 3 and platform 5. DOS3.3_MASTER.dsk is the only
+# image that has actually been observed doing so, so it stays first even though
+# it lives outside this repo. The repo-local images follow as fallbacks for a
+# machine without it: they boot, but their banners are NOT yet verified against
+# this assertion -- wizboot/wiz3boot are game loaders that take over the screen.
+# Promote one of them ahead of the a2vga path only after watching it pass on
+# both platforms; until then a wrong order would turn a real check red for a
+# reason that has nothing to do with the rail.
+#
+# The mount below is s6d1, a 5.25" drive, so .dsk images come before the ProDOS
+# .po ones (gsos601.po is a 3.5" image and will not boot from slot 6 at all --
+# it is last-resort evidence that SOMETHING was tried, and is expected to fail
+# loudly rather than to be skipped silently).
+$bootSearch = @(
+    $env:A2RAIL_BOOTDISK
+    'D:\Projects\a2vga\reference\A2DVI-Firmware\configutil\templates\DOS3.3_MASTER.dsk'
+    (Join-Path $Root 'wizboot.dsk')
+    (Join-Path $Root 'wiz3boot.dsk')
+    (Join-Path $Root 'gsos601.po')
+)
+if (-not $BootDisk) {
+    $found = $bootSearch | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if ($found) { $BootDisk = $found }
+}
+
 $ctl = Join-Path $PSScriptRoot "ctl.ps1"
 $tmp = Join-Path $Dir "railcheck"
 if (-not (Test-Path $tmp)) { New-Item -ItemType Directory $tmp -Force | Out-Null }
@@ -50,6 +92,24 @@ $PLATFORMS = @{ 0 = "Apple II"; 1 = "Apple II Plus"; 2 = "Apple IIe";
 
 function Say([string]$cmd) {
     return ((& $ctl -Dir $Dir -Cmd $cmd) -join "`n")
+}
+# THE SESSION IS THIS $Dir, not any GSSquared on the machine. This suite used to
+# decide both "is there a stale session to quit" and its own `Check "session"`
+# from `Get-Process -Name GSSquared`, which is a machine-wide question being
+# asked of a per-directory thing. The consequence was worse than a nuisance: if
+# THIS session failed to start while some other agent's emulator happened to be
+# running, `session` scored PASS and every later verb then ran against a
+# directory nothing was reading -- each one stalling or text-mismatching in a way
+# that reads as a rail bug rather than as an absent emulator.
+# session.ps1 writes session.json with the pid before it launches, so the pid in
+# this $Dir is the only witness that answers the question actually being asked.
+function Get-LiveSessionPid([string]$d) {
+    $f = Join-Path $d 'session.json'
+    if (-not (Test-Path $f)) { return 0 }
+    try { $s = Get-Content $f -Raw | ConvertFrom-Json } catch { return 0 }
+    if (-not $s.pid) { return 0 }
+    if (Get-Process -Id ([int]$s.pid) -ErrorAction SilentlyContinue) { return [int]$s.pid }
+    return 0
 }
 function PeekByte([string]$addr) {
     $o = Join-Path $tmp "p.bin"
@@ -72,12 +132,22 @@ function Test-Platform([int]$p) {
     Write-Host ""
     Write-Host ("=== platform {0}: {1} " -f $p, $PLATFORMS[$p]).PadRight(64,'=') -ForegroundColor Cyan
 
-    if (Get-Process -Name GSSquared -ErrorAction SilentlyContinue) { Say "quit" | Out-Null; Start-Sleep -Milliseconds 1200 }
+    if ((Get-LiveSessionPid $Dir) -ne 0) { Say "quit" | Out-Null; Start-Sleep -Milliseconds 1200 }
     & (Join-Path $PSScriptRoot "session.ps1") -Dir $Dir -Platform $p | Out-Null
-    if (-not (Get-Process -Name GSSquared -ErrorAction SilentlyContinue)) {
-        Check "session" $false "would not start"; return
+    # Exit 3 is session.ps1's "the rail process was TERMINATED externally". That
+    # is somebody else's kill landing on us -- a second harness, a stray sweep, a
+    # human closing a window -- and it is not a verdict on any rail verb. Passing
+    # it up lets dualsmoke record ABORT instead of filing it under our failures,
+    # which is how a reaper's own damage used to get blamed on the emulator.
+    if ($LASTEXITCODE -eq 3) {
+        Write-Host "railcheck: rail process terminated externally -- ABORTING, this is not a check failure" -ForegroundColor Yellow
+        exit 3
     }
-    Check "session" $true ("{0}" -f $PLATFORMS[$p])
+    $spid = Get-LiveSessionPid $Dir
+    if ($spid -eq 0) {
+        Check "session" $false "would not start -- no live pid in $Dir\session.json"; return
+    }
+    Check "session" $true ("{0}, pid {1}" -f $PLATFORMS[$p], $spid)
 
     # ---- poke/read round trip, then the SAME address proved by EXECUTION ----
     # A write and a read that share a broken assumption agree with each other.
@@ -213,7 +283,10 @@ function Test-Platform([int]$p) {
     # memory map, the CPU and the MMU together -- none of which the verb tests
     # above touch. Passing every rail check on an emulator that can no longer
     # boot a floppy would be a perfect score on the wrong exam.
-    if (Test-Path $BootDisk) {
+    # $BootDisk is "" when the search below found nothing, and `Test-Path ""`
+    # throws under ErrorActionPreference=Stop -- which would abort the suite
+    # instead of reporting the missing disk. Ask whether we have one first.
+    if ($BootDisk -and (Test-Path $BootDisk)) {
         Say ("mount s6d1 {0}" -f ($BootDisk -replace '\\','/')) | Out-Null
         Say "reset" | Out-Null
         Say "run 600" | Out-Null
@@ -226,9 +299,18 @@ function Test-Platform([int]$p) {
             $seen = -join ($by[0..$n] | ForEach-Object {
                 $c = $_ -band 0x7F; if ($c -ge 32 -and $c -lt 127) { [char]$c } else { ' ' } })
         }
-        Check "boots a real disk" ($seen -match "APPLE II") "text page shows the ROM banner after a floppy boot"
+        # Name the image. Which disk made the claim is part of the claim: the
+        # list is searched, so the answer differs between machines and a bare
+        # PASS would not say which one it stands for.
+        Check "boots a real disk" ($seen -match "APPLE II") ("text page shows the ROM banner after a floppy boot -- " + (Split-Path $BootDisk -Leaf))
     } else {
-        Check "boots a real disk" $true "skipped -- no boot disk at $BootDisk"
+        # NOT a pass. This branch used to hand the suite a green tick and a line
+        # of the ALL GREEN tally for a check it never ran -- on every machine
+        # without one developer's a2vga checkout, which is every machine but one.
+        # The comment directly above calls this the widest check here; a suite
+        # that scores it as passed while skipping it is the perfect score on the
+        # wrong exam that comment warns about, printed in green.
+        Check "boots a real disk" $false ("NO BOOT DISK AVAILABLE -- this suite cannot make its widest claim. Searched: " + (($bootSearch | Where-Object { $_ }) -join '; ') + " (set A2RAIL_BOOTDISK or pass -BootDisk)")
     }
 
     # ---- reset leaves the machine somewhere sane ---------------------------

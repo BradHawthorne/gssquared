@@ -24,6 +24,7 @@
 #include "iigs_toolbox.hpp"
 #include "mmus/mmu_ii.hpp"
 #include "mmus/mmu_iigs.hpp"
+#include "a2gspu_assert.hpp"   // CTRL `assert` == the A2GSPU_ASSERT env rail, one evaluator
 
 #include "NClock.hpp"
 #include "devices/adb/keygloo.hpp"
@@ -926,11 +927,20 @@ inline bool try_visual(const char *line, char *result, size_t rsz, computer_t *c
                 }
             }
             bool ok = a2png::write_gray(fbuf, img.data(), ow, oh);
-            snprintf(result, rsz,
-                     ok ? "status=OK png profile=bits-mono %s page%d %dx%d scale%d "
-                          "lit=%ld -> %s"
-                        : "status=FAIL png-write-fail %s page%d %dx%d scale%d lit=%ld %s",
-                     dbl ? "DHGR" : "HGR", page, ow, oh, scale, lit, fbuf);
+            // ONE FORMAT PER OUTCOME. A single snprintf with a ternary-selected
+            // format shares one argument list between two conversion lists, and
+            // nothing makes them stay in step -- the sibling `pngc` below had
+            // exactly this shape with a one-%s failure arm against four
+            // arguments, and the failure path segfaulted. Correct-by-accident is
+            // how that got in, so neither arm shares a format any more.
+            if (ok)
+                snprintf(result, rsz,
+                         "status=OK png profile=bits-mono %s page%d %dx%d scale%d lit=%ld -> %s",
+                         dbl ? "DHGR" : "HGR", page, ow, oh, scale, lit, fbuf);
+            else
+                snprintf(result, rsz,
+                         "status=FAIL png-write-fail %s page%d %dx%d scale%d lit=%ld %s",
+                         dbl ? "DHGR" : "HGR", page, ow, oh, scale, lit, fbuf);
         } else {
             snprintf(result, rsz, "status=FAIL png-parse-fail");
         }
@@ -976,10 +986,22 @@ inline bool try_visual(const char *line, char *result, size_t rsz, computer_t *c
                     }
                 }
                 bool ok = a2png::write_gray(fbuf, img.data(), ow, oh);
-                snprintf(result, rsz,
-                         ok ? "status=OK pngc profile=mono page=%d %dx%d -> %s"
-                            : "status=FAIL pngc-write-fail %s",
-                         page, ow, oh, fbuf);
+                // THE FAILURE ARM USED TO CRASH THE EMULATOR. Both outcomes
+                // shared one snprintf whose FAIL format had a single %s against
+                // (page, ow, oh, fbuf) -- so an unwritable path printed an int
+                // through a char*, and the process died before it could ack.
+                // An instrument that takes the machine down instead of saying
+                // "I could not write that file" costs the whole session, and no
+                // gate could see it because nothing issues pngc. One format per
+                // outcome now, so the conversion lists cannot drift apart.
+                if (ok)
+                    snprintf(result, rsz,
+                             "status=OK pngc profile=mono page=%d %dx%d -> %s",
+                             page, ow, oh, fbuf);
+                else
+                    snprintf(result, rsz,
+                             "status=FAIL pngc-write-fail profile=mono page=%d %dx%d -> %s",
+                             page, ow, oh, fbuf);
             } else {
                 std::vector<uint8_t> rgb(560 * 192 * 3);
                 a2dhgr::render_page_rgb(flat + 0x10000 + base, flat + base, rgb.data(), 1);
@@ -1001,10 +1023,16 @@ inline bool try_visual(const char *line, char *result, size_t rsz, computer_t *c
                     }
                 }
                 bool ok = a2png::write_rgb(fbuf, scaled.data(), ow, oh);
-                snprintf(result, rsz,
-                         ok ? "status=OK pngc profile=4dot page=%d %dx%d -> %s"
-                            : "status=FAIL pngc-write-fail %s",
-                         page, ow, oh, fbuf);
+                // Same crash, and this is the DEFAULT profile (pbuf = "4dot"),
+                // so it is the arm an agent reaches without asking for one.
+                if (ok)
+                    snprintf(result, rsz,
+                             "status=OK pngc profile=4dot page=%d %dx%d -> %s",
+                             page, ow, oh, fbuf);
+                else
+                    snprintf(result, rsz,
+                             "status=FAIL pngc-write-fail profile=4dot page=%d %dx%d -> %s",
+                             page, ow, oh, fbuf);
             }
         } else {
             snprintf(result, rsz, "status=FAIL pngc-parse-fail");
@@ -1343,52 +1371,34 @@ inline bool try_trace_break(const char *line, char *result, size_t rsz) {
 inline bool try_assert_dhgr(const char *line, char *result, size_t rsz,
                             computer_t *computer) {
     if (!strncmp(line, "assert ", 7)) {
-        const char *p = line + 7;
-        int nfail = 0, npass = 0;
+        // ONE EVALUATOR, NOT TWO. This verb used to carry its own assertion
+        // engine: sscanf("peek:%x==%x") and nothing else. Same rail name and
+        // same doc row as A2GSPU_ASSERT, and against the same binary it took a
+        // different grammar (== only, against six operators), a different field
+        // set (peek: only, against ten kinds -- `assert scb_mode==0` answered
+        // "parse-fail" on the surface whose registry row advertises it), a
+        // different value parse (`==169` silently truncated to $69), a
+        // different print base (got=A9 where the spike says actual=169), and --
+        // the one that mattered -- no probe_readable check at all, so
+        // `assert peek:00C029==EE` reported status=PASS against the floating
+        // bus while `read C029 1` in the SAME session correctly refused.
+        //
+        // It now answers with the env rail's own primitives. See
+        // a2gspu_assert.hpp for what is shared, what is still duplicated, and
+        // which gate refuses to let the two drift apart again.
+        //
+        // e1 ONLY ON A IIgs. The SHR fields want the Mega II bank-$E1 image,
+        // which is a IIgs object; handing them aux RAM off a IIe would report a
+        // video mode the machine does not have. nullptr here means those fields
+        // come back unevaluated, which is the true answer.
+        const uint8_t *e1 = nullptr;
+        if (MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(rail_mmu(computer)))
+            e1 = gs->get_megaii_memory_base() + 0x10000;
         char detail[600] = {0};
-        size_t dlen = 0;
-        while (*p) {
-            while (*p == ' ' || *p == ';') p++;
-            if (!*p) break;
-            const char *start = p;
-            while (*p && *p != ';') p++;
-            char tok[128];
-            size_t tl = (size_t)(p - start);
-            if (tl >= sizeof tok) tl = sizeof tok - 1;
-            memcpy(tok, start, tl);
-            tok[tl] = 0;
-            while (tl > 0 && tok[tl - 1] == ' ') tok[--tl] = 0;
-            unsigned bank = 0, addr = 0, want = 0;
-            uint32_t full = 0;
-            bool ok_parse = false;
-            if (sscanf(tok, "peek:%x:%x==%x", &bank, &addr, &want) == 3) {
-                full = ((bank & 0xFF) << 16) | (addr & 0xFFFF);
-                ok_parse = true;
-            } else if (sscanf(tok, "peek:%x==%x", &addr, &want) == 2) {
-                full = addr & 0xFFFFFF;
-                ok_parse = true;
-            }
-            if (!ok_parse) {
-                nfail++;
-                if (dlen + 40 < sizeof detail)
-                    dlen += (size_t)snprintf(detail + dlen, sizeof detail - dlen,
-                                             " parse-fail");
-                continue;
-            }
-            uint8_t got = rail_mmu(computer) ? rail_mmu(computer)->probe_peek(full) : (uint8_t)0xFF;
-            if (got == (uint8_t)(want & 0xFF)) {
-                npass++;
-            } else {
-                nfail++;
-                if (dlen + 48 < sizeof detail)
-                    dlen += (size_t)snprintf(
-                        detail + dlen, sizeof detail - dlen,
-                        " FAIL peek:%06X got=%02X want=%02X", (unsigned)full,
-                        (unsigned)got, (unsigned)(want & 0xFF));
-            }
-        }
-        snprintf(result, rsz, "status=%s assert pass=%d fail=%d path=probe_peek%s",
-                 nfail ? "FAIL" : "PASS", npass, nfail, detail);
+        a2assert::Tally t =
+            a2assert::eval(line + 7, computer ? computer->cpu : nullptr, e1,
+                           detail, sizeof detail);
+        a2assert::format_ack(t, detail, result, rsz);
         return true;
     }
     if (!strncmp(line, "dhgr-calibrate", 14)) {
@@ -1553,9 +1563,37 @@ inline void format_cpu_line(computer_t *computer, char *out, size_t outsz) {
     cpu_state *c = computer->cpu;
     keyboard_state_t *kb =
         (keyboard_state_t *)computer->get_module_state(MODULE_KEYBOARD);
-    int akd = kb ? kb->key_down_count : -1;
-    uint8_t kbd = kb ? kb->kb_key_strobe
-                     : (rail_mmu(computer) ? rail_mmu(computer)->probe_peek(0xC000) : 0);
+    // THE $C000 FALLBACK REPORTED BUS NOISE AS A KEYSTROKE.
+    //
+    // The comment above already said "never probe_peek($C000) (filler)", and
+    // the line underneath it did exactly that. It only ever fired on a IIgs --
+    // MODULE_KEYBOARD is never registered there, the IIgs routes keys through
+    // MODULE_KEYGLOO -- so every single IIgs `cpu` ack took the fallback, and
+    // MMU_IIgs::probe_peek returns floating_bus_read() for $C0xx. The ack said
+    // KBD=EE AKD=-1 forever, unchanged across a 2.8M-cycle run, while `read
+    // C000 1` on the SAME address in the SAME session correctly refused:
+    // "read-unreadable ... the whole range is handler-backed (floating bus,
+    // not memory)". Two instruments, one address, two answers, and the one
+    // that answered confidently was the one making it up.
+    //
+    // A probed byte must never reach this field again, so there is no
+    // probe_peek here at all. The IIgs latch comes from the ADB micro via
+    // read_key_latch(), which is observation-free; its twin read_key_strobe()
+    // is the CONSUMING one and must not be used to report state. When neither
+    // keyboard exists the field says so rather than inventing a byte -- "??"
+    // is a legible absence and $EE was not. kbd_src= names which model
+    // produced the value (AGENTIC_ORACLE G1: no silent modes).
+    keygloo_state_t *kg =
+        (keygloo_state_t *)computer->get_module_state(MODULE_KEYGLOO);
+    char kbdbuf[48];
+    if (kb)
+        snprintf(kbdbuf, sizeof kbdbuf, "KBD=%02X AKD=%d kbd_src=module",
+                 (unsigned)kb->kb_key_strobe, kb->key_down_count);
+    else if (kg && kg->kg)
+        snprintf(kbdbuf, sizeof kbdbuf, "KBD=%02X AKD=%d kbd_src=adb-latch",
+                 (unsigned)kg->kg->read_key_latch(), kg->kg->any_key_down());
+    else
+        snprintf(kbdbuf, sizeof kbdbuf, "KBD=?? AKD=? kbd_src=none");
     // SHOW THE REGISTERS THE CODE IS ACTUALLY USING.
     //
     // This printed A/X/Y masked to 8 bits and never showed D or the data bank at
@@ -1596,12 +1634,12 @@ inline void format_cpu_line(computer_t *computer, char *out, size_t outsz) {
                       (int)(c->_M & 1), (int)(c->_X & 1));
 
     snprintf(out, outsz,
-        "PC=%02X:%04X A=%s X=%s Y=%s SP=%04X%s P=%02X E=%d HALT=%d STP=%d RDY=%d KBD=%02X AKD=%d",
+        "PC=%02X:%04X A=%s X=%s Y=%s SP=%04X%s P=%02X E=%d HALT=%d STP=%d RDY=%d %s",
         (unsigned)((c->full_pc >> 16) & 0xFF), (unsigned)(c->full_pc & 0xFFFF),
         abuf, xbuf, ybuf,
         (unsigned)(c->sp & 0xFFFF), bank, (unsigned)(c->p & 0xFF),
         (int)(c->E & 1), (int)(c->halt ? 1 : 0), (int)(c->clock_stopped ? 1 : 0),
-        (int)(c->rdy ? 1 : 0), (unsigned)kbd, akd);
+        (int)(c->rdy ? 1 : 0), kbdbuf);
 }
 
 // A fired breakpoint (or save-at) leaves cpu->halt == HLT_USER, and
@@ -1657,18 +1695,27 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
                      (int)computer->cpu->halt);
         } else if (dc == 0) {
             snprintf(result, rsz,
-                     "status=FAIL RAN NOTHING: %d frame(s), 0 cycles, PC still $%04X "
+                     "status=FAIL RAN NOTHING: %d frame(s), 0 cycles, PC still $%02X:%04X "
                      "-- exec_mode=%d clock_mode=%d instr_left=%d halt=%d",
-                     ran, (unsigned)(pc1 & 0xFFFF),
+                     ran, (unsigned)((pc1 >> 16) & 0xFF), (unsigned)(pc1 & 0xFFFF),
                      (int)computer->execution_mode,
                      (int)(computer->clock ? computer->clock->get_clock_mode() : -1),
                      (int)computer->instructions_left,
                      (int)computer->cpu->halt);
         } else {
+            // BANK OR THE ARROW IS A LIE. pc0/pc1 are full 24-bit program
+            // counters, and printing them masked to 16 bits made a cold IIgs
+            // boot -- which really goes $00:FA62 -> $FF:FCDE -- ack as
+            // "PC $FA62->$FCDE", two addresses in a bank it never names. A
+            // 65816 run that crosses banks is the normal case on a IIgs, not an
+            // edge, so the one field that says where the run went must carry
+            // the bank. Format now matches format_cpu_line's PC=%02X:%04X, so
+            // one parser reads both.
             snprintf(result, rsz,
-                     "status=OK ran=%d cycles=%llu (in-command) PC $%04X->$%04X%s%s",
+                     "status=OK ran=%d cycles=%llu (in-command) PC $%02X:%04X->$%02X:%04X%s%s",
                      ran, (unsigned long long)dc,
-                     (unsigned)(pc0 & 0xFFFF), (unsigned)(pc1 & 0xFFFF),
+                     (unsigned)((pc0 >> 16) & 0xFF), (unsigned)(pc0 & 0xFFFF),
+                     (unsigned)((pc1 >> 16) & 0xFF), (unsigned)(pc1 & 0xFFFF),
                      armed ? armed : "", rsm);
         }
         soft_watch_after(computer, result, rsz);

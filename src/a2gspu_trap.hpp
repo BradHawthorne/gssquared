@@ -580,12 +580,18 @@ inline void emit_payloads(std::string &s, const std::vector<Payload> &ps, Trap &
         case Payload::MEM: {
             uint32_t base = eval(p.e, cpu);
             snprintf(b, sizeof b, ",\"mem\":{\"at\":%u,\"expr\":\"", (unsigned)base);
-            s += b; s += p.e.src; s += "\",\"d\":\""; hexdump(s, cpu, base, p.n, false); s += "\"}";
+            // the expression text is spec-supplied: escape it, or a quote or
+            // backslash in expr= closes the string early and the line stops
+            // being JSON (the record contract, M1)
+            s += b; a2record::escape(s, p.e.src.c_str()); s += "\",\"d\":\""; hexdump(s, cpu, base, p.n, false); s += "\"}";
             break;
         }
         case Payload::FIELD:
             if (!f.empty()) f += ',';
-            snprintf(b, sizeof b, "\"%s\":%u", p.name.c_str(), (unsigned)eval(p.e, cpu)); f += b;
+            // the field name is spec-supplied too -- escaped, never snprintf'd
+            // raw into the key position. The value stays numeric.
+            f += '"'; a2record::escape(f, p.name.c_str()); f += "\":";
+            snprintf(b, sizeof b, "%u", (unsigned)eval(p.e, cpu)); f += b;
             break;
         case Payload::TEXT: {
             std::string page; gtap_page_json(cpu, page);
@@ -633,14 +639,18 @@ inline void emit(Trap &t, cpu_state *cpu, uint64_t cycles, bool is_exit, uint32_
     s += ",\"pc\":\""; pc_str(s, pc); s += '"';
     {   // names by default: a documented entry point or an application symbol,
         // and an explicit null otherwise -- never a bare address passing for a name
+        // A symbol name is whatever syms.dbg put between the quotes -- it is
+        // not this rail's text. It goes through the writer's escaper like any
+        // other string, so a name holding a quote or a backslash cannot break
+        // the line out of JSON.
         char sym[96];
-        if (a2gspu_name_pc(pc, sym, sizeof sym)[0]) { s += ",\"sym\":\""; s += sym; s += '"'; }
-        else s += ",\"sym\":null";
+        if (a2gspu_name_pc(pc, sym, sizeof sym)[0]) rec.str("sym", sym);
+        else rec.null("sym");
     }
     {   // the toolbox call in progress: the fact that names a shared helper
         char ic[128];
-        if (iigs_call_context(ic, sizeof ic)[0]) { s += ",\"incall\":\""; s += ic; s += '"'; }
-        else s += ",\"incall\":null";
+        if (iigs_call_context(ic, sizeof ic)[0]) rec.str("incall", ic);
+        else rec.null("incall");
     }
     if (extra) s += extra;
     snprintf(b, sizeof b, ",\"heavy\":%d", heavy ? 1 : 0); s += b;

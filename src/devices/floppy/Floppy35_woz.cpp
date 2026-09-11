@@ -225,7 +225,7 @@ void Floppy35_woz::trigger_control() {
         case 0b1000:  // set step direction outward (toward lower tracks)
             step_dir = 1;
             break;
-        case 0x1001:  // reset disk-switched flag (firmware clears the
+        case 0b1001:  // reset disk-switched flag (firmware clears the
                       // "user ejected while mounted" latch here)
             disk_switched = false;
             break;

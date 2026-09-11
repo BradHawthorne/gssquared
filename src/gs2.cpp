@@ -2204,17 +2204,55 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             // A verb that invents a filename out of an address it was asked to
             // disassemble is not a parse failure the caller can see. Require the
             // two numbers, and require something left over to be the path.
-            unsigned int addr = 0; int n = 20, off = 0;
-            if (sscanf(line + 4, "%x %d %n", &addr, &n, &off) == 2 && off > 0 && line[4 + off]) {
+            //
+            // THE ADDRESS IS PARSED THE WAY EVERY OTHER VERB PARSES ONE.
+            // This used a bare "%x", so `dis 7E:0000 ...` -- the form load,
+            // read and poke all accept -- answered dis-parse-fail. It goes
+            // through a2ctrl::parse_addr now; the both-conversions-or-neither
+            // guard above is kept by requiring three fields AND a parsable
+            // address, so `dis 0400` still fails instead of inventing a file.
+            //
+            // GRAMMAR: dis <addr> <n> <file> [m8|m16] [x8|x16]
+            // The widths default to the LIVE CPU's M/X/E, because a 65816
+            // listing decoded at the wrong immediate width desynchronises from
+            // the first 16-bit immediate and invents everything after it. The
+            // override exists for code that has not run yet, where the only
+            // authority on the mode is the source Rosetta assembled.
+            char atok[64] = {0}, ftok[512] = {0}, w1[16] = {0}, w2[16] = {0};
+            uint32_t addr = 0; int n = 20;
+            const int nf = sscanf(line + 4, "%63s %d %511s %15s %15s", atok, &n, ftok, w1, w2);
+            if (nf >= 3 && ftok[0] && a2ctrl::parse_addr(atok, &addr)) {
                 if (n <= 0 || n > 512) n = 20;
-                Disassembler dis(rail_mmu(computer), computer->cpu->cpu_type);
+                cpu_state *dc = computer->cpu;
+                const bool nat816 = (dc->cpu_type == PROCESSOR_65816) && ((dc->E & 1) == 0);
+                bool dm8 = !nat816 || (dc->_M & 1);
+                bool dx8 = !nat816 || (dc->_X & 1);
+                const char *wsrc = "cpu";
+                for (const char *w : { (const char *)w1, (const char *)w2 }) {
+                    if (!w[0]) continue;
+                    if      (!strcmp(w, "m8"))  { dm8 = true;  wsrc = "arg"; }
+                    else if (!strcmp(w, "m16")) { dm8 = false; wsrc = "arg"; }
+                    else if (!strcmp(w, "x8"))  { dx8 = true;  wsrc = "arg"; }
+                    else if (!strcmp(w, "x16")) { dx8 = false; wsrc = "arg"; }
+                }
+                Disassembler dis(rail_mmu(computer), dc->cpu_type);
+                dis.setMX(dm8, dx8);
                 dis.setAddress(addr);
                 std::vector<std::string> lines = dis.disassemble(n);
-                FILE *df = fopen(line + 4 + off, "wb");
+                FILE *df = fopen(ftok, "wb");
                 if (df) {
+                    // THE LISTING SAYS WHAT IT ASSUMED. Entry widths are an
+                    // assumption about a static byte stream, not a measurement
+                    // of it, and a listing that does not say so reads as fact.
+                    fprintf(df, "; dis $%02X/%04X n=%d entry widths m=%d x=%d (source=%s); "
+                                "REP/SEP followed as decoded, XCE assumed 8-bit\n",
+                            (unsigned)((addr >> 16) & 0xFF), (unsigned)(addr & 0xFFFF),
+                            n, dm8 ? 8 : 16, dx8 ? 8 : 16, wsrc);
                     for (auto &l : lines) fprintf(df, "%s\n", l.c_str());
                     fclose(df);
-                    snprintf(result, sizeof result, "status=OK dis n=%d", n);
+                    snprintf(result, sizeof result,
+                             "status=OK dis n=%d mx=m%dx%d@start src=%s unreadable=%d",
+                             n, dm8 ? 8 : 16, dx8 ? 8 : 16, wsrc, dis.unreadable());
                 } else {
                     snprintf(result, sizeof result, "status=FAIL dis-fail");
                 }
@@ -3536,13 +3574,54 @@ static void run_headless_spike(GS2AppState *state) {
         }
         FILE *rb = (state->mmu_iigs) ? fopen(binpath, "rb") : nullptr;
         if (rb) {
-            int n = 0, c;
-            while ((c = fgetc(rb)) != EOF) { state->mmu_iigs->write(loadaddr + n, (uint8_t)c); n++; }
+            // THE INJECTION IS VERIFIED, OR IT DID NOT HAPPEN.
+            //
+            // This used to be a hand-rolled `while (fgetc) mmu->write(loadaddr + n)`
+            // loop that printed the FILE's size as the byte count. Three things
+            // were wrong with it and all three reported success:
+            //   * no read-back, so `RUN_BIN=rt.bin@00D000` wrote 13 bytes into
+            //     bank-0 ROM, printed "injected 13 bytes at $00D000; PC set."
+            //     and the CPU ran ROM;
+            //   * a flat 24-bit add, so `@7EFFFE` spilled the third byte into
+            //     bank $7F while claiming it landed at $7E;
+            //   * no language-card bank-in, which is why the $D000 write went
+            //     nowhere at all.
+            // a2ctrl::load_file_at fixes all three (it banks the language card
+            // in for a bank-0 $D000+ load -- two reads of $C08B, a real
+            // soft-switch side effect this rail did not previously perform, and
+            // must, for such a write to land) and verifies every byte by
+            // probe_peek before returning true.
+            //
+            // ONE DELIBERATE DIFFERENCE FROM load_file_at'S OWN POLICY: it
+            // WRAPS to (start+n)&0xFFFF rather than spilling. A wrap is quieter
+            // than a spill and worse -- a Rosetta binary folded back over its
+            // own entry point still "loads" -- so RUN_BIN refuses the case
+            // outright, before a single byte is written.
+            fseek(rb, 0, SEEK_END);
+            const long rbsz = ftell(rb);
             fclose(rb);
-            bus_trace_reset(); slot_bus_reset(); mmu_state_trace_reset();   // isolate the injected program
-            computer->cpu->full_pc = loadaddr;                              // jump to it (pb = addr>>16)
-            printf("A2GSPU RUN: injected %d bytes at $%06X after %d boot frames; PC set.\n",
-                   n, loadaddr, spike_i);
+            const unsigned lo16 = loadaddr & 0xFFFF, bank8 = (loadaddr >> 16) & 0xFF;
+            if (rbsz > 0 && (long)lo16 + rbsz > 0x10000) {
+                fprintf(stderr, "A2GSPU RUN: FAIL '%s' is %ld bytes at $%02X/%04X -- byte %ld "
+                        "would wrap to $%02X/0000 and overwrite the start of the bank "
+                        "(the loader confines a write to one bank) -- aborting SPIKE (exit 2)\n",
+                        binpath, rbsz, bank8, lo16, (long)(0x10000 - lo16), bank8);
+                exit(2);
+            }
+            long nb = 0; char lerr[256] = {0};
+            if (a2ctrl::load_file_at(computer, loadaddr, binpath, &nb, lerr, sizeof lerr)) {
+                bus_trace_reset(); slot_bus_reset(); mmu_state_trace_reset();   // isolate the injected program
+                computer->cpu->full_pc = loadaddr;                              // jump to it (pb = addr>>16)
+                printf("A2GSPU RUN: injected %ld bytes at $%02X/%04X-$%02X/%04X (verified by read-back) "
+                       "after %d boot frames; PC set.\n",
+                       nb, bank8, lo16, bank8, (unsigned)((lo16 + (unsigned)nb - 1) & 0xFFFF), spike_i);
+            } else {
+                // Same refusal as the missing-binary branch below, for the same
+                // reason: a run whose binary did not arrive is the boot disk
+                // wearing the binary's name.
+                fprintf(stderr, "A2GSPU RUN: FAIL %s -- aborting SPIKE (exit 2)\n", lerr);
+                exit(2);
+            }
         } else if (!state->mmu_iigs) {
             a2gspu_warn("A2GSPU RUN", "no IIgs MMU on this platform -- skipped (use -p 5)");
         } else {
@@ -3812,32 +3891,25 @@ static void run_headless_spike(GS2AppState *state) {
                 uint8_t b = e1a[a]; h = (h ^ b) * HOUSE_FNV_PRIME;
                 if (b) nz++; if (!sn[b]) { sn[b] = 1; nd++; }
             }
-            int gate_rc = 0; bool any_gate = false;
+            int gate_rc = 0; bool any_gate = false, gate_blessed = false;
             if (const char *gf = SDL_getenv("A2GSPU_GOLDEN")) {
                 any_gate = true;
-                FILE *gp = fopen(gf, "r");
-                if (gp) {
-                    unsigned long long g = 0;
-                    if (fscanf(gp, "%llx", &g) == 1) {
-                        int match = (g == h);
-                        printf("IIGS GOLDEN: %s (cur=%016llX want=%016llX)\n",
-                               match ? "MATCH" : "DIFF", (unsigned long long)h, g);
-                        if (!match) gate_rc = 1;   // the SHR golden now GATES the exit
-                    } else {
-                        // The golden file exists/opens but its first token is not hex
-                        // (empty/blank/corrupt). Treat that as a HARD gate failure, not a
-                        // silent PASS — a corrupt golden must never disable the gate. This
-                        // is distinct from "file absent -> bless" (the fopen("w") branch).
-                        printf("IIGS GOLDEN: ERROR — golden file '%s' exists but contains no "
-                               "parseable hash (cur=%016llX); failing gate.\n",
-                               gf, (unsigned long long)h);
-                        gate_rc = 1;
-                    }
-                    fclose(gp);
-                } else if ((gp = fopen(gf, "w"))) {
-                    fprintf(gp, "%016llX\n", (unsigned long long)h); fclose(gp);
-                    printf("IIGS GOLDEN: blessed %s = %016llX\n", gf, (unsigned long long)h);
-                }
+                // ONE implementation, a2dhgr::golden_gate_file. This was a third
+                // hand-rolled copy of it and the copy had drifted in the way
+                // copies do: it had no final `else`, so a golden path under a
+                // directory that does not exist printed NOTHING -- not a line
+                // with GOLDEN in it -- and the run still reported gate=PASS
+                // rc=0 and exited 0. Docs/A2GSPU_RAILS.md states the opposite
+                // principle outright: an output sink that cannot be opened
+                // aborts, because a run that measured something other than what
+                // it was asked to is worse than no run.
+                gate_rc |= a2dhgr::golden_gate_file(gf, h, "IIGS GOLDEN",
+                                                    "shr-window", &gate_blessed);
+                // A bless compared nothing. Warn so warnings= is non-zero and
+                // A2GSPU_STRICT=1 refuses to call the run OK; the verdict word
+                // below says BLESSED rather than PASS for the same reason.
+                if (gate_blessed)
+                    a2gspu_warn("IIGS GOLDEN", "blessed a missing golden; nothing was compared");
             }
             if (const char *eh = SDL_getenv("A2GSPU_EXPECT_HASH")) {
                 // The inline form of GOLDEN: a hash pinned in the invocation
@@ -3851,8 +3923,18 @@ static void run_headless_spike(GS2AppState *state) {
                 if (!match) gate_rc = 1;
             }
             if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
-                any_gate = true;
-                gate_rc |= iigs_eval_asserts(as, computer->cpu, e1a, nz, nd);
+                // ARMED BY A NON-EMPTY SPEC, NOT BY THE VARIABLE'S PRESENCE.
+                // Arming on presence alone made A2GSPU_ASSERT="" report
+                // gate=PASS: a verdict on a question nobody asked. A harness
+                // that exports the variable unconditionally-empty wants no
+                // gate, so it gets gate=none; a non-empty spec that parses to
+                // nothing is a different thing and the evaluator fails it.
+                if (a2gspu_assert_armed(as)) {
+                    any_gate = true;
+                    gate_rc |= iigs_eval_asserts(as, computer->cpu, e1a, nz, nd);
+                } else {
+                    printf("IIGS ASSERT: A2GSPU_ASSERT is set but empty -- no gate armed (gate=none)\n");
+                }
             }
             // machine-readable status line for the corpus harness (exit code stays
             // gate-driven for harness compat; the status NAME is the richer category)
@@ -3865,8 +3947,15 @@ static void run_headless_spike(GS2AppState *state) {
                            : g_iigs_hang_detected    ? "HANG"
                            : g_iigs_last_gsos_err    ? "GSOS_ERROR"
                            : iigs_boot_incomplete()  ? "STALLED" : "OK";
-            iigs_emit_status(st, any_gate ? gate_rc : 0,
-                             any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
+            // THREE OUTCOMES, NOT TWO. "compared and matched" and "compared
+            // nothing, wrote the file" both returned 0 and both printed
+            // gate=PASS, so a first run against a fresh golden path was
+            // byte-indistinguishable from a verified one on the machine-readable
+            // line. BLESSED is its own word. rc and the exit code stay 0.
+            const char *gate_word = !any_gate    ? "none"
+                                  : gate_rc      ? "FAIL"
+                                  : gate_blessed ? "BLESSED" : "PASS";
+            iigs_emit_status(st, any_gate ? gate_rc : 0, gate_word,
                              g_iigs_last_gsos_err, g_iigs_brk_count, scb, h,
                              computer->clock->get_cycles());
             if (SDL_getenv("A2GSPU_STRICT") && g_a2gspu_warnings) {
@@ -3874,7 +3963,7 @@ static void run_headless_spike(GS2AppState *state) {
                 exit(3);
             }
             if (any_gate) {
-                printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
+                printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_word);
                 exit(gate_rc);
             }
         } else {
@@ -3959,38 +4048,34 @@ static void run_headless_spike(GS2AppState *state) {
                 }
             }
 
-            int gate_rc = 0; bool any_gate = false;
+            int gate_rc = 0; bool any_gate = false, gate_blessed = false;
             if (const char *dgf = SDL_getenv("A2GSPU_DHGR_GOLDEN")) {
                 any_gate = true;
                 if (!dhgr_ok) {
                     printf("DHGR GOLDEN: ERROR — no flat image for hash\n");
                     gate_rc = 1;
                 } else {
+                    bool b = false;
                     gate_rc |= a2dhgr::golden_gate_file(dgf, dhgr_h, "DHGR GOLDEN",
-                                                         dhgr_pname);
+                                                         dhgr_pname, &b);
+                    if (b) {
+                        gate_blessed = true;
+                        a2gspu_warn("DHGR GOLDEN", "blessed a missing golden; nothing was compared");
+                    }
                 }
             }
             if (const char *gf = SDL_getenv("A2GSPU_GOLDEN")) {
                 any_gate = true;
-                FILE *gp = fopen(gf, "r");
-                if (gp) {
-                    unsigned long long g = 0;
-                    if (fscanf(gp, "%llx", &g) == 1) {
-                        int match = (g == h);
-                        printf("HGR GOLDEN: %s (cur=%016llX want=%016llX)\n",
-                               match ? "MATCH" : "DIFF", (unsigned long long)h, g);
-                        if (!match) gate_rc = 1;
-                    } else {
-                        // Corrupt/empty golden must never silently disable the gate.
-                        printf("HGR GOLDEN: ERROR — golden file '%s' has no parseable "
-                               "hash (cur=%016llX); failing gate.\n",
-                               gf, (unsigned long long)h);
-                        gate_rc = 1;
-                    }
-                    fclose(gp);
-                } else if ((gp = fopen(gf, "w"))) {
-                    fprintf(gp, "%016llX\n", (unsigned long long)h); fclose(gp);
-                    printf("HGR GOLDEN: blessed %s = %016llX\n", gf, (unsigned long long)h);
+                // The II-family twin of the IIgs block above, and it carried the
+                // same two defects: a hand-rolled copy of golden_gate_file with
+                // no "cannot open or create" branch (silent gate=PASS on an
+                // unwritable path), and a bless that reported PASS for a
+                // comparison that never happened.
+                bool b = false;
+                gate_rc |= a2dhgr::golden_gate_file(gf, h, "HGR GOLDEN", "hgr-page", &b);
+                if (b) {
+                    gate_blessed = true;
+                    a2gspu_warn("HGR GOLDEN", "blessed a missing golden; nothing was compared");
                 }
             }
             if (const char *eh = SDL_getenv("A2GSPU_EXPECT_HASH")) {
@@ -4005,17 +4090,26 @@ static void run_headless_spike(GS2AppState *state) {
                 if (!match) gate_rc = 1;
             }
             if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
-                any_gate = true;
-                // peek:/nonzero/distinct are machine-independent; the SHR-only fields
-                // (scb_mode, idxN) are meaningless here and report as such.
-                gate_rc |= iigs_eval_asserts(as, computer->cpu, hgr, nz, nd);
+                // Same arm rule as the IIgs block above: an empty spec arms no
+                // gate rather than passing one.
+                if (a2gspu_assert_armed(as)) {
+                    any_gate = true;
+                    // peek:/nonzero/distinct are machine-independent; the SHR-only fields
+                    // (scb_mode, idxN) are meaningless here and report as such.
+                    gate_rc |= iigs_eval_asserts(as, computer->cpu, hgr, nz, nd);
+                } else {
+                    printf("IIGS ASSERT: A2GSPU_ASSERT is set but empty -- no gate armed (gate=none)\n");
+                }
             }
             const char *st = (any_gate && gate_rc) ? "GATE_FAIL"
                            : g_iigs_brk_count       ? "CRASH_BRK"
                            : g_iigs_hang_detected   ? "HANG" : "OK";
             // scb is an SHR concept; report 0 on the II family rather than a fake mode.
-            iigs_emit_status(st, any_gate ? gate_rc : 0,
-                             any_gate ? (gate_rc ? "FAIL" : "PASS") : "none",
+            // gate=BLESSED is the third outcome: see the IIgs block above.
+            const char *gate_word = !any_gate    ? "none"
+                                  : gate_rc      ? "FAIL"
+                                  : gate_blessed ? "BLESSED" : "PASS";
+            iigs_emit_status(st, any_gate ? gate_rc : 0, gate_word,
                              0, g_iigs_brk_count, 0, h,
                              computer->clock->get_cycles());
             if (SDL_getenv("A2GSPU_STRICT") && g_a2gspu_warnings) {
@@ -4023,7 +4117,7 @@ static void run_headless_spike(GS2AppState *state) {
                 exit(3);
             }
             if (any_gate) {
-                printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_rc == 0 ? "PASS" : "FAIL");
+                printf("=== SPIKE COMPLETE (gate %s) ===\n", gate_word);
                 exit(gate_rc);
             }
         }

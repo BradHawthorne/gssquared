@@ -46,6 +46,20 @@ param(
 $ErrorActionPreference = "Stop"
 $ctl  = Join-Path (Split-Path $PSScriptRoot -Parent) "ctl.ps1"
 function Say([string]$c) { return ((& $ctl -Dir $Dir -Cmd $c) -join "`n") }
+# THE SESSION IS THIS $Dir, not any GSSquared on the machine. The pre-suite quit
+# below used to fire on `Get-Process -Name GSSquared`, so an unrelated emulator
+# -- another agent's, a human's -- made this suite send `quit` down a rail with
+# nobody on the other end and then wait out the full ctl timeout for an ack that
+# could never come. session.ps1 writes session.json with the pid before it
+# launches, so this $Dir's pid is the only witness to whether THIS rail is live.
+function Get-LiveSessionPid([string]$d) {
+    $f = Join-Path $d 'session.json'
+    if (-not (Test-Path $f)) { return 0 }
+    try { $s = Get-Content $f -Raw | ConvertFrom-Json } catch { return 0 }
+    if (-not $s.pid) { return 0 }
+    if (Get-Process -Id ([int]$s.pid) -ErrorAction SilentlyContinue) { return [int]$s.pid }
+    return 0
+}
 $pass = 0; $fail = 0
 function Check([string]$n,[bool]$ok,[string]$d="") {
     if ($ok) { Write-Host ("  PASS  {0,-34} {1}" -f $n,$d) -ForegroundColor Green; $script:pass++ }
@@ -58,8 +72,15 @@ Write-Host ("=== EXEC CONTROL -- platform {0} " -f $Platform).PadRight(64,'=') -
 
 # A FRESH session is the whole point: arm_cpu's effect persists, so any earlier
 # step/run-until in this emulator would hide the defect.
-if (Get-Process -Name GSSquared -ErrorAction SilentlyContinue) { Say "quit" | Out-Null; Start-Sleep -Milliseconds 1300 }
+if ((Get-LiveSessionPid $Dir) -ne 0) { Say "quit" | Out-Null; Start-Sleep -Milliseconds 1300 }
 & (Join-Path (Split-Path $PSScriptRoot -Parent) "session.ps1") -Dir $Dir -Platform $Platform | Out-Null
+# Exit 3 is session.ps1's "the rail process was TERMINATED externally". Somebody
+# else's kill landing on us is not a verdict on run/step/bp; passing it up lets
+# dualsmoke record ABORT rather than printing FAIL beside real check failures.
+if ($LASTEXITCODE -eq 3) {
+    Write-Host "execcheck: rail process terminated externally -- ABORTING, this is not a check failure" -ForegroundColor Yellow
+    exit 3
+}
 
 # NOP NOP NOP JMP-self at $6100. $6103 is executed on every iteration forever.
 $prog = "poke 00:6100 EA EA EA 4C 03 61"
@@ -71,7 +92,57 @@ Check "PC parked at 6100" ((PC) -eq "6100") ""
 $r = Say "run 2"
 Check "run reports OK"     ($r -match "status=OK ran=2") ""
 Check "run MOVED PC"       ((PC) -eq "6103") ("PC=`${0} -- the arm bug left this at 6100" -f (PC))
-Check "run ack shows PC"   ($r -match 'PC \$6100->\$6103') "the ack must not claim motion the CPU did not make"
+Check "run ack shows PC"   ($r -match 'PC \$00:6100->\$00:6103') "the ack must not claim motion the CPU did not make"
+
+# --- 1a. the cpu ack NAMES WHERE THE KEYBOARD BYTE CAME FROM --------------
+# Nothing in tools/ parsed KBD= , so for as long as it existed the field was
+# unwatched -- and on every IIgs it was floating-bus noise. MODULE_KEYBOARD is
+# never registered on a IIgs (keys go through MODULE_KEYGLOO), so the ack took
+# a probe_peek($C000) fallback that sat directly under a comment forbidding it,
+# and MMU_IIgs returns floating_bus_read() for $C0xx. Result: KBD=EE AKD=-1,
+# identical across a 2.8M-cycle run, while `read C000 1` in the same session
+# correctly refused the same address as handler-backed. One of the two was
+# making it up.
+#
+# kbd_src= is the guard: the field must NAME the model that produced it, and
+# the two platforms must name different ones because they really do have
+# different keyboards. A future edit that reintroduces a filler byte has to
+# lie about its source to get past this.
+$cp = Say "cpu"
+Check "cpu ack names its kbd source" ($cp -match 'kbd_src=(module|adb-latch|none)') $cp
+if ($Platform -eq 5) {
+    Check "IIgs kbd is the ADB latch" ($cp -match 'kbd_src=adb-latch') `
+          "a IIgs has no MODULE_KEYBOARD; anything else here is a fallback inventing a byte"
+} else {
+    Check "IIe kbd is the keyboard module" ($cp -match 'kbd_src=module') $cp
+}
+
+# --- 1b. and the ack NAMES THE BANK ---------------------------------------
+# THE CHECK ABOVE COULD NOT SEE THIS. It pokes NOP NOP NOP JMP-self at $6100
+# and runs it -- entirely inside bank $00 -- so it was written against, and
+# passed happily under, an ack that printed `PC $6100->$6103` with both banks
+# masked off. A cold IIgs boot really goes $00:FA62 -> $FF:FCDE and acked
+# "PC $FA62->$FCDE": two addresses in a bank the ack never named, from the
+# most-used verb on the rail. On a 65816 a bank-crossing run is the normal
+# case, not an edge.
+#
+# So the only way to guard the bank field is to make the run actually change
+# banks and demand the two halves DIFFER. Platform 5 only: $5C (JML) is a
+# three-byte NOP on the 65C02, so on platform 3 this would prove nothing and
+# would prove it silently.
+if ($Platform -eq 5) {
+    Say "poke 00:6200 5C 00 63 01" | Out-Null   # JML $01:6300
+    Say "poke 01:6300 4C 00 63"    | Out-Null   # JMP $6300 -- park in bank $01
+    Say "setreg pc 6200" | Out-Null
+    Say "resume" | Out-Null
+    $r = Say "run 1"
+    $m = [regex]::Match($r, 'PC \$([0-9A-F]{2}):([0-9A-F]{4})->\$([0-9A-F]{2}):([0-9A-F]{4})')
+    Check "run ack has BOTH banks" ($m.Success) $r
+    Check "run ack SHOWS the cross" ($m.Success -and $m.Groups[1].Value -ne $m.Groups[3].Value) `
+          ('a JML to bank 01 from bank 00 must not ack as one bank -- got ' + $(if ($m.Success) { $m.Groups[1].Value + "->" + $m.Groups[3].Value } else { "no match" }))
+    Check "and the CPU really crossed" ((Say "cpu") -match "PC=01:") $r
+    Say "setreg pc 6100" | Out-Null
+}
 
 # --- 2. step is instruction-granular and agrees with run ------------------
 Say "setreg pc 6100" | Out-Null

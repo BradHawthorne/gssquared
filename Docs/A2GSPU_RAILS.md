@@ -87,7 +87,7 @@ Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~189
 | `A2GSPU_SPIKE_FRAMES=N` | run `N` deterministic frames headless (with `-n`), then evaluate the dump/assert/golden gates and exit. The master headless switch. | run | env |
 | `A2GSPU_SPIKE_KEYS=<str>` | inject keystrokes via the keyboard paste buffer (`\n`→`\r`), paced by the guest's own `$C000` polls | run | env |
 | `A2GSPU_SPIKE_KEYS_AT=N` | frame at which `SPIKE_KEYS` is injected (default `spike_frames/2`) | run | env |
-| `A2GSPU_RUN_BIN=path[@HEX]` | after boot frames, inject a flat binary into IIgs RAM (default load/exec `$7E0000`), reset the traces to isolate it, set PC to it | run | env |
+| `A2GSPU_RUN_BIN=path[@HEX]` | after boot frames, inject a flat binary into IIgs RAM (default load/exec `$7E0000`), reset the traces to isolate it, set PC to it. **Writes are verified by read-back and confined to one bank**: every byte is re-read through `probe_peek` and the run aborts (exit 2) if any differs, so `@00D000` can no longer report "injected 13 bytes" into ROM; a binary that would cross the bank end is **refused** before the first write, naming the byte that would wrap, because a binary silently folded back over its own entry point is worse than a refusal; and a bank-0 `$D000+` load banks the language card in (two reads of `$C08B` — a real soft-switch side effect, and the only way such a write lands at all) | run | env |
 | `A2GSPU_RUN_BOOT=N` | boot frames to run before `RUN_BIN` injection (default `spike_frames/2`) | run | env |
 | `A2GSPU_LOAD=file@HEX[;…]` | multi-file deliberate RAM splice (IIe+IIgs); **no PC change**. Also accepts `HEX@file`. Separators: `;` or `,`. Hard-fails SPIKE on any error. | run | env |
 | `A2GSPU_LOAD_BOOT=N` | frames before `A2GSPU_LOAD` (default `0`) | run | env |
@@ -110,9 +110,9 @@ Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~189
 | `A2GSPU_LIVENESS=N` | **progress proof.** Every `N` frames hash the screen (IIgs: SHR `$E1:2000-9FFF` from the Mega II image; II-family: HGR `$2000-3FFF`) and the text page, side-effect-free, and print `frame= cycles= screen= text= kbd= changed=<first\|screen\|text\|both\|none>`. Close-out gives `screen_last_changed=` / `screen_unchanged_since=<frame>\|none` and the same for `text_`, tracked separately (a halted SHR workload keeps redrawing its text page from its wait loop — measured), and both `_unchanged_since` fields are appended to `GSDIAG:` while armed. A **signal, not a verdict**: an idle desktop is static too; what it rules out is a run that halted on an error screen while its counters kept climbing (the one-disk Dealer Demo measured as a workload until its hash was seen not to move) | observe | env |
 | `A2GSPU_LIVENESS_STALL=K` | unchanged samples in a row before the screen counts as static (default 3) | observe | env |
 | `A2GSPU_LIVENESS_OUT=<file>` | NDJSON sink for the samples instead of stdout lines | observe | env |
-| `A2GSPU_RECORDS=<file>` | **the record contract's global sink.** Every rail record has one shape — `{"event":"<rail>.<kind>","frame":N,"cycles":N,…}` then the rail's own fields, one whole line (`src/a2record.hpp`) — and a record whose rail has no sink of its own (`A2GSPU_TRAP_OUT`/`out=`, `A2GSPU_LIVENESS_OUT`, `A2GSPU_WATCH_OUT`, `A2GSPU_CALLSTREAM`, `A2GSPU_TAP`) lands here. Without it those rails print their stdout line as always. `rail read A2GSPU_RECORDS` reports the sink and the count per rail; `rail schema <RAIL>` the fields. `railparity.ps1` fails JSON printed outside the writer | observe | env |
+| `A2GSPU_RECORDS=<file>` | **the record contract's global sink.** Every rail record has one shape — `{"event":"<rail>.<kind>","frame":N,"cycles":N,…}` then the rail's own fields, one whole line (`src/a2record.hpp`) — and a record whose rail has no sink of its own (`A2GSPU_TRAP_OUT`/`out=`, `A2GSPU_LIVENESS_OUT`, `A2GSPU_WATCH_OUT`, `A2GSPU_CALLSTREAM`, `A2GSPU_TAP`) lands here. Without it those rails print their stdout line as always. `rail read A2GSPU_RECORDS` reports the sink, and **per rail two numbers** — `<rail>=<N>sink+<M>own` — where `N` reached *that* sink and `M` went to the rail's own sink or stdout (`<rail>=<M>own` when there is no global sink). One number beside `sink=` read as the sink's count and was not: a session with per-rail sinks answered `sink=…\global.ndjson rails=2 watch=257 callstream=46` while `global.ndjson` was zero bytes long. `rail schema <RAIL>` gives the fields. `railparity.ps1` fails JSON printed outside the writer | observe | env |
 | `A2GSPU_ROM=<path>` | ROM image path for the lazy-loaded ROM-vs-kernel PC classifier (default `resources/roms/apple2gs/main.rom`) | observe | env |
-| `A2GSPU_SYMBOLS=<file>` | load a symbol table (annotate trace/PCs with names) | observe | env |
+| `A2GSPU_SYMBOLS=<file>` | load a symbol table (annotate trace/PCs with names). **Two accepted forms:** the linkiigs `.final.dbg` line `symbol "NAME" type LABEL addr $XXXXXX` (only `LABEL`/`ENTRY` are kept — `EQU` constants are not code addresses), and a plain `HEXADDR name` line (`#` comments skipped) — the same plain form `A2GSPU_ROM_SYMBOLS` and the shipped `assets/symbols/apple2gs/<ROM-FNV>.sym` use. A file that cannot be opened, **or that yields 0 symbols in either form**, is a `WARNING` (so `GSDIAG: warnings=N` is non-zero and `A2GSPU_STRICT=1` exits 3) rather than a silent `loaded 0 code symbols` — an unloaded table makes every downstream `sym` field null, which reads as "this program has no symbols". `rail read A2GSPU_SYMBOLS` answers `A2GSPU_SYMBOLS=<path> format=<dbg\|plain\|mixed\|none> count=<n> base=$XXXXXX` | observe | env |
 | `A2GSPU_ROM_SYMBOLS=<file>` | name ROM-resident PCs in the trace region tags (else `<ROM>`). **Names by default:** even without it, the documented firmware entry points (the Apple II Monitor vectors `COUT RDKEY GETLN HOME …` in banks `$00` and `$FF`, the IIgs `ToolDisp`/`GSOS_Disp` vectors, ProDOS 8's `MLI`) **and the ROM's own toolbox function entry points** — 526 of them for ROM 01, read from the system tool pointer table by `tools/a2rail/romfpt.py` and shipped as `assets/symbols/apple2gs/<ROM house-FNV>.sym` (installed by the build beside the ROMs, so it loads from any working directory) so a different ROM gets no wrong names — name PCs in the new attribution outputs, `STOREVIS writers top:` and `TRAP` records' `sym`. `$FF/46ED` is `SoundTools.FFStartSound+$2FC`. A PC between two entries is named after the preceding one, which is right for a function body and wrong for a shared helper; a `TRAP` at `E1:0000` recording `x` is the authority for helpers. RAM-resident tool sets — most of them under System 6, which patches the ROM sets and loads the rest — are named from the **live** tool pointer table (`$E1/03C0`), walked side-effect-free when a RAM address misses and the table has moved or grown; one `IIGS SYMS: live tool pointer table …` line reports each walk. An address nothing covers prints as `(unnamed)` / `null` | observe | env |
 | `A2GSPU_SYM_BASE=<hex>` | pin the symbol-relocation base (disables auto-inference) | observe | env |
 | `A2GSPU_SYM_SUSPECT=1` | append `[SUSPECT reused]` to any symbol whose name resolves at >1 address (advisory only) | observe | env |
@@ -376,21 +376,54 @@ still in `excluded=`.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `A2GSPU_ASSERT="name OP val[;…]"` | `;`/`,`-separated `name OP value` checks (`OP` ∈ `== != <= >= < >`); the spike exits non-zero if any fails. Fields: `scb_mode`, `qd_carry/qd_err`, `lt_carry`, `cs_carry/pr_carry`, `gsos_err`, `nonzero/distinct`, `idxN` (N=0..15), and `peek:HHHHHH` (observation-free 24-bit byte read) | assert | env |
+| `A2GSPU_ASSERT="name OP val[;…]"` | `;`/`,`-separated `name OP value` checks (`OP` ∈ `== != <= >= < >`); the spike exits non-zero if any fails. Fields: `scb_mode`, `qd_carry/qd_err`, `lt_carry`, `cs_carry/pr_carry`, `gsos_err`, `nonzero/distinct`, `idxN` (N=0..15), and `peek:HHHHHH` (observation-free 24-bit byte read). **Values are decimal** unless prefixed `$` or `0x` (`0d` forces decimal; a bare *leading zero* makes it octal — `== 010` is 8), and a `peek:` comparand **must carry an explicit base**: a bare hex-shaped literal such as `peek:7E0100 == 22` is refused with `write $22 or 0d22` rather than guessed, because `== 34`, `== 0x22` and `== $22` all used to print the identical result line. Every result line now shows both bases: `peek:7E0100 == $22 (34)  (actual=$22 (34)) -> PASS`. **A spec that evaluates nothing is not a pass:** a clause with no comparison operator (the single-`=` typo `qd_carry=0`) is counted, warned and failed, a field that cannot be evaluated fails as `unevaluatable`, and a non-empty spec that yields 0 checks fails. A spec set to `""` or whitespace arms no gate at all (`gate=none`), so a harness that exports the variable unconditionally-empty stays green | assert | env |
 | `A2GSPU_STRICT=1` | exit 3 at spike end if the run printed any `WARNING` line (see `GSDIAG: warnings=N` below). Missing inputs and unopenable sinks are already fatal (exit 2) without it | assert | env |
 | `A2GSPU_EXPECT_HASH=<hex16>` | the SHR-window (IIgs) or HGR-page (II-family) hash the run must end on; prints `MATCH`/`MISMATCH` with both values and gates the exit like `GOLDEN`, without a file. The way a harness pins a row, and the way a differencing harness proves the shorter run reproduced before subtracting | assert | env |
-| `A2GSPU_GOLDEN=<file>` | hash the SHR window (`$E1:2000-9FFF`, house FNV-1a-64); if the file exists compare (DIFF ⇒ gate fail; corrupt/empty file ⇒ hard fail); if absent, bless it | assert | env |
+| `A2GSPU_GOLDEN=<file>` | hash the SHR window (`$E1:2000-9FFF`, house FNV-1a-64); if the file exists compare (DIFF ⇒ gate fail; corrupt/empty file ⇒ hard fail); if absent, bless it — and a path that can be neither opened nor created is a **hard gate failure**, not the silent nothing it used to be (no `GOLDEN` line at all, `gate=PASS`, exit 0). **Blessing is its own verdict:** a bless compared nothing, so it reports `gate=BLESSED` (not `PASS`) and raises a `WARNING`, which means `A2GSPU_STRICT=1` refuses to call a bless run OK. `rc` and the exit code stay `0`. Both the IIgs SHR and the II-family HGR gate now go through the one implementation, `a2dhgr::golden_gate_file` | assert | env |
 
 *Always-on:* at spike end `iigs_emit_status` prints one machine-readable line —
-`GSDIAG: status=<OK\|GATE_FAIL\|CRASH_BRK\|HANG\|GSOS_ERROR\|STALLED> rc=N gate=<PASS\|FAIL\|none>
+`GSDIAG: status=<OK\|GATE_FAIL\|CRASH_BRK\|HANG\|GSOS_ERROR\|STALLED> rc=N gate=<PASS\|FAIL\|BLESSED\|none>
 gsos_err=$XXXX brk=N scb=NNN hash=................ warnings=N cycles=N`. The **process exit code** stays
 golden/assert-gate-driven (`0`/`1`) for harness compatibility; `status` is the richer category.
+`gate=BLESSED` is the **third outcome** — a golden that did not exist was written, so nothing was
+compared. `PASS` and `BLESSED` both exit `0`, and a consumer grepping the literal `gate=PASS` will
+(deliberately) stop matching bless runs; the same word appears in `=== SPIKE COMPLETE (gate …) ===`.
 `warnings=N` counts every `WARNING` line the run printed — a skipped injection, a rail that could
 not do what it was asked — and `A2GSPU_STRICT=1` turns a non-zero count into exit code 3. A missing
 input file (a disk image under `-n`, `RUN_BIN`, `SNAP_LOAD`, `KEYSCHED`, `MILESTONES`, `TRAP_FILE`) or
 an output sink that cannot be opened (`WATCH_OUT`, `CALLSTREAM`, `ITRACE_OUT`, `TRAP_OUT`, the WIZ5
 sinks) is not a warning: it aborts at arm with exit code 2, because a run that measured something
 other than what it was asked to is worse than no run.
+
+### One evaluator, two surfaces
+
+`A2GSPU_ASSERT` (env, spike) and the CTRL `assert` verb (live) are the **same** rail and now
+share the same evaluator primitives (`src/a2gspu_assert.hpp` -> `src/iigs_diag.hpp`). They
+used to be two programs behind one name, and against the same binary they disagreed on the
+grammar (CTRL took `==` only), the field set (CTRL took `peek:` only, so `assert scb_mode==0`
+answered `parse-fail` on the surface this table advertises it for), whether a handler-backed
+address may be asserted against at all (CTRL asserted against the floating bus and reported
+`PASS`), how a value parses (`==169` silently became `$69`), and what base the observed value
+printed in (`got=A9` against `actual=169` for the same byte).
+
+**Values.** `$HH` and `0xHH` are hex, `0dNN` is decimal. A bare literal is decimal *except*
+that a `peek:` comparand which is ambiguous (more than one digit, every digit a hex digit) is
+**refused**, not guessed: write `$22` or `0d22`. A `peek:` address is ONE 24-bit hex number,
+`peek:HHHHHH` -- the live rail refuses anything else rather than keeping the prefix that
+parsed and asserting against the wrong byte.
+
+**Three outcomes, not two.** A check that ran and was false is `fail`. A check the rail could
+not perform at all -- an unknown field, a clause with no operator, an unparsable or ambiguous
+value, an address that is not `probe_readable`, an SHR field on a machine with no Mega II
+bank-`$E1` image, a toolbox call this run never recorded -- is `unevaluated` and is reported
+separately: the CTRL ack says `status=FAIL assert-unevaluated n=N pass=P fail=F`, and the
+spike prints the reason plus a `WARNING`. **Unevaluated still fails the gate.** A spec that
+produces zero checks fails too, on both surfaces: an assert that evaluates nothing is not a
+pass.
+
+`tools/a2rail/gs816/assertparity.ps1` feeds one expression list to both surfaces and fails if
+the verdicts differ. It is the only check that can see this class of defect, because each
+surface on its own looked entirely self-consistent.
 
 ## WIZ5 — the title-specific streams, and the aliases that outlived them
 
@@ -449,13 +482,13 @@ protocol authority.
 
 | Verb | Effect | Group |
 |------|--------|-------|
-| `run <frames>` | step N frames; reply `status=OK ran=N cycles=N (in-command) PC $xxxx->$yyyy`, or `status=HALT ran=N …` if the guest halted inside the call. **Match this as a PREFIX, not a whole line:** `arm_cpu()` appends ` [cleared RESET]`, ` [cleared STOP]` or ` [cleared RESET+STOP]` when it had to un-assert the CPU before advancing, and the first `run` of a session is exactly the case that does -- so the most common ack an agent will ever meet carries the suffix. (It never replies `ok`, and never `halted@<i>` — that belongs to `press`/`key`, which report which injected key was consumed) | CTRL-verb (run) |
+| `run <frames>` | step N frames; reply `status=OK ran=N cycles=N (in-command) PC $bb:aaaa->$bb:aaaa`, **both program counters banked** -- they are 24-bit and printing them masked to 16 bits made a cold IIgs boot (really $00:FA62 -> $FF:FCDE) ack as `PC $FA62->$FCDE`, two addresses in a bank the ack never named; the format now matches `cpu`'s `PC=BB:AAAA` so one parser reads both, or `status=HALT ran=N …` if the guest halted inside the call. **Match this as a PREFIX, not a whole line:** `arm_cpu()` appends ` [cleared RESET]`, ` [cleared STOP]` or ` [cleared RESET+STOP]` when it had to un-assert the CPU before advancing, and the first `run` of a session is exactly the case that does -- so the most common ack an agent will ever meet carries the suffix. (It never replies `ok`, and never `halted@<i>` — that belongs to `press`/`key`, which report which injected key was consumed) | CTRL-verb (run) |
 | `keys <str>` | append to the keyboard paste buffer (paced by guest polls) | CTRL-verb (manipulate) |
 | `press <hex2> [hold] [mods]` | full physical keypress — latch + any-key-down, held `hold` frames (default 15), then released; IIe latch path AND IIgs KeyGloo+IRQ path. `mods` is letters `o` (Open-Apple) `c` (Closed-Apple) `s` (shift) `k` (control), carried in the key's modifier byte (what `$C025` and the Event Manager report): `press 6F 2 o` is Open-Apple-O, which is how the Finder is told to **open** a selected icon — a bare Return on one starts a rename (measured) | CTRL-verb (manipulate) |
 | `holdkey <hex-ascii>` | set the sticky IIgs hold-key WITHOUT running (`0` clears) — hold, step in chunks, watch for consume, release | CTRL-verb (manipulate) |
 | `iolog` | cumulative keyboard soft-switch read counts (`C000/C010/C024/C025/C026`); diff two calls across a `run` to see which switch a wedged menu polls | CTRL-verb (observe) |
-| `cpu` | 65816 state: `PC=BB:AAAA A X Y SP=16bit P E HALT STP RDY KBD AKD` — distinguishes waiting-for-key vs halted vs executing | CTRL-verb (observe) |
-| `dis <hexaddr> <n> <file>` | disassemble N instructions via the debugger `Disassembler` (reads through the MMU: bank/langcard-correct) to `<file>` | CTRL-verb (observe) |
+| `cpu` | 65816 state: `PC=BB:AAAA A X Y SP=16bit P E HALT STP RDY KBD AKD kbd_src=` — distinguishes waiting-for-key vs halted vs executing. **`kbd_src=` names where the keyboard byte came from** (`module` = MODULE_KEYBOARD, `adb-latch` = the IIgs ADB micro's observation-free `read_key_latch()`, `none` = no keyboard, and then `KBD=?? AKD=?`). It exists because the field used to fall back to `probe_peek($C000)` when MODULE_KEYBOARD was absent — which is every IIgs — so every IIgs ack reported the floating bus as a keystroke (`KBD=EE AKD=-1`, unchanged across millions of cycles) while `read C000 1` in the same session correctly refused the same address as handler-backed. No probed byte reaches this field now | CTRL-verb (observe) |
+| `dis <addr> <n> <file> [m8\|m16] [x8\|x16]` | disassemble N instructions via the debugger `Disassembler` to `<file>`. The address takes the same `BB:AAAA` form as `load`/`read`/`poke`. **Reads are side-effect-free:** `$xxC000-$xxC0FF` is never touched **in any bank** (the old guard compared the full 24-bit address, so `dis E1C055 1 …` fell through to the CPU's read path and physically flipped `PAGE2` and `HIRES` — an observe verb actuating the machine), and everything else goes through `probe_readable`/`probe_peek` rather than `mmu->read`. A byte the MMU will not show is reported as `<unreadable>` instead of being decoded from the `$EE` placeholder into a fictional `INC $EEEE`, and the ack carries `unreadable=N`. **65816 immediate width:** `m`/`x` are seeded from the live CPU (override with the trailing tokens for code that has not run yet), `REP`/`SEP` are followed as the listing decodes them, and `XCE` resets to the conservative 8-bit reading; the first line of the output file and the ack's `mx=m8x16@start src=<cpu\|arg>` both name the assumption. Without this the listing desynchronised from the first 16-bit immediate: `A9 34 12` read as `LDA #$34` / `ORA ($8F)` while the CPU executed `LDA #$1234` | CTRL-verb (observe) |
 | `text <file>` | dump the text page to `<file>` | CTRL-verb (observe) |
 | `shot <file>` | update the display and save a screenshot to `<file>` | CTRL-verb (observe) |
 | `read <hexaddr> <len> <file>` | dump `len` bytes from `<addr>` via `probe_peek` (side-effect-free, bank-correct on `-p 5`) to `<file>` | CTRL-verb (observe) |
@@ -476,7 +509,7 @@ protocol authority.
 | `cycles` | absolute counter; **WARN** cross-ack deltas unreliable | CTRL-verb (observe) |
 | `dhgr-calibrate` / `dhgr-export` | 4-dot self-test + profile files for a2tile | CTRL-verb (calibrate) |
 | `dhgr-golden <file> [page] [vram-raw\|4dot] [bless]` | FNV page golden; `vram-raw`=16K AUX‖MAIN; `4dot`=discrete RGB 560×192 | CTRL-verb (calibrate) |
-| `A2GSPU_DHGR_GOLDEN=<file>` | SPIKE-end IIe DHGR gate (bless if missing; MATCH/DIFF exit) | env (run) |
+| `A2GSPU_DHGR_GOLDEN=<file>` | SPIKE-end IIe DHGR gate (bless if missing; MATCH/DIFF exit). A bless compared nothing, so it reports `gate=BLESSED` rather than `gate=PASS` and raises a `WARNING` that `A2GSPU_STRICT=1` turns into exit 3 | env (run) |
 | `A2GSPU_DHGR_PAGE=1\|2` | which page for DHGR SPIKE golden (default 1) | env (run) |
 | `A2GSPU_DHGR_GOLDEN_PROFILE=` | `vram-raw` (default) or `4dot` — must match how the golden file was blessed | env (run) |
 | `assert peek:…==…[;…]` | live probe_peek checks; `status=PASS\|FAIL` | CTRL-verb (observe) |

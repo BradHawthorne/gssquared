@@ -21,7 +21,8 @@
 //   * a human summary is one line, prefixed RAILNAME:;
 //   * device chatter goes to stderr, never into a rail's stdout.
 //
-// `rail read A2GSPU_RECORDS` reports the sink and the records written per rail.
+// `rail read A2GSPU_RECORDS` reports the sink, and per rail how many records
+// reached THAT sink and how many went to the rail's own sink or to stdout.
 #pragma once
 #include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include <cstdint>
@@ -45,15 +46,30 @@ inline unsigned long long cycles_now() { return g_cycles_fn ? g_cycles_fn() : 0U
 inline int (*g_frame_fn)() = nullptr;
 inline int frame_now() { return g_frame_fn ? g_frame_fn() : -1; }   // -1: no frame counter registered
 
-struct Count { const char *rail; unsigned long long n; };
+// TWO NUMBERS, BECAUSE THERE ARE TWO DESTINATIONS. This was one counter,
+// incremented at the end of both Record::write and Record::done with no
+// reference to WHERE the line went, and format_status printed it immediately
+// after `sink=<path>`. So a session with A2GSPU_RECORDS set plus per-rail
+// sinks answered `sink=...\global.ndjson rails=2 watch=257 callstream=46`
+// while global.ndjson was zero bytes long: every one of those records had gone
+// to the rail's own file. And with no sink at all it answered `sink=none
+// rails=1 trap=50`, a count beside the word none. A readback that says how
+// many records a sink holds must not be counting records that never reached it.
+struct Count { const char *rail; unsigned long long to_sink, elsewhere; };
 inline Count g_counts[24] = {};
 inline int   g_ncounts = 0;
 
-inline void count(const char *rail) {
+inline void count(const char *rail, bool to_sink) {
     for (int i = 0; i < g_ncounts; i++)
-        if (!strcmp(g_counts[i].rail, rail)) { g_counts[i].n++; return; }
+        if (!strcmp(g_counts[i].rail, rail)) {
+            if (to_sink) g_counts[i].to_sink++; else g_counts[i].elsewhere++;
+            return;
+        }
     if (g_ncounts < (int)(sizeof g_counts / sizeof g_counts[0])) {
-        g_counts[g_ncounts].rail = rail; g_counts[g_ncounts].n = 1; g_ncounts++;
+        g_counts[g_ncounts].rail = rail;
+        g_counts[g_ncounts].to_sink  = to_sink ? 1 : 0;
+        g_counts[g_ncounts].elsewhere = to_sink ? 0 : 1;
+        g_ncounts++;
     }
 }
 
@@ -122,7 +138,8 @@ struct Record {
     Record &frag(const std::string &f) { s += f; return *this; }
 
     // The closed body, for a rail that prints it on stdout behind its prefix.
-    std::string done() { std::string r = s; r += '}'; count(rail); return r; }
+    // By definition it never reached the global sink, so it counts as "own".
+    std::string done() { std::string r = s; r += '}'; count(rail, false); return r; }
 
     // One whole line to the sink. flush for low-rate rails whose reader may be
     // tailing the file; not for streams.
@@ -130,15 +147,27 @@ struct Record {
         s += "}\n";
         fputs(s.c_str(), f);
         if (flush) fflush(f);
-        count(rail);
+        // WHICH file, not just that a write happened: sink(own) returns the
+        // rail's own FILE* when it has one, so f == g_global is the only
+        // evidence that this line landed in the global sink.
+        count(rail, f == g_global);
     }
 };
 
+// The two numbers can never be read as one: <rail>=Nsink+Mown when a global
+// sink exists, <rail>=Mown when it does not. A bare count beside sink= was
+// read as the sink's, which was the whole defect.
 inline void format_status(char *buf, size_t n) {
     int m = snprintf(buf, n, "status=OK sink=%s rails=%d",
                      g_global ? g_global_path.c_str() : "none", g_ncounts);
-    for (int i = 0; i < g_ncounts && m > 0 && (size_t)m < n; i++)
-        m += snprintf(buf + m, n - m, " %s=%llu", g_counts[i].rail, g_counts[i].n);
+    for (int i = 0; i < g_ncounts && m > 0 && (size_t)m < n; i++) {
+        if (g_global)
+            m += snprintf(buf + m, n - m, " %s=%llusink+%lluown",
+                          g_counts[i].rail, g_counts[i].to_sink, g_counts[i].elsewhere);
+        else
+            m += snprintf(buf + m, n - m, " %s=%lluown",
+                          g_counts[i].rail, g_counts[i].elsewhere);
+    }
 }
 
 } // namespace a2record

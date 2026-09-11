@@ -24,6 +24,12 @@
 #include "mmus/mmu.hpp"
 #include "a2gspu_pins.hpp"     // g_a2gspu_rom_data / size: the ROM the run actually loaded
 
+// iigs_diag.hpp defines it, and iigs_diag.hpp includes iigs_toolbox.hpp which
+// includes this header, so the definition arrives after us. Declared here the
+// same way memvu_storevis.hpp declares a2gspu_name_pc: a rail that cannot warn
+// can only printf, and a printf never reaches GSDIAG warnings= or A2GSPU_STRICT.
+inline void a2gspu_warn(const char *rail, const char *what);
+
 struct IigsSym { uint32_t addr; std::string name; };
 inline std::vector<IigsSym> g_iigs_syms;
 inline bool g_iigs_syms_loaded = false;
@@ -39,15 +45,59 @@ inline bool     g_iigs_sym_base_locked = false;  // true = A2GSPU_SYM_BASE pinne
 inline std::unordered_set<std::string> g_iigs_name_multi;   // names at >1 distinct addr
 inline bool g_iigs_sym_suspect = false;                     // A2GSPU_SYM_SUSPECT
 
+// What the load actually consumed, for the readback below and for the summary
+// line: a table that yielded nothing must be able to say so out loud.
+inline std::string g_iigs_sym_path;
+inline int g_iigs_sym_n_dbg = 0;      // lines read as the .final.dbg form
+inline int g_iigs_sym_n_plain = 0;    // lines read as plain "HEXADDR name"
+
+// Which form the file turned out to be in. "none" is the answer that used to be
+// unavailable: the summary said "loaded 0 code symbols" and left the reader to
+// guess whether the file was empty, the wrong format, or full of EQU constants.
+inline const char *iigs_symbols_format_word() {
+    if (g_iigs_sym_n_dbg && g_iigs_sym_n_plain) return "mixed";
+    if (g_iigs_sym_n_dbg)   return "dbg";
+    if (g_iigs_sym_n_plain) return "plain";
+    return "none";
+}
+
 inline void iigs_symbols_load(const char *path) {
+    g_iigs_sym_path = path ? path : "";
+    g_iigs_sym_n_dbg = g_iigs_sym_n_plain = 0;
     FILE *f = fopen(path, "rb");
-    if (!f) { printf("IIGS SYM: cannot open '%s'\n", path); return; }
+    if (!f) {
+        // A WARNING, NOT A PRINTF. This printed "IIGS SYM: cannot open X" and
+        // the run still ended "GSDIAG: status=OK ... warnings=0", exit 0 --
+        // even under A2GSPU_STRICT=1, which exists precisely to refuse a run
+        // that could not do what it was asked. Every sym field in every ITRACE
+        // / WATCH / TRAP / BRK record downstream is null because of this, so
+        // the harness has to be able to see it.
+        char m[640];
+        snprintf(m, sizeof m, "cannot open '%s' -- every sym field will be null", path ? path : "(null)");
+        a2gspu_warn("IIGS SYM", m);
+        return;
+    }
     char line[1024];
     while (fgets(line, sizeof(line), f)) {
         const char *s = strstr(line, "symbol \"");
         const char *t = strstr(line, " type ");
         const char *a = strstr(line, "addr $");
-        if (!s || !t || !a) continue;
+        if (!s || !t || !a) {
+            // ALSO ACCEPT THE PLAIN "HEXADDR name" FORM, exactly as
+            // iigs_rom_symbols_load below already does and as the shipped
+            // assets/symbols/apple2gs/<ROM-FNV>.sym is written. This parser
+            // demanded all three .final.dbg tokens on every line and `continue`d
+            // otherwise, so a perfectly good plain table loaded 0 symbols and
+            // said "loaded 0 code symbols" as though that were an outcome.
+            // Two parsers for two forms of the same thing, in the same header,
+            // and only one of them was reachable from A2GSPU_SYMBOLS.
+            unsigned aa; char nm[128];
+            if (line[0] != '#' && sscanf(line, "%x %127s", &aa, nm) == 2) {
+                g_iigs_syms.push_back({ aa & 0xFFFFFF, std::string(nm) });
+                g_iigs_sym_n_plain++;
+            }
+            continue;
+        }
         // keep only code symbols
         if (!strstr(t, "LABEL") && !strstr(t, "ENTRY")) continue;
         const char *nm = s + 8;
@@ -57,6 +107,7 @@ inline void iigs_symbols_load(const char *path) {
         // applied at RESOLVE time so it can be set/auto-inferred after load.
         uint32_t addr = (uint32_t)strtoul(a + 6, nullptr, 16) & 0xFFFFFF;
         g_iigs_syms.push_back({addr, std::string(nm, (size_t)(eq - nm))});
+        g_iigs_sym_n_dbg++;
     }
     fclose(f);
     std::sort(g_iigs_syms.begin(), g_iigs_syms.end(),
@@ -70,9 +121,33 @@ inline void iigs_symbols_load(const char *path) {
         if (it == firstaddr.end()) firstaddr[s.name] = s.addr;
         else if (it->second != s.addr) g_iigs_name_multi.insert(s.name);
     }
-    printf("IIGS SYM: loaded %zu code symbols from '%s' (base $%06X); %zu reused-local names flagged\n",
-           g_iigs_syms.size(), path, g_iigs_sym_base, g_iigs_name_multi.size());
+    // A table that yielded nothing is not a loaded table. Same reason as the
+    // fopen failure above: silence here reads downstream as "this program has
+    // no symbols", which is a different and wrong statement.
+    if (g_iigs_syms.empty()) {
+        char m[700];
+        snprintf(m, sizeof m, "'%s' yielded 0 symbols (neither the .final.dbg "
+                 "'symbol \"NAME\" type LABEL addr $XXXXXX' form nor plain "
+                 "'HEXADDR name') -- every sym field will be null", path);
+        a2gspu_warn("IIGS SYM", m);
+    }
+    printf("IIGS SYM: loaded %zu code symbols from '%s' (format=%s dbg=%d plain=%d, base $%06X); %zu reused-local names flagged\n",
+           g_iigs_syms.size(), path, iigs_symbols_format_word(),
+           g_iigs_sym_n_dbg, g_iigs_sym_n_plain,
+           g_iigs_sym_base, g_iigs_name_multi.size());
 }
+
+// ---- readback (M8): `rail read A2GSPU_SYMBOLS` -----------------------------
+// The rail had no reader at all, so the only way to learn that a symbol table
+// loaded nothing was to read the stdout line at arm time -- which a CTRL
+// session that armed the rail through the environment never sees.
+inline void iigs_symbols_format_status(char *buf, size_t n) {
+    snprintf(buf, n, "status=OK A2GSPU_SYMBOLS=%s format=%s count=%zu base=$%06X",
+             g_iigs_sym_path.empty() ? "(unset)" : g_iigs_sym_path.c_str(),
+             iigs_symbols_format_word(), g_iigs_syms.size(),
+             (unsigned)g_iigs_sym_base);
+}
+inline a2rails::Registrar g_reader_symbols{"A2GSPU_SYMBOLS", iigs_symbols_format_status};
 
 // Resolve full_pc -> "NAME+$off" into buf; "" if no table / no nearby symbol.
 // Subtracts the runtime load base so a relocated GS/OS app's PC maps back to its

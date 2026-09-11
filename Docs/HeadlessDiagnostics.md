@@ -88,6 +88,20 @@ A2GSPU_FAKETIME=1000000000 GSSquared -p 5 -d s7d1=mydisk.po -n
 A `;`/`,`-separated list of `name OP value` checks (`OP` ∈ `== != <= >= < >`); the spike exits non-zero if
 any fails.
 
+**Bases.** Values are **decimal** unless prefixed `$` or `0x`; `0d` forces decimal, and a bare
+leading zero makes `strtol` read octal (`== 010` is 8). A `peek:` comparand **must carry an
+explicit base** — `peek:7E0100 == 22` is refused (`write $22 or 0d22`) rather than read as
+decimal 22, because the three spellings `== 34`, `== 0x22` and `== $22` all printed the identical
+result line and the wrong-base one passed. Non-`peek:` fields are decimal by nature and stay that
+way, so `scb_mode == 640` and `idx6 == 28800` below are unaffected. Every result line prints both
+bases: `scb_mode == $280 (640)  (actual=$280 (640)) -> PASS`.
+
+**An assert that evaluates nothing is not a pass.** A clause with no comparison operator (the
+single-`=` typo `qd_carry=0`) is counted, warned and failed; an unknown field, a handler-backed
+`peek:` address and a toolbox field whose call never fired all fail as `unevaluatable` rather
+than comparing their sentinel as a number; and a non-empty spec that yields 0 checks fails the
+gate. A spec set to `""` or whitespace arms **no** gate (`gate=none`, exit 0).
+
 | Field | Meaning |
 |-------|---------|
 | `scb_mode` | 320 or 640 (line-0 SCB bit 7) |

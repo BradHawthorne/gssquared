@@ -231,6 +231,60 @@ else()
     set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 endif()
 
+# ---------------------------------------------------------------------------
+# First-party warning policy.
+#
+# Until now the only warning flag in this whole file was -Werror=reorder-init-list
+# above, and it is Clang-only -- so on the Windows/GCC Release build that the
+# gates actually run, all 163 first-party translation units compiled with
+# `-O3 -std=gnu++17` and no warning flag at all. A scan with -Wall -Wextra
+# turned up 2140 diagnostics, of which four were real defects the compiler
+# would have named for free: two %s handed an int (a2gspu_ctrl_cmds.hpp), a
+# bitwise comparison that is always false (frame_bit.hpp), and a case label
+# outside the switch type's range (Floppy35_woz.cpp).
+#
+# This is an INTERFACE target rather than add_compile_options(), deliberately:
+# directory-scope flags leak into the vendored/ add_subdirectory() calls above
+# and fight SDL's own warning settings. Only targets that link gs2_warnings --
+# i.e. everything created after the link_libraries() line below, which is all
+# first-party code and no vendored code -- are held to this policy.
+#
+# The -Werror= list is deliberately four named classes with countable
+# instances rather than -Wall -Werror: a class that a different GCC version
+# reports differently must not be able to break a fresh toolchain. Each of the
+# four is at zero violations once the defects above are fixed, so a new one is
+# a new defect and not inherited debt -- which is what lets it be fatal.
+#
+# NOT yet fatal, and why:
+#   -Wclass-memaccess  8 live violations (7 in devices/uthernet2/vnat.cpp, 1 in
+#                      devices/scc8530/Z85C30.hpp): memset() over structs that
+#                      are non-trivial. Promote to -Werror= once those are
+#                      converted to value-initialization.
+#   -Wreorder          45 live violations. Member-init order only; harmless
+#                      today, but it is how a field gets read before it is set.
+add_library(gs2_warnings INTERFACE)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(gs2_warnings INTERFACE
+        -Werror=format
+        -Werror=return-type
+        -Werror=tautological-compare
+    )
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # GCC-only spellings, in their own branch so a Clang toolchain does not
+    # choke on an option it does not have: Clang has no -Wswitch-outside-range
+    # and names the memset-over-non-trivial case differently. (The Clang-only
+    # -Werror=reorder-init-list stays where it is, above.) The COMPILE_LANGUAGE
+    # guard keeps the C++-only options off src/devices/a2gspu/vt100.c and
+    # utf8_decode.c, which would otherwise emit "valid for C++ but not for C"
+    # on every build.
+    target_compile_options(gs2_warnings INTERFACE
+        -Werror=switch-outside-range
+        $<$<COMPILE_LANGUAGE:CXX>:-Wclass-memaccess>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wreorder>
+    )
+endif()
+
 # When using sanitizers, we need to link with them too
 #if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT WIN32)
@@ -246,8 +300,10 @@ target_include_directories(gs2_headers
     INTERFACE ${CMAKE_BINARY_DIR}/cfg
 )
 
-# all following targets will link to SDL3
-link_libraries(gs2_headers SDL3::SDL3-shared SDL3_net::SDL3_net-shared)
+# all following targets will link to SDL3, and are held to the first-party
+# warning policy. This line is the whole boundary: vendored/ was added by
+# configure_sdl_builds() above, before it, so nothing vendored inherits either.
+link_libraries(gs2_headers gs2_warnings SDL3::SDL3-shared SDL3_net::SDL3_net-shared)
 
 add_library(gs2_devices_game src/devices/game/gamecontroller.cpp src/devices/game/mousewheel.cpp )
 
@@ -1027,8 +1083,20 @@ add_test(NAME cpu_cycles_65816 COMMAND cycletest816)
 set_tests_properties(cpu_cycles_65816 PROPERTIES
     FAIL_REGULAR_EXPRESSION "Failed tests: [1-9]")
 
-# The 6522 VIA (Mockingboard). Prints its own verdict; a zero exit alone is not
-# enough, because it exits 0 on the trace path too.
-add_test(NAME via_6522 COMMAND w6522)
-set_tests_properties(via_6522 PROPERTIES
-    PASS_REGULAR_EXPRESSION "PASS: all read expectations matched")
+# The 6522 VIA (Mockingboard). w6522 carries nine scenarios; only 6..9 contain
+# READ_EXPECT rows. Scenarios 1..5 are traces -- they drive the chip and print,
+# but assert nothing -- and `add_test(NAME via_6522 COMMAND w6522)` passed no
+# argv, so the one registered 6522 test ran scenario 1 and could not fail. That
+# is precisely what the policy comment above forbids, and it was registered
+# anyway. So: register the four scenarios that assert, each by number, and leave
+# 1..5 unregistered until somebody gives them expectations.
+#
+# The PASS regex demands a non-zero count, not just the word PASS, because a
+# scenario silently losing its READ_EXPECT rows must not read as green. (w6522
+# itself now exits 2 and prints FAIL in that case; the regex is the second wall,
+# since PASS_REGULAR_EXPRESSION overrides the exit code.)
+foreach(_via_scenario 6 7 8 9)
+    add_test(NAME via_6522_t${_via_scenario} COMMAND w6522 ${_via_scenario})
+    set_tests_properties(via_6522_t${_via_scenario} PROPERTIES
+        PASS_REGULAR_EXPRESSION "PASS: [1-9][0-9]* read expectations matched")
+endforeach()

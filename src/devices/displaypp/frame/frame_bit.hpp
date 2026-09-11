@@ -41,7 +41,7 @@ public:
     };
 
     inline bool pull() { 
-        bool bit = (working & ((uint64_t)1 << 63)) == 1; 
+        bool bit = (working & ((uint64_t)1 << 63)) != 0; 
         hpos++; 
         if (hpos>=64) { 
             working = *hloc;

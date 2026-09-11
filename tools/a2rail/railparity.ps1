@@ -52,6 +52,20 @@
 
     Both are offline: no running process, no build.
 
+    AND THE CHECK THAT ONLY LOOKED LIKE ONE.
+
+    The record-contract check below asserted, in its own PASS line, that "every
+    record is written by the contract". It was a single regex over one spelling
+    of one call -- an `fprintf` whose format string literally opens `{"`. Seven
+    ways of emitting a record round it were tried and five went straight
+    through: fputs, a `%s` indirection, snprintf-then-fputs, a record with a
+    leading newline, and -- the one the contract's own rules paragraph forbids
+    by name -- a record printed in PIECES, a header call plus a per-byte loop
+    plus a closer. src/wiz5_config.hpp writes all three of its streams exactly
+    that way. So the green was not evidence; the file-wide exemption was the
+    only thing telling the truth. It is now checked on the SINK as well as on
+    the text, and the PASS prints its own carve-outs so the green can be read.
+
     Run after any rail change, alongside dualsmoke.ps1.
 #>
 
@@ -142,23 +156,76 @@ if ($undocumented.Count -or $phantom.Count) {
 $recordExempt = @{
     'a2record.hpp'         = 'the writer itself'
     'a2gspu_ctrl_json.hpp' = 'the CTRL reply envelope is protocol, not a rail record'
-    'wiz5_config.hpp'      = 'title-specific streams (WIZ5_EC19_OUT, WIZ5_CSP6_OUT) predate the contract; they convert when their readers do'
+    'wiz5_config.hpp'      = 'title-specific streams (WIZ5_EC19_OUT, WIZ5_DISKWR_OUT, WIZ5_CSP6_OUT) predate the contract, and all three build their records piecemeal; they convert when their readers do'
 }
+
+# TWO SCANS, because each is blind where the other sees.
+#
+# (a) The LITERAL scan: a printf/fputs/fwrite whose format string opens a JSON
+#     object. Cheap and file-agnostic, and it catches the obvious shape.
+#
+#     It catches ONLY that shape, and that is why (b) exists. It matches one
+#     spelling of one call: it does not see fputs, it does not see a `%s`
+#     indirection, and above all it does not see a record printed in PIECES --
+#     a header fprintf, a per-byte loop, a closing fprintf -- because no single
+#     call in that sequence has a format string that opens the object. "Never
+#     printed in pieces" is the contract's own rule, and until (b) nothing
+#     enforced it. src/wiz5_config.hpp writes all three of its streams in
+#     exactly that shape and was invisible here for as long as this check has
+#     existed; only its file-wide exemption above is honest about it.
+#
+# (b) The SINK scan: any stdio write aimed at a rail's own FILE* from a file
+#     that is not the writer. Keyed on the SINK and not on the text, because
+#     text is what (a) already does badly -- and because widening (a) to any
+#     literal opening `{"` would flag legitimate NESTED fragments, such as the
+#     `{"at":...}` object a2gspu_trap.hpp snprintf's into a std::string that
+#     Record::write then emits whole. Those touch no sink and stay silent.
+#
+# The sink table is the rail record sinks only. g_iigs_itrace_out is
+# deliberately absent: ITRACE emits a human-readable trace line, not a record,
+# so the contract makes no claim about it. A new rail that opens its own FILE*
+# belongs in this table -- a sink missing from it is unchecked, which is the
+# failure this whole script was written about.
+$railSinks = @(
+    'g_gtap\.out', 'g_gtap\.zp_f', 'g_gtap\.pages_f', 'g_gtap\.keys_f', 'g_gtap\.disk_f',
+    'g_watch_out', 'g_callstream_out', 'g_snap_out', 'g_liveness_out', 'g_default_out',
+    'g_wiz5_diskwr_out', 'g_wiz5_ec19_out', 'g_wiz5_csp6_out'
+)
+$sink = '(?:' + ($railSinks -join '|') + ')(?![A-Za-z0-9_])'
+$contractScans = @(
+    @{ why = 'JSON literal printed outside a2record.hpp';
+       rx  = '(?<![A-Za-z_])f?printf\s*\((?:[^;"]*?,)?\s*"\{\\"' }
+    @{ why = 'JSON literal printed outside a2record.hpp';
+       rx  = '(?<![A-Za-z_])fputs\s*\(\s*"\{\\"' }
+    @{ why = 'JSON literal printed outside a2record.hpp';
+       rx  = '(?<![A-Za-z_])fwrite\s*\(\s*"\{\\"' }
+    @{ why = 'stdio write straight to a rail sink (a record built in pieces)';
+       rx  = '(?<![A-Za-z_])fprintf\s*\(\s*' + $sink }
+    @{ why = 'stdio write straight to a rail sink (a record built in pieces)';
+       rx  = '(?<![A-Za-z_])fputs\s*\([^;]*,\s*' + $sink + '\s*\)' }
+    @{ why = 'stdio write straight to a rail sink (a record built in pieces)';
+       rx  = '(?<![A-Za-z_])fwrite\s*\([^;]*,\s*' + $sink + '\s*\)' }
+)
 $outside = @()
 Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp, *.h, *.cc |
     Where-Object { $_.FullName -notmatch '\\imgui\\' -and -not $recordExempt.ContainsKey($_.Name) } |
     ForEach-Object {
         $text = [IO.File]::ReadAllText($_.FullName)
-        foreach ($m in [regex]::Matches($text, '(?<![A-Za-z_])f?printf\s*\((?:[^;"]*?,)?\s*"\{\\"')) {
-            $line = ($text.Substring(0, $m.Index) -split "`n").Count
-            $outside += ('  {0}:{1}' -f $_.FullName.Substring($srcDir.Length + 1), $line)
+        $rel  = $_.FullName.Substring($srcDir.Length + 1)
+        foreach ($scan in $contractScans) {
+            foreach ($m in [regex]::Matches($text, $scan.rx)) {
+                $line = ($text.Substring(0, $m.Index) -split "`n").Count
+                $outside += ('  {0}:{1}  -- {2}' -f $rel, $line, $scan.why)
+            }
         }
     }
+$outside = @($outside | Sort-Object -Unique)
 if ($outside.Count) {
     Write-Host ''
-    Write-Host 'OUTSIDE THE RECORD CONTRACT - JSON printed by a rail without a2record.hpp:' -ForegroundColor Red
+    Write-Host 'OUTSIDE THE RECORD CONTRACT - a rail record not written by a2record.hpp:' -ForegroundColor Red
     $outside | ForEach-Object { Write-Host $_ }
-    Write-Host '  (write it with a2record::Record, or name the exemption and its reason in railparity.ps1)'
+    Write-Host '  (write it with a2record::Record -- one call, whole record -- or name the'
+    Write-Host '   exemption and its reason in $recordExempt in railparity.ps1)'
     Write-Host ''
     Write-Host ("railparity: FAIL - {0} record(s) outside the contract" -f $outside.Count) -ForegroundColor Red
     exit 1
@@ -289,8 +356,27 @@ if ($hidden.Count -or $unreach.Count) {
     exit 1
 }
 
+# --- what the green does NOT cover ----------------------------------------
+# A PASS is only as honest as its carve-outs, and a carve-out nobody reads is
+# the same silence this script exists to break. So print them: whoever reads
+# the green sees exactly which files the record contract is not checking, and
+# which rails the catalogue is not describing.
+Write-Host ''
+Write-Host 'carve-outs this PASS does not cover:'
+foreach ($k in ($recordExempt.Keys | Sort-Object)) {
+    Write-Host ("  record contract  {0,-22} {1}" -f $k, $recordExempt[$k])
+}
+if ($docExempt.Count) {
+    foreach ($k in ($docExempt.Keys | Sort-Object)) {
+        Write-Host ("  rail catalogue   {0,-22} {1}" -f $k, $docExempt[$k])
+    }
+} else {
+    Write-Host '  rail catalogue   (none)                every declared rail is described'
+}
+Write-Host ''
 Write-Host ("railparity: PASS - every rail the code reads is discoverable, every declared rail")
-Write-Host ("                   exists and is described in Docs/A2GSPU_RAILS.md, every record is")
-Write-Host ("                   written by the contract, all {0} declared readers are registered by" -f $fnRows.Count)
-Write-Host ("                   their rails, and all {0} CTRL verbs are both dispatched and listed." -f $verbTable.Count)
+Write-Host ("                   exists and is described in Docs/A2GSPU_RAILS.md, no non-exempt file")
+Write-Host ("                   prints a JSON record or writes to any of the {0} rail sinks itself," -f $railSinks.Count)
+Write-Host ("                   all {0} declared readers are registered by their rails, and all {1}" -f $fnRows.Count, $verbTable.Count)
+Write-Host ("                   CTRL verbs are both dispatched and listed.")
 exit 0

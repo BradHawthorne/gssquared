@@ -18,6 +18,24 @@
 #
 # Fix: never issue cmd.N until ack.(N-1) exists. A timeout is then a *stall*, not a
 # corruption -- the session stays consistent and the next call resumes waiting.
+#
+# EXIT CODES. Every path out of this script sets one, so a caller can branch on
+# the outcome instead of regex-matching the text. The stall path used to fall off
+# the end of the script without an exit, which leaves $LASTEXITCODE holding
+# whatever the CALLER's previous command set -- so a stall could be read as
+# success, or as some unrelated failure code, depending on what ran before it.
+# The only reason no in-tree caller tripped on that is that railcheck/execcheck/
+# altzpcheck's Say ignores the code entirely and protocolcheck zeroes it first.
+#
+#   0  acked -- the emulator replied and the reply is on stdout
+#   1  a PREVIOUS command has not acked; this one was NOT issued
+#   2  no session (no session.json, or its pid is gone), or invalid metadata
+#   3  owner mismatch; command not issued
+#   4  issued but not yet acked -- queued, still consistent, retry to keep waiting
+#
+# 4 is deliberately distinct from 1: 'issued and pending' and 'refused because
+# something else is pending' need different handling, and both differ from a
+# refusal. A caller that retries drains the queue either way.
 param(
   [Parameter(Mandatory=$true)][string]$Cmd,
   [string]$Dir = $(if ($env:A2RAIL_DIR) { $env:A2RAIL_DIR } else { Join-Path $env:TEMP 'a2rail' }),
@@ -59,11 +77,20 @@ if ($Owner -and $session -and $session.owner -ne $Owner) {
 # the diagnosis. The rail quits itself on A2GSPU_CTRL_TIMEOUT idle seconds, which
 # is easy to trip while reading code between commands -- and the symptom was a
 # silent 120s stall that looked like a hung emulator rather than an absent one.
+#
+# THE SESSION IS THE DIRECTORY, not the process name. This used to fall back to
+# `Get-Process -Name GSSquared` whenever $Dir held no session.json, which made
+# ANY emulator anywhere on the machine -- another agent's, a human's -- count as
+# proof that THIS rail was alive. Against an empty directory that turned an
+# instant "NO SESSION" into a full-timeout STALL with a cmd.1 left behind for
+# nobody to read. session.ps1 always writes session.json before it launches
+# anything, so an absent file means no session here, full stop; there is no case
+# where the name fallback was right and the pid was not available.
 function Test-SessionAlive {
   if ($session -and $session.pid) {
     return [bool](Get-Process -Id ([int]$session.pid) -ErrorAction SilentlyContinue)
   }
-  return [bool](Get-Process -Name GSSquared -ErrorAction SilentlyContinue)
+  return $false
 }
 
 function Wait-Ack([string]$path, [int]$ms) {
@@ -76,8 +103,21 @@ function Wait-Ack([string]$path, [int]$ms) {
 }
 
 if (-not (Test-SessionAlive)) {
-  Write-RailEvent 'refused' @{ reason='no-session'; command=$Cmd }
-  "[--] NO SESSION: GSSquared is not running. Start one with tools\session.ps1"
+  # Say WHICH of the two it is. "GSSquared is not running" was a guess dressed as
+  # a fact -- it was printed both when this directory had never had a session and
+  # when one had died, and those need different actions (start one here; or look
+  # at session.log for why the last one went away).
+  if (-not $session) {
+    Write-RailEvent 'refused' @{ reason='no-session'; detail='no-session-json'; command=$Cmd }
+    "[--] NO SESSION: no session.json in $Dir. Start one with tools\session.ps1"
+  } elseif (-not $session.pid) {
+    Write-RailEvent 'refused' @{ reason='no-session'; detail='session-json-has-no-pid'; command=$Cmd }
+    "[--] NO SESSION: $sessionFile records no pid. Start one with tools\session.ps1"
+  } else {
+    Write-RailEvent 'refused' @{ reason='no-session'; detail='pid-gone'; pid=$session.pid; command=$Cmd }
+    "[--] NO SESSION: session pid $($session.pid) is gone. Start one with tools\session.ps1"
+    "     (see $(Join-Path $Dir 'session.log') for how the last one ended)."
+  }
   "     (the rail self-quits after A2GSPU_CTRL_TIMEOUT idle seconds)."
   exit 2
 }
@@ -127,4 +167,11 @@ if (Wait-Ack $ack $TimeoutMs) {
   "[$seq] $Cmd"
   "     -> STALL after ${TimeoutMs}ms. Command IS queued and will complete;"
   "        the next invocation drains it before issuing anything new."
+  # Exit 4, not 0 and not "fall off the end". Falling off the end leaves
+  # $LASTEXITCODE at whatever the caller's previous command set, so a stall was
+  # indistinguishable from success -- and from any other code -- to anyone who
+  # checked the status rather than the text. The command really is queued, so
+  # this is not a refusal: 4 says 'issued, pending' so the caller can retry and
+  # let the drain logic above finish the wait.
+  exit 4
 }

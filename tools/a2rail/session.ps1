@@ -137,8 +137,26 @@ for ($i = 0; $i -lt 120; $i++) {          # 30s: ROM load and video init take a 
     if ($proc.HasExited) {
         $err = Join-Path $Dir 'session.err'
         $tail = if (Test-Path $err) { (Get-Content $err -Tail 20) -join "`n" } else { '<no stderr>' }
+        # "The emulator could not start" and "somebody killed the emulator" are
+        # different facts and used to print the same red line. A harness sweeping
+        # the machine by process NAME -- which dualsmoke.ps1 did for a long time,
+        # and a second concurrent run still can -- kills a healthy session mid
+        # handshake, and reporting that as a startup failure sends the reader
+        # hunting a bug in the emulator that is not there.
+        #
+        # Stop-Process -Force surfaces as exit -1; TerminateProcess via a console
+        # close surfaces as 0xC000013A (STATUS_CONTROL_C_EXIT, -1073741510 as a
+        # signed Int32). Neither is anything the emulator chose to return.
+        # Exit 3 is the caller's signal to record 'aborted-externally' rather
+        # than to print FAIL beside real check failures.
+        $code = $proc.ExitCode
+        if ($code -eq -1 -or $code -eq -1073741510) {
+            Write-Host ("rail process was TERMINATED externally (pid={0} exit={1}) -- this is not a check failure`n{2}" -f `
+                        $proc.Id, $code, $tail) -ForegroundColor Yellow
+            exit 3
+        }
         Write-Host ("rail process exited before readiness: pid={0} exit={1}`n{2}" -f `
-                    $proc.Id, $proc.ExitCode, $tail) -ForegroundColor Red
+                    $proc.Id, $code, $tail) -ForegroundColor Red
         exit 1
     }
 }

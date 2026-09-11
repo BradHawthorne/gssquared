@@ -31,9 +31,30 @@ $ctl = Join-Path (Split-Path $PSScriptRoot -Parent) "ctl.ps1"
 $tmp = Join-Path $Dir "gs816"
 if (-not (Test-Path $tmp)) { New-Item -ItemType Directory $tmp -Force | Out-Null }
 function Say([string]$c) { return ((& $ctl -Dir $Dir -Cmd $c) -join "`n") }
+# THE SESSION IS THIS $Dir, not any GSSquared on the machine. The pre-suite quit
+# below used to fire on `Get-Process -Name GSSquared`, so an unrelated emulator
+# -- another agent's, a human's -- made this suite send `quit` down a rail with
+# nobody on the other end and then wait out the full ctl timeout for an ack that
+# could never come. session.ps1 writes session.json with the pid before it
+# launches, so this $Dir's pid is the only witness to whether THIS rail is live.
+function Get-LiveSessionPid([string]$d) {
+    $f = Join-Path $d 'session.json'
+    if (-not (Test-Path $f)) { return 0 }
+    try { $s = Get-Content $f -Raw | ConvertFrom-Json } catch { return 0 }
+    if (-not $s.pid) { return 0 }
+    if (Get-Process -Id ([int]$s.pid) -ErrorAction SilentlyContinue) { return [int]$s.pid }
+    return 0
+}
 
-if (Get-Process -Name GSSquared -ErrorAction SilentlyContinue) { Say "quit" | Out-Null; Start-Sleep -Milliseconds 1300 }
+if ((Get-LiveSessionPid $Dir) -ne 0) { Say "quit" | Out-Null; Start-Sleep -Milliseconds 1300 }
 & (Join-Path (Split-Path $PSScriptRoot -Parent) "session.ps1") -Dir $Dir -Platform $Platform | Out-Null
+# Exit 3 is session.ps1's "the rail process was TERMINATED externally". Somebody
+# else's kill landing on us is not a verdict on ALTZP; passing it up lets
+# dualsmoke record ABORT rather than printing FAIL beside real check failures.
+if ($LASTEXITCODE -eq 3) {
+    Write-Host "altzpcheck: rail process terminated externally -- ABORTING, this is not a check failure" -ForegroundColor Yellow
+    exit 3
+}
 
 Write-Host ""
 Write-Host ("=== ALTZP / STACK / LANGUAGE CARD -- platform {0} " -f $Platform).PadRight(64,'=') -ForegroundColor Cyan

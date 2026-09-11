@@ -222,8 +222,15 @@ inline uint64_t page_hash(const uint8_t *aux_8k, const uint8_t *main_8k,
 // SPIKE / harness golden file: missing → bless write; corrupt → hard fail;
 // present → MATCH/DIFF. Returns gate_rc contribution (0 pass, 1 fail).
 // tag is the log prefix (e.g. "DHGR GOLDEN").
+//
+// *blessed (when supplied) is set on the bless path. THREE OUTCOMES, NOT TWO:
+// "compared and matched" and "compared nothing, wrote the file" both return 0,
+// and the caller's verdict line said gate=PASS for both -- a first run against
+// a fresh path was indistinguishable from a verified one. The caller uses this
+// to print gate=BLESSED instead, and to warn so A2GSPU_STRICT=1 can refuse it.
 inline int golden_gate_file(const char *path, uint64_t cur_hash, const char *tag,
-                            const char *profile = "vram-raw") {
+                            const char *profile = "vram-raw",
+                            bool *blessed = nullptr) {
     FILE *gp = fopen(path, "r");
     if (gp) {
         unsigned long long g = 0;
@@ -248,6 +255,7 @@ inline int golden_gate_file(const char *path, uint64_t cur_hash, const char *tag
     }
     fprintf(gp, "%016llX\n", (unsigned long long)cur_hash);
     fclose(gp);
+    if (blessed) *blessed = true;
     printf("%s: blessed %s = %016llX profile=%s\n",
            tag, path, (unsigned long long)cur_hash, profile ? profile : "?");
     return 0;

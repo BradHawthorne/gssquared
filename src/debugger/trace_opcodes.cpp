@@ -23,6 +23,13 @@ const address_mode_entry address_mode_formats[] = {
     { "$%04X", 3 },    // ABS
     { "$%04X,X", 3 },    // ABS_X
     { "$%04X,Y", 3 },    // ABS_Y
+    // IMM is the ONE row this table cannot answer on its own: on a 65816 the
+    // A-group immediates are two operand bytes when M is clear and the index
+    // group two when X is clear, and a static table has no M or X. The row
+    // stays the 8-bit form (right for the 6502/65C02 and for 65816 emulation
+    // mode); Disassembler::imm_size overrides the size and the format when the
+    // caller has seeded the widths. trace.cpp:246 handles the same case its own
+    // way, from the live CPU's f_op_sz, which is why tbuf never desynchronised.
     { "#$%02X", 2 },    // IMM
     { "", 1 },           // IMP
     { "($%04X)", 3 },    // INDIR

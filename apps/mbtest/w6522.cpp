@@ -74,6 +74,12 @@ int main(int argc, char *argv[]) {
 
     int recindex = 0;
     int mismatches = 0;
+    // Counted so that "no MISMATCH lines" cannot be mistaken for "the chip was
+    // checked". Scenarios 1-5 are traces: they drive the VIA and print, but
+    // contain no READ_EXPECT row, so they can never fail. Registering one of
+    // those as a ctest is the exact failure this counter refuses to allow --
+    // a green test that asserted nothing.
+    int expectations = 0;
 
     reg_record_t *test_recs = recs[0];
 
@@ -81,8 +87,14 @@ int main(int argc, char *argv[]) {
     if (argc > 1) {
         test_num = atoi(argv[1]);
         // it's 1 .. N, not 0 .. N-1
-        if (test_num >= 1 && test_num <= sizeof(recs) / sizeof(recs[0])) {
+        if (test_num >= 1 && test_num <= (int)(sizeof(recs) / sizeof(recs[0]))) {
             test_recs = recs[test_num-1];
+        } else {
+            // Refuse to silently run scenario 1 while claiming to be scenario N:
+            // a mistyped argv used to fall through to recs[0] and still print PASS.
+            printf("FAIL: no scenario %d (have 1..%d)\n",
+                   test_num, (int)(sizeof(recs) / sizeof(recs[0])));
+            return 2;
         }
     }
     printf("Running test %d\n", test_num);
@@ -102,6 +114,7 @@ int main(int argc, char *argv[]) {
                 //printf("read: Reg %02X => %02X\n", recs[recindex].reg, value);
             } else if (test_recs[recindex].action == READ_EXPECT) {
                 uint8_t value = chip.read(test_recs[recindex].reg);
+                expectations++;
                 if (value != test_recs[recindex].value) {
                     mismatches++;
                     printf("MISMATCH cycle=%llu reg=%02X expected=%02X actual=%02X\n",
@@ -129,6 +142,10 @@ int main(int argc, char *argv[]) {
         printf("FAIL: %d read expectation mismatch(es)\n", mismatches);
         return 1;
     }
-    printf("PASS: all read expectations matched\n");
+    if (!expectations) {
+        printf("FAIL: scenario %d has no read expectations\n", test_num);
+        return 2;
+    }
+    printf("PASS: %d read expectations matched\n", expectations);
     return 0;
 }

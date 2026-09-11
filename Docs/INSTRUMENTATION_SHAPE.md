@@ -172,6 +172,14 @@ its inputs; it should not have needed to).
 **Status:** done: a missing disk image under `-n`, `RUN_BIN`, `SNAP_LOAD`,
 `KEYSCHED`, `MILESTONES` or `TRAP_FILE`, and an unopenable `WATCH_OUT`,
 `CALLSTREAM`, `ITRACE_OUT`, `TRAP_OUT` or WIZ5 sink, abort at arm with exit 2.
+`RUN_BIN` also verifies every injected byte by read-back and aborts (exit 2) if
+any differs, and refuses a binary that would cross the end of its bank — an
+injection that reported "injected 13 bytes at $00D000" into ROM was the same
+class of lie as a missing file. An unwritable `A2GSPU_GOLDEN` path is a hard
+gate failure rather than the silent nothing it used to be. `SYMBOLS` is a
+**warning**, not fatal: a table that cannot be opened, or that yields 0 symbols
+in either accepted form, now goes through `a2gspu_warn` (it used to be a bare
+printf, so `GSDIAG` said `warnings=0` and `A2GSPU_STRICT=1` could not see it).
 `GSDIAG:` carries `warnings=N`; `A2GSPU_STRICT=1` exits 3 on any. The
 remaining "skipped" paths (`SPIKE_KEYS` with no keyboard, `RUN_BIN` on a
 II-family machine, `SAVE_AT` without a IIgs MMU) are warnings.
@@ -442,6 +450,25 @@ which does not resolve ROM/language-card banking, and switching it there once
 produced a `CALLTRACE` that emitted nothing at all on `-p 3`). Closing it needs
 a before/after on a real IIgs calltrace with a IIe one beside it. And the
 `base_6502.cpp` `PCTRAP` site still carries the stale justification in a comment.
+
+**A third site, found by an audit and now closed: the disassembler.**
+`Disassembler::read_mem` (`debugger/disasm.cpp`) guarded `$C000-$C0FF` with a
+comparison against the *full 24-bit* address, so the guard only ever fired in
+bank zero and `dis E1C055 1 <file>` fell straight through to `mmu->read`. One
+`observe` verb physically set `PAGE2`, and — because the decoder also read the
+operand bytes at `$C056/$C057` — `HIRES`. The bound was exclusive too, so
+`$C0FF` itself was never covered. It now tests the low 16 bits inclusively and
+reads everything else through `probe_readable`/`probe_peek`; the low-16 guard
+has to come *first*, because `MMU_IIgs::probe_peek` takes an early exit for
+banks `$E0/$E1` into the Mega II image with no `$C0xx` test. The `$C400`
+mockingboard hack is deleted rather than widened: it masked only bits 8–15, so
+it returned `$DD` for `$7EC4xx` — real RAM — in every bank, and `probe_peek`
+cannot disturb a 6522 anyway. An unreadable byte prints as `<unreadable>`
+instead of being decoded from the `$EE` placeholder into a fictional
+`INC $EEEE`, and the ack carries `unreadable=N`: M11's "print `unreadable`
+rather than `$EE`" rule, applied where it was still being broken. One
+imperfection is named rather than hidden: at `$E1:C100-CFFF` `probe_peek`
+answers with Mega II RAM rather than the slot ROM the CPU would fetch.
 
 What remains of M11 is the rule — an observe rail reads through the probe,
 never through the CPU's read path — plus those two sites.

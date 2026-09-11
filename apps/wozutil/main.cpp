@@ -218,6 +218,9 @@ static int cmd_export(const std::string& input_woz,
            interleave == INTERLEAVE_PO ? "PO" : "DO");
     return rc == 0 ? 0 : 2; // 2 = wrote partial result
 #endif
+    // The real return lives inside the #if 0 block above; without this the
+    // function falls off the end and the caller reads a garbage exit code.
+    return 0;
 }
 
 static int cmd_save(const std::string& input_woz,
