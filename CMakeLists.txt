@@ -497,6 +497,7 @@ add_subdirectory(apps/cycletest)
 # distinct properties, and the CPU had no owned check of the second one because
 # cputest's Klaus Dormann fixture is third-party and not vendored here.
 add_subdirectory(apps/conformtest)
+add_subdirectory(apps/coveragetest)
 
 #add_subdirectory(apps/dpp)
 add_subdirectory(apps/vpp)
@@ -1014,6 +1015,7 @@ configure_file(src/build_config.hpp.in "${CMAKE_BINARY_DIR}/cfg/build_config.hpp
 enable_testing()
 
 add_test(NAME cpu_conformance COMMAND conformtest)
+add_test(NAME cpu_coverage COMMAND coveragetest)
 set_tests_properties(cpu_conformance PROPERTIES
     FAIL_REGULAR_EXPRESSION "Failed tests: [1-9]")
 

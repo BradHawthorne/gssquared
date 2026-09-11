@@ -8,6 +8,26 @@ nav:
   - Overview: Documentation.md
   - Roadmap: Roadmap.md
 
+  # The instrumentation set. This section exists because it was once absent:
+  # every document AGENTS.md names as "read first for behavioural changes" and
+  # as "required context for instrumentation work" was present in Docs/ and
+  # missing from this nav, so a rendered site published a stock Apple II user
+  # manual and no route at all to the oracle contract, the rail catalogue, the
+  # dual-platform rule or the shared-foundation do-not-break list. This fork's
+  # entire differentiator over upstream was invisible on its own documentation.
+  # Anything added to the instrumentation contract belongs here as well as in
+  # Docs/ -- a page that is not in nav is a page a reader cannot reach.
+  - Instrumentation & Agentic Oracle:
+    - Agentic Oracle Contract: AGENTIC_ORACLE.md
+    - Rails (env contract): A2GSPU_RAILS.md
+    - PC Traps: A2GSPU_TRAP.md
+    - Headless Diagnostics: HeadlessDiagnostics.md
+    - Closed-Loop Integration: CLOSED_LOOP_INTEGRATION.md
+    - Shared Foundation: SHARED_FOUNDATION.md
+    - Dual-Platform Bar (IIe + IIgs): DUAL_PLATFORM.md
+    - Instrumentation Audit: INSTRUMENTATION_AUDIT.md
+    - Instrumentation Shape: INSTRUMENTATION_SHAPE.md
+
   - User Guide:
     - Getting Started: index.md
     - Menus: Menus.md
@@ -81,6 +101,26 @@ nav:
     - Debugger: Debugger.md
 
   - Development Journal: DevelopLog.md
+
+# Forward guard against the silence that hid the instrumentation set above.
+# mkdocs logs an omitted page at INFO by default, which is off in a normal
+# build: nine required-context documents sat unreachable for as long as they
+# existed and no build ever said so. At `warn` an unreferenced page is named
+# on every build, so the next doc that lands in Docs/ without a nav entry is
+# noisy rather than silently unpublished.
+#
+# This warns today, on purpose, and the list is short and known:
+#   SecondSight.md    -- its own first line says to leave it out for now
+#   Woz.md            -- design scratch, not a finished page
+#   NeilA235Floppy.md -- third-party reference text kept verbatim
+#   IIgs_SHR_SCB.md   -- oracle note, wants a home under Internals
+#   Serial_Modem.md   -- linked from Docs/index.md but never navigable
+# Deliberately NOT paired with `strict: true`: that would turn those five into
+# a hard build failure and the fix for them is an editorial decision, not this
+# change's to make.
+validation:
+  nav:
+    omitted_files: warn
 
 theme:
   name: material

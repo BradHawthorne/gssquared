@@ -1,0 +1,3 @@
+add_executable(coveragetest main.cpp)
+target_link_libraries(coveragetest PRIVATE
+    gs2_mmu gs2_cpu gs2_cpu_new gs2_debugger gs2_video_scanner)

@@ -52,8 +52,8 @@ inline void iigs_mem_range_dump(cpu_state *cpu, const uint8_t *megaii_base,
 //   qd_carry/qd_err  (QDStartUp $0204)   lt_carry (LoadTools $0E01)
 //   cs_carry (ClearScreen $1504)   pr_carry (PaintRect $5404)
 //   nonzero / distinct  (SHR-window byte stats)
-//   idxN  (N=0..15: mode-correct pixel count of palette index N;
-//          e.g. idx6==28800 = a 240x120 colour-6 PaintRect rectangle)
+//   idxN  (N=0..15: mode+fill-correct displayed pixel count of palette index N;
+//          320 fill-mode zeros count as the previous color on that line)
 // Grammar: "name OP value [; name OP value ...]", OP in == != <= >= < >.
 inline long iigs_assert_value(const char *name, cpu_state *cpu, const uint8_t *e1,
                               int nonzero, int distinct) {
@@ -81,7 +81,7 @@ inline long iigs_assert_value(const char *name, cpu_state *cpu, const uint8_t *e
         }
         return cpu->mmu->probe_peek(a);
     }
-    if (!strcmp(name, "scb_mode")) return (e1[0x9D00] & 0x80) ? 640 : 320;
+    if (!strcmp(name, "scb_mode")) return (e1[0x9D00] & iigs_shr::SCB_640) ? 640 : 320;
     if (!strcmp(name, "qd_carry")) return tf(0x0204, 0);
     if (!strcmp(name, "qd_err"))   return tf(0x0204, 1);
     if (!strcmp(name, "lt_carry")) return tf(0x0E01, 0);
@@ -90,8 +90,7 @@ inline long iigs_assert_value(const char *name, cpu_state *cpu, const uint8_t *e
     if (!strcmp(name, "gsos_err")) return g_iigs_last_gsos_err;
     if (!strcmp(name, "nonzero"))  return nonzero;
     if (!strcmp(name, "distinct")) return distinct;
-    // idxN -> the mode-correct count of palette-index N across the SHR window
-    // (e.g. idx6==28800 proves a 240x120 colour-6 PaintRect rectangle is on screen).
+    // idxN -> displayed count of palette-index N (320/640 + fill expansion).
     if (name[0]=='i' && name[1]=='d' && name[2]=='x' && name[3]>='0' && name[3]<='9') {
         int idx = atoi(name + 3);
         if (idx >= 0 && idx < 16) { long h[16]; iigs_shr::histogram(e1, h); return h[idx]; }

@@ -82,10 +82,20 @@ inline void obs_view_fault(cpu_state* cpu, const char* why) {
         printf("OBS FAULT:   code @%06X:", lo);
         for (uint32_t a = lo; a < lo + 24; a++) {
             uint8_t b = cpu->mmu->probe_peek(a);
-            bool suspect = (((a >> 16) & 0xFF) <= 0x01) && (b == 0xEE);   // $EE-liar guard
+            // '?' means the MMU says it cannot see this address, not that the
+            // byte happened to be $EE. The old test was `bank <= $01 && b ==
+            // 0xEE`, written when MMU_IIgs::probe_peek really did return
+            // floating bus for the whole of banks $00/$01. It does not: it
+            // resolves those banks and returns floating bus only for page $C0.
+            // So this legend printed on every fault view was marking genuine
+            // bank-0 code and data -- $EE is INC abs -- as untrustworthy, on the
+            // one platform where the probe is right. probe_readable is the MMU's
+            // own answer about the same address and tracks probe_peek exactly.
+            bool suspect = !cpu->mmu->probe_readable(a);
             if (suspect) printf(" %02X?", b); else printf(" %02X", b);
         }
-        printf("  (probe_peek, side-effect-free; '?' = bank<=01 floating-bus $EE)\n");
+        printf("  (probe_peek, side-effect-free; '?' = the MMU reports no read pointer for that "
+               "address -- soft switches or a handler page -- so its byte is floating bus)\n");
     }
     printf("=== end OBS FAULT VIEW ===\n");
 }

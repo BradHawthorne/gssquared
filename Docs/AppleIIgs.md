@@ -72,7 +72,9 @@ See Ensoniq.md. Accessed via new $C0xx registers.
 
 Pretty straightforward. Linear video buffer, pixel values look up 4096 colors (12-bit color value) in a palette table.
 
-[X] Implement Fill Mode  
+[X] Implement Fill Mode
+
+SCB (Hardware Reference Table 4-19): bit7=`$80` 640, bit6=`$40` scanline IRQ, bit5=`$20` fill (320 only), bits3-0 palette. Fill expands a 0 nibble as a repeat of the previous color on that line. `$40` is IRQ, not fill. See `Docs/IIgs_SHR_SCB.md`.
 
 ### Standard Apple II text with Color
 

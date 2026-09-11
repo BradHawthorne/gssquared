@@ -164,16 +164,8 @@ void VideoScanGenerator::generate_frame(ScanBuffer *frame_scan, Frame560 *frame_
                         frame_shr->set_line(vcount);
                     }
 
-                    // from MAME
-                    // the low 5 bits of the SCB determine the initial fillmode color
-                    // for the scanline (hardware testing by John Brooks)
-                    static const uint32_t fillmode_init[32] =
-                    {
-                        2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
-                        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
-                    };
-                    /* Right now it seems to be consistently palette index #2 unless I use the magic undefined bit, and then it is consistently palette index #3. - Ian Brumby 4/17/2020 */
-                    lastpixel = convert12bitTo24bit(palette.colors[fillmode_init[vcount & 0x1F]]);
+                    // Fill leftover is latched when this line's SCB is read (VM_SHR_MODE),
+                    // indexed by SCB&0x1F (Brooks/MAME). Not vcount: HSYNC is before SCB.
                 }
                 break;
             case VM_BORDER_COLOR: {
@@ -228,6 +220,8 @@ void VideoScanGenerator::generate_frame(ScanBuffer *frame_scan, Frame560 *frame_
                 break;
             case VM_SHR_MODE: {
                     mode.v = scan.mainbyte;
+                    // Brooks/MAME: leftover fill color from SCB low 5 bits (not vcount).
+                    lastpixel = convert12bitTo24bit(palette.colors[shr_fillmode_init[mode.v & 0x1F]]);
                 }
                 break;
             case VM_SHR_PALETTE: { // load the palette values into palette based on index.

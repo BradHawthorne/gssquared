@@ -81,3 +81,12 @@ __pycache__/
 parallel.out
 speaker_event_log.txt
 test.asm
+
+# Snapshots and writable disk images a driven session leaves in the repo root.
+# `save <path>` and a RAMDISK volume both take an arbitrary path, and a session
+# driven from here puts them beside the source: five .snap at 8.4 MB each plus a
+# 1.6 MB .2mg had accumulated. They are run output, reproducible by re-running,
+# and a snapshot is tied to the exact build that wrote it -- committing one would
+# publish a fixture that silently stops matching the emulator.
+/*.snap
+/*.2mg

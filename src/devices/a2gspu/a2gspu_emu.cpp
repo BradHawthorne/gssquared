@@ -67,14 +67,14 @@ static void render_shr_to_texture(a2gspu_emu_state *emu, RGBA_t *pixels, int pit
     for (int line = 0; line < 200; line++) {
         uint8_t scb = scbs[line];
         int pal_idx = scb & 0x0F;
-        bool mode640 = (scb & 0x80) != 0;
+        bool mode640 = (scb & 0x80) != 0;  // SCB bit 7: 640 (Hardware Ref Table 4-19)
         const uint8_t *pal_base = pals + pal_idx * 32;  // 16 colors × 2 bytes
 
         // Each SHR line → 2 output lines (2× vertical)
         RGBA_t *row0 = pixels + (line * 2) * pitch_pixels;
         RGBA_t *row1 = pixels + (line * 2 + 1) * pitch_pixels;
         int out_x = 0;
-        bool fill_mode = (scb & 0x20) != 0;
+        bool fill_mode = (scb & 0x20) != 0;  // SCB bit 5 FILL; bit 6 (0x40) is IRQ, not fill
         uint8_t last_color = 0;  // fill mode: per-line tracking
 
         for (int x = 0; x < 160; x++) {

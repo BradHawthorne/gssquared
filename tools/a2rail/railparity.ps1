@@ -24,6 +24,34 @@
     documented capability that does not exist, which is worse than an
     undocumented one, because it will be believed.
 
+    WHAT THIS DID NOT CHECK, AND NOW DOES.
+
+    Two surfaces were still held together by habit alone, and habit lost twice
+    more while every gate stayed green:
+
+    * The DOC. The registry fixed the set of rail NAMES; it does not carry their
+      semantics -- the invariants, the worked combinations, the gotchas that a
+      one-line synopsis cannot hold. Those live in Docs/A2GSPU_RAILS.md, which
+      AGENTS.md hands a new agent and which `manifest <file>` points at. At the
+      142-rail mark that file had no mention of 24 of them, including every
+      WIZ5_* rail and A2GSPU_COVERAGE itself -- the rail the header above names
+      as the reason this script exists. So: every declared rail's name must
+      appear in the doc. Name-presence only, deliberately; demanding a table row
+      per rail would be noisy and would not have caught anything this does not.
+
+    * The VERB DISPATCHER. The header above says verb discoverability "was true
+      and enforced by their being in a table the process itself prints". It was
+      true only of verbs someone remembered to add to the table. `pause` and
+      `pause-status` were dispatched in the CTRL loop and in NEITHER `help` nor
+      `manifest`, while `resume` -- dispatched on the same line of gs2.cpp -- had
+      a row. The cost was not just a hidden verb: an unrecognised word is
+      answered "not a verb. `help` lists all of them", so the process stated a
+      falsehood about itself. So: every command word the dispatcher matches must
+      have a verbs[] row, and every row must be dispatched. Both directions, the
+      same shape as the readback check.
+
+    Both are offline: no running process, no build.
+
     Run after any rail change, alongside dualsmoke.ps1.
 #>
 
@@ -174,7 +202,95 @@ if ($unkept.Count -or $unfound.Count) {
     exit 1
 }
 
+# --- the doc carries the semantics (Docs/A2GSPU_RAILS.md) ------------------
+# The registry answers WHICH rails exist; the doc answers what they mean. A
+# rail absent from the doc is discoverable by name and a black box by
+# behaviour -- the same black box the registry removed, moved one layer out.
+# Name presence is the whole test: cheap, and exactly the check that would have
+# caught all 24 of the misses. A rail deliberately left out of the doc must be
+# named here with its reason, the way the record contract's exemptions are.
+$docFile   = Join-Path $Root 'Docs\A2GSPU_RAILS.md'
+$docExempt = @{}          # rail -> reason. Empty on purpose: every rail is documented.
+if (-not (Test-Path $docFile)) {
+    Write-Host "railparity: FAIL - rail catalogue not found at $docFile" -ForegroundColor Red
+    exit 1
+}
+$docText = [IO.File]::ReadAllText($docFile)
+$undocInDoc = @($regRails | Where-Object {
+        -not $docExempt.ContainsKey($_) -and
+        $docText -notmatch ('(?<![A-Za-z0-9_])' + [regex]::Escape($_) + '(?![A-Za-z0-9_])')
+    } | Sort-Object)
+if ($undocInDoc.Count) {
+    Write-Host ''
+    Write-Host 'UNDESCRIBED - declared in the registry, named nowhere in Docs/A2GSPU_RAILS.md:' -ForegroundColor Red
+    foreach ($n in $undocInDoc) { Write-Host "  $n" }
+    Write-Host '  (write the rail into the catalogue with its FULL name -- a short form such as'
+    Write-Host '   `TAP_PCS` for A2GSPU_TAP_PCS is invisible to a reader grepping for what to set --'
+    Write-Host '   or name it and its reason in $docExempt in railparity.ps1)'
+    Write-Host ''
+    Write-Host ("railparity: FAIL - {0} rail(s) the catalogue does not describe" -f $undocInDoc.Count) -ForegroundColor Red
+    exit 1
+}
+
+# --- the CTRL dispatcher vs the verb registry (AGENTS.md rule 6) -----------
+# verbs[] in a2gspu_manifest.hpp is what `help`, `help <file>` and
+# `manifest <file>` all print -- all three of the discovery surfaces rule 6
+# names. The dispatcher is what actually answers. A word in one and not the
+# other is either a verb nobody can find or a catalogue entry nobody can call,
+# and the process says "`help` lists all of them" either way.
+#
+# A dispatcher literal counts as a command word only when the comparison is
+# against `line` (the whole command). Comparisons against `arg`, `sub` and the
+# like are sub-commands (`on`, `off`, `status`, `bus`) and are not verbs; the
+# first word of the literal is taken so `strncmp(line,"read ",5)` reads as
+# `read`.
+$manifestFile = Join-Path $srcDir 'a2gspu_manifest.hpp'
+$verbTable = [System.Collections.Generic.HashSet[string]]::new()
+$inVerbs   = $false
+foreach ($line in [IO.File]::ReadAllLines($manifestFile)) {
+    if ($line -match 'static const Verb v\[\]') { $inVerbs = $true; continue }
+    if ($inVerbs -and $line -match '^\s*\};') { break }
+    if ($inVerbs -and $line -match '^\s*\{"([a-z0-9-]+)"') { [void]$verbTable.Add($matches[1]) }
+}
+if ($verbTable.Count -lt 2) {
+    Write-Host "railparity: FAIL - could not read verbs[] from $manifestFile" -ForegroundColor Red
+    exit 1
+}
+$dispatched = [System.Collections.Generic.HashSet[string]]::new()
+foreach ($f in @('gs2.cpp', 'a2gspu_ctrl_cmds.hpp')) {
+    $p = Join-Path $srcDir $f
+    if (-not (Test-Path $p)) {
+        Write-Host "railparity: FAIL - CTRL dispatcher source not found at $p" -ForegroundColor Red
+        exit 1
+    }
+    foreach ($m in [regex]::Matches([IO.File]::ReadAllText($p), 'strn?cmp\s*\(\s*line\s*,\s*"([^"]+)"')) {
+        $w = ($m.Groups[1].Value -split '\s+')[0]
+        if ($w -match '^[a-z][a-z0-9-]*$') { [void]$dispatched.Add($w) }
+    }
+}
+$hidden  = @($dispatched | Where-Object { -not $verbTable.Contains($_) } | Sort-Object)
+$unreach = @($verbTable  | Where-Object { -not $dispatched.Contains($_) } | Sort-Object)
+if ($hidden.Count -or $unreach.Count) {
+    Write-Host ''
+    if ($hidden.Count) {
+        Write-Host 'UNDISCOVERABLE VERB - the CTRL loop answers it, verbs[] does not list it:' -ForegroundColor Red
+        $hidden | ForEach-Object { Write-Host "  $_" }
+        Write-Host '  (help/manifest omit it, and `unknown-cmd` tells callers `help` lists all of them)'
+    }
+    if ($unreach.Count) {
+        Write-Host 'UNCALLABLE VERB - verbs[] lists it, no dispatcher literal matches it:' -ForegroundColor Red
+        $unreach | ForEach-Object { Write-Host "  $_" }
+        Write-Host '  (a declared capability that does not exist will be believed)'
+    }
+    Write-Host ''
+    Write-Host ("railparity: FAIL - {0} undiscoverable, {1} uncallable verb(s)" -f `
+                $hidden.Count, $unreach.Count) -ForegroundColor Red
+    Write-Host 'Fix: add or remove the row in src/a2gspu_manifest.hpp verbs[].'
+    exit 1
+}
+
 Write-Host ("railparity: PASS - every rail the code reads is discoverable, every declared rail")
-Write-Host ("                   exists, every record is written by the contract, and all {0}" -f $fnRows.Count)
-Write-Host ("                   declared readers are registered by their rails.")
+Write-Host ("                   exists and is described in Docs/A2GSPU_RAILS.md, every record is")
+Write-Host ("                   written by the contract, all {0} declared readers are registered by" -f $fnRows.Count)
+Write-Host ("                   their rails, and all {0} CTRL verbs are both dispatched and listed." -f $verbTable.Count)
 exit 0

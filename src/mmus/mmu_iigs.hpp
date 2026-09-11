@@ -405,8 +405,19 @@ class MMU_IIgs : public MMU {
 
         // A2GSPU diagnostic: print the master soft-switch state + how bank-$00/$01
         // $A600 (the loader CallTable) actually resolves. Banks $00/$01 are handler
-        // pages (bank_shadow_read/write) so read_raw/probe_peek return floating-bus
-        // $EE for them; this replicates bank_shadow's calc_aux_read/write resolution
+        // pages (bank_shadow_read/write), so READ_RAW returns floating-bus $EE for
+        // them -- probe_peek above does NOT: it resolves those banks through
+        // calc_aux_read, the language-card bank/ROM state and the Mega II page
+        // table, and returns floating bus only for page $C0, where no
+        // observation-free answer exists. (The old text here said probe_peek
+        // returned $EE for the whole of banks $00/$01. That was true before the
+        // probe was fixed nineteen lines above, and INSTRUMENTATION_SHAPE.md M11
+        // was written from this sentence rather than from the code -- then three
+        // more consumers were built on it, each flagging every genuine $EE in
+        // bank 0 as "floating bus, do NOT trust as memory truth". $EE is INC abs
+        // and an ordinary data byte. A stale comment beside working code is a
+        // black box of the documentation kind, and this one seeded four.)
+        // This function replicates bank_shadow's calc_aux_read/write resolution
         // (honouring g_ramrd/g_ramwrt/g_altzp) and reads the megaii RAM DIRECTLY, so
         // it shows the TRUE content + whether a read vs a write of the same logical
         // address land in MAIN vs AUX (the split we are hunting). Observation-free.

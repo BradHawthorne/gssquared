@@ -108,7 +108,7 @@ Agents must pick a model. Toolchain recipes pin models in scripts.
 | `inject-ram` | `load` / `poke` / RUN_BIN | does not auto-run unless said |
 | `inject-key` | `key` (with consume receipt), `press`, `keys` | prefer `key` when proof matters |
 | `inject-media` | `mount` | host file side effects |
-| `time-travel` | `save`/`restore` | Class A: CPU+MMU only |
+| `time-travel` | `save`/`restore` | Class **derived per file**, not fixed: `A` cpu+mmu+softswitches+RAM, `B` adds video/scanner, `C` adds ADB+Ensoniq+IWM. A IIgs `save` writes `adb, ensoniq, vgcint, iwm, pdblock` today, so it is not Class A. The `devices=`/`included=`/`excluded=` lists in the file's own manifest are the contract; the letter is a summary of them. The `restore` ack carries the manifest text verbatim — read it, do not assume it |
 | `force-control` | `setreg`, `bp`, `reset` | label in ack |
 
 ---

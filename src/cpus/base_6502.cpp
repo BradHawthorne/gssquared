@@ -29,7 +29,7 @@
 #include "obs_iigs.hpp"   // Observatory boot-fault-context view (obs_view_fault)
 #include "generic_tap.hpp" // A2GSPU_TAP: generic title-agnostic PC-hit tap (off => 1 branch)
 #include "a2gspu_trap.hpp" // A2GSPU_TRAP: configurable PC traps with a payload spec (off => 1 branch)
-#include "a2gspu_coverage.hpp" // A2GSPU_COVERAGE: execution bitmap (off => 1 branch)
+#include "a2gspu_coverage.hpp" // A2GSPU_COVERAGE: consumed program-byte bitmap
 #include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting (off => 1 branch)
 #include "memvu_istream.hpp"   // MEMVU_OPMIX / MEMVU_IREUSE: instruction-stream shape
 
@@ -273,8 +273,10 @@ inline uint32_t make_pc_long(cpu_state *cpu, uint16_t address) {
 inline uint16_t read_word_from_pc(cpu_state *cpu) {
     // make sure this is read lo-byte first.
     byte_t al = bus_read(cpu, make_pc_long(cpu, cpu->pc));
+    if (g_cov_on) a2gspu_cov_fetch(make_pc_long(cpu, cpu->pc), 1, &al);
     cpu->pc++;
     byte_t ah = bus_read(cpu, make_pc_long(cpu, cpu->pc));
+    if (g_cov_on) a2gspu_cov_fetch(make_pc_long(cpu, cpu->pc), 1, &ah);
     cpu->pc++;
     
     return word(al, ah);
@@ -418,6 +420,7 @@ inline uint32_t _PC(cpu_state *cpu) {
 
 inline uint8_t fetch_pc(cpu_state *cpu) {
     uint8_t b = cpu->mmu->read(_PC(cpu));
+    if (g_cov_on) a2gspu_cov_fetch(_PC(cpu), 1, &b);
     if (memvu_lv_on) memvu_lv_note_load(_PC(cpu) & 0xFFFFFF, MEMVU_K_FETCH);  // MEMVU_LOADVIS
     incr_cycles(cpu);
     cpu->pc++;
@@ -1270,9 +1273,11 @@ inline void transfer_x_s(cpu_state *cpu, T &reg) {
             cpu->sp_lo = word_lo(reg);
             cpu->sp_hi = 0x01;
         } else {
-            // if x is 8-bit:  top byte will be zero (8 bit extended to 16-bit)
-            // if x is 16-bit, this will be a 16-bit transfer
-            cpu->sp = reg; 
+            // W65C816: native TXS always transfers the full 16-bit X to S,
+            // regardless of the index-register select (X) flag. Using _X()/x_lo
+            // when X=1 truncated S (e.g. X=1234 -> S=0034).
+            (void)reg;
+            cpu->sp = cpu->x;
         }
     } else {
         cpu->sp_lo = reg;
@@ -2182,18 +2187,24 @@ inline void move_memory(cpu_state *cpu) {
     uint8_t DBA = fetch_pc(cpu); // cycle 2
     uint8_t SBA = fetch_pc(cpu); // cycle 3
 
-    cpu->db = SBA;
-    uint8_t N = bus_read(cpu, (cpu->full_db | _X(cpu))); // cycle 4
-    cpu->db = DBA;
-    bus_write(cpu, (cpu->full_db | _Y(cpu)), N); // cycle 5
+    // MVN/MVP always use 16-bit X/Y for the block-move addresses, even when
+    // the X flag selects 8-bit index mode for other instructions (W65C816).
+    // Form bank:offset explicitly: setting only cpu->db left unused_db stale
+    // and _X()/_Y() under x_8 truncated the offset to 8 bits (writes missed
+    // e.g. $00/3100 and hit $00/00nn instead).
+    uint32_t src = ((uint32_t)SBA << 16) | (uint16_t)cpu->x;
+    uint32_t dst = ((uint32_t)DBA << 16) | (uint16_t)cpu->y;
+    uint8_t N = bus_read(cpu, src); // cycle 4
+    bus_write(cpu, dst, N); // cycle 5
+    cpu->db = DBA; // DBR becomes destination bank after the move
 
-    phantom_read_ign(cpu, (cpu->full_db | _Y(cpu))); // cycle 6
-    phantom_read_ign(cpu, (cpu->full_db | _Y(cpu))); // cycle 7
+    phantom_read_ign(cpu, dst); // cycle 6
+    phantom_read_ign(cpu, dst); // cycle 7
     if (cpu->a--) { // uses full accumulator
         cpu->pc = cpu->pc - 3;
     };
     // TODO: put the address written into the trace eaddr. Eventually we need both.
-    TRACE(cpu->trace_entry.operand = (DBA << 8) | SBA; cpu->trace_entry.f_op_sz = 2; cpu->trace_entry.eaddr = (cpu->full_db | _Y(cpu));)
+    TRACE(cpu->trace_entry.operand = (DBA << 8) | SBA; cpu->trace_entry.f_op_sz = 2; cpu->trace_entry.eaddr = dst;)
 }
 
 inline void invalid_opcode(cpu_state *cpu, opcode_t opcode) {
@@ -2202,6 +2213,15 @@ inline void invalid_opcode(cpu_state *cpu, opcode_t opcode) {
 }
 
 inline void invalid_nop(cpu_state *cpu, int bytes, int cycles) {
+    // These decoded NOPs consume operands without reading them from the bus.
+    if (g_cov_on) {
+        if(g_cov_maps.empty()) a2gspu_cov_fetch(_PC(cpu), bytes - 1);
+        else for(int k=0;k<bytes-1;k++) {
+            uint32_t pc=(_PC(cpu)&0xFF0000u)|((_PC(cpu)+k)&0xFFFFu);
+            uint8_t b=cpu->mmu->probe_peek(pc);
+            a2gspu_cov_fetch(pc,1,&b);
+        }
+    }
     cpu->pc += (bytes-1); // we already fetched the opcode, so just count bytes excl. that.
     for (uint16_t i = 0; i < cycles-1; i++) {
         incr_cycles(cpu);
@@ -2433,14 +2453,12 @@ int execute_next(cpu_state *cpu) override {
             iigs_print_ring_symbolized(64);   // #1: NAME+off caller path
         }
     }
-    // A2GSPU_COVERAGE: record that this byte is executed code.  Deliberately
-    // OUTSIDE the `if constexpr (CPUTraits::has_65816_ops)` block above -- most
-    // of the per-instruction rails there are 65816-only at compile time, and the
-    // whole point of coverage is to serve 6502 Apple II archaeology.
-    if (g_cov_on) a2gspu_cov_step(cpu->full_pc);
-
     const uint32_t memvu_ipc = cpu->full_pc;   // opcode address, before fetch_pc advances PC
     if (memvu_blame_on) memvu_blame_pc = memvu_ipc;   // MEMVU_BLAME attributes to the opcode
+    if(g_cov_on && !g_cov_maps.empty()) a2gspu_cov_begin(_PC(cpu),
+        0x80 | (CPUTraits::has_65816_ops?0x10:CPUTraits::has_65c02_ops?8:0) |
+        ((CPUTraits::e_mode || !CPUTraits::has_65816_ops)?4:0) |
+        (CPUTraits::m_16?2:0) | (CPUTraits::x_16?1:0));
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;
     // MEMVU_OPMIX / MEMVU_IREUSE (off => 1 branch). The mode context is a
@@ -4367,8 +4385,9 @@ int execute_next(cpu_state *cpu) override {
         case OP_INOP_44: /* INOP 44 */
             if constexpr (CPUTraits::has_65816_ops) {
                 move_memory(cpu);
-                _X(cpu)--;
-                _Y(cpu)--;
+                // Always 16-bit index adjust (independent of X flag).
+                cpu->x--;
+                cpu->y--;
             } else if constexpr (CPUTraits::has_65c02_ops) {
                 invalid_nop(cpu, 2, 3);
             } else invalid_opcode(cpu, opcode);
@@ -4377,8 +4396,9 @@ int execute_next(cpu_state *cpu) override {
         case OP_INOP_54: /* INOP 54 */ /* OP_MVN_MOVE */
             if constexpr (CPUTraits::has_65816_ops) {
                 move_memory(cpu);
-                _X(cpu)++;
-                _Y(cpu)++;
+                // Always 16-bit index adjust (independent of X flag).
+                cpu->x++;
+                cpu->y++;
             } else if constexpr (CPUTraits::has_65c02_ops) {
                 invalid_nop(cpu, 2, 4);
             } else invalid_opcode(cpu, opcode);
@@ -4880,7 +4900,10 @@ int execute_next(cpu_state *cpu) override {
 
         case OP_INOP_AB: /* INOP AB */ /* OP_PLB_S */
             if constexpr (CPUTraits::has_65816_ops) {
-                cpu->db = pop_byte_new(cpu); // "unsafe" pop.
+                // Datasheet PLB = 4: opcode + 2 internal + stack pull.
+                phantom_read_ign(cpu, make_pc_long(cpu, _PC(cpu))); // 2
+                phantom_read_ign(cpu, make_pc_long(cpu, _PC(cpu))); // 3
+                cpu->db = pop_byte_new(cpu); // 4
                 stack_fix_new(cpu);
                 set_n_z_flags(cpu, cpu->db);
             } else if constexpr (CPUTraits::has_65c02_ops) {
@@ -4935,6 +4958,8 @@ int execute_next(cpu_state *cpu) override {
 
         case OP_INOP_FB: /* OP_XCE_IMP */
             if constexpr (CPUTraits::has_65816_ops) {
+                // Datasheet XCE = 2: opcode fetch + 1 internal operation.
+                phantom_read_ign(cpu, make_pc_long(cpu, _PC(cpu)));
                 bool old_E = cpu->E;
                 cpu->E = cpu->C;
                 cpu->C = old_E;

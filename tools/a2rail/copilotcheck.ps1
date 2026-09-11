@@ -1,4 +1,4 @@
-<# Prove windowed human-input mode and read-only agent telemetry coexist. #>
+<# Prove windowed agent observe+control; instrumentation poke still refused. #>
 [CmdletBinding()]
 param([string]$Dir=(Join-Path $env:TEMP ('a2rail-copilot-'+[guid]::NewGuid().ToString('N'))))
 $ErrorActionPreference='Stop'; $here=$PSScriptRoot
@@ -14,9 +14,20 @@ function Ask([int]$n,[string]$cmd){
   throw "copilot command $n did not ack; exited=$($p.HasExited)"
 }
 try {
-  $cpu=Ask 1 'cpu'; $contract=Ask 2 'copilot'; $deny=Ask 3 'poke 0400 00'
+  Start-Sleep -Milliseconds 3000
+  $cpu=Ask 1 'cpu'; $contract=Ask 2 'copilot'; $deny=Ask 3 'poke 0400 00'; $press=Ask 4 'press 41 0'
   if($cpu-notmatch '^status=OK cpu '){throw "cpu failed: $cpu"}
-  if($contract-notmatch 'mode=windowed-read-only'){throw "contract failed: $contract"}
-  if($deny-notmatch '^status=FAIL copilot-read-only'){throw "write was not refused: $deny"}
-  Write-Host 'ALL GREEN -- windowed co-pilot telemetry + write refusal' -ForegroundColor Green
-} finally { if(-not $p.HasExited){Stop-Process -Id $p.Id -Force} }
+  if($contract-notmatch 'mode=windowed-agent'){throw "contract failed: $contract"}
+  if($deny-notmatch '^status=FAIL copilot-command-not-allowed'){throw "instrumentation poke was not refused: $deny"}
+  if($press-notmatch '^status=OK press'){throw "press failed: $press"}
+  Write-Host 'ALL GREEN -- windowed agent observe+control; poke refused' -ForegroundColor Green
+} finally {
+  if(-not $p.HasExited){
+    try {
+      Set-Content (Join-Path $Dir 'cmd.5.tmp') 'quit' -NoNewline
+      Move-Item (Join-Path $Dir 'cmd.5.tmp') (Join-Path $Dir 'cmd.5') -Force
+      $p.WaitForExit(5000)|Out-Null
+    } catch {}
+    if(-not $p.HasExited){Stop-Process -Id $p.Id -Force}
+  }
+}

@@ -22,7 +22,8 @@
 > ```
 >
 > `tools/a2rail/railparity.ps1` (run by `dualsmoke.ps1`) fails if the code reads a
-> rail the registry does not declare, or declares one no code reads.
+> rail the registry does not declare, or declares one no code reads — **and now
+> also if a declared rail's name appears nowhere in this file.**
 >
 > This warning exists because the file earned it: it described **96** of the
 > **128** rails the code actually read. The 32 it omitted included `MEMVU_LOADVIS`,
@@ -30,6 +31,19 @@
 > feeds the deasmiigs code/data split. A hand-maintained list in
 > `a2gspu_manifest.hpp` had drifted separately to 36. Three copies of one fact,
 > and both copies a client could reach were short.
+>
+> **And it happened again**, because the warning was the only mechanism. At the
+> 142-rail mark this file had no entry for 24 of them: all twelve `WIZ5_*` rails,
+> `A2GSPU_COVERAGE` and `COVERAGE_OUT` (the subject of the note above), the SNAP
+> region-logger's `HI`/`MAX`/`ZP`, `HGR_PAGE`, `KEYRAM`, `KEYSCHED_DELAY`,
+> `MOUSETRACE`, `OUT_DIR` and the `WRITEBACK` pair — while the `A2GSPU_TAP_*`
+> family was present but written under short names, which is invisible to anyone
+> grepping for the name they must actually set. The hand-maintained list in
+> `a2gspu_manifest.hpp` had drifted again too, to 53 of 142, and had acquired a
+> rail that does not exist (`ITRACE`, which `rail find` rejects). That list is
+> now generated from the registry, and the name check below is a gate. A
+> catalogue nothing checks is a catalogue that is wrong; this one has now proved
+> it twice.
 
 This document supersedes the stale "Gaps" table in `../A2GSPU_INSTRUMENTATION.md`
 (most of those gaps are now implemented — see that file's appended note).
@@ -104,6 +118,10 @@ Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~189
 | `A2GSPU_SYM_SUSPECT=1` | append `[SUSPECT reused]` to any symbol whose name resolves at >1 address (advisory only) | observe | env |
 | `A2GSPU_BUS_DUMP=<path>` | `~BUS` cycle dump (source = slot_bus) for the gssquared→card host gate | observe | env |
 | `A2GSPU_BUS_STREAM=1` | live `~BUS` slot-bus CDC streaming (→ PB `INGRESS_SOURCE=0`) | observe | env |
+| `A2GSPU_COVERAGE="LO-HI"\|"BANK:LO-HI"` | **per-byte execution bitmap** over that range, one bit per byte, set when the byte was part of an executed instruction — this is what turns deasmiigs's code/data split from a heuristic into a measurement (`--coverage`). A lower bound, never an upper one: a byte that did not execute in this run is *not proven code*, not *proven data*; union several runs to widen it. Live equivalent: the `cov` verb, which also binds a source plan (`A2COV2`) | observe | env |
+| `A2GSPU_COVERAGE_OUT=<file>` | file the bitmap is flushed to. Written **before** the gate block, which exits on any gate and would otherwise throw the run's coverage away | observe | env |
+| `A2GSPU_HGR_PAGE=1\|2` | which HGR page the II-family dump/golden gate reads — for a workload that gates on the page it just drew | observe | env |
+| `A2GSPU_KEYRAM=1` | dump RAM once per keystroke; needs a session directory to write into (`A2GSPU_TAP_SESSION`). Canonical name for `WIZ5_KEYRAM` | observe | env |
 
 *Always-on spike output (no env needed):* the spike prints `SPIKE E1:` (SHR-window
 nonzero/distinct/FNV hash + SCB row), `SPIKE TRACE/SLOT/MMU/OBS/BRACKET:` lines, writes
@@ -126,7 +144,7 @@ it differences two runs.
 | `A2GSPU_ITRACE_FROM=<hex24>` | per-instruction trace, armed when PC first hits this 24-bit address | trace | env |
 | `A2GSPU_ITRACE_FRAME=<N>` | per-instruction trace, armed at the start of headless frame N | trace | env |
 | `A2GSPU_ITRACE_N=<n>` | cap logged instructions (default 256) | trace | env |
-| `A2GSPU_ITRACE_LO/_HI=<hex24>` | restrict ITRACE to a PC window `[LO,HI]` | trace | env |
+| `A2GSPU_ITRACE_LO=<hex24>`, `A2GSPU_ITRACE_HI=<hex24>` | restrict ITRACE to a PC window `[LO,HI]`; setting either one also **enables** ITRACE (they are the master switch that has no bare `A2GSPU_ITRACE` behind it — that name is not a rail and the binary rejects it) | trace | env |
 | `A2GSPU_ITRACE_REARM=<n>` | re-arm ITRACE this many times (windowed re-capture) | trace | env |
 | `A2GSPU_ITRACE_OUT=<file>` | write ITRACE to a file instead of stderr | trace | env |
 | `A2GSPU_TRACE_EXT=1` | append DBR/DP/cycle-delta/scanline columns to 65816 trace lines | trace | env |
@@ -140,9 +158,12 @@ it differences two runs.
 | `A2GSPU_MODETRACE=1` | CPU mode-transition events (XCE / REP / SEP → e/M/X changes) | trace | env |
 | `A2GSPU_INTLOG=1` | interrupt-entry logger (IRQ/BRK/COP entries) | trace | env |
 | `A2GSPU_MILESTONES=<file>` | load a boot-milestone list; print a reached / NOT-REACHED table at spike end | trace | env |
-| `A2GSPU_SNAP_LO/_HI=<hex24>` | memory-window `[LO,HI]` for the SNAP region-logger | trace | env |
+| `A2GSPU_SNAP_LO=<hex24>`, `A2GSPU_SNAP_HI=<hex24>` | memory-window `[LO,HI]` for the SNAP region-logger. **Nothing to do with the snapshot rails** — `SNAP_SAVE`/`SNAP_LOAD` save a machine, `SNAP_LO/_HI/_PCS/_OUT/_MAX/_ZP` dump a memory window at trigger PCs | trace | env |
 | `A2GSPU_SNAP_PCS=<hex,…>` | up to 8 trigger PCs at which to dump the SNAP window | trace | env |
 | `A2GSPU_SNAP_OUT=<file>` | destination file for the SNAP region-logger (requires LO/HI + PCS) | trace | env |
+| `A2GSPU_SNAP_MAX=N` | cap on SNAP records emitted | trace | env |
+| `A2GSPU_SNAP_ZP=<hexZP>` | zero-page pointer correlation key, recorded as an **annotation** on each record. The emitter keys on PC, so this labels a record; it never triggers one | trace | env |
+| `A2GSPU_MOUSETRACE=1` | append each ADB mouse injection to `kg_mouse_trace.txt` — proves a mouse delta reached the micro, not just the host | trace | env |
 
 ## MEMVU — memory-behaviour accounting
 
@@ -294,8 +315,12 @@ the early-boot figure as the outlier it is.
 | `A2GSPU_POKE_NTH=<n>` | fire the POKE on the Nth hit of the PC (default 1) | manipulate | env |
 | `A2GSPU_TAP="PC[,PC…]"` | generic title-agnostic call tap (`src/generic_tap.hpp`, from the harvested wiz5 taps): NDJSON record on each hit of the watched PC(s) | trace | env |
 | `A2GSPU_TAP_SESSION=<dir>` | periodic capture session: ZP stream + `$0400-BFFF` RAM / `$2000-5FFF` HGR + soft-switch `.meta` + text-page snapshots to `<dir>` | trace | env |
-| `A2GSPU_TAP_PTRS`, `TAP_PCS`, `TAP_MAX`, `TAP_DUMP_ON`, `TAP_DUMP_EVERY`, `TAP_ZP_EVERY`, `TAP_CYC_PER_MS`, `TAP_CYC_PER_SEC` | tap tuning: extra ZP-pointer register fields, which PCs, hit cap, dump-on-op / dump cadence, ZP-stream cadence, cycle-rate calibration | trace | env |
+| `A2GSPU_TAP_PTRS`, `A2GSPU_TAP_PCS`, `A2GSPU_TAP_MAX`, `A2GSPU_TAP_DUMP_ON`, `A2GSPU_TAP_DUMP_EVERY`, `A2GSPU_TAP_ZP_EVERY`, `A2GSPU_TAP_CYC_PER_MS`, `A2GSPU_TAP_CYC_PER_SEC` | tap tuning: extra ZP-pointer register fields, which PCs, hit cap, dump-on-op / dump cadence, ZP-stream cadence, cycle-rate calibration. (Spelled in full. They were written here under short names, which is invisible to a reader — and to a checker — grepping for the name they must actually set) | trace | env |
 | `A2GSPU_FORCE_KEY=<hex-ascii>` | force the ADB `$C000` keyboard latch to return this key (drives a `$C000`-polling guest headlessly) | manipulate | env |
+| `A2GSPU_KEYSCHED=<file>` | a **schedule** of keystrokes read from a file, injected entry by entry. Distinct from `SPIKE_KEYS`, which is one literal string injected at one frame. A missing file is fatal at arm (exit 2), not a warning. Canonical name for `WIZ5_KEYS` | manipulate | env |
+| `A2GSPU_KEYSCHED_DELAY=N` | frames between scheduled keystrokes. Canonical name for `WIZ5_KEY_DELAY` | manipulate | env |
+| `A2GSPU_WRITEBACK=1` | write in-memory (possibly modified) disks back to their **host files** at spike end. OFF by default under mutation-guard discipline — use only on writable scratch images. Canonical name for `WIZ5_WRITEBACK` | manipulate | env |
+| `A2GSPU_NO_WRITEBACK=1` | suppress write-back even when `WRITEBACK` is set. Honoured across **both** spellings, so the guard cannot be bypassed by setting the other name. Canonical for `WIZ5_NO_WRITEBACK` | manipulate | env |
 
 *(Live/interactive manipulation is the CTRL rail's `keys`/`press`/`holdkey`/`mount`/`save`/`restore` verbs, below.)*
 
@@ -303,14 +328,38 @@ the early-boot figure as the outlier it is.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `A2GSPU_SNAP_SAVE=<file>` | at spike end, save CPU regs + full MMU snapshot (128K + page tables + soft-switch state) + trailing sentinel + a **manifest** naming what the file holds (`class=A included=cpu,mmu,softswitches,ram,rom-map,megaii`), what it omits (`excluded=adb,ensoniq,iwm,scanner,rtc,serial,clock`), the frame, the pins and the binary | snapshot | env |
-| `A2GSPU_SNAP_LOAD=<file>` | restore that snapshot at start and skip the ~1200-frame boot (the ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device's RAM-disk overlay restore from the snapshot when it holds them; floppy media, scanner and clock self-heal). Prints the manifest, or that it is absent and what Class A means. `SPIKE_KEYS` into a restored machine is a `WARNING`: the ADB micro is not in the snapshot and a restored desktop never polls `$C000` again (measured) | snapshot | env |
+| `A2GSPU_SNAP_SAVE=<file>` | at spike end, save CPU regs + full MMU snapshot (128K + page tables + soft-switch state) + device blocks + trailing sentinel + a **manifest** naming what the file holds, what it omits, the frame, the pins and the binary. **Do not read the lists from here — read them from the file.** They vary by platform and by what the machine had when the save ran (`tools/a2rail/artifacts.py snap <file>` prints the trailer; the `restore` ack carries the same text) | snapshot | env |
+| `A2GSPU_SNAP_LOAD=<file>` | restore that snapshot at start and skip the ~1200-frame boot (the ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device's RAM-disk overlay restore from the snapshot when it holds them; floppy media, scanner and clock self-heal). Prints the manifest, or that it is absent and what Class A means. `SPIKE_KEYS` into a restored machine warns **only when the snapshot does not hold the ADB micro** — a pre-device-block file, or a platform with no ADB. From such a machine a restored desktop never polls `$C000` again (measured); from one that holds the ADB it does, and there is no warning | snapshot | env |
 | `A2GSPU_RESTORE=<file>` | alias for `SNAP_LOAD` (load-at-start) | snapshot | env |
 
 *(File-format tokens `A2GSPU_SNAP_MAGIC/_VER/_END/_FREAD` are snapshot on-disk constants, not env rails.)*
 
-> **A restored machine cannot accept keyboard input.** "Devices self-heal" understates this
-> one. Measured on GS/OS 6.0.1 at the Finder desktop: a cold-booted machine reads `$C000`
+**The manifest, and why this file no longer quotes one.** It used to, and the
+quote was wrong on *both* platforms. The generator is
+`a2gspu_snap_manifest_text()` in `gs2.cpp`; its fields are:
+
+| Field | Meaning |
+|-------|---------|
+| `class=` | `A` cpu+mmu+softswitches+RAM · `B` adds video/scanner state · `C` adds the ADB micro, the Ensoniq and the IWM (`INSTRUMENTATION_SHAPE.md` M5's roadmap). **Derived from the blocks actually written**, and claimed only when the definition is met — a save holding a device the roadmap never named (a IIe holding only `pdblock`) stays `class=A` and lets `devices=` carry it, because inventing a `B` for it would be a second false claim |
+| `devices=` | the device blocks in the file, comma-separated, or `-` |
+| `included=` / `excluded=` | the full state vocabulary split in two. **This pair is the contract**; the letter is a summary of it |
+| `frame= seed= faketime= ramdisk= build= exe=` | the pins and the binary identity, so a restored run is traceable to what produced the file |
+
+Read it from the running process, not from here: the `restore` ack carries the
+manifest text verbatim after its `skipped=` field, and
+`python tools/a2rail/artifacts.py snap <file>` reads the `GSPM` trailer straight
+off disk. A worked IIgs example — not a contract, a sample — is
+`class=C devices=adb,ensoniq,vgcint,iwm,pdblock` with `scanner` and `media`
+still in `excluded=`.
+
+> **A restored machine cannot accept keyboard input — measured before device blocks
+> existed, and true today only of a snapshot that holds neither `adb` nor `vgcint`.**
+> The ADB micro and the VGC interrupt state are now saved and restored on a IIgs
+> (`M5`), which is what closed this; check the manifest's `devices=` rather than
+> assuming either way. The measurement below is kept because it is the reason those
+> blocks exist and it still describes a pre-device-block file exactly.
+>
+> Measured on GS/OS 6.0.1 at the Finder desktop: a cold-booted machine reads `$C000`
 > **1,213 times** over 2,000 frames and keeps polling indefinitely; a machine restored from
 > a snapshot of that same desktop reads it **zero** times, ever. The Finder falls back to
 > polling only `$C025` from one ROM routine. Injected keys land correctly in the ADB latch
@@ -343,6 +392,33 @@ an output sink that cannot be opened (`WATCH_OUT`, `CALLSTREAM`, `ITRACE_OUT`, `
 sinks) is not a warning: it aborts at arm with exit code 2, because a run that measured something
 other than what it was asked to is worse than no run.
 
+## WIZ5 — the title-specific streams, and the aliases that outlived them
+
+These are the last per-project rails in the fork: three PC traps compiled into
+`src/wiz5_config.hpp` for one 1988 title, plus the legacy spellings of rails
+that have since been generalised. `Docs/INSTRUMENTATION_SHAPE.md` section 1 names
+them as a known exception and M10 sets the retirement condition — they stand
+until their consumers read the generic `A2GSPU_TRAP` records. They are here
+because an undocumented rail is the black box the registry exists to remove, not
+because a new consumer should reach for one: **for new work use `A2GSPU_TRAP`.**
+Their record shapes are the three that predate the M1 envelope (`t=`, `op=`,
+none) and are the named exemption in `railparity.ps1`.
+
+| Rail | Effect | Group | Gated |
+|------|--------|-------|-------|
+| `WIZ5_EC19_OUT=<file>` | PC trap at `$EC19` (SCREENDEV driver entry) → NDJSON `t=e\|x` records. Rides the generic-tap per-instruction gate | wiz5 | env |
+| `WIZ5_DISKWR_OUT=<file>` | PC traps at `$DF09`/`$DF04` (UNITWRITE/UNITREAD) → `op=BLKWR\|BLKRD` records with unit, block, length and data | wiz5 | env |
+| `WIZ5_CSP6_OUT=<file>` | PC trap capturing CSP-6 eval-stack entries (no tag; `ipc ts_ms sp page1 zp bufs[]`) | wiz5 | env |
+| `WIZ5_TAP` | legacy alias for `A2GSPU_TAP`. `A2GSPU_TAP*` is canonical; the alias lets one merged tool serve the wiz5/pascal projects with no script change | alias | env |
+| `WIZ5_SESSION` | legacy alias for `A2GSPU_TAP_SESSION` | alias | env |
+| `WIZ5_ZP_EVERY` | legacy alias for `A2GSPU_TAP_ZP_EVERY` | alias | env |
+| `WIZ5_DUMP_EVERY` | legacy alias for `A2GSPU_TAP_DUMP_EVERY` | alias | env |
+| `WIZ5_KEYS` | legacy alias for `A2GSPU_KEYSCHED` | alias | env |
+| `WIZ5_KEY_DELAY` | legacy alias for `A2GSPU_KEYSCHED_DELAY` | alias | env |
+| `WIZ5_KEYRAM` | legacy alias for `A2GSPU_KEYRAM` | alias | env |
+| `WIZ5_WRITEBACK` | legacy alias for `A2GSPU_WRITEBACK` | alias | env |
+| `WIZ5_NO_WRITEBACK` | legacy alias for `A2GSPU_NO_WRITEBACK`; the suppression is honoured under **either** spelling | alias | env |
+
 ## Device / determinism — reproducible oracle knobs
 
 | Rail | Effect | Group | Gated |
@@ -353,6 +429,7 @@ other than what it was asked to is worse than no run.
 | `A2GSPU_SP_NDEV=<n>` | override the SmartPort device count (A/B faithfulness; `32` reproduces pre-fix enumeration) | device | env |
 | `A2GSPU_SERIAL_PORT=<COMx>` | override the real-card CDC probe port (default tries `COM10` first) | device | env |
 | `A2GSPU_SERIAL_DEBUG=1` | verbose real-card serial/reconnect logging | device | env |
+| `A2GSPU_OUT_DIR=<dir>` | directory prefix applied to rail output filenames. An absolute path (or a Windows drive letter) is honoured verbatim, so a path a caller chose explicitly is never rewritten | meta | env |
 
 ## CTRL rail — the interactive `cmd.N`→`ack.N` protocol
 
@@ -372,7 +449,7 @@ protocol authority.
 
 | Verb | Effect | Group |
 |------|--------|-------|
-| `run <frames>` | step N frames; reply `ok` or `halted@<i>` | CTRL-verb (run) |
+| `run <frames>` | step N frames; reply `status=OK ran=N cycles=N (in-command) PC $xxxx->$yyyy`, or `status=HALT ran=N …` if the guest halted inside the call. **Match this as a PREFIX, not a whole line:** `arm_cpu()` appends ` [cleared RESET]`, ` [cleared STOP]` or ` [cleared RESET+STOP]` when it had to un-assert the CPU before advancing, and the first `run` of a session is exactly the case that does -- so the most common ack an agent will ever meet carries the suffix. (It never replies `ok`, and never `halted@<i>` — that belongs to `press`/`key`, which report which injected key was consumed) | CTRL-verb (run) |
 | `keys <str>` | append to the keyboard paste buffer (paced by guest polls) | CTRL-verb (manipulate) |
 | `press <hex2> [hold] [mods]` | full physical keypress — latch + any-key-down, held `hold` frames (default 15), then released; IIe latch path AND IIgs KeyGloo+IRQ path. `mods` is letters `o` (Open-Apple) `c` (Closed-Apple) `s` (shift) `k` (control), carried in the key's modifier byte (what `$C025` and the Event Manager report): `press 6F 2 o` is Open-Apple-O, which is how the Finder is told to **open** a selected icon — a bare Return on one starts a rename (measured) | CTRL-verb (manipulate) |
 | `holdkey <hex-ascii>` | set the sticky IIgs hold-key WITHOUT running (`0` clears) — hold, step in chunks, watch for consume, release | CTRL-verb (manipulate) |
@@ -384,7 +461,7 @@ protocol authority.
 | `read <hexaddr> <len> <file>` | dump `len` bytes from `<addr>` via `probe_peek` (side-effect-free, bank-correct on `-p 5`) to `<file>` | CTRL-verb (observe) |
 | `mount sXdY <path>` | runtime media swap (save-and-unmount the drive first so writes persist) | CTRL-verb (manipulate) |
 | `save <file>` | CPU regs + full MMU snapshot + sentinel + manifest (take at a quiescent point) | CTRL-verb (snapshot) |
-| `restore <file>` | restore a `save`d snapshot and force-run; the ack says `manifest=present\|absent class=A` and the manifest itself goes to the session log | CTRL-verb (snapshot) |
+| `restore <file>` | restore a `save`d snapshot and force-run. The ack is `status=OK restore <file> manifest=present\|absent devices=<restored> skipped=<skipped> \| <the manifest text>` — there is no `class=` field of its own; the letter is inside the manifest text, which the ack now carries verbatim instead of leaving it only in the session log | CTRL-verb (snapshot) |
 | `quit` | ack and end the session | CTRL-verb (run) |
 | `oracle` | north-star contracts (cycles/colour/snapshot/dual-mode) | CTRL-verb (meta) |
 | `help` / `help <file>` | list CTRL verbs; optional full catalog to file | CTRL-verb (meta) |
@@ -420,6 +497,36 @@ protocol authority.
 | `systems [file]` | platform/configuration/ROM/slot-device inventory | CTRL-verb (meta) |
 | `limitations [file]` | known unsupported or partial fidelity surfaces | CTRL-verb (meta) |
 | `shr-golden <file> [bless]` | live IIgs SHR-window golden without relaunch | CTRL-verb (calibrate) |
+| `audio [status]\|doc\|sfx\|on\|off\|reset` | generated sample streams per SOURCE (`doc`=Ensoniq, `sfx`=drive sounds; never summed): count, non-silent, min/max, average, and the same per channel so a dropped side is visible. Register round-trips pass on a chip emitting silence; this does not | CTRL-verb (observe) |
+| `boot <slot>` | enter slot firmware at `$Cs00` (1–7) the way autoboot would — for a block device the ROM's own autoboot cannot reach | CTRL-verb (run) |
+| `bp [addr\|off]` | interactive breakpoint; bare reports state. A hit **halts** — pair with `resume` or `run`/`step` | CTRL-verb (manipulate) |
+| `copilot` | the windowed agent rail's contract (`A2GSPU_COPILOT`): observe + pause/key/mount/quit with human input still live | CTRL-verb (meta) |
+| `cov [status]\|on <LO-HI>\|map <A2MAP1>\|off\|reset\|write <file>` | execution coverage: raw `A2COV1`, or source-bound `A2COV2` once a plan is mapped. The write ack carries `format=` and `hash=`; read either with `tools/a2rail/artifacts.py cov`. Mismatched executed bytes refuse the write rather than blessing stale evidence | CTRL-verb (observe) |
+| `devstate [name\|all <file>]` | per-device state the emulator already computes (ADB regs, disk head, mouse clamp, DOC, memory map); bare lists handlers. Read before assuming a slot is populated | CTRL-verb (observe) |
+| `hgr` | coarse ASCII view of an HGR page — "is anything drawn". Not pixel-exact; use `pngc` for colour truth | CTRL-verb (observe) |
+| `joymode [status]\|gamepad\|mouse\|atari` | controller shape at `$C061-$C063`, and whether the Joyport post-reset suspend window is still open. The only way to reach Atari/mouse modes headlessly | CTRL-verb (manipulate) |
+| `memvu [status]\|store\|load\|reset` | live `MEMVU_STOREVIS`/`LOADVIS` counters, readable and zeroable mid-session so a measurement can be a bounded window. **Refuses** rather than reporting zeros when the rail is unarmed | CTRL-verb (observe) |
+| `paddle <0-3> <0-255>` / `paddle off` | analogue paddle; seeds the 558 decay so `PREAD` counts the value back | CTRL-verb (manipulate) |
+| `pause` | stop the machine (`EXEC_PAUSED`), the Machine▸Pause equivalent. Matters on the **windowed** `A2GSPU_COPILOT` rail, where frames run on their own; a headless CTRL session is already stopped between commands | CTRL-verb (manipulate) |
+| `pause-status` | `paused\|step\|running` plus the raw `execution_mode`, without changing it | CTRL-verb (observe) |
+| `pbutton <0-2> <0\|1>` | game switch PB0–PB2 (`$C061-$C063`) | CTRL-verb (manipulate) |
+| `reset [cold]` | the guest reset path (warm by default, `cold` for a restart) — recover a wedged machine | CTRL-verb (manipulate) |
+| `resume` | clear a user halt (breakpoint / `save-at`) and unpause, so the CPU advances again. **Refuses** to paper over a jammed CPU: a halting instruction needs `reset` | CTRL-verb (manipulate) |
+| `screen` | text-page helper | CTRL-verb (observe) |
+| `session [status]\|reset` | what probe state is armed, and one command to disarm all of it. Names what it cannot reach rather than reporting a confident zero. Run it before trusting a measurement, and before handing the machine on | CTRL-verb (meta) |
+| `shr <file> [scale]` | IIgs super hi-res as PNG, 320 or 640 per line by SCB | CTRL-verb (observe) |
+| `speaker` | `$C030` toggle count and the c14m stamp of the last one — sound is WHEN, not whether | CTRL-verb (observe) |
+| `tbuf [status]\|on\|off\|clear\|dump <file> [n]` | the CPU trace ring: per-instruction registers, effective address, data, read vs write. Lighter than `itrace`; use it for a few instructions, `itrace` for a whole path | CTRL-verb (trace) |
+| `verify <addr\|BANK:addr> <len> <file>` | compare guest memory to a host file **inside** the emulator and answer with the verdict: identical, or the first differing offset and both bytes | CTRL-verb (observe) |
+
+> **This table is checked.** `tools/a2rail/railparity.ps1` fails if the CTRL
+> dispatcher matches a command word with no row in the verb registry, or the
+> registry names a verb the dispatcher never matches. It does **not** check that
+> a verb has a row *here* — `help` and `manifest <file>` are the authority for
+> the set; this table carries the semantics. `pause` and `pause-status` were
+> dispatched and in neither surface, which is how `bogusverb` came to be answered
+> "not a verb. `help` lists all of them" — a false statement the process made
+> about itself.
 
 **Cycle contract:** only `cycles=` on `run` / `step` / `run-until` acks are valid timing.
 Never subtract two standalone `cycles` acks across other commands. See AGENTIC_ORACLE.md.

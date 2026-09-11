@@ -107,11 +107,18 @@ Write-Host "log:       $log"
 Write-Host "waiting for the rail to come up..."
 
 # Readiness is proved by a round trip on the rail, not by scraping the log. The
-# emulator's stdout is redirected to a file and block-buffered, so the "rail is
-# up" line can sit in a buffer for a long time after the rail is in fact serving
-# commands -- scraping it reported failure on a session that was already working.
-# The rail answering a command is the only thing that actually matters, and it is
-# the thing being tested.
+# rail answering a command is the only thing that actually matters, and it is the
+# thing being tested; a banner in the log is a proxy for it at best.
+#
+# It was also, for a long time, not even available: stdout redirected to a file
+# is block-buffered by the CRT, so the "rail is up" line could sit in a buffer
+# long after the rail was serving commands, and scraping it reported failure on a
+# session that was already working. That is fixed at the source now -- gs2.cpp's
+# SDL_AppInit sets stdout unbuffered, because the same buffer was swallowing
+# every mid-session diagnostic the emulator printed, the snapshot manifest
+# included, and losing all of it outright if the session was killed rather than
+# quitting. So session.log is live from here on. The round trip stays anyway:
+# the log says what the emulator believes, the ack says what it can do.
 $probe = Join-Path $Dir "cmd.1"
 # Renamed into place for the same reason ctl.ps1 does it: the emulator polls for
 # cmd.N with a plain fopen and cannot tell a finished file from one still being

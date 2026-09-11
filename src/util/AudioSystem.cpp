@@ -28,7 +28,12 @@ AudioSystem::AudioSystem(computer_t *computer) {
     gain = 1.0f * 6.0f / 16.0f;
      
     computer->sys_event->registerHandler(SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED, [this](const SDL_Event &event) {
-        printf("what the fuck\n");
+        // Was a debug printf here. It sat in a REGISTERED EVENT HANDLER, so it
+        // fired on any audio-format change and wrote to the same stdout an agent
+        // parses -- and since stdout became unbuffered it reaches session.log live,
+        // inside the record stream, in artifacts that get shared. Device chatter
+        // belongs on stderr (SHAPE P3: one record, one channel); a handler that has
+        // nothing to report says nothing.
         if ((SDL_AudioDeviceID)event.adevice.which != device_id) return false;
 
         SDL_AudioSpec spec;

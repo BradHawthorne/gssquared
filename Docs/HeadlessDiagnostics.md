@@ -96,7 +96,7 @@ any fails.
 | `cs_carry` / `pr_carry` | `ClearScreen` ($1504) / `PaintRect` ($5404) carry |
 | `gsos_err` | last GS/OS dispatch error code |
 | `nonzero` / `distinct` | SHR-window byte stats |
-| `idxN` (N=0..15) | mode-correct pixel count of palette index N (e.g. `idx6==28800` ⇒ a 240×120 colour-6 rectangle) |
+| `idxN` (N=0..15) | mode+fill-correct displayed pixel count of palette index N (320 fill zeros repeat previous color) |
 | `peek:HHHHHH` | **observation-free byte at the 24-bit address** `bank<<16\|addr` (e.g. `peek:E11E00`, `peek:0003FC`) — for structural asserts on toolset work-area pointers and `$E1` structures |
 
 ```sh

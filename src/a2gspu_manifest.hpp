@@ -57,7 +57,7 @@ inline const char *verb_when(const char *name) {
         {"boot",       "enter a SLOT's firmware at $Cs00 the way autoboot would -- for a block device the ROM's own autoboot cannot reach"},
         {"bp",         "stop at a PC you can name. A hit HALTS -- pair with resume or run/step"},
         {"callstream", "capture toolbox/GS-OS calls as NDJSON while software runs (toolbox ABI work)"},
-        {"copilot",    "discover the read-only windowed telemetry rail used while a human drives the emulator"},
+        {"copilot",    "discover the windowed agent rail (observe + pause/key/mount/quit); instrumentation stays off"},
         {"cov",        "which addresses executed AT ALL -- dead code, unreached branches, coverage of a run"},
         {"cpu",        "registers and halt state. The first thing to read when execution went somewhere unexpected"},
         {"cycles",     "the machine's clock rate, before trusting any timing a test assumes"},
@@ -78,6 +78,8 @@ inline const char *verb_when(const char *name) {
         {"mount",      "swap media at runtime. FAILS on a missing path and does not eject the current disk to find out"},
         {"oracle",     "the contracts governing every other verb. Read FIRST -- especially the cycles= rule"},
         {"paddle",     "inject an analogue paddle value; seeds the 558 decay so PREAD counts the value back"},
+        {"pause",      "freeze the machine on the WINDOWED copilot rail, where frames run on their own; headless CTRL is already stopped between commands"},
+        {"pause-status","ask whether the machine is paused, stepping or running, before reading a rail whose meaning depends on which"},
         {"pbutton",    "press a game-controller button headlessly"},
         {"png",        "pixel capture of a graphics page"},
         {"pngc",       "pixel-exact COLOUR capture against a named profile -- this is the art oracle, not shot"},
@@ -128,8 +130,8 @@ inline const Verb *verbs(int *count) {
         {"boot", "run", "boot <slot> — enter slot firmware at $Cs00 (slot 1-7), as autoboot would", "enter-slot-firmware"},
         {"bp", "manipulate", "bp [addr|off] — interactive breakpoint; bare reports state. A hit halts; run/step/resume continue past it", "force-control"},
         {"callstream", "trace", "callstream on <file>|off|status — LIVE NDJSON toolbox stream", "tool_locator"},
-        {"copilot", "meta", "copilot — windowed read-only rail contract (A2GSPU_COPILOT)", "discover"},
-        {"cov", "observe", "cov [status] | cov on <LO-HI|BANK:LO-HI> | cov off | cov reset | cov write <file> — execution coverage", "coverage"},
+        {"copilot", "meta", "copilot — windowed agent rail contract (A2GSPU_COPILOT)", "discover"},
+        {"cov", "observe", "cov [status] | cov on <LO-HI|BANK:LO-HI> | cov map <A2MAP1-file> | cov off | cov reset | cov write <file> — coverage: raw A2COV1 or source-bound A2COV2; map/reset starts an overlay generation, mismatched executed bytes refuse write", "coverage"},
         {"cpu", "observe", "cpu — PBR:PC A X Y SP P E HALT STP RDY KBD AKD", "cpu-state"},
         {"cycles", "observe", "cycles — guest cycle counter NOW (absolute). "
          "Deltas only valid inside run/step/run-until acks.", "cycles-absolute-warn"},
@@ -154,6 +156,19 @@ inline const Verb *verbs(int *count) {
         {"mount", "manipulate", "mount sXdY <path> — runtime media swap", "inject-media"},
         {"oracle", "meta", "oracle — north-star contracts (cycles/colour/snapshot)", "discover"},
         {"paddle", "manipulate", "paddle <0-3> <0-255> | paddle off — analogue paddle; seeds the 558 decay so PREAD counts the value back", "force-control"},
+        // pause / pause-status were DISPATCHED AND UNDISCOVERABLE. Both are
+        // handled in a2gspu_ctrl_cmds.hpp (try_exec) and dispatched on the same
+        // line of gs2.cpp as `resume`, which has always had a row here; they had
+        // none, so `help`, `help <file>` and `manifest <file>` -- all three of
+        // the surfaces AGENTS.md rule 6 names -- omitted them, and nothing in
+        // Docs/ mentions either. That made the process state a falsehood about
+        // itself: an unrecognised word is answered "not a verb. `help` lists all
+        // of them", which was not true of these two. Drift, not policy; there is
+        // no internal-verb carve-out anywhere in the tree. railparity.ps1 now
+        // compares the dispatcher's literals against this table in both
+        // directions so the next one fails a gate instead of a user.
+        {"pause", "manipulate", "pause — stop the machine (EXEC_PAUSED), the Machine>Pause equivalent; `resume` undoes it", "force-control"},
+        {"pause-status", "observe", "pause-status — paused|step|running plus the raw execution_mode, without changing it", "exec-mode"},
         {"session", "meta", "session [status]|reset — what probe state is armed, and one command to disarm all of it. Names what it cannot reach rather than reporting a confident zero", "probe-state"},
         {"verify", "observe", "verify <addr|BANK:addr> <len> <file> — compare guest memory to a host file in the emulator and answer with the verdict: identical, or the first differing offset and both bytes", "compare-in-place"},
         {"joymode", "manipulate", "joymode [status]|gamepad|mouse|atari — controller shape at $C061-$C063; reports the Joyport post-reset suspend window and whether it is still open", "force-control"},
@@ -304,22 +319,66 @@ inline void write_manifest(FILE *f) {
     fprintf(f, "colour_not_oracle: shot sdl\n");
     fprintf(f, "bits_oracle: png|vram\n");
     fprintf(f, "memory_observe: probe_peek\n");
-    fprintf(f, "snapshot_class: A-cpu-mmu-softswitches\n");
+    // snapshot_class was the flat literal "A-cpu-mmu-softswitches", which stopped
+    // being true once save started writing device blocks: a IIgs snapshot holds
+    // adb, ensoniq, vgcint, iwm and pdblock, and this line told a consumer cold
+    // that it held none of them. The class letter is now DERIVED per file
+    // (gs2.cpp a2gspu_snap_manifest_text) from Docs/INSTRUMENTATION_SHAPE.md M5's
+    // definitions, so the only honest thing to state here is the rule and where
+    // the per-file answer lives -- never a letter, which varies by platform and
+    // by what the machine had when the save ran.
+    fprintf(f, "snapshot_class: derived-per-file (A=cpu+mmu+softswitches+ram, B=+video/scanner, C=+adb/ensoniq/iwm)\n");
+    fprintf(f, "snapshot_contract: the manifest's devices=/included=/excluded= lists, not the letter; read it from the save file's GSPM trailer or the restore ack\n");
     fprintf(f, "dual_mode: no-A2GSPU-env-is-stock-emulator\n");
     fprintf(f, "\n## observation_models\n");
     fprintf(f, "bits-mono,colour-4dot,colour-ntsc560,vram-raw,text-page,softswitch,");
     fprintf(f, "cpu-state,cycles-in-cmd,cycles-absolute-warn,shr-window,memory-peek,sdl-human\n");
-    fprintf(f, "\n## env_rail_groups (see Docs/A2GSPU_RAILS.md)\n");
-    fprintf(f, "run: SPIKE_FRAMES SPIKE_KEYS RUN_BIN LOAD LOAD_BOOT CPUTEST MMUTEST HANG_THRESHOLD\n");
-    fprintf(f, "observe: DUMP TEXTDUMP TEXT40 VIDEOSUM VIDEOMAP SYMBOLS BUS_DUMP LIVENESS LIVENESS_OUT LIVENESS_STALL\n");
-    fprintf(f, "trace: TBTRACE ITRACE CALLTRACE CALLSTREAM LOADTRACE LCTRACE MODETRACE INTLOG TAP\n");
-    fprintf(f, "break: BREAK WATCH VALTRAP PCTRAP TRAP TRAP_FILE TRAP_OUT CONDTRAP STACKTRAP STACKWATCH SAVE_AT RETGUARD\n");
-    fprintf(f, "manipulate: POKE FORCE_KEY\n");
-    fprintf(f, "snapshot: SNAP_SAVE SNAP_LOAD RESTORE\n");
-    fprintf(f, "assert: ASSERT GOLDEN EXPECT_HASH STRICT\n");
-    fprintf(f, "determinism: SEED FAKETIME RAMDISK\n");
-    fprintf(f, "ctrl: CTRL CTRL_TIMEOUT\n");
-    fprintf(f, "copilot: COPILOT (windowed read-only cmd.N/ack.N)\n");
+    /* GENERATED FROM THE REGISTRY. This section used to be ten hand-written
+     * fprintf literals naming 54 short forms, and it had done exactly what the
+     * banner of Docs/A2GSPU_RAILS.md says a hand-maintained list in this file
+     * did once before: drifted. It covered 53 of the 142 rails the binary reads,
+     * and one name in it -- ITRACE -- was not a rail at all. The binary reads
+     * A2GSPU_ITRACE_FROM/FRAME/N/LO/HI/OUT/REARM and no bare A2GSPU_ITRACE, so
+     * the same process contradicted itself: `manifest <file>` listed ITRACE and
+     * `rail find A2GSPU_ITRACE` answered status=FAIL rail-unknown. A declared
+     * capability that does not exist is worse than an undocumented one, because
+     * it will be believed -- a consumer setting A2GSPU_ITRACE=1 on the strength
+     * of this list got silence and no error.
+     *
+     * So it is no longer a list. It is the registry's own table, grouped by the
+     * registry's own family column, printed with the full A2GSPU_/MEMVU_/WIZ5_
+     * names a caller must actually set. It cannot diverge from `rail env-only`
+     * again because there is nothing left to diverge. */
+    fprintf(f, "\n## env_rail_groups (generated from src/a2gspu_rails_registry.hpp; `rail env-only <file>` is the same table with synopses)\n");
+    {
+        int nr = 0;
+        const a2rails::Rail *rr = a2rails::rails(nr);
+        // Families in first-appearance order, so the grouping is stable across
+        // builds for a consumer diffing two manifests.
+        const char *seen[32]; int nseen = 0, dropped = 0;
+        for (int i = 0; i < nr; i++) {
+            bool have = false;
+            for (int k = 0; k < nseen; k++) if (!strcmp(seen[k], rr[i].family)) { have = true; break; }
+            if (have) continue;
+            if (nseen < (int)(sizeof seen / sizeof seen[0])) seen[nseen++] = rr[i].family;
+            else dropped++;   // never silently: see below
+        }
+        // A list that quietly omits part of itself is the failure this section
+        // was rewritten to stop. If the family cap is ever hit, the manifest
+        // says so in the manifest, where the consumer that would be misled by
+        // it is looking.
+        if (dropped)
+            fprintf(f, "# INCOMPLETE: %d rail families beyond the %d-family cap are NOT listed below."
+                       " Raise `seen[]` in a2gspu_manifest.hpp; use `rail env-only <file>` meanwhile.\n",
+                    dropped, (int)(sizeof seen / sizeof seen[0]));
+        for (int k = 0; k < nseen; k++) {
+            fprintf(f, "%s:", seen[k]);
+            for (int i = 0; i < nr; i++)
+                if (!strcmp(rr[i].family, seen[k])) fprintf(f, " %s", rr[i].name);
+            fprintf(f, "\n");
+        }
+        fprintf(f, "env_rail_total: %d\n", nr);
+    }
     fprintf(f, "\n## env_only_rationale\n");
     fprintf(f, "# High-volume traces arm at launch; CTRL parity is the roadmap (AGENTIC_ORACLE L4).\n");
     fprintf(f, "env-only-today: GOLDEN(SPIKE SHR/HGR) DHGR_GOLDEN(SPIKE) SPIKE_* ASSERT(env)\n");

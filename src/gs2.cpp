@@ -1004,15 +1004,42 @@ static std::string a2gspu_snap_manifest_text(int frame, const std::string &devic
     static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "pdblock", "media", "scanner", "rtc", "serial", "clock" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
+    auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
     for (const char *d : all) {
-        if (have.find(std::string(",") + d + ",") != std::string::npos) { included += ","; included += d; }
+        if (holds(d)) { included += ","; included += d; }
         else { if (!excluded.empty()) excluded += ","; excluded += d; }
     }
+    /* THE CLASS LETTER IS DERIVED, not a constant.
+     *
+     * It was the literal 'A' in this snprintf, printed whatever the save had
+     * actually written -- so a IIgs file holding five device blocks (adb,
+     * ensoniq, vgcint, iwm, pdblock) still announced itself as Class A, "CPU and
+     * MMU only". class= and excluded= are the two fields a consumer reads to
+     * decide whether a workload can be windowed from a snapshot or has to pay a
+     * cold boot, and both said no while the answer was yes. That is Event D of
+     * INSTRUMENTATION_SHAPE.md section 1 pointing the other way, and it is the
+     * reason the comment above this function says the manifest reports what is
+     * in the file and never what a class letter would imply -- the generator was
+     * honest and the letter beside it was a vestige.
+     *
+     * The letters are INSTRUMENTATION_SHAPE.md M5's own roadmap and nothing
+     * else: A = cpu+mmu+softswitches+RAM, B adds scanner/video state, C adds the
+     * ADB micro, the Ensoniq and the IWM. A letter is only claimed when its
+     * definition is actually met -- C needs all three of adb/ensoniq/iwm, B
+     * needs the video/interrupt state -- so a save that holds a device the
+     * roadmap never named (a IIe holding only `pdblock`) stays class=A and lets
+     * devices=/included= carry it. Inventing a B for it would replace one false
+     * claim with another. devices=/included=/excluded= remain the contract; the
+     * letter is a summary of them, and it can now be wrong only by being too
+     * modest. */
+    const char *cls = (holds("adb") && holds("ensoniq") && holds("iwm")) ? "C"
+                    : (holds("vgcint") || holds("scanner"))              ? "B"
+                                                                         : "A";
     char buf[640];
     snprintf(buf, sizeof buf,
-             "class=A devices=%s included=%s excluded=%s "
+             "class=%s devices=%s included=%s excluded=%s "
              "frame=%d seed=%s faketime=%s ramdisk=%d build=%s exe=%s",
-             devices.empty() ? "-" : devices.c_str(), included.c_str(), excluded.c_str(),
+             cls, devices.empty() ? "-" : devices.c_str(), included.c_str(), excluded.c_str(),
              frame, seed ? seed : "unset", ft ? ft : "unset", getenv("A2GSPU_RAMDISK") ? 1 : 0,
              BUILD_VERSION, exe);
     return buf;
@@ -2478,6 +2505,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
         } else if (!strncmp(line, "cov", 3) && (line[3] == '\0' || line[3] == ' ')) {
             // cov | cov status   -- report the armed range and what it has marked
             // cov on <LO-HI>     -- arm (BANK:LO-HI also accepted, hex)
+            // cov map <file>     -- bind source/segment plan, fresh overlay generation
             // cov off            -- disarm and release the bitmap
             // cov reset          -- clear the bits, keep the range
             // cov write <file>   -- dump the bitmap (legacy bare `cov <file>` still works)
@@ -2493,12 +2521,29 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             const char *arg = line + 3;
             while (*arg == ' ') arg++;
             if (!*arg || !strcmp(arg, "status")) {
-                uint32_t span = g_cov_on ? (g_cov_hi - g_cov_lo + 1) : 0;
+                uint32_t span = a2gspu_cov_span();
                 snprintf(result, sizeof result, g_cov_on
                          ? "status=OK cov on $%06X-$%06X marked=%llu/%u (%.1f%%)"
                          : "status=OK cov off",
                          g_cov_lo, g_cov_hi, (unsigned long long)g_cov_marked, span,
                          span ? 100.0 * (double)g_cov_marked / (double)span : 0.0);
+                if(!g_cov_maps.empty()) {
+                    size_t used=strlen(result);
+                    snprintf(result+used,sizeof(result)-used," format=A2COV2 maps=%zu run=%llu generation=%llu valid=%d %s",
+                        g_cov_maps.size(),(unsigned long long)g_cov_run_id,
+                        (unsigned long long)g_cov_generation,g_cov_map_error[0]?0:1,g_cov_map_error);
+                }
+            } else if (!strncmp(arg,"map",3) && (arg[3]=='\0' || arg[3]==' ')) {
+                const char *path=arg+3;while(*path==' ')path++;
+                if(!*path) {
+                    a2gspu_cov_off();
+                    snprintf(result,sizeof(result),"status=FAIL bad-args -- cov map needs a deasmiigs --coverage-plan file");
+                } else if(a2gspu_cov_map_load(path)) {
+                    snprintf(result,sizeof(result),"status=OK cov mapped format=A2COV2 maps=%zu run=%llu generation=%llu -- executed bytes verified against plan",
+                        g_cov_maps.size(),(unsigned long long)g_cov_run_id,(unsigned long long)g_cov_generation);
+                } else {
+                    snprintf(result,sizeof(result),"status=FAIL cov-map-failed %s",g_cov_map_error);
+                }
             } else if (!strncmp(arg, "on", 2) && (arg[2] == '\0' || arg[2] == ' ')) {
                 const char *range = arg + 2;
                 while (*range == ' ') range++;
@@ -2541,12 +2586,20 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                     snprintf(result, sizeof result, "status=FAIL cov-not-armed -- "
                              "nothing written; arm it with `cov on <LO-HI>` first");
                 } else if (a2gspu_cov_write(path)) {
-                    uint32_t span = g_cov_hi - g_cov_lo + 1;
-                    snprintf(result, sizeof result, "status=OK cov wrote %s (%llu/%u bytes = %.1f%%)",
-                             path, (unsigned long long)g_cov_marked, span,
+                    uint32_t span = a2gspu_cov_span();
+                    // format= and hash=, because `cov` writes TWO formats and this
+                    // ack named neither. A mapped run (any `cov map <plan>`, which
+                    // is the normal deasmiigs source-bound path) silently produces
+                    // A2COV2 instead of A2COV1; a consumer reading only this line
+                    // could not tell, and the one shared reader refused the file it
+                    // was handed. hash= is the same house-FNV the artifact carries,
+                    // so the reader can prove it read what was written (P4).
+                    snprintf(result, sizeof result, "status=OK cov wrote %s format=%s hash=%016llX (%llu/%u bytes = %.1f%%)",
+                             path, g_cov_last_format, (unsigned long long)g_cov_last_hash,
+                             (unsigned long long)g_cov_marked, span,
                              span ? 100.0 * (double)g_cov_marked / (double)span : 0.0);
                 } else {
-                    snprintf(result, sizeof result, "status=FAIL cov-write-failed '%s'", path);
+                    snprintf(result, sizeof result, "status=FAIL cov-write-failed '%s' %s", path,g_cov_map_error);
                 }
             }
         } else if (!strncmp(line, "save ", 5)) {
@@ -2588,12 +2641,28 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             }
             if (ok) {
                 computer->cpu->halt = 0;   // force-run after restore
-                a2gspu_snap_print_manifest(manifest);   // to the session log; the ack says present/absent
+                a2gspu_snap_print_manifest(manifest);
                 a2gspu_snap_print_devices();
-                snprintf(result, sizeof result, "status=OK restore %s manifest=%s devices=%s skipped=%s", line + 8,
+                /* THE ACK CARRIES THE MANIFEST ITSELF, not a present/absent flag.
+                 *
+                 * It used to say only manifest=present, and the doc sent the
+                 * caller to the session log for the rest. Two things were wrong
+                 * with that. The log is stdout, which was block-buffered, so the
+                 * manifest line did not exist anywhere a live consumer could read
+                 * it until the process exited (fixed in SDL_AppInit, but the
+                 * split channel was the deeper fault: P3 is one record, one
+                 * channel). And class=/included=/excluded=/frame=/seed=/build=/
+                 * exe= appear ONLY in the manifest line -- a consumer deciding
+                 * "can I window this workload from this snapshot, or must I pay a
+                 * cold boot" had no way to read the fields that answer it off the
+                 * rail at all. Appended at the end of the line so every existing
+                 * prefix match on status=/manifest=/devices=/skipped= still
+                 * works. */
+                snprintf(result, sizeof result, "status=OK restore %s manifest=%s devices=%s skipped=%s%s%s", line + 8,
                          manifest.empty() ? "absent" : "present",
                          g_snap_dev_restored.empty() ? "-" : g_snap_dev_restored.c_str(),
-                         g_snap_dev_skipped.empty() ? "-" : g_snap_dev_skipped.c_str());
+                         g_snap_dev_skipped.empty() ? "-" : g_snap_dev_skipped.c_str(),
+                         manifest.empty() ? "" : " | ", manifest.c_str());
             } else snprintf(result, sizeof result, "status=FAIL restore-fail");
         } else if (!strncmp(line, "vid", 3)) {
             // vid -- the live video mode, read from the VIDEO SCANNER's own state.
@@ -2667,6 +2736,14 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                          first);
             }
         }
+        /* ORDERING, not just flushing. Whatever this verb printed to stdout --
+         * the snapshot manifest, the device list, a SYMS walk -- must be on disk
+         * BEFORE the ack that announces it, or a harness that reads ack.N and
+         * then scrapes session.log races the buffer and reads the log as it was
+         * one command ago. setvbuf(_IONBF) in SDL_AppInit already makes this
+         * true; this is here so it STAYS true if someone ever restores a buffer
+         * for throughput. Belt and braces on the one boundary that matters. */
+        fflush(stdout);
         if (json_reply) {
             char json[16384]; a2ctrljson::format(json,sizeof json,line,result);
             a2gspu_ctrl_ack(dir, seq, json);
@@ -2675,9 +2752,14 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
     }
 }
 
-// Windowed co-pilot telemetry. Unlike A2GSPU_CTRL this never takes over the
-// frame loop and never runs on a worker thread: one read-only command is polled
-// after each normal frame, on the same SDL thread that owns the machine.
+// Windowed co-pilot / agent UX rail. Unlike A2GSPU_CTRL this never takes over
+// the frame loop and never runs on a worker thread: one command is polled after
+// each normal frame, on the same SDL thread that owns the machine.
+//
+// Observe verbs (cpu/png/speaker/audio/pause-status/...) sample without
+// disturbing guest state. Control verbs (pause/resume/reset/quit/press/mount/...)
+// intentionally act as the user for agentic DUAL-03 closed-loop proofs.
+// Instrumentation env (SPIKE/COVERAGE/CTRL takeover) stays independent and off.
 static void a2gspu_copilot_poll(computer_t *computer) {
     const char *dir = SDL_getenv("A2GSPU_COPILOT");
     if (!dir || !*dir || !computer) return;
@@ -2688,15 +2770,75 @@ static void a2gspu_copilot_poll(computer_t *computer) {
     size_t n=fread(line,1,sizeof line-1,f); fclose(f);
     while(n && (line[n-1]=='\r'||line[n-1]=='\n')) line[--n]=0;
     bool handled=false;
+
+    // --- observe / discover ---
     if (!strcmp(line,"protocol") || !strcmp(line,"systems") || !strncmp(line,"systems ",8) ||
-        !strncmp(line,"manifest ",9) || !strcmp(line,"limitations") || !strncmp(line,"limitations ",12) || !strcmp(line,"help") || !strncmp(line,"help ",5) ||
+        !strncmp(line,"manifest ",9) || !strcmp(line,"limitations") || !strncmp(line,"limitations ",12) ||
+        !strcmp(line,"help") || !strncmp(line,"help ",5) ||
         !strcmp(line,"oracle") || !strcmp(line,"copilot"))
         handled=a2ctrl::try_meta(line,result,sizeof result);
-    else if (!strcmp(line,"cpu")) handled=a2ctrl::try_cpu(line,result,sizeof result,computer);
-    else if (!strncmp(line,"read ",5)) handled=a2ctrl::try_regs(line,result,sizeof result,computer);
-    else if (!strncmp(line,"assert ",7)) handled=a2ctrl::try_assert_dhgr(line,result,sizeof result,computer);
-    else if (!strncmp(line,"png ",4)||!strncmp(line,"pngc ",5)) handled=a2ctrl::try_visual(line,result,sizeof result,computer);
-    if(!handled) snprintf(result,sizeof result,"status=FAIL copilot-read-only command-not-allowed use='copilot'");
+    else if (!strcmp(line,"cpu") || !strncmp(line,"cpu ",4))
+        handled=a2ctrl::try_cpu(line,result,sizeof result,computer);
+    else if (!strncmp(line,"read ",5))
+        handled=a2ctrl::try_regs(line,result,sizeof result,computer);
+    else if (!strncmp(line,"assert ",7))
+        handled=a2ctrl::try_assert_dhgr(line,result,sizeof result,computer);
+    else if (!strncmp(line,"png ",4)||!strncmp(line,"pngc ",5))
+        handled=a2ctrl::try_visual(line,result,sizeof result,computer);
+    else if (!strncmp(line,"audio",5) && (line[5]==0 || line[5]==' '))
+        handled=a2ctrl::try_regs(line,result,sizeof result,computer);
+    else if (!strcmp(line,"pause") || !strcmp(line,"pause-status") || !strcmp(line,"resume"))
+        handled=a2ctrl::try_exec(line,result,sizeof result,computer,nullptr);
+    else if (a2ctrl::try_input(line,result,sizeof result,computer))
+        handled=true;
+    else if (!strncmp(line,"reset",5) && (line[5]==0 || line[5]==' ')) {
+        // Same path as MENU_MACHINE_RESET / MENU_MACHINE_RESTART.
+        const bool cold = (line[5]==' ' && strstr(line+6,"cold"));
+        computer->reset(cold);
+        char st[192]; a2ctrl::format_cpu_line(computer, st, sizeof st);
+        snprintf(result,sizeof result,"status=OK reset %s %s", cold?"cold":"warm", st);
+        handled=true;
+    } else if (!strcmp(line,"quit") || !strncmp(line,"quit ",5)) {
+        // Same path as EVENT_QUIT / window chrome close under auto-launch.
+        if (computer->cpu) computer->cpu->halt = HLT_USER;
+        snprintf(result,sizeof result,"status=OK quit");
+        handled=true;
+    } else if (!strncmp(line,"mount ",6)) {
+        // Same Mounts::mount_media path the File>Open Disk Image dialog uses
+        // after SDL_ShowOpenFileDialog returns. Host OS file pickers are not
+        // agent-closed-loop; this verb is the DUAL-03 disk-selection contract.
+        int slot = 0, drive = 0, off = 0;
+        if (sscanf(line + 6, "s%dd%d %n", &slot, &drive, &off) == 2 && line[6 + off]) {
+            const char *mpath = line + 6 + off;
+            FILE *probe = fopen(mpath, "rb");
+            if (!probe) {
+                snprintf(result,sizeof result,
+                         "status=FAIL mount-no-such-file '%s' -- nothing was unmounted",
+                         mpath);
+            } else {
+                fclose(probe);
+                storage_key_t key;
+                key.slot = (uint16_t)slot;
+                key.drive = (uint16_t)(drive - 1);
+                key.partition = 0;
+                key.subunit = 0;
+                computer->mounts->unmount_media(key, SAVE_AND_UNMOUNT);
+                disk_mount_t dm{ (uint16_t)slot, (uint16_t)(drive - 1),
+                                 std::string(mpath) };
+                if (!computer->mounts->mount_media(dm))
+                    snprintf(result,sizeof result,"status=FAIL mount-fail '%s'", mpath);
+                else
+                    snprintf(result,sizeof result,"status=OK mount s%dd%d", slot, drive);
+            }
+        } else {
+            snprintf(result,sizeof result,"status=FAIL mount-parse-fail");
+        }
+        handled=true;
+    }
+
+    if(!handled) snprintf(result,sizeof result,
+        "status=FAIL copilot-command-not-allowed use='copilot' "
+        "(observe+windowed-control only; no poke/load/cov instrumentation)");
     a2gspu_ctrl_ack(dir,seq,result); seq++;
 }
 
@@ -3915,6 +4057,45 @@ static void run_headless_spike(GS2AppState *state) {
    ======================================================================== */
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
+    /* STDOUT IS UNBUFFERED FROM HERE. The whole CTRL rail depends on it.
+     *
+     * session.ps1 launches with -RedirectStandardOutput <dir>/session.log, so
+     * stdout is a FILE, and a FILE gets FULL block buffering by default. Nothing
+     * in src/ ever called setvbuf, so every diagnostic the process printed after
+     * startup sat in a 4 KB buffer until exit. MEASURED: a live IIgs session that
+     * had answered `run`, `save` and `restore` had a 4283-byte session.log whose
+     * last line was "IIgs init_video_addresses()" -- the last line in the tree
+     * that carries a hand-placed fflush(stdout). The CTRL banner, the snapshot
+     * manifest (the ONLY place class=/included=/excluded= is ever reported), the
+     * device list, the IIGS SYMS tool-pointer-table walks, MEMVU summaries and
+     * SPIKE KEYS lines all appeared only after `quit`, at line 128 onward. An
+     * agent following Docs/A2GSPU_RAILS.md to "read the manifest in the session
+     * log" found no manifest and would conclude the snapshot had none -- Event D
+     * of INSTRUMENTATION_SHAPE.md section 1, recreated by a buffer. Worse, a
+     * session that is killed rather than quitting loses the buffer outright: the
+     * instrument answered and the answer was never written down (P2, P3).
+     *
+     * _IONBF, not _IOLBF, DELIBERATELY. This is the trap that makes the obvious
+     * fix a no-op on the platform the failure was measured on: the Windows CRT
+     * documents _IOLBF as EQUIVALENT TO _IOFBF -- it does not line-buffer. A
+     * setvbuf(_IOLBF) here would compile, return 0, look right in review and
+     * change nothing. Unbuffered costs a write per printf on chatty rails; the
+     * high-volume streams (ITRACE, WATCH, TRAP, the record contract) already
+     * write to stderr or to their own sinks, so what pays the cost is exactly
+     * the low-volume out-of-band text that is worthless if it arrives late.
+     *
+     * Must be the first statement: setvbuf is only defined before any other
+     * operation on the stream. If it fails we say so on stderr rather than
+     * carrying on silently -- a silence about silence is the failure twice. Not
+     * routed through a2gspu_warn(): that counts into GSDIAG warnings= and would
+     * make A2GSPU_STRICT exit 3 over a buffering mode. */
+    if (setvbuf(stdout, nullptr, _IONBF, 0) != 0) {
+        fprintf(stderr, "A2GSPU WARNING: setvbuf(stdout, _IONBF) failed -- stdout stays "
+                        "block-buffered, so out-of-band diagnostics (the snapshot manifest, "
+                        "CTRL banners, SYMS walks) will not reach a redirected log until exit, "
+                        "and will be LOST if this process is killed.\n");
+        fflush(stderr);
+    }
     std::cout << "Booting GSSquared!" << std::endl;
 
     g_a2gspu_argv0 = argv[0];   // so the spike can hash the executable it is running in

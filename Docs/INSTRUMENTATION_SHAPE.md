@@ -265,11 +265,19 @@ A consumer's sweep harness grew this check by hand this week; it belongs in the 
 
 *Would have prevented E.*
 
-**Status:** done for coverage: the `wrote` line carries the range and the
-body's house-FNV hash, and `tools/a2rail/artifacts.py` is the reader — it
-refuses a wrong magic or a short body, re-derives the count and the hash, and
-has a self-test. Snapshots get a header check only; the other `spike_*.bin`
-artifacts are not yet covered.
+**Status:** done for coverage, in **both** formats. The `wrote` line carries
+the body's house-FNV hash — `A2COV1`'s always did, `A2COV2`'s did not until it
+was noticed that the newer format, the source-bound one that actually feeds the
+deasmiigs code/data split, was the one whose reader had nothing to check
+against. `tools/a2rail/artifacts.py` is the reader: it dispatches on the magic,
+refuses anything that is neither, refuses a wrong magic, a short body, a plan
+with trailing bytes or map data that does not reach the trailer, re-derives the
+count and recomputes the trailing hash over header+plan+maps, and self-tests
+each of those refusals against a file built to trip it. The CTRL `cov write`
+ack now says `format=` and `hash=` too, because a caller could not otherwise
+tell which of the two formats a run had produced — any `cov map <plan>` quietly
+switches it. Snapshots get a header and manifest-trailer check only; the other
+`spike_*.bin` artifacts are not yet covered.
 
 ### M7 — Symbols by default  (P10) — M
 
@@ -401,9 +409,42 @@ floating bus only for `$C0xx`, where no observation-free answer exists;
 `probe_readable` tracks it exactly. The paragraph above was written from a
 comment describing the *old* behaviour that sits above the code that fixed
 it — a black box of the documentation kind. `A2GSPU_TRAP` and the
-names-by-default check now read through the probe everywhere. What remains
-of M11 is only the rule: an observe rail reads through the probe, never
-through the CPU's read path.
+names-by-default check now read through the probe everywhere.
+
+**The comment outlived the note, and seeded four more consumers.** Saying the
+note was wrong did not delete the sentence that produced it: `mmu_iigs.hpp`
+still said "banks `$00/$01` are handler pages … so `read_raw`/`probe_peek`
+return floating-bus `$EE` for them", nineteen lines below a `probe_readable`
+whose own comment says the opposite. Four places had been built on it — the
+`OBS FAULT VIEW`'s `'?'` flag and its printed legend (`obs_iigs.hpp`),
+`iigs_probe_suspect()` and the `SYSFAIL` dump's `[** N SUSPECT $EE … do NOT
+trust as memory truth **]` banner (`iigs_toolbox.hpp`), and the second
+`read()`-path row in the `PCTRAP` dump (`cpus/base_6502.cpp`). `$EE` is `INC
+abs` and an ordinary data byte, so every genuine `$EE` in bank `$00` or `$01`
+was being labelled untrustworthy on the one platform where the probe is right —
+a false instrument in the sense of AGENTS.md rule 3, since making an agent
+distrust correct data costs what making it trust wrong data costs.
+
+The comment is rewritten, and the two flags in `obs_iigs.hpp` and
+`iigs_toolbox.hpp` now ask `probe_readable` — the MMU's own statement about the
+address, kept in lockstep with `probe_peek` by the MMU that implements both —
+instead of guessing from the value. That is strictly wider as well as correct:
+it catches a handler-backed page returning *any* value, not only `$EE`, which
+is what the II family needs.
+
+**Still open, and named rather than papered over:** `iigs_instr_peek()`
+(`iigs_toolbox.hpp`) routes every read outside `$C000-$CFFF` through
+`cpu->mmu->read` — the CPU's own path — so `CALLTRACE`, `CALLSTREAM` and the
+attribution `BLAME` builds on them are a standing violation of M11's remaining
+rule. Half its justification is now stale (the IIgs `-> 00/EEEE` symptom cannot
+recur); the other half is not (`probe_peek` on the II family is `read_raw`,
+which does not resolve ROM/language-card banking, and switching it there once
+produced a `CALLTRACE` that emitted nothing at all on `-p 3`). Closing it needs
+a before/after on a real IIgs calltrace with a IIe one beside it. And the
+`base_6502.cpp` `PCTRAP` site still carries the stale justification in a comment.
+
+What remains of M11 is the rule — an observe rail reads through the probe,
+never through the CPU's read path — plus those two sites.
 
 ### M12 — The manifest carries record schemas  (P3, P7) — S
 
@@ -413,14 +454,28 @@ writer uses. A consumer can then validate records against the schema and a
 schema change is a visible diff.
 
 **Status:** done as a declared table rather than one generated from the
-writer (M1's writer does not exist yet): `record_schemas` in
-`a2gspu_manifest.hpp` lists, for every rail that writes NDJSON — TRAP,
-LIVENESS, WATCH_OUT, CALLSTREAM, TAP and the three WIZ5 sinks — the tag that
+writer — by choice, so the shape is declared beside the writers and a change
+of shape is a diff in one table. (This paragraph used to give the reason as
+"M1's writer does not exist yet". M1 shipped: `src/a2record.hpp` is the one
+writer, and `railparity.ps1` enforces it. Four screens of the same document
+said both things, which is the M11 failure again in the file that named it.)
+
+`record_schemas` in `a2gspu_manifest.hpp` lists, for every rail that writes
+NDJSON — **ten** of them: the `A2GSPU_RECORDS` envelope row, TRAP, LIVENESS,
+WATCH_OUT, CALLSTREAM, SNAP_OUT, TAP and the three WIZ5 sinks — the tag that
 names a record and the fields a consumer may rely on, optional ones marked.
-`rail schema [NAME]` serves it live and checks every row against the
-registry; `manifest <file>` carries it as a section. The eight shapes are
-visibly eight different conventions (`event=`, `ev=`, `t=`, `op=`, none),
-which is the argument for M1 written down where a consumer will read it.
+`rail schema [NAME]` serves it live and checks every row against the registry
+(`status=OK record-writing rails=10`); `manifest <file>` carries it as a
+section.
+
+**Seven of the ten now share the `event=` envelope**, precisely because M1
+landed; the three that do not are the WIZ5 title sinks (`t=`, `op=`, none),
+which are the named exemption in `railparity.ps1` and convert when their
+readers do. So a consumer writes one envelope parser plus three legacy cases,
+not ten parsers. The old closing sentence here — "the eight shapes are visibly
+eight different conventions, which is the argument for M1" — was the argument
+for a change that has since been made, and left standing it argued a consumer
+out of trusting the surface M1 built.
 
 ---
 

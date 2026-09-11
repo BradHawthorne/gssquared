@@ -10,6 +10,42 @@ a2engine `ARCHITECTURE.md` (cycle rail).
 
 ---
 
+## Closure (added later — the body below is the dated 2026-07-31 snapshot)
+
+**Read this first if you were handed this file as current.** It is not. The body
+is a snapshot and its value is that it is one; do not rewrite its findings. But
+`AGENTS.md`'s reading list and `INSTRUMENTATION_SHAPE.md`'s "Builds on" header
+both present it without saying what has since closed, and most of §5's programme
+has. An agent taking §5 as a work list sets out to build things that exist; an
+agent reading §2's scorecard concludes the interactive surface is skeletal when
+it is 65 CTRL verbs with a checked reachability table. The cost is wasted work
+and mis-set expectations, which is why this section is here and the body is not
+touched.
+
+| §5 item | State | Closed by |
+|---------|-------|-----------|
+| P0.1 cycles contract + `cycles=` on run/step/run-until | **done** | all three acks carry `cycles=N (in-command)`; the rule is in `A2GSPU_RAILS.md`, `oracle` and every `help` row |
+| P0.2 profile field on image rails | **done** | `png`/`pngc`/`vram`/`dhgr-golden` acks carry `profile=` |
+| P0.3 stale-doc quarantine | **done** | root `A2GSPU_INSTRUMENTATION.md` is a 15-line SUPERSEDED pointer |
+| P1.4 CTRL `assert` | **done** | `assert peek:…` verb, `status=PASS\|FAIL` |
+| P1.5 CTRL `watch` | **done** | `watch add\|list\|sample\|clear` and live `watch bus` |
+| P1.6 `run-bin` / IIe load recipes | **partial** | `load`/`poke`/`setreg` are live verbs; there is no `run-bin` verb — the SPIKE `A2GSPU_RUN_BIN` rail is still the only form |
+| P1.7 DHGR golden rail | **done** | `dhgr-golden` verb + `A2GSPU_DHGR_GOLDEN` SPIKE gate with a named profile |
+| P2.8 split the CTRL dispatcher out of `gs2.cpp` | **partial** | most verbs moved to `src/a2gspu_ctrl_cmds.hpp`; the loop and a tail of verbs are still in `gs2.cpp` |
+| P2.9 verb registry auto-listed by `help` | **done** | `verbs[]` in `a2gspu_manifest.hpp` drives `help`, `help <file>` and `manifest <file>` identically, and `railparity.ps1` now fails a verb the dispatcher answers but the table omits |
+| P2.10 platform-matrix ctest | **partial** | `dualsmoke.ps1` runs railcheck + exec + ALTZP on IIe **and** IIgs; ctest itself is CPU/VIA-level |
+| P3.11 `A2GSPU_PROFILE` preset bundles | **open** | no such rail |
+| P3.12 batch `script` verb | **open** (and arguably a non-goal — `session.ps1`'s header argues against batching the rail) | |
+| P3.13 snapshot classes documented and expanded | **partial** | every snapshot carries a manifest and the class letter is derived from the blocks written; `adb`, `ensoniq`, `vgcint`, `iwm` and `pdblock` are saved. Scanner state is still out — see `INSTRUMENTATION_SHAPE.md` M5 |
+
+§2's scorecard is likewise 2026-07-31. Two of its stated reasons have since
+gone: "root `INSTRUMENTATION.md` stale" (P0.3) and the D for CTRL↔env parity.
+For the current state read the **Status** paragraph of each of M1–M12 in
+[`INSTRUMENTATION_SHAPE.md`](INSTRUMENTATION_SHAPE.md), which is the document
+that carries the live picture.
+
+---
+
 ## 0. What “first principles” means here
 
 An instrumented emulator is not “a debugger bolted on.” For this fork it must be:
@@ -80,6 +116,10 @@ That is instrumentation improving the oracle, not feature creep—if documented 
 
 ## 2. Architecture scorecard
 
+*Scored 2026-07-31 and not rescored since — see **Closure** above for what has
+changed, and `INSTRUMENTATION_SHAPE.md`'s M1–M12 Status paragraphs for the
+current state.*
+
 | Principle | Score | Notes |
 |-----------|-------|-------|
 | Env-gated default OFF | A | Core promise |
@@ -109,8 +149,11 @@ Bracketing `cycles` across CTRL commands once returned:
 
 **First principle violated:** measurement must be *inside* the same atomic run unit as the
 work.  
-**Status:** partially fixed for `run-until` (cycles reported inside the call).  
-**Still required:**
+**Status (2026-07-31):** partially fixed for `run-until` (cycles reported inside the call).  
+**Status now: closed.** `run`, `step` **and** `run-until` all report `cycles=N
+(in-command)` inside the call; `cycles` on its own is documented and acked as an
+absolute counter whose cross-ack deltas are not valid timing.  
+**Still required (as written in 2026-07-31):**
 
 - Document that **only** cycles reported *inside* `run` / `run-until` / `step` are valid  
 - Forbid / warn harnesses that diff `cycles` across `ack` boundaries  
@@ -402,3 +445,12 @@ Protect the three invariants. Fix lying instruments first. Then make the interac
 **Missing from RAILS CTRL table at audit time:** several of the above (including
 `step`, `run-until`, `vid`, `stack`, `png`/`pngc`, `vram`, `load`, `cycles`, `dhgr-*`).
 Catalog refresh is part of P0.
+
+**Closed.** The refresh was applied to the verbs this appendix names in *prose*
+and not to the list beside them, so `boot`, `bp`, `cov`, `hgr`, `reset` and
+`screen` — all six printed above — stayed out of the RAILS CTRL table for
+another year, along with thirteen verbs added since. All 65 now have a row, the
+`run` row no longer states a reply format the binary cannot emit, and
+`railparity.ps1` fails a verb the CTRL dispatcher answers that `verbs[]` does
+not list. `help` from the running process remains the authority for the *set*;
+the table carries the semantics.

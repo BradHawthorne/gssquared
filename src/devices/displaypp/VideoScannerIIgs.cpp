@@ -220,7 +220,7 @@ void VideoScannerIIgs::video_cycle()
         }
     }
 
-    // if in shr and this is cycle 64 of a scanline, and the SCB has bit 6 (interrupt) enabled, then assert scanline interrupt.
+    // SHR SCB bit 6 (0x40) = scanline IRQ (Hardware Ref Table 4-19). Bit 5 (0x20) is FILL, bit 7 is 640. $40 must IRQ and must not fill.
     if (irq_handler.handler) {
         // old code that fires at end of scanline 
         /* if (shr && (h_counter == 64) && (current_scb & 0x40)) {

@@ -152,13 +152,36 @@ inline bool       g_watch_change_only = false;
 inline bool       g_watch_read_on     = false;
 inline int        g_watch_last[8]     = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
-// probe_peek of banks $00/$01 can return floating-bus $EE for handler/relocated pages
-// that read_raw cannot see (see mmu.hpp). A sensor that trusts such a read lied ~6x in
-// the owned-GS/OS boot campaign. This flags a SUSPECT reading so a diagnostic surfaces
-// it ("suspect a liar") instead of silently trusting a floating-bus byte as memory
-// truth. Observation-only; RETGUARD's validated stack-context probe_peek is unaffected.
-inline bool iigs_probe_suspect(uint32_t addr, uint8_t val) {
-    return (((addr >> 16) & 0xFF) <= 0x01) && (val == 0xEE);
+// Is a probe_peek of this address bus noise rather than memory? ASK THE MMU.
+//
+// This used to be `bank <= $01 && value == $EE`, a guess at the answer from the
+// value it got back, and both halves of the guess have since become wrong.
+// MMU_IIgs::probe_peek resolves banks $00/$01 through calc_aux_read and the
+// language-card mapping and returns floating bus only for page $C0 -- so every
+// genuine $EE in bank $00 or $01, on the one platform where the probe is
+// correct, was being labelled by the instrument as "do NOT trust as memory
+// truth". MEASURED: `poke 2000 EE EE EE EE` then `read 2000 8` returns exactly
+// those bytes from bank $00 RAM, and the old test called all four of them liars.
+// $EE is INC abs and an ordinary data byte, so the false-positive rate on a real
+// code window is not small, and making an agent distrust correct data costs the
+// same as making it trust wrong data (AGENTS.md rule 3).
+//
+// probe_readable() is the MMU's own statement about the same address, kept in
+// lockstep with probe_peek by the MMU that implements both -- exact on the IIgs
+// (page $C0 only), and on the II family it is read_raw's own read_p==nullptr
+// test, which is strictly better than the value guess it replaces: it catches a
+// handler-backed page returning ANY value, not just $EE. This is the pattern
+// iigs_diag.hpp's `peek:` assert already uses, and M11's remaining rule -- an
+// observe rail reads through the probe, never through the CPU's read path --
+// only means anything if the probe is also asked whether it can see.
+//
+// Templated on the MMU pointer so this header does not have to include
+// mmus/mmu.hpp ahead of every consumer; the body is instantiated at the call
+// site, where the type is complete. Observation-only; RETGUARD's validated
+// stack-context probe_peek is unaffected.
+template <typename MmuPtr>
+inline bool iigs_probe_suspect(MmuPtr mmu, uint32_t addr) {
+    return !mmu || !mmu->probe_readable(addr & 0xFFFFFF);
 }
 
 extern int g_iigs_cur_frame;   // fwd (defined below with ITRACE): early decl so the WATCH `ts` field below can read the frame clock
@@ -702,6 +725,21 @@ inline int   g_callstream_seq = 0;
 
 // Banking-correct, mostly-non-disturbing opcode read for the instrumentation
 // rails.  See the note at the fetch site in iigs_calltrace_step().
+//
+// STANDING VIOLATION OF M11'S RULE, LEFT IN PLACE DELIBERATELY. The rule
+// (Docs/INSTRUMENTATION_SHAPE.md M11) is that an observe rail reads through the
+// probe and never through the CPU's read path; this reads through cpu->mmu->read
+// for everything outside $C000-$CFFF, so CALLTRACE and CALLSTREAM -- and the
+// attribution BLAME builds on them -- are on the CPU's path with its side
+// effects. Half the original justification is now stale: probe_peek no longer
+// returns floating bus for IIgs banks $00/$01 (mmu_iigs.hpp), so the "-> 00/EEEE"
+// symptom below cannot recur there. The OTHER half still stands and is why this
+// was not simply switched: on the II family probe_peek is read_raw, which does
+// not resolve ROM/language-card banking, and switching it there produced a
+// CALLTRACE that emitted NOTHING on -p 3 with thousands of JSRs executing.
+// Closing this needs a before/after on a real IIgs calltrace and a IIe one
+// beside it, not an edit -- so it is recorded here as open rather than papered
+// over with a comment that makes the wrong rule look justified.
 static inline uint8_t iigs_instr_peek(cpu_state *cpu, uint32_t a) {
     uint16_t off = (uint16_t)(a & 0xFFFF);
     if (off >= 0xC000 && off <= 0xCFFF) return cpu->mmu->probe_peek(a);
@@ -735,7 +773,10 @@ inline void iigs_calltrace_step(cpu_state *cpu) {
     // Operand bytes need the same banking-correct read as the opcode.  With
     // probe_peek these came back as floating-bus $EE for banks $00/$01 on the
     // IIgs, so every logged call target read "-> 00/EEEE" -- the trace named the
-    // caller correctly and the callee not at all.
+    // caller correctly and the callee not at all.  THAT IIgs SYMPTOM IS HISTORY:
+    // probe_peek resolves those banks now.  What keeps the read() path here is
+    // the II-family half, recorded at iigs_instr_peek above; do not cite the
+    // $EE story as a live reason.
     auto pk = [&](uint32_t o){ return iigs_instr_peek(cpu, (pc & 0xFF0000) | ((pc + o) & 0xFFFF)); };
     char here[80]; iigs_sym_resolve(pc, here, sizeof(here));
     char tgt[80]; tgt[0] = 0;
@@ -1229,11 +1270,18 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
                     int suspects = 0;
                     for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++) {
                         uint8_t v = cpu->mmu->probe_peek(a);
-                        if (iigs_probe_suspect(a, v)) suspects++;
+                        if (iigs_probe_suspect(cpu->mmu, a)) suspects++;
                         printf(" %02X", v);
                     }
+                    // Named for what the MMU actually said, not for a byte value.
+                    // The old banner accused "bank $00/$01 floating-bus" on every
+                    // real $EE in bank 0; the count is now of addresses the probe
+                    // itself reports it cannot see (page $C0 on a IIgs; any
+                    // handler-backed page on the II family).
                     if (suspects)
-                        printf("  [** %d SUSPECT $EE: bank $00/$01 floating-bus, do NOT trust as memory truth **]",
+                        printf("  [** %d NOT PROBE-READABLE: the MMU has no read pointer for these "
+                               "addresses (soft switches / handler pages), so the bytes shown for them "
+                               "are floating bus, not memory **]",
                                suspects);
                     printf("\n");
                 }

@@ -17,16 +17,26 @@ struct SHRColor {
 };
 
 struct SHRMode {
+    // Hardware Reference Table 4-19: bit7=640, bit6=IRQ, bit5=FILL, bits3-0=palette.
+    // $40 is scanline IRQ (not fill). $20 is fill (320 nibble-repeat). $80 is 640.
     union {
         struct {
-            uint8_t p:4;
-            uint8_t _unused:1;
-            uint8_t fill:1;
-            uint8_t interrupt:1;
-            uint8_t mode640:1;
+            uint8_t p:4;          // bits 3-0: palette 0-15
+            uint8_t _unused:1;    // bit 4: reserved
+            uint8_t fill:1;       // bit 5 (0x20): fill mode, 320 only
+            uint8_t interrupt:1;  // bit 6 (0x40): scanline IRQ
+            uint8_t mode640:1;    // bit 7 (0x80): 1=640, 0=320
         };
         uint8_t v;
     };
+};
+
+// VGC leftover fill index when a 320 fill-mode line starts with a 0 nibble.
+// Hardware testing by John Brooks; same table as MAME. Indexed by SCB & 0x1F
+// (not vcount) when that line's SCB is latched.
+inline constexpr uint8_t shr_fillmode_init[32] = {
+    2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
 };
 
 struct Palette {

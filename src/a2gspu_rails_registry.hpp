@@ -50,7 +50,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_CALLTRACE_SKIP",      "trace",       "skip the first n calls before logging"},
     {"A2GSPU_CONDTRAP",            "break",       "conditional flag-provenance trap: at PC, when flag f(c/z/i/d/x/m/v/n)==v, report the PC that last changed that flag"},
     {"A2GSPU_CONDTRAP_MAX",        "break",       "CONDTRAP hit cap"},
-    {"A2GSPU_COPILOT",             "observe",     "windowed, read-only telemetry rail; human input stays active"},
+    {"A2GSPU_COPILOT",             "observe",     "windowed agent rail: observe+UX control (pause/key/mount/quit); instrumentation stays opt-in/off"},
     {"A2GSPU_COVERAGE",            "observe",     "LO-HI or BANK:LO-HI -- per-byte execution bitmap over that range, written at spike end. Feeds deasmiigs --coverage so the code/data split is a measurement, not a heuristic."},
     {"A2GSPU_COVERAGE_OUT",        "observe",     "file the COVERAGE bitmap is flushed to. Written BEFORE the gate block, which exits on any gate and would otherwise discard the run."},
     {"A2GSPU_CPUTEST",             "run",         "short-circuit the spike: run one CPU micro-test case, print === CPUTEST COMPLETE (PASS/FAIL) ===, exit with its rc"},

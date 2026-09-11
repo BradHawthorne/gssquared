@@ -1018,7 +1018,13 @@ inline bool try_visual(const char *line, char *result, size_t rsz, computer_t *c
 // ---- meta: oracle / help / manifest / rail ---------------------------------
 inline bool try_meta(const char *line, char *result, size_t rsz) {
     if (!strcmp(line, "copilot")) {
-        snprintf(result, rsz, "status=OK copilot transport=atomic-files mode=windowed-read-only thread=SDL-frame commands=protocol,systems,manifest,help,oracle,cpu,read,assert,png,pngc");
+        /* Windowed agent rail: observe verbs never disturb the guest; control
+           verbs intentionally act as the user (pause/key/mount/quit). Full
+           instrumentation env (COVERAGE/SPIKE/CTRL takeover) stays off. */
+        snprintf(result, rsz,
+                 "status=OK copilot transport=atomic-files mode=windowed-agent thread=SDL-frame "
+                 "observe=protocol,systems,manifest,help,oracle,cpu,read,assert,png,pngc,speaker,audio,pause-status "
+                 "control=pause,resume,reset,quit,press,key,keys,holdkey,paddle,pbutton,joymode,mount");
         return true;
     }
     if (!strcmp(line, "protocol")) {
@@ -1719,21 +1725,42 @@ inline bool try_exec(const char *line, char *result, size_t rsz,
         soft_watch_after(computer, result, rsz);
         return true;
     }
-    // resume — the explicit half of the breakpoint round trip. Distinguishes the
-    // two halts by name, because they need opposite responses: a user halt is
-    // continuable, a jammed CPU is not and no amount of `run` will help.
+    // pause / pause-status / resume -- Menu Machine > Pause/Resume equivalent
+    // (EXEC_PAUSED) plus the breakpoint user-halt clear. Windowed COPILOT and
+    // headless CTRL share these so an agent can prove pause without a human.
+    if (!strcmp(line, "pause")) {
+        computer->execution_mode = EXEC_PAUSED;
+        snprintf(result, rsz, "status=OK pause mode=EXEC_PAUSED");
+        return true;
+    }
+    if (!strcmp(line, "pause-status")) {
+        const char *m = computer->execution_mode == EXEC_PAUSED ? "paused"
+                      : computer->execution_mode == EXEC_STEP_INTO ? "step"
+                                                                    : "running";
+        snprintf(result, rsz, "status=OK pause-status mode=%s exec=%d",
+                 m, (int)computer->execution_mode);
+        return true;
+    }
+    // resume - clear EXEC_PAUSED (menu Resume) and/or user-halt (breakpoint).
+    // Distinguishes halt kinds: user halt is continuable; jammed CPU is not.
     if (!strcmp(line, "resume")) {
+        const bool was_paused = (computer->execution_mode == EXEC_PAUSED);
+        if (was_paused) computer->execution_mode = EXEC_NORMAL;
         const int h = computer->cpu ? computer->cpu->halt : 0;
         if (h == HLT_USER) {
             computer->cpu->halt = 0;
             char st[192];
             format_cpu_line(computer, st, sizeof st);
-            snprintf(result, rsz, "status=OK resume cleared user-halt %s", st);
+            snprintf(result, rsz,
+                     "status=OK resume cleared user-halt%s %s",
+                     was_paused ? "+unpaused" : "", st);
         } else if (h == HLT_INSTRUCTION) {
             snprintf(result, rsz, "status=FAIL resume-cpu-jammed halt=%d -- the guest "
                      "executed a halting instruction; only `reset` leaves this state", h);
         } else if (h) {
             snprintf(result, rsz, "status=FAIL resume-unknown-halt halt=%d", h);
+        } else if (was_paused) {
+            snprintf(result, rsz, "status=OK resume unpaused mode=EXEC_NORMAL");
         } else {
             snprintf(result, rsz, "status=OK resume not-halted (nothing to clear)");
         }
@@ -2008,13 +2035,20 @@ inline bool try_input(const char *line, char *result, size_t rsz,
                 kb->kb_key_strobe = (uint8_t)(ch | 0x80);
                 if (kb->mk) kb->mk->last_key_val = (uint8_t)ch;
                 kb->key_down_count++;
+                int ran = 0; bool halted = false;
                 for (int i = 0; i < hold; i++) {
-                    if (!run_one_frame(computer)) {
-                        snprintf(result, rsz, "halted@%d", i);
-                        break;
-                    }
+                    if (!run_one_frame(computer)) { halted = true; break; }
+                    ran++;
                 }
                 kb->key_down_count--;
+                // Always write status= — success used to leave result empty, so a
+                // COPILOT/CTRL caller saw a blank ack and treated press as failure
+                // even when KBD strobe was set (DUAL-03 windowed press proof).
+                if (halted)
+                    snprintf(result, rsz, "status=OK press $%02X halted@%d", ch, ran);
+                else
+                    snprintf(result, rsz, "status=OK press $%02X hold=%d KBD=$%02X",
+                             ch, hold, (unsigned)kb->kb_key_strobe);
             } else if (kg && kg->kg) {
                 // force_key queues exactly one ADB buffer byte. hold_key is
                 // sticky: the ADB micro auto-repeats inside a single video
@@ -2050,6 +2084,9 @@ inline bool try_input(const char *line, char *result, size_t rsz,
             } else {
                 snprintf(result, rsz, "status=FAIL no-keyboard");
             }
+            // keygloo success path historically left result blank; fill it.
+            if (result[0] == 0)
+                snprintf(result, rsz, "status=OK press $%02X hold=%d (adb)", ch, hold);
         } else {
             snprintf(result, rsz, "status=FAIL press-parse-fail");
         }

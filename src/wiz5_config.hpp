@@ -25,6 +25,19 @@
 //   WIZ5_DISKWR_OUT=<file>  UCSD UNITWRITE/UNITREAD block byte capture ($DF09/$DF04)
 //   WIZ5_CSP6_OUT=<file>    CSP-6 (UNITWRITE) p-code eval-stack + 6502 stack/zp dump ($D681)
 //
+// AGENTS.md RULE 2 SAYS "no hard-coded product memory maps in the emulator",
+// AND THIS FILE IS THE ONE STANDING EXCEPTION TO IT. That was true for a long
+// time and written down everywhere except the file an agent is told to obey:
+// INSTRUMENTATION_SHAPE.md section 1 named it, M10 set its retirement
+// condition, railparity.ps1 granted it an exemption (for the record shape, not
+// for the addresses) -- and AGENTS.md listed rule 2 as an absolute with no
+// pointer here. An agent finding this file therefore had two wrong conclusions
+// available: that it is a defect to delete (it is load-bearing for a live
+// consumer), or that the rules are advisory (rule 4 is not, and AGENTS.md says
+// so). The exception is now recorded in AGENTS.md under rule 2, with the
+// retirement condition: these traps go when their consumers read the generic
+// A2GSPU_TRAP records, and not before. Do not add a second file like this one.
+//
 // The three PC traps ride the generic tap's existing per-instruction call site
 // (base_6502.cpp: `if (g_gtap.on) generic_tap_check(...)`) via the g_gtap_ext
 // hook registered by wiz5_config_arm() — so NO cpu/device file is touched.
