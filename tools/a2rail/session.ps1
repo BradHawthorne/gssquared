@@ -54,6 +54,18 @@ if (Test-Path $Dir) {
     New-Item -ItemType Directory $Dir -Force | Out-Null
 }
 
+# The emulator reads A2GSPU_CTRL at spawn, so these only need to be set
+# across Start-Process -- and they MUST NOT outlive it. session.ps1 is
+# called IN-PROCESS by railcheck/execcheck/altzpcheck/protocolcheck, so a
+# value left behind here leaks into the caller shell and into every later
+# gate it runs. A leaked A2GSPU_CTRL sends the NEXT emulator to the
+# PREVIOUS gate's rail directory, where it replays that directory's
+# stale commands and quits -- copilotcheck then reports "did not ack;
+# exited=True", which reads as an emulator crash rather than an
+# environment bug. Saved and restored around the launch below, the same
+# way personalitycheck.ps1 already does it.
+$a2railOldCtrl        = $env:A2GSPU_CTRL
+$a2railOldCtrlTimeout = $env:A2GSPU_CTRL_TIMEOUT
 $env:A2GSPU_CTRL         = $Dir
 $env:A2GSPU_CTRL_TIMEOUT = "$TimeoutS"
 
@@ -89,6 +101,10 @@ $proc = Start-Process -FilePath $Exe -ArgumentList $launchArgs -WorkingDirectory
               -RedirectStandardOutput $log `
               -RedirectStandardError (Join-Path $Dir "session.err") `
               -WindowStyle Hidden -PassThru
+
+# The child has inherited them; put the caller's environment back.
+$env:A2GSPU_CTRL         = $a2railOldCtrl
+$env:A2GSPU_CTRL_TIMEOUT = $a2railOldCtrlTimeout
 
 @{
     schema = "a2rail-session-v1"

@@ -30,8 +30,31 @@ $personalities = @(
     @{ id=11; platform=5; name='Apple IIgs + Uthernet II'; cpu='65816' },
     @{ id=12; platform=5; name='Apple IIgs ROM 4 Mark Twain'; cpu='65816' },
     @{ id=13; platform=5; name='Apple IIgs ROM 3'; cpu='65816' },
-    @{ id=14; platform=3; name='Apple IIe Enhanced + Thunderclock'; cpu='65C02' }
+    @{ id=14; platform=3; name='Apple IIe Enhanced + Thunderclock'; cpu='65C02' },
+    @{ id=15; platform=5; name='Apple IIgs + A2GSPU + Mouse'; cpu='65816' }
 )
+
+# THE LIST ABOVE IS A TRANSCRIPTION, SO IT IS CHECKED AGAINST ITS SOURCE.
+#
+# It sat at 15 entries while src/systemconfig.cpp held 16 and the live rail
+# reported configs=16. The missing one -- id 15, "Apple IIgs + A2GSPU + Mouse" --
+# had never been started by any gate, and the suite could not have said so: it
+# ended with a hard-coded `ALL GREEN -- 15`, which is the transcription agreeing
+# with itself. A gate whose expected value is its own input cannot fail.
+#
+# Deriving the count means the next config added to systemconfig.cpp turns this
+# suite RED until someone extends the list, which is the only way a transcription
+# stays honest. The pattern matches protocolcheck.ps1's identical check on the
+# same array; the helper is shared from runtime.ps1 so the two cannot drift.
+$srcConfigs = Get-CArrayCount `
+    (Join-Path $PSScriptRoot '..\..\src\systemconfig.cpp') `
+    'BuiltinSystemConfigs\[\]\s*=\s*\{' '^    \{\s*$' 'NUM_SYSTEM_CONFIGS'
+if ($personalities.Count -ne $srcConfigs) {
+    Write-Host ("personalitycheck: src/systemconfig.cpp holds $srcConfigs builtin " +
+                "configs, this suite lists $($personalities.Count). Add the missing " +
+                "entry -- an untested personality is not a passing one.") -ForegroundColor Red
+    exit 1
+}
 
 function Wait-File([string]$Path, [int]$TimeoutMs, $Process) {
     $watch = [Diagnostics.Stopwatch]::StartNew()
@@ -83,5 +106,6 @@ $results | ConvertTo-Json -Depth 4 | Set-Content $Report -Encoding utf8
 $failed=@($results | Where-Object { -not $_.pass })
 Write-Host "report: $Report"
 if ($failed.Count) { Write-Host "$($failed.Count) personalities failed" -ForegroundColor Red; exit 1 }
-Write-Host 'ALL GREEN -- 15 built-in Apple II machine personalities' -ForegroundColor Green
+Write-Host ("ALL GREEN -- $($results.Count) of $srcConfigs built-in Apple II " +
+            'machine personalities') -ForegroundColor Green
 exit 0
