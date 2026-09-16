@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 #include "util/DebugFormatter.hpp"
 #include "gs2.hpp"
@@ -1607,7 +1608,11 @@ class SecondSight {
 
         void cmd_set_palette_entry() {
             if (command_step == 1) {
-                setup_dma(DMA_DIRECTION_IN, cmd_buffer+1, 3);
+                // FORK: four bytes -- index, red, green, blue (the command's length is 5 with
+                // the command byte). The window was 3, so blue came from whatever the last
+                // command left in cmd_buffer[4], and the guest's fourth byte arrived after
+                // the DMA had closed: dropped, or in GPU Text mode pushed into the text ring.
+                setup_dma(DMA_DIRECTION_IN, cmd_buffer+1, 4);
             } else if (command_step == 2) {
                 // DMA complete, we're done.
                 uint8_t index = cmd_buffer[1];
@@ -2277,8 +2282,173 @@ class SecondSight {
             }
         }
 
+        // ---- A2GSPU snapshot (M5) -------------------------------------------
+        // The card's registers, command and DMA state (a DMA pointer is saved as a
+        // buffer and an offset), mode, CRTC and palette state, the text renderer's
+        // 16-entry palette, the Host Text and GPU Text state, and all of VRAM and
+        // the Z180 SRAM. GPU mode cannot be saved: its textures exist only as host
+        // GPU objects. A save taken in GPU mode says so, and its restore puts the
+        // card in its reset state (VRAM and SRAM still restored) and reports it.
+        enum : uint8_t { SS_DMA_NONE = 0, SS_DMA_CMD, SS_DMA_RESP, SS_DMA_USERMODE, SS_DMA_PALETTE, SS_DMA_VRAM, SS_DMA_GPU };
+
+        uint8_t dma_target(uint32_t *offset) const {
+            *offset = 0;
+            if (!dma_address) return SS_DMA_NONE;
+            auto in = [&](const uint8_t *base, size_t size) {
+                if (dma_address >= base && dma_address <= base + size) { *offset = (uint32_t)(dma_address - base); return true; }
+                return false;
+            };
+            if (in(cmd_buffer, sizeof cmd_buffer)) return SS_DMA_CMD;
+            if (in(resp_buffer, sizeof resp_buffer)) return SS_DMA_RESP;
+            if (in(user_mode_data, sizeof user_mode_data)) return SS_DMA_USERMODE;
+            if (in((const uint8_t *)palette_rgb, sizeof palette_rgb)) return SS_DMA_PALETTE;
+            if (in(frame_buffer, SECOND_SIGHT_FB_SIZE)) return SS_DMA_VRAM;
+            return SS_DMA_GPU;
+        }
+
+        bool A2GSPU_gpu_mode() const { return ss_mode == SS_MODE_GPU || gpu.is_active(); }
+
+        void A2GSPU_snapshot(FILE *f) const {
+            uint32_t dma_off = 0;
+            const uint8_t target = dma_target(&dma_off);
+            const uint8_t gpu_flag = (A2GSPU_gpu_mode() || target == SS_DMA_GPU) ? 1 : 0;
+            fwrite(&gpu_flag, 1, 1, f);
+            const uint8_t b[20] = {
+                reg_cmd, reg_handshake, vga_mode_num, static_cast<uint8_t>(ss_mode), crt_start_addr_high,
+                crt_start_addr_low, crt_hdisplay_end, crt_offset, crt_char_width, text_font_index,
+                host_text_border, pending_status, static_cast<uint8_t>(dma_direction), target,
+                upload_code_data_flag, static_cast<uint8_t>(gputext_hs_terminal_consumed ? 1 : 0),
+                static_cast<uint8_t>(gputext_hs_off_consumed ? 1 : 0), static_cast<uint8_t>(gputext_logged_mega_ii ? 1 : 0),
+                static_cast<uint8_t>(host_text_armed ? 1 : 0), static_cast<uint8_t>(host_text_ctrl_aux ? 1 : 0),
+            };
+            fwrite(b, 1, sizeof b, f);
+            const uint16_t w[7] = { resp_length, vga_active, display_enabled, res_x, res_y, fb_pitch, host_text_ctrl_addr };
+            fwrite(w, 2, 7, f);
+            const int32_t c[2] = { active_command, command_step };
+            fwrite(c, 4, 2, f);
+            const uint32_t q[14] = { screen_base_addr, gpu_text_frame, host_text_frame, handshake_hold_reads, longrun_reads,
+                                     dma_off, dma_length, dma_offset, dma_length_remaining, dma_this_chunk,
+                                     upload_start_offset, upload_total_length, upload_host_src, 0 };
+            fwrite(q, 4, 14, f);
+            const uint8_t vm[7] = { current_vga_mode.mode, static_cast<uint8_t>(current_vga_mode.vgamode ? 1 : 0),
+                                    static_cast<uint8_t>(current_vga_mode.graphics), current_vga_mode.color_depth,
+                                    current_vga_mode.bitspercolor, host_text_raster.mode, host_text_raster.cols };
+            fwrite(vm, 1, 7, f);
+            const uint16_t vmw[2] = { current_vga_mode.width, current_vga_mode.height };
+            fwrite(vmw, 2, 2, f);
+            const uint8_t htr[3] = { host_text_raster.vis_rows, host_text_raster.cell_w, host_text_raster.cell_h };
+            fwrite(htr, 1, 3, f);
+            const uint16_t htw[2] = { host_text_raster.pix_w, host_text_raster.pix_h };
+            fwrite(htw, 2, 2, f);
+            fwrite(&host_text_latch, sizeof host_text_latch, 1, f);
+            fwrite(cmd_buffer, 1, sizeof cmd_buffer, f);
+            fwrite(resp_buffer, 1, sizeof resp_buffer, f);
+            fwrite(user_mode_data, 1, sizeof user_mode_data, f);
+            fwrite(palette_rgb, 1, sizeof palette_rgb, f);
+            fwrite(vga_text_palette(), 4, 16, f);
+            gpu_text.A2GSPU_snapshot(f);
+            fwrite(frame_buffer, 1, SECOND_SIGHT_FB_SIZE, f);
+            fwrite(z180_sram, 1, SS_Z180_SRAM_SIZE, f);
+        }
+
+        bool A2GSPU_restore(FILE *f, bool *gpu_lost) {
+            *gpu_lost = false;
+            uint8_t gpu_flag = 0, b[20], vm[7], htr[3];
+            uint16_t w[7], vmw[2], htw[2];
+            int32_t c[2];
+            uint32_t q[14];
+            ss_host_text_ctrl_t latch{};
+            uint8_t cmdb[256], respb[256], umd[84], pal[768];
+            uint32_t tpal[16];
+            if (fread(&gpu_flag, 1, 1, f) != 1 || fread(b, 1, sizeof b, f) != sizeof b || fread(w, 2, 7, f) != 7 ||
+                fread(c, 4, 2, f) != 2 || fread(q, 4, 14, f) != 14 || fread(vm, 1, 7, f) != 7 ||
+                fread(vmw, 2, 2, f) != 2 || fread(htr, 1, 3, f) != 3 || fread(htw, 2, 2, f) != 2 ||
+                fread(&latch, sizeof latch, 1, f) != 1 || fread(cmdb, 1, 256, f) != 256 ||
+                fread(respb, 1, 256, f) != 256 || fread(umd, 1, 84, f) != 84 || fread(pal, 1, 768, f) != 768 ||
+                fread(tpal, 4, 16, f) != 16) {
+                return false;
+            }
+            // The GPU Text ring alone is 64K: read it into a heap copy, not the stack.
+            std::unique_ptr<SsGpuText> saved_text(new SsGpuText());
+            if (!saved_text->A2GSPU_restore(f)) return false;
+            if (fread(frame_buffer, 1, SECOND_SIGHT_FB_SIZE, f) != SECOND_SIGHT_FB_SIZE ||
+                fread(z180_sram, 1, SS_Z180_SRAM_SIZE, f) != SS_Z180_SRAM_SIZE) {
+                return false;
+            }
+            if (b[3] > SS_MODE_GPUTEXT || b[13] > SS_DMA_GPU || q[0] >= SECOND_SIGHT_FB_SIZE) return false;
+
+            reset();   // leaves GPU mode and GPU Text, clears DMA, selects the EMU table
+            for (int i = 0; i < 16; i++) {
+                vga_text_9x16_set_palette_entry((uint8_t)i, (uint8_t)(tpal[i] >> 16), (uint8_t)(tpal[i] >> 8), (uint8_t)tpal[i]);
+            }
+            memcpy(palette_rgb, pal, sizeof palette_rgb);
+            sync_vga_palette_from_rgb();
+            if (gpu_flag) {
+                *gpu_lost = true;
+                text_font_index = b[9];
+                apply_text_font(text_font_index);
+                return true;
+            }
+
+            reg_cmd = b[0]; reg_handshake = b[1]; vga_mode_num = b[2]; ss_mode = static_cast<ss_display_mode_t>(b[3]);
+            crt_start_addr_high = b[4]; crt_start_addr_low = b[5]; crt_hdisplay_end = b[6]; crt_offset = b[7];
+            crt_char_width = b[8]; text_font_index = b[9]; host_text_border = b[10]; pending_status = b[11];
+            dma_direction = b[12] ? DMA_DIRECTION_OUT : DMA_DIRECTION_IN;
+            upload_code_data_flag = b[14];
+            gputext_hs_terminal_consumed = b[15] != 0; gputext_hs_off_consumed = b[16] != 0;
+            gputext_logged_mega_ii = b[17] != 0; host_text_armed = b[18] != 0; host_text_ctrl_aux = b[19] != 0;
+            resp_length = w[0]; vga_active = w[1]; display_enabled = w[2]; res_x = w[3]; res_y = w[4];
+            fb_pitch = w[5]; host_text_ctrl_addr = w[6];
+            active_command = c[0]; command_step = c[1];
+            screen_base_addr = q[0]; gpu_text_frame = q[1]; host_text_frame = q[2]; handshake_hold_reads = q[3];
+            longrun_reads = q[4]; dma_length = q[6]; dma_offset = q[7]; dma_length_remaining = q[8];
+            dma_this_chunk = q[9]; upload_start_offset = q[10]; upload_total_length = q[11]; upload_host_src = q[12];
+            current_vga_mode.mode = vm[0]; current_vga_mode.vgamode = vm[1] != 0;
+            current_vga_mode.graphics = vm[2] ? TG_GRAPHICS : TG_TEXT; current_vga_mode.color_depth = vm[3];
+            current_vga_mode.bitspercolor = vm[4]; current_vga_mode.width = vmw[0]; current_vga_mode.height = vmw[1];
+            host_text_raster.mode = vm[5]; host_text_raster.cols = vm[6]; host_text_raster.vis_rows = htr[0];
+            host_text_raster.cell_w = htr[1]; host_text_raster.cell_h = htr[2];
+            host_text_raster.pix_w = htw[0]; host_text_raster.pix_h = htw[1];
+            host_text_latch = latch;
+            memcpy(cmd_buffer, cmdb, sizeof cmd_buffer);
+            memcpy(resp_buffer, respb, sizeof resp_buffer);
+            memcpy(user_mode_data, umd, sizeof user_mode_data);
+            gpu_text = *saved_text;
+
+            // The DMA pointer, from its buffer and offset.
+            const uint32_t off = q[5];
+            auto at = [&](uint8_t *base, size_t size) -> uint8_t * { return off <= size ? base + off : nullptr; };
+            switch (b[13]) {
+                case SS_DMA_CMD: dma_address = at(cmd_buffer, sizeof cmd_buffer); break;
+                case SS_DMA_RESP: dma_address = at(resp_buffer, sizeof resp_buffer); break;
+                case SS_DMA_USERMODE: dma_address = at(user_mode_data, sizeof user_mode_data); break;
+                case SS_DMA_PALETTE: dma_address = at((uint8_t *)palette_rgb, sizeof palette_rgb); break;
+                case SS_DMA_VRAM: dma_address = at(frame_buffer, SECOND_SIGHT_FB_SIZE); break;
+                default: dma_address = nullptr; break;
+            }
+            if (b[13] != SS_DMA_NONE && !dma_address) return false;
+            select_cmd_table();
+            apply_text_font(text_font_index);
+            return true;
+        }
+
         void debug(DebugFormatter *df) {
             df->addLine("VGA Active: %d", vga_active);
+            {
+                // FORK: the command in progress and its DMA window, as the snapshot saves them.
+                uint32_t off = 0;
+                const uint8_t target = dma_target(&off);
+                static const char *names[] = { "none", "cmd", "resp", "usermode", "palette", "vram", "gpu" };
+                df->addLine("Command: active=%d step=%d handshake=%02X hold_reads=%u longrun_reads=%u",
+                    active_command, command_step, reg_handshake, handshake_hold_reads, longrun_reads);
+                df->addLine("DMA: dir=%s target=%s offset=%u remaining=%u",
+                    dma_direction == DMA_DIRECTION_OUT ? "out" : "in", names[target], off, dma_length);
+                df->addLine("Palette 00-07: %02X%02X%02X %02X%02X%02X %02X%02X%02X %02X%02X%02X %02X%02X%02X %02X%02X%02X %02X%02X%02X %02X%02X%02X",
+                    palette_rgb[0][0], palette_rgb[0][1], palette_rgb[0][2], palette_rgb[1][0], palette_rgb[1][1], palette_rgb[1][2],
+                    palette_rgb[2][0], palette_rgb[2][1], palette_rgb[2][2], palette_rgb[3][0], palette_rgb[3][1], palette_rgb[3][2],
+                    palette_rgb[4][0], palette_rgb[4][1], palette_rgb[4][2], palette_rgb[5][0], palette_rgb[5][1], palette_rgb[5][2],
+                    palette_rgb[6][0], palette_rgb[6][1], palette_rgb[6][2], palette_rgb[7][0], palette_rgb[7][1], palette_rgb[7][2]);
+            }
             {
                 uint8_t br = 0, bg = 0, bb = 0;
                 resolve_ss_bezel(&br, &bg, &bb);

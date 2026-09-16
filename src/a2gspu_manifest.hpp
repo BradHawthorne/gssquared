@@ -493,6 +493,7 @@ inline void write_limitations(FILE *f) {
     fprintf(f,"limitation\tid=w5100-int-line\tcomponent=Uthernet-II\tstatus=not-modelled\treason=card-wiring-unverified\n");
     fprintf(f,"limitation\tid=w5100-mr-ind\tcomponent=Uthernet-II\tstatus=open-decision\tbehaviour=IND-held-set\treason=card-evidence-owed\n");
     fprintf(f,"limitation\tid=ssc-host-queue-snapshot\tcomponent=Super-Serial-Card\tstatus=unsaveable\tstate=bytes-queued-in-host-serial-device\trestore=chip-only\n");
+    fprintf(f,"limitation\tid=secondsight-gpu-snapshot\tcomponent=SecondSight\tstatus=unsaveable\tstate=GPU-mode-textures-are-host-GPU-objects\trestore=card-reset-with-VRAM-and-SRAM+warning\n");
     fprintf(f,"limitation\tid=vidhd\tcomponent=VidHD\tstatus=detection-only\tfunctionality=none\n");
     fprintf(f,"limitation\tid=prodos-block-dead\tcomponent=prodos_block\tstatus=not-in-any-build-config\n");
 }

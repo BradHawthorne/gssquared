@@ -51,6 +51,7 @@
 #include "devices/applemouseiii/applemouseiii.hpp"  // the mouse card (M5)
 #include "devices/voc/voc.hpp"                      // the Video Overlay Card (M5)
 #include "devices/ssc/ssc.hpp"                      // the Super Serial Card (M5)
+#include "devices/secondsight/secondsight_snapshot.hpp" // the SecondSight card (M5)
 #include "devices/speaker/speaker.hpp"
 #include "platforms.hpp"
 #include "util/dialog.hpp"

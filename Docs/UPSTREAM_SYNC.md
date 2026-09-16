@@ -600,7 +600,7 @@ Merged against an explicit base of `29dadbbb`, straight into `a2gspu`. The next 
 
 **Owed after this port** (the per-component study of real-hardware behaviour, 2026-09-16, is the input):
 - **Fused Uthernet II:** done, see section 9.
-- **Snapshot blocks** for the new cards: SecondSight is still owed. Uthernet II, ThunderClock, Apple Mouse, VOC and Super Serial are done (sections 9-11), and so is ThunderClock time through `A2GSPU_FAKETIME` (section 10).
+- **Snapshot blocks** for the new cards are done (sections 9-12), and so is ThunderClock time through `A2GSPU_FAKETIME` (section 10).
 - **Side-effect-free reads** for the debug protocol's `READMEM`/`FINDMEM`, which today read through the CPU's bus path.
 - **Hardware-evidence decisions still open:**
   - game switches with nothing attached (the IIe manual's pull-downs are in the hand controller, which favours upstream's floating reads);
@@ -679,3 +679,46 @@ number of seconds after power-on, and a restore keeps the ticks to the edge.
 mouse ROM bank 3, wrote VOC `$C0B1`/`$C0B5` and programmed the 6551 at 9600 baud. The run saved,
 restored into a fresh machine (`skipped=-`), and compared bank, PIA, VOC registers, 6551 registers
 and baud.
+
+## 12. SecondSight snapshot block, and its SetPaletteEntry length (2026-09-16)
+
+**Block `ssight`.** It holds:
+- the command, handshake and DMA state; a DMA pointer is saved as a buffer and an offset (command, response, user mode record, palette or VRAM);
+- the display mode, CRTC fields, resolution and pitch;
+- the 256-colour palette and the text renderer's 16-entry palette;
+- the text font;
+- the Host Text latch and raster;
+- the GPU Text raster, cells, command ring, pen, margins and sync;
+- all 1 MB of VRAM and the 128 K Z180 SRAM.
+
+Restore goes through the card's `reset()`, then applies the saved state, reselects the command
+table for the mode and reloads the font (from SRAM for the user font).
+
+**GPU mode cannot be saved.** Its textures exist only as host GPU objects. A save taken in GPU
+mode, or during a GPU upload, is marked. Its restore returns the card to reset, restores VRAM,
+SRAM and palettes, and warns (limitation row `secondsight-gpu-snapshot`).
+
+**`SetPaletteEntry` (`$07`) read four bytes through a three-byte window.** The handler takes index,
+red, green and blue from `cmd_buffer[1..4]`, and upstream's own command-length table gives 5 with the
+command byte. The window was 3, so blue came from whatever the previous command left in
+`cmd_buffer[4]`. The guest's fourth byte arrived after the DMA had closed: it was dropped, or in
+GPU Text mode pushed into the text ring as a character. The window is now 4 (upstream has the same
+3 at `d380e055`). **OPEN:** confirm against the card's own library when a copy is available.
+
+**Instrumentation:** `devstate ss` now shows the command in progress, the handshake hold and
+long-run read counters, the DMA window (direction, buffer, offset, bytes remaining) and palette
+entries 0-7.
+
+**Noted, not changed:** in `frame()`, the host preference `ss_text_mode` decides whether the card
+takes over Apple II text. That path rewrites card state (mode number, CRTC fields, the user mode
+record and VRAM), so a host setting can change what the guest reads back. It also runs only when a
+video frame is rendered. This belongs in the fidelity study.
+
+**Verified:** a scratch run (16 checks) on a IIgs with the card in slot 3.
+- The guest sent `SetPaletteEntry` and two of its four bytes. The run saved and restored into a
+  fresh machine (`skipped=-`, with the same command, step and DMA window: buffer `cmd`, offset 3,
+  2 remaining), then sent the last two bytes there. The command completed and palette entry 5 read
+  `112233`.
+- It entered GPU Text 80x25 and wrote a character and half of the next word. The raster, the
+  pending half word and the pen restored into a fresh machine.
+- It entered GPU mode (640x480, 8 bpp) and saved. That restore warned and left the card in `emu`.

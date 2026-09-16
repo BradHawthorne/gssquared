@@ -95,7 +95,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2", "tclock", "mousecd", "voc", "ssc" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2", "tclock", "mousecd", "voc", "ssc", "ssight" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -248,6 +248,11 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "ssc", 1); ssc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "ssc" : ",ssc";
     }
+    // SecondSight: registers, command/DMA state, modes, palettes, text state, VRAM and SRAM.
+    if (secondsight_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "ssight", 1); secondsight_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "ssight" : ",ssight";
+    }
     return names;
 }
 // Reads device blocks up to the sentinel, which it leaves for the caller. A block
@@ -384,6 +389,14 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 r = ssc_A2GSPU_restore(f, &absent) ? RESTORED : FAILED;
                 if (r == RESTORED && absent)
                     a2gspu_warn("A2GSPU SNAP", "ssc: a saved Super Serial Card's slot has none in this machine; that card was not applied");
+            }
+        } else if (!strcmp(nm, "ssight") && ver == 1) {
+            if (secondsight_A2GSPU_present()) {
+                bool gpu_lost = false;
+                r = secondsight_A2GSPU_restore(f, &gpu_lost) ? RESTORED : FAILED;
+                if (r == RESTORED && gpu_lost)
+                    a2gspu_warn("A2GSPU SNAP", "ssight: the snapshot was taken in SecondSight GPU mode, whose textures cannot be "
+                                "saved; the card was restored to its reset state (VRAM and SRAM restored) and the guest must re-enter GPU mode");
             }
         }
         if (r == FAILED) return false;

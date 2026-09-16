@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include <vector>
 
 #include "ss_host_text.hpp"
@@ -63,6 +64,10 @@ public:
 
     /** Cell at (col,row): char in [0], attr in [1]. nullptr if OOB. */
     const uint8_t *cell_at(int col, int row) const;
+
+    // FORK: snapshot (M5): the raster, cells, command ring, pen, margins and sync.
+    void A2GSPU_snapshot(FILE *f) const;
+    bool A2GSPU_restore(FILE *f);
 
 private:
     enum class Pending : uint8_t {

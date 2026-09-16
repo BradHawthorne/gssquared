@@ -536,3 +536,49 @@ void SsGpuText::execute_word(uint16_t w) {
     }
     execute_command((uint8_t)(w >> 8), (uint8_t)(w & 0xFF));
 }
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+void SsGpuText::A2GSPU_snapshot(FILE *f) const {
+    const uint8_t b[18] = {
+        static_cast<uint8_t>(active ? 1 : 0), static_cast<uint8_t>(yielded_ ? 1 : 0),
+        raster_.mode, raster_.cols, raster_.vis_rows, raster_.cell_w, raster_.cell_h,
+        static_cast<uint8_t>(have_lo ? 1 : 0), lo_byte, static_cast<uint8_t>(pending), pending_count,
+        static_cast<uint8_t>(sync), x, y, left, right, top, bottom,
+    };
+    fwrite(b, 1, sizeof b, f);
+    const uint16_t w[3] = { raster_.pix_w, raster_.pix_h, style };
+    fwrite(w, 2, 3, f);
+    fwrite(&attr, 1, 1, f);
+    const int32_t r[3] = { ring_head, ring_tail, ring_count };
+    fwrite(r, 4, 3, f);
+    fwrite(ring, 2, RING_WORDS, f);
+    const uint32_t n = static_cast<uint32_t>(cells_.size());
+    fwrite(&n, 4, 1, f);
+    if (n) fwrite(cells_.data(), 1, n, f);
+}
+
+bool SsGpuText::A2GSPU_restore(FILE *f) {
+    uint8_t b[18];
+    uint16_t w[3];
+    uint8_t at = 0;
+    int32_t r[3];
+    uint32_t n = 0;
+    if (fread(b, 1, sizeof b, f) != sizeof b || fread(w, 2, 3, f) != 3 || fread(&at, 1, 1, f) != 1 ||
+        fread(r, 4, 3, f) != 3 || fread(ring, 2, RING_WORDS, f) != (size_t)RING_WORDS || fread(&n, 4, 1, f) != 1) {
+        return false;
+    }
+    if (r[0] < 0 || r[0] >= RING_WORDS || r[1] < 0 || r[1] >= RING_WORDS || r[2] < 0 || r[2] > RING_WORDS ||
+        n > 256u * 256u * 2u || b[9] > static_cast<uint8_t>(Pending::CursorStyle) || b[11] > 1) {
+        return false;
+    }
+    cells_.assign(n, 0);
+    if (n && fread(cells_.data(), 1, n, f) != n) return false;
+    active = b[0] != 0; yielded_ = b[1] != 0;
+    raster_.mode = b[2]; raster_.cols = b[3]; raster_.vis_rows = b[4]; raster_.cell_w = b[5]; raster_.cell_h = b[6];
+    raster_.pix_w = w[0]; raster_.pix_h = w[1]; style = w[2];
+    have_lo = b[7] != 0; lo_byte = b[8]; pending = static_cast<Pending>(b[9]); pending_count = b[10];
+    sync = static_cast<Sync>(b[11]); x = b[12]; y = b[13]; left = b[14]; right = b[15]; top = b[16]; bottom = b[17];
+    attr = at;
+    ring_head = r[0]; ring_tail = r[1]; ring_count = r[2];
+    return true;
+}

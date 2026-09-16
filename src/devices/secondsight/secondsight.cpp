@@ -3,6 +3,7 @@
 #include "videosystem.hpp"
 #include "cpu.hpp"
 #include "util/DebugHandlerIDs.hpp"
+#include "secondsight_snapshot.hpp"
 
 void secondsight_log_yield_mux(computer_t *computer, const char *why,
     bool yielded, uint16_t old_vga, uint16_t new_vga) {
@@ -25,6 +26,9 @@ ssHANDSHAKE =  $E0C0B8
 struct secondsight_state_t {
     SecondSight *secondsight;
 };
+
+// FORK: the machine's SecondSight, for the snapshot block. Cleared at shutdown.
+static secondsight_state_t *g_secondsight = nullptr;
 
 void secondsight_write_00(void *context, uint32_t address, uint8_t value) {
     secondsight_state_t *st = (secondsight_state_t *)context;
@@ -50,6 +54,7 @@ void init_secondsight(computer_t *computer, SlotType_t slot) {
     secondsight_state_t *st = new secondsight_state_t();
     // for now, pass in the megaii MMU, which has access to just the IIe shadowed video memory.
     st->secondsight = new SecondSight(computer->video_system, computer->mmu, computer->clock, computer);
+    g_secondsight = st;
 
     uint16_t slot_base = 0xC080 + (slot * 0x10);
     
@@ -75,6 +80,7 @@ void init_secondsight(computer_t *computer, SlotType_t slot) {
     });
 
     computer->register_shutdown_handler([st]() {
+        if (g_secondsight == st) g_secondsight = nullptr;
         delete st->secondsight;
         delete st;
         return true;
@@ -86,4 +92,13 @@ void init_secondsight(computer_t *computer, SlotType_t slot) {
         return df;
     });
 
+}
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+bool secondsight_A2GSPU_present() { return g_secondsight && g_secondsight->secondsight; }
+
+void secondsight_A2GSPU_snapshot(FILE *f) { g_secondsight->secondsight->A2GSPU_snapshot(f); }
+
+bool secondsight_A2GSPU_restore(FILE *f, bool *gpu_lost) {
+    return g_secondsight->secondsight->A2GSPU_restore(f, gpu_lost);
 }
