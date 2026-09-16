@@ -139,18 +139,21 @@ static void ensoniq_flush_sdl_staging(ensoniq_state_t *st) {
    raises IRQs inside halt_osc()->update_irq_status()->m_irq_callback as oscillators
    halt, so generating the right number of samples also fires IRQs at the right time. */
 static void ensoniq_catch_up(ensoniq_state_t *st, uint64_t now_c14m) {
-    if (!st->chip || !st->stream) {
+    if (!st->chip) {
         return;
     }
 
-    // Only generate during normal execution. While paused / single-stepping we
-    // just keep the time base pinned to "now" so that resuming does not try to
-    // render a huge backlog of samples. (Ludicrous N×14M keeps c_14M advancing.)
-    if (st->computer->execution_mode != EXEC_NORMAL) {
-        st->last_catchup_c14m = now_c14m;
-        st->c14m_accum = 0;
+    // FORK: the DOC runs on emulated time and nothing else. It used to return here
+    // when the host had no audio stream -- on a machine with no audio device the chip
+    // never advanced and no oscillator interrupt ever fired -- and to pin its time
+    // base while single-stepping, so a stepped machine lost DOC time a running one
+    // kept. Oscillators, halts and IRQs now advance whenever 14M time does (paused,
+    // 14M does not move, so there is no backlog to render). Only HOST OUTPUT depends
+    // on the host: samples are handed to SDL when a stream exists and the machine is
+    // running normally, and dropped otherwise.
+    const bool host_output = st->stream && st->computer->execution_mode == EXEC_NORMAL;
+    if (!host_output) {
         st->sdl_staging_count = 0;
-        return;
     }
 
     // Guard against the clock going backwards (e.g. after a reset/resync).
@@ -227,7 +230,9 @@ static void ensoniq_catch_up(ensoniq_state_t *st, uint64_t now_c14m) {
 #endif
 
         // Queue DOC frames only — SDL is fed once per frame in generate_ensoniq_frame.
-        if (st->sdl_staging) {
+        if (!host_output) {
+            // emulated state advanced above; nothing goes to the host
+        } else if (st->sdl_staging) {
             uint32_t off = 0; // frames into audio_buffer
             while (off < n) {
                 uint32_t space = ensoniq_state_t::SDL_STAGING_CAP - st->sdl_staging_count;
@@ -310,19 +315,19 @@ uint8_t ensoniq_read_C0xx(void *context, uint32_t address) {
         case 0xC03C:  // Sound Control
             ensoniq_update_transaction(st); // update on every soundglu access
             return st->soundctl | 0xF; // this reg is write-only, low 4 bits are always 1111 on read
-            
+
         case 0xC03D: // Sound Data
             // Bit 6 of control: 0 = DOC registers, 1 = DOC RAM (handled in pipeline).
             return ensoniq_doc_data_read_pipeline(st);
-            
+
         case 0xC03E:  // Sound Address Low
             ensoniq_update_transaction(st); // update on every soundglu access
             return st->soundadrl;
-            
+
         case 0xC03F:  // Sound Address High
             ensoniq_update_transaction(st); // update on every soundglu access
             return st->soundadrh;
-            
+
         default:
             assert(false && "Invalid Ensoniq address");
             return 0;
@@ -350,12 +355,12 @@ void ensoniq_write_C0xx(void *context, uint32_t address, uint8_t data) {
             // System volume nibble; applied per-sample (slewed) in ensoniq_catch_up.
             st->audio_system->set_volume(data & 0x0F);
             break;
-            
+
         case 0xC03D: { // Sound Data
             // TODO: what should this do if the busy is already set?
             st->sounddata = data;
             uint16_t full_address = (st->soundadrh << 8) | st->soundadrl;
-            
+
             // Bit 6 of control: 0 = access DOC RAM, 1 = access DOC registers
             if (st->soundctl & 0x40) {
                 // RAM mode - use full 16-bit address
@@ -382,15 +387,15 @@ void ensoniq_write_C0xx(void *context, uint32_t address, uint8_t data) {
             }
             break;
         }
-            
+
         case 0xC03E:  // Sound Address Low
             st->soundadrl = data;
             break;
-            
+
         case 0xC03F:  // Sound Address High
             st->soundadrh = data;
             break;
-            
+
         default:
             assert(false && "Invalid Ensoniq address");
             break;
@@ -398,7 +403,7 @@ void ensoniq_write_C0xx(void *context, uint32_t address, uint8_t data) {
 }
 
 void generate_ensoniq_frame(ensoniq_state_t *st) {
-    if (!st->chip || !st->stream) {
+    if (!st->chip) {   // FORK: the chip advances without a host stream (see ensoniq_catch_up)
         return;
     }
     // Samples are now generated incrementally via ensoniq_catch_up() on every
@@ -424,9 +429,9 @@ DebugFormatter * debug_ensoniq(ensoniq_state_t *st) {
     df->addLine("Osc Freq WtSize Ctrl Vol Data WtPtr WtSize Res Acc       Irq");
     for (int o = 0; o < 32; o++) {
         Oscillator *osc = chip->get_oscillator(o);
-        df->addLine(" %2d %04X   %04X  %02X  %02X  %02X   %04X  %02X    %02X  %08X %02X", 
-            o, osc->freq, osc->wtsize, osc->control, osc->vol, 
-            osc->data, osc->wavetblpointer, osc->wavetblsize, osc->resolution, 
+        df->addLine(" %2d %04X   %04X  %02X  %02X  %02X   %04X  %02X    %02X  %08X %02X",
+            o, osc->freq, osc->wtsize, osc->control, osc->vol,
+            osc->data, osc->wavetblpointer, osc->wavetblsize, osc->resolution,
             osc->accumulator, osc->irqpend);
     }
     return df;
@@ -478,7 +483,7 @@ bool pack_ensoniq_state(ensoniq_state_t *st, std::vector<uint8_t> &out, std::str
 
 void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
     ensoniq_state_t *st = new ensoniq_state_t();
-    
+
     // Allocate 64KB DOC RAM
     st->doc_ram = new uint8_t[0x10000];
     std::memset(st->doc_ram, 0, 0x10000);
@@ -495,7 +500,7 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
     st->sdl_resample_buf = new int16_t[ensoniq_state_t::SDL_STAGING_CAP * ch];
     st->sdl_staging_count = 0;
     st->resample_pos = 0.0;
-    
+
     // Create and initialize ES5503 chip (2 host channels = TN #19 stereo card)
     st->chip = new ES5503();
     // Observatory: register the DOC oscillator array as a coverage-first memory window.
@@ -514,7 +519,7 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
             st->irq_control->set_irq(IRQ_ID_SOUNDGLU, state);
         }
     });
-    
+
     // Register I/O handlers for C03C-C03F
     for (uint32_t i = 0xC03C; i <= 0xC03F; i++) {
         computer->mmu->set_C0XX_write_handler(i, { ensoniq_write_C0xx, st });
@@ -523,7 +528,7 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
 
     // Calculate frame rate
     st->frame_rate = (double)computer->clock->get_c14m_per_second() / (double)computer->clock->get_c14m_per_frame();
-    
+
     // SDL stream at host device rate; we resample DOC→device once per frame.
     st->sdl_device_rate = st->audio_system->get_device_sample_rate();
     uint32_t es5503_output_rate = st->chip->calculate_output_rate();
