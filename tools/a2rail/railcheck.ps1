@@ -47,10 +47,14 @@ $ErrorActionPreference = "Stop"
 # $PSScriptRoot is empty inside param() defaults under `pwsh -File`, so anything
 # derived from the script's location is resolved here, in the body.
 $here = $PSScriptRoot
-# The old default was `Split-Path $PSScriptRoot -Parent`, which is <repo>\tools,
-# not the repo root -- this script lives in tools\a2rail, two levels down. It was
-# unused, so nothing noticed; it is used now. Same derivation as railparity.ps1.
-if (-not $Root) { $Root = (Resolve-Path (Join-Path $here '..\..')).Path }
+# $Root is the gssquared checkout, whose corpus/ holds the boot disk. It is NOT
+# "two levels above this script": a2engine runs a pulled copy of this file from
+# its own tools\ directory (sync-a2rail.ps1), where that derivation lands outside
+# any repository and the boot search below would find nothing. Get-GssquaredRoot
+# answers the same way session.ps1 finds the emulator: GSSQUARED_ROOT, else this
+# script's own checkout when it runs in place.
+. (Join-Path $here 'toolpin.ps1')
+if (-not $Root) { $Root = Get-GssquaredRoot }
 
 # BOOT DISK RESOLUTION. A candidate LIST, not one absolute path on one
 # developer's machine -- that is how the widest check in this suite came to be
