@@ -103,7 +103,9 @@ Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp, *.h, *.cc |
         $file = $_
         foreach ($m in [regex]::Matches(
                     [IO.File]::ReadAllText($file.FullName),
-                    '(?:SDL_)?getenv\s*\(\s*"([A-Z0-9_]+)"')) {
+                    '(?:(?:SDL_)?getenv|a2gspu_rail_arm_env)\s*\(\s*"([A-Z0-9_]+)"')) {
+            # a2gspu_rail_arm_env("NAME") is a launch-time read of NAME through the rail's
+            # registered apply function (a2gspu_rail_setters.cpp), the same as a getenv here.
             $name = $m.Groups[1].Value
             if ($notRails -contains $name) { continue }
             [void]$codeRails.Add($name)
@@ -260,7 +262,7 @@ Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp, *.h, *.cc |
     Where-Object { $_.FullName -notmatch '\\imgui\\' } |
     ForEach-Object {
         $file = $_
-        foreach ($m in [regex]::Matches([IO.File]::ReadAllText($file.FullName), 'Registrar\s+\w+\s*\{\s*"([A-Z0-9_]+)"')) {
+        foreach ($m in [regex]::Matches([IO.File]::ReadAllText($file.FullName), '(?<!Setter)Registrar\s+\w+\s*\{\s*"([A-Z0-9_]+)"')) {
             $registered[$m.Groups[1].Value] = $file.FullName.Substring($srcDir.Length + 1)
         }
     }
@@ -278,6 +280,44 @@ if ($unkept.Count -or $unfound.Count) {
     }
     Write-Host ''
     Write-Host ("railparity: FAIL - {0} unkept, {1} unfindable reader(s)" -f $unkept.Count, $unfound.Count) -ForegroundColor Red
+    exit 1
+}
+
+# --- live arming registration ----------------------------------------------
+# A reach-table row whose verb is "rail" promises `rail set NAME VALUE` works:
+# the rail must register its apply function (a2rails::SetterRegistrar). A
+# registration without the row is a live arm nobody can discover. Both
+# directions, offline -- the same contract as readers above.
+$railRows = [System.Collections.Generic.HashSet[string]]::new()
+$inReach = $false
+foreach ($line in [IO.File]::ReadAllLines($registry)) {
+    if ($line -match 'static const Reach r\[\]') { $inReach = $true; continue }
+    if ($inReach -and $line -match '^\s*\};') { break }
+    if ($inReach -and $line -match '^\s*\{"([A-Z0-9_]+)",\s*"rail",') { [void]$railRows.Add($matches[1]) }
+}
+$setters = @{}
+Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp, *.h, *.cc |
+    Where-Object { $_.FullName -notmatch '\\imgui\\' } |
+    ForEach-Object {
+        $file = $_
+        foreach ($m in [regex]::Matches([IO.File]::ReadAllText($file.FullName), 'SetterRegistrar\s+\w+\s*\{\s*"([A-Z0-9_]+)"')) {
+            $setters[$m.Groups[1].Value] = $file.FullName.Substring($srcDir.Length + 1)
+        }
+    }
+$unarmable  = @($railRows | Where-Object { -not $setters.ContainsKey($_) } | Sort-Object)
+$undeclared = @($setters.Keys | Where-Object { -not $railRows.Contains($_) } | Sort-Object)
+if ($unarmable.Count -or $undeclared.Count) {
+    Write-Host ''
+    if ($unarmable.Count) {
+        Write-Host 'UNARMABLE - the reach table says `rail set`, but no a2rails::SetterRegistrar registers an apply function:' -ForegroundColor Red
+        $unarmable | ForEach-Object { Write-Host "  $_" }
+    }
+    if ($undeclared.Count) {
+        Write-Host 'UNDECLARED - an apply function is registered, but the reach table does not say verb rail:' -ForegroundColor Red
+        $undeclared | ForEach-Object { Write-Host ("  {0,-24} {1}" -f $_, $setters[$_]) }
+    }
+    Write-Host ''
+    Write-Host ("railparity: FAIL - {0} unarmable, {1} undeclared setter(s)" -f $unarmable.Count, $undeclared.Count) -ForegroundColor Red
     exit 1
 }
 
@@ -472,6 +512,6 @@ Write-Host ("railparity: PASS - every rail the code reads is discoverable, every
 Write-Host ("                   exists and has a row of its own under its registry family in")
 Write-Host ("                   Docs/A2GSPU_RAILS.md with a whole synopsis, no non-exempt file")
 Write-Host ("                   prints a JSON record or writes to any of the {0} rail sinks itself," -f $railSinks.Count)
-Write-Host ("                   all {0} declared readers are registered by their rails, and all {1}" -f $fnRows.Count, $verbTable.Count)
-Write-Host ("                   CTRL verbs are both dispatched and listed.")
+Write-Host ("                   all {0} declared readers and all {1} live-settable rails are registered" -f $fnRows.Count, $railRows.Count)
+Write-Host ("                   by their rails, and all {0} CTRL verbs are both dispatched and listed." -f $verbTable.Count)
 exit 0

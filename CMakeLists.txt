@@ -455,6 +455,7 @@ target_link_libraries(gs2_devices_diskii_woz gs2_devices_floppy_woz gs2_util)
 # Add the executable
 add_executable(GSSquared src/gs2.cpp src/debug.cpp  src/opcodes.cpp 
     src/a2gspu_snapshot.cpp src/a2gspu_selftests.cpp src/a2gspu_ctrl.cpp src/a2gspu_ctrl_cmds.cpp src/a2gspu_spike.cpp
+    src/a2gspu_rail_setters.cpp
     src/display/display.cpp
     src/platforms.cpp
     src/devices.cpp src/slots.cpp src/systemconfig.cpp

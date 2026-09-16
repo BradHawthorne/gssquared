@@ -947,6 +947,7 @@ bool try_meta(const char *line, char *result, size_t rsz) {
         snprintf(result, rsz,
                  "status=OK copilot transport=atomic-files mode=windowed-agent thread=SDL-frame "
                  "observe=protocol,systems,manifest,help,oracle,cpu,read,assert,png,pngc,speaker,audio,pause-status "
+                 "instrument=rail(list,find,live,read,schema,set,unset:windowed-safe),trap "
                  "control=pause,resume,reset,quit,press,key,keys,holdkey,paddle,pbutton,joymode,mount");
         return true;
     }
@@ -1109,8 +1110,35 @@ bool try_meta(const char *line, char *result, size_t rsz) {
                     snprintf(result, rsz, "status=OK rail env-only wrote %s", path);
                 }
             }
+        } else if ((!strncmp(rest, "set", 3) && rest[3] == ' ') || (!strncmp(rest, "unset", 5) && rest[5] == ' ')) {
+            // ARM A RAIL LIVE. The apply function is the one the headless start
+            // calls with the environment's value, so `rail set` cannot mean
+            // something the launch form does not.
+            const bool unset = (rest[0] == 'u');
+            const char *p = rest + (unset ? 6 : 4);
+            while (*p == ' ') p++;
+            char nm[64] = {0};
+            size_t k = 0;
+            while (*p && *p != ' ' && k + 1 < sizeof nm) nm[k++] = *p++;
+            while (*p == ' ') p++;
+            const a2rails::SetterReg *st = a2rails::setter_find(nm);
+            if (!a2rails::rail_find(nm)) {
+                snprintf(result, rsz, "status=FAIL rail-unknown %s", nm);
+            } else if (!st) {
+                const a2rails::Reach *rc = a2rails::reach_find(nm);
+                snprintf(result, rsz, "status=FAIL rail-not-settable %s -- launch-only%s%s",
+                         nm, (rc && rc->verb[0]) ? "; its live equivalent is the verb " : "", (rc && rc->verb[0]) ? rc->verb : "");
+            } else if (!unset && !*p) {
+                snprintf(result, rsz, "status=FAIL rail-set-needs-value -- rail set %s <value> (the value its environment variable would hold)", nm);
+            } else {
+                char msg[512] = "";
+                const int rc = st->fn(unset ? nullptr : p, msg, sizeof msg);
+                printf("A2GSPU RAIL %s %s: %s\n", unset ? "unset" : "set", nm, msg);   // the session log keeps the history
+                snprintf(result, rsz, "status=%s rail %s %s -- %s",
+                         rc == a2rails::SET_OK ? "OK" : "FAIL", unset ? "unset" : "set", nm, msg);
+            }
         } else {
-            snprintf(result, rsz, "status=FAIL rail-need: list|find <NAME>|live|read <NAME>|schema [NAME]|env-only [file]");
+            snprintf(result, rsz, "status=FAIL rail-need: list|find <NAME>|live|read <NAME>|set <NAME> <value>|unset <NAME>|schema [NAME]|env-only [file]");
         }
         return true;
     }

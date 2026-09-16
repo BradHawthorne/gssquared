@@ -244,47 +244,128 @@ inline Reader reader_find(const char *rail) {
     return nullptr;
 }
 
+// ---- live arming, registered by the rail itself ----------------------------
+// A rail that can be armed while the machine runs registers ONE function that
+// applies a value -- the same function the headless start calls with the
+// environment's value, so the launch parser and the live parser cannot be two
+// parsers that drift. `rail set NAME VALUE` / `rail unset NAME` call it. The
+// reach table declares such a rail with verb "rail"; `rail live` and
+// railparity.ps1 fail a "rail" row nothing registered and a registration with
+// no "rail" row, the same two directions as readers.
+//
+//   value   the rail's value exactly as its environment variable would hold it,
+//           or nullptr to disarm (flags off, numbers back to their defaults,
+//           sinks closed)
+//   return  SET_OK       armed or disarmed as asked; msg says what now holds
+//           SET_REFUSED  not applied, harmless (a launch prints it and runs on)
+//           SET_INVALID  the value cannot be honoured (fatal at launch, exit 2;
+//                        a FAIL ack live)
+//   windowed  whether the windowed co-pilot may set it: false for a rail that
+//             halts the machine, because a halt ends a windowed session
+enum SetRc { SET_OK = 0, SET_REFUSED = 1, SET_INVALID = 2 };
+using Setter = int (*)(const char *value, char *msg, size_t n);
+struct SetterReg { const char *rail; Setter fn; bool windowed; bool to_stderr; };
+inline SetterReg g_setters[96] = {};
+inline int       g_nsetters = 0;
+struct SetterRegistrar {
+    SetterRegistrar(const char *rail, Setter fn, bool windowed = true, bool to_stderr = false) {
+        if (g_nsetters < (int)(sizeof g_setters / sizeof g_setters[0])) g_setters[g_nsetters++] = {rail, fn, windowed, to_stderr};
+    }
+};
+inline const SetterReg *setter_find(const char *rail) {
+    for (int i = 0; i < g_nsetters; i++)
+        if (!strcmp(g_setters[i].rail, rail)) return &g_setters[i];
+    return nullptr;
+}
+
 inline const Reach *reach(int &n) {
     static const Reach r[] = {
-    {"A2GSPU_ASSERT",        "assert",      ""},
-    {"A2GSPU_BRAM",          "",            "fn"},
-    {"A2GSPU_BREAK",         "bp",          "verb:bp"},
-    {"A2GSPU_CALLSTREAM",    "callstream",  "verb:callstream status"},
-    {"A2GSPU_COVERAGE",      "cov",         "verb:cov status"},
-    {"A2GSPU_COVERAGE_OUT",  "cov",         ""},
-    {"A2GSPU_DHGR_GOLDEN",   "dhgr-golden", ""},
-    {"A2GSPU_DUMP",          "read",        ""},
-    {"A2GSPU_EXPECT_HASH",   "shr-golden",  ""},
-    {"A2GSPU_FAKETIME",      "",            "fn"},
-    {"A2GSPU_FORCE_KEY",     "holdkey",     ""},
-    {"A2GSPU_GOLDEN",        "shr-golden",  ""},
-    {"A2GSPU_ITRACE_FROM",   "itrace",      ""},
-    {"A2GSPU_ITRACE_N",      "itrace",      ""},
-    {"A2GSPU_LIVENESS",      "",            "fn"},
-    {"A2GSPU_PACE",          "",            "fn"},
-    {"A2GSPU_LOAD",          "load",        ""},
-    {"A2GSPU_POKE",          "poke",        ""},
-    {"A2GSPU_RAMDISK",       "",            "fn"},
-    {"A2GSPU_RECORDS",       "",            "fn"},
-    {"A2GSPU_RESTORE",       "restore",     ""},
-    {"A2GSPU_SEED",          "",            "fn"},
-    {"A2GSPU_SNAP_LOAD",     "restore",     ""},
-    {"A2GSPU_SNAP_SAVE",     "save",        ""},
-    {"A2GSPU_SPIKE_KEYS",    "keys",        ""},
-    {"A2GSPU_STRICT",        "",            "fn"},
-    {"A2GSPU_SYMBOLS",       "",            "fn"},
-    {"A2GSPU_TBTRACE",       "tbtrace",     ""},
-    {"A2GSPU_TBTRACE_BANK",  "tbtrace",     ""},
-    {"A2GSPU_TEXT40",        "text",        ""},
-    {"A2GSPU_TEXTDUMP",      "text",        ""},
-    {"A2GSPU_TRAP",          "trap",        "fn"},
-    {"A2GSPU_TRAP_FILE",     "",            "fn"},
-    {"A2GSPU_TRAP_OUT",      "",            "fn"},
-    {"A2GSPU_VALTRAP",       "valtrap",     "verb:valtrap status"},
-    {"A2GSPU_VRAM_LOAD",     "vram",        ""},
-    {"A2GSPU_WATCH",         "watch",       "verb:watch bus hits"},
-    {"MEMVU_LOADVIS",        "",            "fn"},
-    {"MEMVU_STOREVIS",       "",            "fn"},
+    {"A2GSPU_ASSERT",              "assert",        ""},
+    {"A2GSPU_BRAM",                "",              "fn"},
+    {"A2GSPU_BREAK",               "bp",            "verb:bp"},
+    {"A2GSPU_BRKDUMP",             "rail",          ""},
+    {"A2GSPU_BRKMEM",              "rail",          ""},
+    {"A2GSPU_CALLSTREAM",          "callstream",    "verb:callstream status"},
+    {"A2GSPU_CALLTRACE",           "rail",          ""},
+    {"A2GSPU_CALLTRACE_N",         "rail",          ""},
+    {"A2GSPU_CALLTRACE_SKIP",      "rail",          ""},
+    {"A2GSPU_CONDTRAP",            "rail",          ""},
+    {"A2GSPU_CONDTRAP_MAX",        "rail",          ""},
+    {"A2GSPU_COVERAGE",            "cov",           "verb:cov status"},
+    {"A2GSPU_COVERAGE_OUT",        "cov",           ""},
+    {"A2GSPU_DHGR_GOLDEN",         "dhgr-golden",   ""},
+    {"A2GSPU_DHGR_GOLDEN_PROFILE", "dhgr-golden",   ""},
+    {"A2GSPU_DHGR_PAGE",           "dhgr-golden",   ""},
+    {"A2GSPU_DUMP",                "read",          ""},
+    {"A2GSPU_ERRHOOK",             "rail",          ""},
+    {"A2GSPU_EXPECT_HASH",         "shr-golden",    ""},
+    {"A2GSPU_FAKETIME",            "",              "fn"},
+    {"A2GSPU_FORCE_KEY",           "holdkey",       ""},
+    {"A2GSPU_GOLDEN",              "shr-golden",    ""},
+    {"A2GSPU_HANG_THRESHOLD",      "rail",          ""},
+    {"A2GSPU_INTLOG",              "rail",          ""},
+    {"A2GSPU_ITRACE_FRAME",        "rail",          ""},
+    {"A2GSPU_ITRACE_FROM",         "itrace",        ""},
+    {"A2GSPU_ITRACE_HI",           "rail",          ""},
+    {"A2GSPU_ITRACE_LO",           "rail",          ""},
+    {"A2GSPU_ITRACE_N",            "itrace",        ""},
+    {"A2GSPU_ITRACE_OUT",          "rail",          ""},
+    {"A2GSPU_ITRACE_REARM",        "rail",          ""},
+    {"A2GSPU_KEYSCHED_DELAY",      "rail",          ""},
+    {"A2GSPU_LCTRACE",             "rail",          ""},
+    {"A2GSPU_LIVENESS",            "",              "fn"},
+    {"A2GSPU_LIVENESS_STALL",      "rail",          ""},
+    {"A2GSPU_LOAD",                "load",          ""},
+    {"A2GSPU_LOADTRACE",           "rail",          ""},
+    {"A2GSPU_LOADTRACE_MIN",       "rail",          ""},
+    {"A2GSPU_MODETRACE",           "rail",          ""},
+    {"A2GSPU_PACE",                "",              "fn"},
+    {"A2GSPU_PCTRAP",              "rail",          ""},
+    {"A2GSPU_POKE",                "poke",          ""},
+    {"A2GSPU_POKE_NTH",            "rail",          ""},
+    {"A2GSPU_RAMDISK",             "",              "fn"},
+    {"A2GSPU_RECORDS",             "",              "fn"},
+    {"A2GSPU_RESTORE",             "restore",       ""},
+    {"A2GSPU_RETGUARD",            "rail",          ""},
+    {"A2GSPU_SEED",                "",              "fn"},
+    {"A2GSPU_SNAP_HI",             "rail",          ""},
+    {"A2GSPU_SNAP_LO",             "rail",          ""},
+    {"A2GSPU_SNAP_LOAD",           "restore",       ""},
+    {"A2GSPU_SNAP_MAX",            "rail",          ""},
+    {"A2GSPU_SNAP_OUT",            "rail",          ""},
+    {"A2GSPU_SNAP_PCS",            "rail",          ""},
+    {"A2GSPU_SNAP_SAVE",           "save",          ""},
+    {"A2GSPU_SNAP_ZP",             "rail",          ""},
+    {"A2GSPU_SPIKE_KEYS",          "keys",          ""},
+    {"A2GSPU_STACKTRAP",           "rail",          ""},
+    {"A2GSPU_STACKWATCH",          "rail",          ""},
+    {"A2GSPU_STACKWATCH_JUMP",     "rail",          ""},
+    {"A2GSPU_STOP_ON_FAULT",       "rail",          ""},
+    {"A2GSPU_STRICT",              "",              "fn"},
+    {"A2GSPU_SYMBOLS",             "",              "fn"},
+    {"A2GSPU_SYM_BASE",            "rail",          ""},
+    {"A2GSPU_SYM_SUSPECT",         "rail",          ""},
+    {"A2GSPU_TBTRACE",             "tbtrace",       ""},
+    {"A2GSPU_TBTRACE_BANK",        "tbtrace",       ""},
+    {"A2GSPU_TEXT40",              "text",          ""},
+    {"A2GSPU_TEXTDUMP",            "text",          ""},
+    {"A2GSPU_TRACE_EXT",           "rail",          ""},
+    {"A2GSPU_TRACE_FROM",          "rail",          ""},
+    {"A2GSPU_TRAP",                "trap",          "fn"},
+    {"A2GSPU_TRAPDUMP",            "rail",          ""},
+    {"A2GSPU_TRAP_FILE",           "",              "fn"},
+    {"A2GSPU_TRAP_OUT",            "",              "fn"},
+    {"A2GSPU_VALTRAP",             "valtrap",       "verb:valtrap status"},
+    {"A2GSPU_VALTRAP_MAX",         "rail",          ""},
+    {"A2GSPU_VRAM_LOAD",           "vram",          ""},
+    {"A2GSPU_VRAM_PAGE",           "vram",          ""},
+    {"A2GSPU_WATCH",               "watch",         "verb:watch bus hits"},
+    {"A2GSPU_WATCH_CHANGE",        "watch",         ""},
+    {"A2GSPU_WATCH_MAX",           "rail",          ""},
+    {"A2GSPU_WATCH_OUT",           "rail",          ""},
+    {"A2GSPU_WATCH_READ",          "watch",         ""},
+    {"MEMVU_LOADVIS",              "",              "fn"},
+    {"MEMVU_STOREVIS",             "",              "fn"},
     };
     n = (int)(sizeof(r) / sizeof(r[0]));
     return r;

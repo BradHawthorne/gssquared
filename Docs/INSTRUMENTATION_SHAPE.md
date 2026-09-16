@@ -21,7 +21,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, iwm and pdblock are saved; the scanner (Class B) and floppy media are not |
 | M6 artifact discipline | partial | coverage (both formats) and snapshots are checked; other `spike_*.bin` artifacts and `vram-raw` have no reader |
 | M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
-| M8 reachability + readback | done | launch-only rails are declared by absence from the reach table |
+| M8 reachability + readback | done | launch-only rails are declared by absence from the reach table; 42 are also armable live (`rail set`) |
 | M9 determinism asserted | done | — |
 | M10 configuration over code | done, one standing exception | the WIZ5 title traps stand until their readers move (AGENTS.md rule 2) |
 | M11 a peek that works everywhere | done | — |
@@ -399,6 +399,19 @@ show or claim one it does not have. What "impossible to add without" still
 does not cover is a new *launch-only* rail: absence from the reach table is a
 declared state (`rail find` says launch-only), and forcing an explicit row for
 every one of the 142 would be noise, not information.
+
+**Live arming followed (2026-09-16), on the same pattern.** A rail can register
+one apply function with itself (`a2rails::SetterRegistrar`,
+`src/a2gspu_rail_setters.cpp`). The headless start calls it with the
+environment's value in the order the old inline blocks ran; `rail set NAME VALUE`
+/ `rail unset NAME` call it live, on the CTRL rail and on the windowed co-pilot
+for rails that do not halt. One parser per rail, so the two forms cannot drift.
+The reach table marks those rails `verb=rail`, and both `rail live` and
+`railparity.ps1` fail a row with no registration and a registration with no row.
+42 rails are settable; the ones that still need a relaunch are the mode switches
+(SPIKE_FRAMES, CTRL, PACE, platform and media), the spike-end reports, and the
+rails that allocate or install hooks at arm (MEMVU accounting, TAP sessions, the
+WIZ5 streams). Unsettable does not mean undiscoverable: `rail find` says which.
 
 ### M9 — Determinism, asserted  (P8) — S
 

@@ -916,6 +916,12 @@ void a2gspu_ctrl_loop(GS2AppState *state) {
 // disturbing guest state. Control verbs (pause/resume/reset/quit/press/mount/...)
 // intentionally act as the user for agentic DUAL-03 closed-loop proofs.
 // Instrumentation env (SPIKE/COVERAGE/CTRL takeover) stays independent and off.
+// OBSERVATION CAN BE ARMED HERE TOO: `rail` (discovery, readback, and set/unset
+// of any rail whose apply function is windowed-safe) and `trap` (records only).
+// A windowed agent that needed a trap used to have to relaunch under CTRL and
+// lose the human's session. Splices (poke/load/setreg) stay refused -- they race
+// the human -- and so does any rail that halts, because a halt ends a windowed
+// session.
 void a2gspu_copilot_poll(computer_t *computer) {
     static const char *dir = SDL_getenv("A2GSPU_COPILOT");   // once: this runs every frame
     if (!dir || !*dir || !computer) return;
@@ -935,6 +941,25 @@ void a2gspu_copilot_poll(computer_t *computer) {
         handled=a2ctrl::try_meta(line,result,sizeof result);
     else if (!strcmp(line,"cpu") || !strncmp(line,"cpu ",4))
         handled=a2ctrl::try_cpu(line,result,sizeof result,computer);
+    else if (!strncmp(line,"rail",4) && (line[4]==0 || line[4]==' ')) {
+        const char *rest = line[4] ? line+5 : "";
+        while (*rest==' ') rest++;
+        if (!strncmp(rest,"set ",4) || !strncmp(rest,"unset ",6)) {
+            const char *p = rest + (rest[0]=='u' ? 6 : 4);
+            while (*p==' ') p++;
+            char nm[64]={0}; size_t k=0;
+            while (*p && *p!=' ' && k+1<sizeof nm) nm[k++]=*p++;
+            const a2rails::SetterReg *st = a2rails::setter_find(nm);
+            if (st && !st->windowed) {
+                snprintf(result,sizeof result,
+                    "status=FAIL copilot-rail-not-windowed %s -- it halts the machine, and a halt ends a windowed session; use the CTRL rail",
+                    nm);
+                handled=true;
+            } else handled=a2ctrl::try_meta(line,result,sizeof result);
+        } else handled=a2ctrl::try_meta(line,result,sizeof result);
+    }
+    else if (!strncmp(line,"trap",4) && (line[4]==0 || line[4]==' '))
+        handled=a2ctrl::try_trace_break(line,result,sizeof result);
     else if (!strncmp(line,"read ",5))
         handled=a2ctrl::try_regs(line,result,sizeof result,computer);
     else if (!strncmp(line,"assert ",7))
@@ -994,6 +1019,6 @@ void a2gspu_copilot_poll(computer_t *computer) {
 
     if(!handled) snprintf(result,sizeof result,
         "status=FAIL copilot-command-not-allowed use='copilot' "
-        "(observe+windowed-control only; no poke/load/cov instrumentation)");
+        "(observe, windowed control, rail and trap only; no poke/load/setreg splices)");
     a2gspu_ctrl_ack(dir,seq,result); seq++;
 }

@@ -1148,6 +1148,14 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 return SDL_APP_SUCCESS;
             }
         }
+        // THE WINDOWED FRAME CLOCK. Records stamp g_iigs_cur_frame and ITRACE_FRAME
+        // arms from it, but only the spike and CTRL `run` ever advanced it, so every
+        // record a windowed session wrote said frame 0. An executed frame counts;
+        // a paused one does not. Instrument state only, never the machine's.
+        else if (state->computer->execution_mode != EXEC_PAUSED) {
+            static int s_windowed_frame = 0;
+            iigs_itrace_frame_tick(++s_windowed_frame);
+        }
         // state->computer, not the local: transition_to_shutdown() above deletes
         // the computer and nulls the state's pointer, and the poll must see that.
         if (!state->computer) s_a2obs_computer = nullptr;   // shut down: nothing to observe

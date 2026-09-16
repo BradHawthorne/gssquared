@@ -16,6 +16,7 @@
  */
 // The headless spike -- moved out of gs2.cpp; see gs2_app.hpp.
 #include "gs2_app.hpp"
+#include "a2gspu_rail_setters.hpp"   // rails that are also armed live: one apply function each
 
 // A2GSPU_OUT_DIR: parallel-safe output relocation. When set, the fixed-name
 // headless/spike output files (spike_e1.bin, spike_e1_init.bin, spike_frame.bmp,
@@ -127,12 +128,17 @@ void run_headless_spike(GS2AppState *state) {
     g_a2gspu_cpu_for_names = computer->cpu;   // names by default check bank-0 ROM mapping live
     iigs_names_ready();         // at arm, so its one line prints whole and never inside a report
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
-    g_iigs_errhook_enabled = (SDL_getenv("A2GSPU_ERRHOOK") != nullptr);
-    g_iigs_brkdump_enabled = (SDL_getenv("A2GSPU_BRKDUMP") != nullptr);
-    g_iigs_stop_on_fault   = (SDL_getenv("A2GSPU_STOP_ON_FAULT") != nullptr);
-    g_brkmem_on = (SDL_getenv("A2GSPU_BRKMEM") != nullptr);
-    g_lctrace_on = (SDL_getenv("A2GSPU_LCTRACE") != nullptr);  // Language-Card softswitch access log
-    if (const char *ht = SDL_getenv("A2GSPU_HANG_THRESHOLD")) { int v = atoi(ht); if (v > 0) g_iigs_hang_threshold = v; }
+    // RAILS THAT CAN ALSO BE ARMED LIVE. Each used to be an inline getenv block
+    // here; each is now one apply function registered with the rail
+    // (a2gspu_rail_setters.cpp), called below with the environment's value in the
+    // order the blocks ran, and by `rail set` / `rail unset` on the CTRL rail.
+    // One parser per rail. A value that cannot be honoured is still fatal here.
+    a2gspu_rail_arm_env("A2GSPU_ERRHOOK");
+    a2gspu_rail_arm_env("A2GSPU_BRKDUMP");
+    a2gspu_rail_arm_env("A2GSPU_STOP_ON_FAULT");
+    a2gspu_rail_arm_env("A2GSPU_BRKMEM");
+    a2gspu_rail_arm_env("A2GSPU_LCTRACE");
+    a2gspu_rail_arm_env("A2GSPU_HANG_THRESHOLD");
     // A2GSPU_WATCH="bank:lo-hi[,bank:lo-hi...]" (hex) — address-range write-watchpoint.
     if (const char *w = SDL_getenv("A2GSPU_WATCH")) {
         g_watch_count = 0;
@@ -180,17 +186,14 @@ void run_headless_spike(GS2AppState *state) {
         }
     }
     // WATCH v2 (batch-2): cap / NDJSON file / change-only / also-watch-reads.
-    if (const char *wm = SDL_getenv("A2GSPU_WATCH_MAX")) { int v = atoi(wm); if (v >= 0) g_watch_max = v; }
+    a2gspu_rail_arm_env("A2GSPU_WATCH_MAX");
     g_watch_change_only = (SDL_getenv("A2GSPU_WATCH_CHANGE") != nullptr);
     g_watch_read_on     = (SDL_getenv("A2GSPU_WATCH_READ")   != nullptr);
-    if (const char *wo = SDL_getenv("A2GSPU_WATCH_OUT")) {
-        g_watch_out = fopen(wo, "wb");
-        printf("A2GSPU_WATCH_OUT: %s -> '%s'\n", g_watch_out ? "NDJSON" : "OPEN-FAILED", wo);
-        if (!g_watch_out) { fprintf(stderr, "A2GSPU_WATCH_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", wo); exit(2); }
-    }
+    a2gspu_rail_arm_env("A2GSPU_WATCH_OUT");
     if (g_watch_on && (g_watch_max != 256 || g_watch_change_only || g_watch_read_on || g_watch_out))
         printf("A2GSPU_WATCH v2: max=%d change_only=%d read=%d out=%d\n",
                g_watch_max, g_watch_change_only ? 1 : 0, g_watch_read_on ? 1 : 0, g_watch_out ? 1 : 0);
+    a2gspu_rail_arm_env("A2GSPU_VALTRAP_MAX");
     // A2GSPU_VALTRAP="<hexval>[:<width>]" — value-provenance store trap: bind the PC
     // that stores VALUE (e.g. a bogus pointer) into memory, LE across consecutive bytes.
     if (const char *vt = SDL_getenv("A2GSPU_VALTRAP")) {
@@ -199,14 +202,10 @@ void run_headless_spike(GS2AppState *state) {
         if (ep && *ep == ':') g_valtrap_width = atoi(ep + 1);
         if (g_valtrap_width < 1) g_valtrap_width = 1;
         if (g_valtrap_width > 4) g_valtrap_width = 4;
-        if (const char *vm = SDL_getenv("A2GSPU_VALTRAP_MAX")) { int v = atoi(vm); if (v >= 0) g_valtrap_max = v; }
         g_valtrap_on = true;
         printf("A2GSPU_VALTRAP: trap value $%X width=%d max=%d\n", g_valtrap_val, g_valtrap_width, g_valtrap_max);
     }
-    // A2GSPU_SYM_SUSPECT=1 — SYMBOL-TRUTH: append "[SUSPECT reused]" to any resolved symbol
-    // whose name lives at >1 address (reused local label; the nearest-preceding pick may be
-    // the wrong proc). Advisory-only (stderr/stdout trace text); emulated state untouched.
-    g_iigs_sym_suspect = (SDL_getenv("A2GSPU_SYM_SUSPECT") != nullptr);
+    a2gspu_rail_arm_env("A2GSPU_SYM_SUSPECT");
     // A2GSPU_CALLSTREAM=<file> — EXEC-DIFF: symbol-free NDJSON of the toolbox/GS-OS call
     // sequence for the ours-vs-pristine first-divergence differ (tools/gdiff/calldiff.py).
     if (const char *cs = SDL_getenv("A2GSPU_CALLSTREAM")) {
@@ -215,102 +214,15 @@ void run_headless_spike(GS2AppState *state) {
         printf("A2GSPU_CALLSTREAM: %s -> '%s'\n", g_callstream_on ? "NDJSON" : "OPEN-FAILED", cs);
         if (!g_callstream_on) { fprintf(stderr, "A2GSPU_CALLSTREAM: FAIL cannot open '%s' -- aborting (exit 2)\n", cs); exit(2); }
     }
-    // A2GSPU_CONDTRAP="bank:pc@f=v" — conditional flag-provenance trap: at PC, when flag f
-    // (c/z/i/d/x/m/v/n) == v, report the PC that last changed that flag. Answers "who set
-    // the carry that routed here". Default-OFF; observation-only => golden-neutral.
-    if (const char *ct = SDL_getenv("A2GSPU_CONDTRAP")) {
-        const char *p = ct;
-        uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
-        if (*p == ':') p++;
-        uint32_t pc = (uint32_t)strtoul(p, (char**)&p, 16);
-        g_condtrap_pc = ((bank & 0xFF) << 16) | (pc & 0xFFFF);
-        if (*p == '@') {
-            p++;
-            char f = *p ? *p++ : 'c';
-            int v = 1;
-            if (*p == '=') { p++; v = atoi(p); }
-            const char *fl = "czidxmvn";
-            const char *pos = strchr(fl, f);
-            g_condtrap_bit = pos ? (uint8_t)(pos - fl) : 0;
-            g_condtrap_want = v ? 1 : 0;
-        }
-        if (const char *cm = SDL_getenv("A2GSPU_CONDTRAP_MAX")) { int v = atoi(cm); if (v > 0) g_condtrap_max = v; }
-        g_condtrap_on = true;
-        printf("A2GSPU_CONDTRAP: trap $%06X when flag-bit-%d=%d max=%d\n",
-               g_condtrap_pc, g_condtrap_bit, g_condtrap_want, g_condtrap_max);
-    }
-    // A2GSPU_LOADTRACE="bank[:lo-hi]" — runtime segment-overlay tracker: logs contiguous
-    // write-bursts into the region (segment loads) + when they OVERLAY prior loads.
-    if (const char *lt = SDL_getenv("A2GSPU_LOADTRACE")) {
-        const char *p = lt;
-        uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
-        uint32_t lo = 0x0000, hi = 0xFFFF;
-        if (*p == ':') { p++; lo = (uint32_t)strtoul(p, (char**)&p, 16); if (*p == '-') { p++; hi = (uint32_t)strtoul(p, (char**)&p, 16); } }
-        g_lt_lo = ((bank & 0xFF) << 16) | (lo & 0xFFFF);
-        g_lt_hi = ((bank & 0xFF) << 16) | (hi & 0xFFFF);
-        if (const char *lm = SDL_getenv("A2GSPU_LOADTRACE_MIN")) { int v = atoi(lm); if (v > 0) g_lt_min = (uint32_t)v; }
-        g_loadtrace_on = true;
-        printf("A2GSPU_LOADTRACE: track %06X-%06X min=%u\n", g_lt_lo, g_lt_hi, g_lt_min);
-    }
-    // A2GSPU_PCTRAP="bank:lo-hi" (hex) — one-shot dump of regs + PC ring on first entry.
-    if (const char *t = SDL_getenv("A2GSPU_PCTRAP")) {
-        const char *p = t;
-        uint32_t bank = (uint32_t)strtoul(p, (char**)&p, 16);
-        if (*p == ':') p++;
-        uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
-        if (*p == '-') p++;
-        uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
-        g_pctrap_lo = (bank << 16) | (lo & 0xFFFF);
-        g_pctrap_hi = (bank << 16) | (hi & 0xFFFF);
-        g_pctrap_active = true;
-        g_pctrap_fired = false;
-        printf("A2GSPU_PCTRAP: one-shot on first entry to %06X-%06X\n", g_pctrap_lo, g_pctrap_hi);
-    }
-    // A2GSPU_TRAPDUMP="base:len" (hex) — extra memory region dumped by PCTRAP.
-    if (const char *d = SDL_getenv("A2GSPU_TRAPDUMP")) {
-        const char *p = d;
-        g_trap_dump_base = (uint32_t)strtoul(p, (char**)&p, 16);
-        if (*p == ':') p++;
-        g_trap_dump_len = (uint32_t)strtoul(p, (char**)&p, 16);
-        if (g_trap_dump_len == 0 || g_trap_dump_len > 256) g_trap_dump_len = 48;
-        printf("A2GSPU_TRAPDUMP: dump $%06X..+%u at PCTRAP\n",
-               g_trap_dump_base, g_trap_dump_len);
-    }
-    // A2GSPU_STACKTRAP="lo-hi" (hex) — one-shot dump when S first enters the range.
-    if (const char *t = SDL_getenv("A2GSPU_STACKTRAP")) {
-        const char *p = t;
-        uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
-        if (*p == '-') p++;
-        uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
-        g_stacktrap_lo = (uint16_t)lo;
-        g_stacktrap_hi = (uint16_t)hi;
-        g_stacktrap_active = true;
-        g_stacktrap_fired = false;
-        printf("A2GSPU_STACKTRAP: one-shot when S first enters $%04X-$%04X\n",
-               g_stacktrap_lo, g_stacktrap_hi);
-    }
-    // A2GSPU_STACKWATCH=1 (imbalance only) or ="lo-hi" (hex; + over/underflow window)
-    // — CONTINUOUS stack-pointer tripwire for the garbage-S crash class.
-    if (const char *sw = SDL_getenv("A2GSPU_STACKWATCH")) {
-        g_stackwatch_on = true;
-        g_stackwatch_hits = 0; g_stackwatch_last_s = -1; g_stackwatch_was_out = false;
-        if (strchr(sw, '-')) {
-            const char *p = sw;
-            uint32_t lo = (uint32_t)strtoul(p, (char**)&p, 16);
-            if (*p == '-') p++;
-            uint32_t hi = (uint32_t)strtoul(p, (char**)&p, 16);
-            g_stackwatch_lo = (uint16_t)lo; g_stackwatch_hi = (uint16_t)hi;
-            g_stackwatch_has_win = true;
-        }
-        if (const char *j = SDL_getenv("A2GSPU_STACKWATCH_JUMP")) {
-            int v = (int)strtoul(j, nullptr, 16); if (v > 0) g_stackwatch_jump = v;
-        }
-        printf("A2GSPU_STACKWATCH: continuous (imbalance>$%X%s)\n", g_stackwatch_jump,
-               g_stackwatch_has_win ? "" : "; no window");
-        if (g_stackwatch_has_win)
-            printf("A2GSPU_STACKWATCH: over/underflow window [$%04X,$%04X]\n",
-                   g_stackwatch_lo, g_stackwatch_hi);
-    }
+    a2gspu_rail_arm_env("A2GSPU_CONDTRAP_MAX");
+    a2gspu_rail_arm_env("A2GSPU_CONDTRAP");
+    a2gspu_rail_arm_env("A2GSPU_LOADTRACE_MIN");
+    a2gspu_rail_arm_env("A2GSPU_LOADTRACE");
+    a2gspu_rail_arm_env("A2GSPU_PCTRAP");
+    a2gspu_rail_arm_env("A2GSPU_TRAPDUMP");
+    a2gspu_rail_arm_env("A2GSPU_STACKTRAP");
+    a2gspu_rail_arm_env("A2GSPU_STACKWATCH_JUMP");
+    a2gspu_rail_arm_env("A2GSPU_STACKWATCH");
     if (const char *bp = SDL_getenv("A2GSPU_BREAK")) {
         g_iigs_break_enabled = true;
         g_iigs_break_addr = (uint32_t)strtoul(bp, nullptr, 16) & 0xFFFFFF;
@@ -444,25 +356,18 @@ void run_headless_spike(GS2AppState *state) {
             }
             g_poke_on = !g_poke_actions.empty(); g_poke_fired = false; g_poke_hits = 0;
             g_poke_nth = 1;
-            if (const char *pn = SDL_getenv("A2GSPU_POKE_NTH")) { int v = atoi(pn); if (v > 0) g_poke_nth = v; }
+            a2gspu_rail_arm_env("A2GSPU_POKE_NTH");
             printf("A2GSPU POKE: %zu action(s) armed at PC=$%06X hit #%d (DELIBERATE splice)\n",
                    g_poke_actions.size(), g_poke_pc, g_poke_nth);
         }
     }
-    // (3) A2GSPU_INTLOG: interrupt-entry logger (IRQ/BRK/COP).
-    if (SDL_getenv("A2GSPU_INTLOG")) { g_intlog_on = true; g_intlog_hits = 0;
-        fprintf(stderr, "IIGS INTLOG: enabled (IRQ/BRK/COP entry logging)\n"); }
-    // (4) A2GSPU_TRACE_EXT: append DBR/DP/cycle-delta/scanline to 65816 trace lines.
-    if (SDL_getenv("A2GSPU_TRACE_EXT")) { g_a2gspu_trace_ext = true;
-        fprintf(stderr, "IIGS TRACE_EXT: enabled (DBR/DP/dcyc/scanline columns)\n"); }
-    // (5) A2GSPU_MODETRACE: CPU mode-transition events (XCE / REP / SEP).
-    if (SDL_getenv("A2GSPU_MODETRACE")) { g_modetrace_on = true;
-        fprintf(stderr, "IIGS MODETRACE: enabled (e/M/X transitions)\n"); }
+    a2gspu_rail_arm_env("A2GSPU_INTLOG");
+    a2gspu_rail_arm_env("A2GSPU_TRACE_EXT");
+    a2gspu_rail_arm_env("A2GSPU_MODETRACE");
     if (const char *bk = SDL_getenv("A2GSPU_TBTRACE_BANK"))
         g_iigs_tbtrace_bank = (int)strtoul(bk, nullptr, 16);
     g_iigs_trace_from = 0; g_iigs_trace_armed = false;
-    if (const char *tf = SDL_getenv("A2GSPU_TRACE_FROM"))
-        g_iigs_trace_from = (uint32_t)strtoul(tf, nullptr, 16) & 0xFFFFFF;
+    a2gspu_rail_arm_env("A2GSPU_TRACE_FROM");
 
     // A2GSPU_COVERAGE="LO-HI"|"BANK:LO-HI" -> per-byte execution bitmap, written
     // to A2GSPU_COVERAGE_OUT at spike end.  Feeds deasmiigs --coverage so the
@@ -484,93 +389,41 @@ void run_headless_spike(GS2AppState *state) {
         g_iigs_itrace_from = (uint32_t)strtoul(itf, nullptr, 16) & 0xFFFFFF;
         g_iigs_itrace_use_pc = true; g_iigs_itrace_enabled = true;
     }
-    if (const char *ctf = SDL_getenv("A2GSPU_CALLTRACE")) {
-        g_calltrace_enabled = true;
-        // value forms: "1" = arm from frame 0; "<hexPC>" = arm at that PC
-        if (ctf[0] && !(ctf[0] == '1' && ctf[1] == '\0')) {
-            g_calltrace_from = (uint32_t)strtoul(ctf, nullptr, 16) & 0xFFFFFF;
-            g_calltrace_use_pc = true;
-        } else {
-            g_calltrace_armed = true;
-        }
-        if (const char *ctn = SDL_getenv("A2GSPU_CALLTRACE_N")) {
-            int v = (int)strtol(ctn, nullptr, 10); if (v > 0) g_calltrace_n = v;
-        }
-        if (const char *cts = SDL_getenv("A2GSPU_CALLTRACE_SKIP")) {
-            int v = (int)strtol(cts, nullptr, 10); if (v > 0) g_calltrace_skip = v;
-        }
-        fprintf(stderr, "IIGS CALLTRACE: enabled (%s, n=%d)\n",
-                g_calltrace_use_pc ? "PC-armed" : "from frame 0", g_calltrace_n);
-    }
+    a2gspu_rail_arm_env("A2GSPU_CALLTRACE_N");
+    a2gspu_rail_arm_env("A2GSPU_CALLTRACE_SKIP");
+    a2gspu_rail_arm_env("A2GSPU_CALLTRACE");
     if (const char *msp = SDL_getenv("A2GSPU_MILESTONES")) {
         iigs_milestones_load(msp);
     }
-    if (const char *rg = SDL_getenv("A2GSPU_RETGUARD")) {
-        g_retguard_on = true;
-        g_retguard_strict = (strcmp(rg, "strict") == 0);
-        fprintf(stderr, "IIGS RETGUARD: enabled (%s)\n",
-                g_retguard_strict ? "strict: BRK-target + symbol-gap"
-                                  : "BRK-target returns into $00/$01");
-    }
-    if (const char *itfr = SDL_getenv("A2GSPU_ITRACE_FRAME")) {
-        g_iigs_itrace_frame = (int)strtol(itfr, nullptr, 10);
-        g_iigs_itrace_enabled = true;
-    }
+    a2gspu_rail_arm_env("A2GSPU_RETGUARD");
+    a2gspu_rail_arm_env("A2GSPU_ITRACE_FRAME");
     if (const char *itn = SDL_getenv("A2GSPU_ITRACE_N")) {
         int v = (int)strtol(itn, nullptr, 10);
         if (v > 0) g_iigs_itrace_n = v;
     }
     // ITRACE v2 (batch-2): PC-RANGE window + per-instr EA/value + file sink + re-arm.
-    if (const char *lo = SDL_getenv("A2GSPU_ITRACE_LO"))
-        { g_iigs_itrace_lo = (uint32_t)strtoul(lo, nullptr, 16) & 0xFFFFFF; g_iigs_itrace_enabled = true; }
-    if (const char *hi = SDL_getenv("A2GSPU_ITRACE_HI"))
-        { g_iigs_itrace_hi = (uint32_t)strtoul(hi, nullptr, 16) & 0xFFFFFF; g_iigs_itrace_enabled = true; }
-    if (const char *rr = SDL_getenv("A2GSPU_ITRACE_REARM"))
-        { int v = (int)strtol(rr, nullptr, 10); if (v > 0) g_iigs_itrace_rearm = v; }
-    if (const char *io = SDL_getenv("A2GSPU_ITRACE_OUT")) {
-        g_iigs_itrace_out = fopen(io, "wb");
-        fprintf(stderr, "IIGS ITRACE_OUT: %s -> '%s'\n", g_iigs_itrace_out ? "file" : "OPEN-FAILED", io);
-        if (!g_iigs_itrace_out) { fprintf(stderr, "IIGS ITRACE_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", io); exit(2); }
-    }
+    a2gspu_rail_arm_env("A2GSPU_ITRACE_LO");
+    a2gspu_rail_arm_env("A2GSPU_ITRACE_HI");
+    a2gspu_rail_arm_env("A2GSPU_ITRACE_REARM");
+    a2gspu_rail_arm_env("A2GSPU_ITRACE_OUT");
     if (g_iigs_itrace_enabled)
         fprintf(stderr, "IIGS ITRACE: enabled (from=%s$%06X frame=%d n=%d)\n",
                 g_iigs_itrace_use_pc ? "" : "(none)",
                 (unsigned)g_iigs_itrace_from, g_iigs_itrace_frame, g_iigs_itrace_n);
     g_iigs_sym_base = 0; g_iigs_sym_base_locked = false;
-    if (const char *sb = SDL_getenv("A2GSPU_SYM_BASE")) {
-        g_iigs_sym_base = (uint32_t)strtoul(sb, nullptr, 16) & 0xFFFFFF;
-        g_iigs_sym_base_locked = true;   // pinned -> no auto-inference
-    }
+    a2gspu_rail_arm_env("A2GSPU_SYM_BASE");
     if (const char *sp = SDL_getenv("A2GSPU_SYMBOLS")) iigs_symbols_load(sp);
     // A2GSPU_ROM_SYMBOLS=<file> (batch-2): name ROM-resident PCs (else "<ROM>").
     if (const char *rs = SDL_getenv("A2GSPU_ROM_SYMBOLS")) iigs_rom_symbols_load(rs);
     // A2GSPU_SNAP region-logger (batch-2): dump [LO,HI] at up to 8 trigger PCS -> OUT.
-    {
-        const char *slo  = SDL_getenv("A2GSPU_SNAP_LO");
-        const char *shi  = SDL_getenv("A2GSPU_SNAP_HI");
-        const char *spcs = SDL_getenv("A2GSPU_SNAP_PCS");
-        const char *sout = SDL_getenv("A2GSPU_SNAP_OUT");
-        g_snap_npc = 0; g_snap_count = 0; g_snap_out = nullptr;
-        if (slo) g_snap_lo = (uint32_t)strtoul(slo, nullptr, 16) & 0xFFFFFF;
-        if (shi) g_snap_hi = (uint32_t)strtoul(shi, nullptr, 16) & 0xFFFFFF;
-        if (spcs) {
-            char buf[256]; strncpy(buf, spcs, sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
-            for (char *t = strtok(buf, ",; "); t && g_snap_npc < 8; t = strtok(nullptr, ",; "))
-                g_snap_pcs[g_snap_npc++] = (uint32_t)strtoul(t, nullptr, 16) & 0xFFFF;
-        }
-        if (sout && g_snap_npc > 0 && g_snap_hi >= g_snap_lo) {
-            g_snap_out = fopen(sout, "wb");
-            printf("A2GSPU_SNAP: %s window $%06X-$%06X at %d PC(s) -> '%s'\n",
-                   g_snap_out ? "logging" : "OPEN-FAILED", g_snap_lo, g_snap_hi, g_snap_npc, sout);
-        }
-        // wiz5 snapshot extensions (recognized on the one tool): SNAP_MAX caps
-        // records (g_snap_max already backs the emitter); SNAP_ZP is a ZP-pointer
-        // correlation key — parsed here so the env name is honored (main's snap
-        // emitter keys on PC, so this is recorded as an annotation).
-        if (const char *smax = SDL_getenv("A2GSPU_SNAP_MAX")) { int v = atoi(smax); if (v > 0) g_snap_max = v; }
-        if (const char *szp = SDL_getenv("A2GSPU_SNAP_ZP"))
-            printf("A2GSPU_SNAP_ZP: %s (zp correlation key)\n", szp);
-    }
+    // The window and PCs configure; OUT arms (and says why when it cannot).
+    g_snap_npc = 0; g_snap_count = 0; g_snap_out = nullptr;
+    a2gspu_rail_arm_env("A2GSPU_SNAP_LO");
+    a2gspu_rail_arm_env("A2GSPU_SNAP_HI");
+    a2gspu_rail_arm_env("A2GSPU_SNAP_PCS");
+    a2gspu_rail_arm_env("A2GSPU_SNAP_MAX");
+    a2gspu_rail_arm_env("A2GSPU_SNAP_OUT");
+    a2gspu_rail_arm_env("A2GSPU_SNAP_ZP");
     g_iigs_pending.clear();
     g_iigs_last_result.clear();
     g_iigs_last_gsos_err = 0;

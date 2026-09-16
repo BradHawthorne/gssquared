@@ -1,4 +1,4 @@
-<# Prove windowed agent observe+control; instrumentation poke still refused. #>
+<# Prove windowed agent observe+control, live observation arming (rail set, trap), and that splices and halting rails are still refused. #>
 [CmdletBinding()]
 param([string]$Dir=(Join-Path $env:TEMP ('a2rail-copilot-'+[guid]::NewGuid().ToString('N'))))
 $ErrorActionPreference='Stop'; $here=$PSScriptRoot
@@ -20,12 +20,20 @@ try {
   if($contract-notmatch 'mode=windowed-agent'){throw "contract failed: $contract"}
   if($deny-notmatch '^status=FAIL copilot-command-not-allowed'){throw "instrumentation poke was not refused: $deny"}
   if($press-notmatch '^status=OK press'){throw "press failed: $press"}
-  Write-Host 'ALL GREEN -- windowed agent observe+control; poke refused' -ForegroundColor Green
+  # Observation arms live in a windowed session; a rail that halts does not.
+  $live=Ask 5 'rail live'; $set=Ask 6 'rail set A2GSPU_INTLOG 1'; $halt=Ask 7 'rail set A2GSPU_STOP_ON_FAULT 1'
+  $trap=Ask 8 'trap add name=cp at=FA62 once'; $unset=Ask 9 'rail unset A2GSPU_INTLOG'
+  if($live-notmatch '^status=OK rails='){throw "rail live failed: $live"}
+  if($set-notmatch '^status=OK rail set A2GSPU_INTLOG'){throw "windowed rail set failed: $set"}
+  if($halt-notmatch '^status=FAIL copilot-rail-not-windowed'){throw "a halting rail was not refused windowed: $halt"}
+  if($trap-notmatch '^status=OK trap added cp'){throw "windowed trap add failed: $trap"}
+  if($unset-notmatch '^status=OK rail unset A2GSPU_INTLOG'){throw "windowed rail unset failed: $unset"}
+  Write-Host 'ALL GREEN -- windowed agent observe+control and live observation arming; poke and halting rails refused' -ForegroundColor Green
 } finally {
   if(-not $p.HasExited){
     try {
-      Set-Content (Join-Path $Dir 'cmd.5.tmp') 'quit' -NoNewline
-      Move-Item (Join-Path $Dir 'cmd.5.tmp') (Join-Path $Dir 'cmd.5') -Force
+      Set-Content (Join-Path $Dir 'cmd.10.tmp') 'quit' -NoNewline
+      Move-Item (Join-Path $Dir 'cmd.10.tmp') (Join-Path $Dir 'cmd.10') -Force
       $p.WaitForExit(5000)|Out-Null
     } catch {}
     if(-not $p.HasExited){Stop-Process -Id $p.Id -Force}

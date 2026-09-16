@@ -87,7 +87,7 @@ inline const char *verb_when(const char *name) {
         {"poke",       "write bytes at an address. The fastest way to plant a stub and drive it"},
         {"press",      "press a key with modifiers held, where a bare key injection is not enough"},
         {"quit",       "end the session. A suite that does not is a paused machine that reads as a hang"},
-        {"rail",       "what can be OBSERVED here at all. Verbs are the live surface; rails are the launch-time one, and asking the binary beats reading a catalogue that has drifted before (128 rails read, 96 described, when this was added)"},
+        {"rail",       "what can be OBSERVED here at all, and arming it without a relaunch: `rail live` lists what a verb reaches, `rail set` arms a settable rail now. Asking the binary beats reading a catalogue that has drifted before (128 rails read, 96 described, when this was added)"},
         {"read",       "dump guest memory to a host file, including aux as bank 01"},
         {"reset",      "recover a wedged machine; cold with the argument"},
         {"restore",    "reload a snapshot: CPU+MMU+softswitches+RAM plus whichever device blocks the file holds (the ack carries its manifest). Media and scanner self-heal -- not full time travel. A file that does not fit is rolled back, never half-applied"},
@@ -182,7 +182,7 @@ inline const Verb *verbs(int *count) {
         {"shr-golden", "calibrate", "shr-golden <file> [bless] — live FNV of $E1:2000-$9FFF", "shr-window"},
         {"press", "manipulate", "press <hex> [hold] [mods] — physical key edge, mods o/c/s/k = Open-Apple/Closed-Apple/shift/control (no consume proof)", "inject-key"},
         {"quit", "run", "quit — end CTRL session", "-"},
-        {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> | live | read <NAME> | schema [NAME] — enumerate every env rail this binary reads, from the binary; live= which a CTRL verb reaches, read= how its state comes back, schema= the shape of the records it writes", "discover"},
+        {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> | live | read <NAME> | set <NAME> <value> | unset <NAME> | schema [NAME] — enumerate every env rail this binary reads, from the binary; live= which a CTRL verb reaches, read= how its state comes back, set/unset= arm a settable rail now with the same apply function the launch uses, schema= the shape of the records it writes", "discover"},
         {"read", "observe", "read <addr> <len> <file> — probe_peek dump (side-effect-free)", "memory-peek"},
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
         {"restore", "snapshot", "restore <file> — transactional snapshot load; ack carries the manifest, or FAIL stage= rolled-back=", "time-travel"},
@@ -579,8 +579,23 @@ inline void format_rail_live(char *buf, size_t bufsz) {
                 return;
             }
         }
+        if (!strcmp(r[i].verb, "rail") && !a2rails::setter_find(r[i].rail)) {
+            snprintf(buf, bufsz, "status=FAIL reach-table-inconsistent rail=%s declares `rail set` but no a2rails::SetterRegistrar registered an apply function",
+                     r[i].rail);
+            return;
+        }
         if (r[i].verb[0]) live++;
         if (r[i].read[0]) readable++;
+    }
+    // A setter registered for a rail the table does not declare settable is a live
+    // arm nobody can discover.
+    for (int j = 0; j < a2rails::g_nsetters; j++) {
+        const char *rail = a2rails::g_setters[j].rail;
+        const a2rails::Reach *rc = a2rails::reach_find(rail);
+        if (!a2rails::rail_find(rail) || !rc || strcmp(rc->verb, "rail")) {
+            snprintf(buf, bufsz, "status=FAIL reach-table-inconsistent a setter is registered for %s but the reach table does not declare verb rail for it", rail);
+            return;
+        }
     }
     // The other direction: a reader registered for a rail the table does not
     // declare readable is a reader nobody can find.
@@ -593,8 +608,8 @@ inline void format_rail_live(char *buf, size_t bufsz) {
         }
     }
     size_t off = 0;
-    int m = snprintf(buf, bufsz, "status=OK rails=%d live=%d readable=%d readers=%d launch-only=%d |",
-                     a2rails::rail_count(), live, readable, a2rails::g_nreaders, a2rails::rail_count() - live);
+    int m = snprintf(buf, bufsz, "status=OK rails=%d live=%d readable=%d readers=%d setters=%d launch-only=%d |",
+                     a2rails::rail_count(), live, readable, a2rails::g_nreaders, a2rails::g_nsetters, a2rails::rail_count() - live);
     if (m > 0) off = (size_t)m;
     for (int i = 0; i < n && off + 40 < bufsz; i++) {
         m = snprintf(buf + off, bufsz - off, " %s:%s%s%s", r[i].rail,
