@@ -253,7 +253,7 @@ inline int    g_wiz5_key_delay = 0;
 inline std::string g_wiz5_key_pending;   // remaining chars of the current entry
 inline int    g_wiz5_key_last = -100000;
 inline bool   g_wiz5_keyram_on = false;
-inline std::string g_wiz5_session_dir;   // KEYRAM sink dir (from WIZ5_SESSION)
+inline std::string g_wiz5_session_dir;   // KEYRAM sink dir (A2GSPU_TAP_SESSION, else WIZ5_SESSION)
 inline int    g_wiz5_keyram_seq = 0;
 inline int    g_wiz5_frame = 0;          // executed-frame counter (per run_one_frame)
 
@@ -505,8 +505,11 @@ inline void wiz5_config_arm(computer_t *computer) {
     g_wiz5_keyram_on = (getenv("A2GSPU_KEYRAM") != nullptr) ||
                        (getenv("WIZ5_KEYRAM") != nullptr);
     g_wiz5_session_dir.clear();
-    if (const char *sd = getenv("WIZ5_SESSION"))          g_wiz5_session_dir = sd;
-    else if (const char *sd2 = getenv("A2GSPU_TAP_SESSION")) g_wiz5_session_dir = sd2;
+    // The canonical name wins, as it does for the session itself (generic_tap_arm):
+    // with both set, the keystroke dumps used to land in WIZ5_SESSION's directory
+    // while every other session file went to A2GSPU_TAP_SESSION's.
+    if (const char *sd = getenv("A2GSPU_TAP_SESSION"))    g_wiz5_session_dir = sd;
+    else if (const char *sd2 = getenv("WIZ5_SESSION"))    g_wiz5_session_dir = sd2;
     if (g_wiz5_keyram_on)
         printf("WIZ5_KEYRAM: per-keystroke RAM dump ($0800-$BFFF) enabled -> %s\n",
                g_wiz5_session_dir.empty() ? "(no session dir!)" : g_wiz5_session_dir.c_str());

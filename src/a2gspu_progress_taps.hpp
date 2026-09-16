@@ -51,6 +51,13 @@ inline void a2gspu_progress_note_store(uint32_t addr) {
     else if (text) { g_progress_text_store   = g_progress_now(); g_progress_text_seen   = true; }
 }
 
+// Session event taps (A2GSPU_TAP_SESSION, generic_tap.hpp): a key reaching the
+// keyboard latch (the II family's latch; the IIgs ADB micro's, buffered or not)
+// and a bit a Disk II lays on a mounted 5.25 track. generic_tap_arm binds them
+// when the session opens its event files; null is one untaken branch.
+inline void (*g_tap_key_event)(uint8_t ascii) = nullptr;
+inline void (*g_tap_disk_write_event)(int qtrack, int drive) = nullptr;
+
 inline void a2gspu_progress_note_kbd() {
     g_progress_kbd_poll = g_progress_now();
     g_progress_kbd_seen = true;

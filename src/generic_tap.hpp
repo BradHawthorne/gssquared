@@ -42,18 +42,32 @@
 //     ram_dump_periodic_tNNN.bin $0400-$BFFF every DUMP_EVERY s
 //     hgr_dump_periodic_tNNN.bin $2000-$5FFF (+ .meta soft-switch sidecar)
 //     text_pages.ndjson          40x24 text page snapshot each dump
-//     ram_full_<tag>.bin         on-demand $0000-$BFFF (skips $C0xx I/O)
+//     ram_full_<tag>.bin         on-demand full RAM: a IIe/IIc's 128K RAM array as the
+//                                MMU stores it (main, then aux at +$10000; the language
+//                                card's bank-1 $D000 page at $C000); elsewhere $0000-$BFFF
+//                                as the CPU sees it. Each with a .meta.json sidecar (M6)
+//     ram_full_periodic_tNNN.bin the same, every DUMP_EVERY s
+//     keypress_events.ndjson     tap.key on each key that reaches the keyboard latch (host,
+//                                paste buffer, KEYSCHED, CTRL keys; II family and IIgs ADB),
+//                                with ts_ms and the text page before it; tap.keypost with the
+//                                text page KEY_POST_FRAMES later
+//     keypress_NNNN_{pre,post}_hgr.bin   $2000-$5FFF at the key and KEY_POST_FRAMES later --
+//                                the fork's per-key picture: memory, not a host rendering
+//     disk_writes.ndjson         tap.diskwr per quarter-track per emulated second a Disk II
+//                                lays bits on a mounted 5.25 disk
 //   A2GSPU_TAP_DUMP_EVERY=<sec>  (60)   A2GSPU_TAP_ZP_EVERY=<sec> (5)
+//   A2GSPU_TAP_KEY_POST_FRAMES=<n> (30) frames between a key and its post capture
 //   A2GSPU_TAP_DUMP_ON=<LABEL>:<min>    first time a tap hit with op LABEL has
 //                                operand[0] >= min (per distinct value), request
 //                                a tagged ram_full dump on the next frame — the
 //                                generic form of wiz5's "CXP into a scenario
 //                                segment >=16 => capture it resident, once".
 //
-// Ready-to-call, un-wired event hooks (call from keyboard/floppy if a title RE
-// wants them — kept out of the default wiring to stay minimal + separable):
-//   generic_tap_keypress(cpu, key)      -> keypress_events.ndjson
-//   generic_tap_disk_write(qtrack)      -> disk_writes.ndjson
+// Event hooks: the keyboard latches (keyboard.cpp, ADB_Micro.hpp) and the Disk II
+// write path (diskii_controller.hpp) call through a2gspu_progress_taps.hpp's
+// function pointers, which the session binds when it opens the event files.
+// Until 2026-09-16 these writers had no callers, and the two files were created
+// empty on every session.
 // ============================================================================
 #include <cstdio>
 #include <cstdint>
@@ -63,6 +77,9 @@
 #include <string>
 #include "cpu.hpp"
 #include "a2gspu_observe.hpp"   // a2obs_peek: observer reads never take the CPU path (M11)
+#include "a2gspu_progress_taps.hpp"   // g_tap_key_event / g_tap_disk_write_event
+#include "a2gspu_artifact_meta.hpp"   // sidecars for the RAM and HGR dumps (M6)
+#include "mmus/mmu_iie.hpp"           // the IIe's 128K RAM array
 
 // ---- watch table ------------------------------------------------------------
 struct GenericTapWatch {
@@ -96,8 +113,14 @@ struct GenericTap {
     bool     full_dump_req = false;
     char     full_dump_tag[32] = {0};
     // disk-write dedup: one event per quarter-track per emulated second
-    uint8_t  disk_seen[160] = {0};
+    uint8_t  disk_seen[2][160] = {{0}};
     int      disk_seen_sec = -1;
+    // keypress captures: the CPU the session last served, and post captures owed
+    cpu_state *cpu = nullptr;
+    int      key_post_frames = 30;
+    int      post_seq[64] = {0};
+    uint64_t post_due[64] = {0};
+    int      npost = 0;
 };
 inline GenericTap g_gtap;
 
@@ -140,18 +163,44 @@ inline void gtap_page_json(cpu_state *cpu, std::string &s) {
     }
 }
 
+// A bank-$00 range as the CPU sees it now, through the observer read, with its sidecar.
+inline void gtap_write_cpu_view(cpu_state *cpu, const char *path, uint32_t lo, uint32_t hi, const char *what) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return;
+    uint64_t h = HOUSE_FNV_BASIS;
+    for (uint32_t a = lo; a <= hi; a++) { const uint8_t v = a2obs_peek(cpu->mmu, a); fputc(v, f); h ^= v; h *= HOUSE_FNV_PRIME; }
+    fclose(f);
+    char layout[160];
+    snprintf(layout, sizeof layout, "u8 x %u: $%04X-$%04X as the CPU sees it (observer read; $C000-$CFFF from the probe), %s",
+             (unsigned)(hi - lo + 1), (unsigned)lo, (unsigned)hi, what);
+    a2gspu_artifact_meta(path, "cpu-view-v1", 1, hi - lo + 1, layout, "house-FNV-1a-64 over the file bytes", h);
+}
+
+// Full RAM. A IIe or IIc keeps main and aux RAM in one 128K array; that array is
+// the whole of what the machine remembers, whichever soft switches are showing
+// which part to the CPU, so it is written as stored. A 48K II and a IIgs write
+// $0000-$BFFF as the CPU sees it (a IIgs has megabytes; the tap is a II-family tool).
 inline void gtap_write_full_ram(cpu_state *cpu, const char *tag) {
     if (!g_gtap.sess_on) return;
     char p[600];
     snprintf(p, sizeof(p), "%s/ram_full_%s.bin", g_gtap.dir.c_str(), tag);
-    if (FILE *f = fopen(p, "wb")) {
-        for (uint32_t a = 0x0000; a < 0xC000; a++) {
-            uint8_t v = a2obs_peek(cpu->mmu, (uint16_t)a);
-            fputc(v, f);
+    MMU_IIe *iie = a2obs_is_iigs(cpu->mmu) ? nullptr : dynamic_cast<MMU_IIe *>(cpu->mmu);
+    if (iie && iie->get_memory_base()) {
+        if (FILE *f = fopen(p, "wb")) {
+            const uint8_t *ram = iie->get_memory_base();
+            fwrite(ram, 1, 0x20000, f);
+            fclose(f);
+            uint64_t h = HOUSE_FNV_BASIS;
+            for (size_t i = 0; i < 0x20000; i++) { h ^= ram[i]; h *= HOUSE_FNV_PRIME; }
+            a2gspu_artifact_meta(p, "iie-ram-array-v1", 1, 0x20000,
+                                 "u8 x 131072: the IIe MMU's RAM array as stored -- main $0000-$BFFF; language card bank-1 $D000-$DFFF at $C000, bank-2 at $D000, $E000-$FFFF; aux the same at +$10000",
+                                 "house-FNV-1a-64 over the file bytes", h);
+            printf("A2GSPU_TAP: full RAM dump (128K, main+aux) -> %s\n", p);
         }
-        fclose(f);
-        printf("A2GSPU_TAP: full RAM dump (48K) -> %s\n", p);
+        return;
     }
+    gtap_write_cpu_view(cpu, p, 0x0000, 0xBFFF, "a full dump on a machine without a IIe RAM array");
+    printf("A2GSPU_TAP: full RAM dump (48K as seen) -> %s\n", p);
 }
 
 // ---- (1) per-instruction PC-hit tap -----------------------------------------
@@ -212,10 +261,32 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
     g_gtap.frame++;
     int sec = (int)(cycles / g_gtap.cyc_per_sec);
 
+    g_gtap.cpu = cpu;
     if (g_gtap.full_dump_req) {
         g_gtap.full_dump_req = false;
         char tag[64]; snprintf(tag, sizeof(tag), "t%03d_%s", sec, g_gtap.full_dump_tag);
         gtap_write_full_ram(cpu, tag);
+    }
+
+    // Post-key captures that have come due.
+    for (int i = 0; i < g_gtap.npost;) {
+        if (g_gtap.frame < g_gtap.post_due[i]) { i++; continue; }
+        const int seq = g_gtap.post_seq[i];
+        char p[600];
+        snprintf(p, sizeof(p), "%s/keypress_%04d_post_hgr.bin", g_gtap.dir.c_str(), seq);
+        gtap_write_cpu_view(cpu, p, 0x2000, 0x5FFF, "HGR pages 1 and 2, KEY_POST_FRAMES after the key");
+        if (g_gtap.keys_f) {
+            std::string page; gtap_page_json(cpu, page);
+            a2record::Record("tap", "keypost", a2record::frame_now(), (unsigned long long)cycles)
+                .i("seq", seq).f0("ts_ms", gtap_ts_ms(cycles)).i("frames_after", g_gtap.key_post_frames)
+                .raw("text_page_post", ("\"" + page + "\"").c_str())
+                .write(g_gtap.keys_f, true);
+        }
+        for (int j = i + 1; j < g_gtap.npost; j++) {             // keep key order
+            g_gtap.post_seq[j - 1] = g_gtap.post_seq[j];
+            g_gtap.post_due[j - 1] = g_gtap.post_due[j];
+        }
+        g_gtap.npost--;
     }
 
     if (g_gtap.zp_f && sec >= g_gtap.next_zp_s) {
@@ -230,15 +301,11 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
         g_gtap.next_dump_s = sec + g_gtap.dump_every_s;
         char p[600];
         snprintf(p, sizeof(p), "%s/ram_dump_periodic_t%03d.bin", g_gtap.dir.c_str(), sec);
-        if (FILE *f = fopen(p, "wb")) {
-            for (uint32_t a = 0x0400; a <= 0xBFFF; a++) fputc(a2obs_peek(cpu->mmu, a), f);
-            fclose(f);
-        }
+        gtap_write_cpu_view(cpu, p, 0x0400, 0xBFFF, "every DUMP_EVERY s");
         snprintf(p, sizeof(p), "%s/hgr_dump_periodic_t%03d.bin", g_gtap.dir.c_str(), sec);
-        if (FILE *f = fopen(p, "wb")) {
-            for (uint32_t a = 0x2000; a <= 0x5FFF; a++) fputc(a2obs_peek(cpu->mmu, a), f);
-            fclose(f);
-        }
+        gtap_write_cpu_view(cpu, p, 0x2000, 0x5FFF, "HGR pages 1 and 2, every DUMP_EVERY s");
+        char tag[32]; snprintf(tag, sizeof(tag), "periodic_t%03d", sec);
+        gtap_write_full_ram(cpu, tag);
         snprintf(p, sizeof(p), "%s/hgr_dump_periodic_t%03d.bin.meta", g_gtap.dir.c_str(), sec);
         if (FILE *f = fopen(p, "wb")) {
             a2record::Record("tap", "dumpmeta", a2record::frame_now(), (unsigned long long)cycles)
@@ -263,31 +330,54 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
     }
 }
 
-// ---- ready-to-call, un-wired event hooks ------------------------------------
-inline void generic_tap_keypress(cpu_state *cpu, uint8_t key) {
+// ---- event hooks (bound in generic_tap_arm) -----------------------------------
+// A key reached the keyboard latch. The text page and the HGR pages are taken
+// now, before the program has read the key; the post capture is owed
+// KEY_POST_FRAMES frames later.
+inline void generic_tap_keypress(uint8_t key) {
     if (!g_gtap.keys_f) return;
     g_gtap.key_seq++;
-    std::string page; gtap_page_json(cpu, page);
+    const unsigned long long cycles = a2record::cycles_now();
     char chr = (key >= 32 && key < 127) ? (char)key : '.';
     const char chrs[2] = { chr, 0 };
-    a2record::Record("tap", "key", a2record::frame_now(), a2record::cycles_now())
-        .i("seq", g_gtap.key_seq).u("ascii", key).str("chr", chrs).i("ts_wall", (long long)time(nullptr))
-        .raw("text_page_pre", ("\"" + page + "\"").c_str())
-        .write(g_gtap.keys_f, true);
+    a2record::Record rec("tap", "key", a2record::frame_now(), cycles);
+    rec.i("seq", g_gtap.key_seq).u("ascii", key).str("chr", chrs).f0("ts_ms", gtap_ts_ms(cycles))
+       .i("ts_wall", (long long)time(nullptr));
+    if (g_gtap.cpu) {
+        std::string page; gtap_page_json(g_gtap.cpu, page);
+        rec.raw("text_page_pre", ("\"" + page + "\"").c_str());
+        char p[600];
+        snprintf(p, sizeof(p), "%s/keypress_%04d_pre_hgr.bin", g_gtap.dir.c_str(), g_gtap.key_seq);
+        gtap_write_cpu_view(g_gtap.cpu, p, 0x2000, 0x5FFF, "HGR pages 1 and 2 when the key reached the latch");
+        if (g_gtap.npost < 64) {
+            g_gtap.post_seq[g_gtap.npost] = g_gtap.key_seq;
+            g_gtap.post_due[g_gtap.npost] = g_gtap.frame + (uint64_t)g_gtap.key_post_frames;
+            g_gtap.npost++;
+        }
+    } else {
+        rec.null("text_page_pre");   // a key before the session served its first frame
+    }
+    rec.write(g_gtap.keys_f, true);
 }
-inline void generic_tap_disk_write(int qtrack) {
+// A Disk II laid bits on a mounted 5.25 disk: one record per drive and
+// quarter-track per emulated second.
+inline void generic_tap_disk_write(int qtrack, int drive) {
     if (!g_gtap.disk_f) return;
     int sec = (int)(g_gtap.frame / 60);
     if (sec != g_gtap.disk_seen_sec) { memset(g_gtap.disk_seen, 0, sizeof(g_gtap.disk_seen)); g_gtap.disk_seen_sec = sec; }
-    if (qtrack < 0 || qtrack >= 160 || g_gtap.disk_seen[qtrack]) return;
-    g_gtap.disk_seen[qtrack] = 1;
-    a2record::Record("tap", "diskwr", a2record::frame_now(), a2record::cycles_now())
-        .str("op", "DISKWR").i("qtrack", qtrack).f2("track", qtrack / 4.0).write(g_gtap.disk_f, true);
+    const int d = drive ? 1 : 0;
+    if (qtrack < 0 || qtrack >= 160 || g_gtap.disk_seen[d][qtrack]) return;
+    g_gtap.disk_seen[d][qtrack] = 1;
+    const unsigned long long cycles = a2record::cycles_now();
+    a2record::Record("tap", "diskwr", a2record::frame_now(), cycles)
+        .str("op", "DISKWR").i("drive", d + 1).i("qtrack", qtrack).f2("track", qtrack / 4.0)
+        .f0("ts_ms", gtap_ts_ms(cycles)).write(g_gtap.disk_f, true);
 }
 
 // ---- env parsing / arm / close ----------------------------------------------
 inline void generic_tap_close() {
     if (g_gtap.out)     { printf("A2GSPU_TAP: %llu events captured\n", (unsigned long long)g_gtap.count); fclose(g_gtap.out);   g_gtap.out = nullptr; }
+    g_tap_key_event = nullptr; g_tap_disk_write_event = nullptr;   // before the files they write close
     for (FILE **f : { &g_gtap.zp_f, &g_gtap.pages_f, &g_gtap.keys_f, &g_gtap.disk_f })
         if (*f) { fclose(*f); *f = nullptr; }
     g_gtap.on = false; g_gtap.sess_on = false;
@@ -372,6 +462,9 @@ inline void generic_tap_arm() {
         snprintf(p, sizeof(p), "%s/text_pages.ndjson", sess);   g_gtap.pages_f = fopen(p, "w");
         snprintf(p, sizeof(p), "%s/keypress_events.ndjson", sess); g_gtap.keys_f = fopen(p, "w");
         snprintf(p, sizeof(p), "%s/disk_writes.ndjson", sess);  g_gtap.disk_f  = fopen(p, "w");
+        if (const char *kp = getenv("A2GSPU_TAP_KEY_POST_FRAMES")) { int v = atoi(kp); if (v >= 0) g_gtap.key_post_frames = v; }
+        if (g_gtap.keys_f) g_tap_key_event = generic_tap_keypress;
+        if (g_gtap.disk_f) g_tap_disk_write_event = generic_tap_disk_write;
         printf("A2GSPU_TAP_SESSION: armed -> %s (dump=%ds zp=%ds)\n", sess, g_gtap.dump_every_s, g_gtap.zp_every_s);
     }
     atexit(generic_tap_close);

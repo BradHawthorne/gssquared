@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "device_reset_id.hpp"
+#include "a2gspu_progress_taps.hpp"   // A2GSPU_TAP_SESSION: a key reaching the latch (off => 1 branch)
 #include "util/ResourceFile.hpp"
 
 #include "ADB_Host.hpp"
@@ -648,6 +649,7 @@ class KeyGloo
 
             key_latch.keycode = key_codes[vars.inpt] | 0x80; // set the 'key present' bit.
             key_latch.keymods.value = key_mods[vars.inpt];
+            if (g_tap_key_event) g_tap_key_event(key_codes[vars.inpt] & 0x7F);
             vars.inpt = (vars.inpt + 1) % 16;
             
             kb_register_full = true;
@@ -663,6 +665,7 @@ class KeyGloo
             if (!keyboard_buffer_enabled()) {
                 key_latch.keycode = keycode | 0x80;
                 key_latch.keymods.value = keymods;
+                if (g_tap_key_event) g_tap_key_event(keycode & 0x7F);
                 kb_register_full = true;
                 update_interrupt_status();
                 return;

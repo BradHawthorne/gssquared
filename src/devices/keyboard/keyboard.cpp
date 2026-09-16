@@ -42,6 +42,7 @@ inline bool is_key_modifier(const SDL_Event &event) {
 }
 
 inline void kb_key_pressed(keyboard_state_t *kb_state, uint8_t key) {
+    if (g_tap_key_event) g_tap_key_event(key);   // A2GSPU_TAP_SESSION keypress_events (off => 1 branch)
     kb_state->kb_key_strobe = key | 0x80;
     if (kb_state->mk) kb_state->mk->last_key_val = key;
 }

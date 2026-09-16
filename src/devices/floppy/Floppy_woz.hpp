@@ -210,6 +210,7 @@ public:
     // now, and counts a mismatch for the caller to warn about. A subclass
     // writes its own fields after these and applies them under the same rule.
 public:
+    bool a2gspu_is_mounted() const { return is_mounted; }   // an observer's question (A2GSPU_TAP_SESSION disk_writes)
     virtual void A2GSPU_snapshot(FILE *f) {
         const std::string name = (is_mounted && media_d) ? media_d->filename : std::string();
         uint32_t n = (uint32_t)name.size(); fwrite(&n, 4, 1, f); if (n) fwrite(name.data(), 1, n, f);

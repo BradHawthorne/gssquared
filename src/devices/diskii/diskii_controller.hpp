@@ -22,6 +22,7 @@
 #include "util/media.hpp"
 #include "util/SoundEffectKeys.hpp"
 #include "devices/floppy/Floppy525_woz.hpp"
+#include "a2gspu_progress_taps.hpp"   // A2GSPU_TAP_SESSION: disk_writes (off => 1 branch)
 
 // Soft-switch offsets within the slot's I/O page (same as ndiskii.hpp)
 #define DiskII_Ph0_Off       0x00
@@ -257,6 +258,9 @@ public:
                 // while motor enabled loads data_register).
                 uint8_t out_bit = (data_register >> 7) & 0x01;
                 drives[diskii_select].write_pulse(out_bit);
+                if (g_tap_disk_write_event && drives[diskii_select].a2gspu_is_mounted() &&
+                    drives[diskii_select].is_bitstream_spinning())
+                    g_tap_disk_write_event(drives[diskii_select].get_track(), diskii_select);
                 data_register   = static_cast<uint8_t>(data_register << 1);
                 sequencer_state = false;
             }

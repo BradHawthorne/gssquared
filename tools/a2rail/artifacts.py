@@ -198,7 +198,7 @@ def _content_hash(fmt, d, record_size):
     h = HOUSE_FNV_BASIS
     if fmt in ('megaii-e1-64k-v1',):
         return house_fnv(d[0x2000:0xA000])
-    if fmt in ('megaii-e1-shr-window-v1', 'vram-raw-v1'):
+    if fmt in ('megaii-e1-shr-window-v1', 'vram-raw-v1', 'cpu-view-v1', 'iie-ram-array-v1'):
         return house_fnv(d)
     if fmt == 'bus-trace-v1':
         for i in range(0, len(d), record_size):
@@ -220,6 +220,7 @@ def _content_hash(fmt, d, record_size):
     return None
 
 RAW_FORMATS = {'megaii-e1-64k-v1': 1, 'megaii-e1-shr-window-v1': 1, 'vram-raw-v1': 1,
+               'cpu-view-v1': 1, 'iie-ram-array-v1': 1,
                'bus-trace-v1': None, 'slot-bus-v1': None, 'mmu-state-v1': None}
 
 
