@@ -744,3 +744,22 @@ speaker, and every displayed byte fed the watch rails as a guest read.
 `$C055` left `RDPAGE2` (`$C01C`) clear, and a `MAIN_BUS` read set it. `MAIN_READABLE` gave 0 for
 `$C050-$C057` and 1 for `$0400`. `$F800` ROM matched between peek and bus, and domain `0x84` was
 still rejected.
+
+## 14. Battery RAM stays with an automated run (2026-09-16)
+
+Stage 1 took upstream's per-machine BRAM file, `<prefs>/bram/<machine-uuid>.bin`, in place of
+`./gs2-bram.bin` in the working directory. For a person at the window, settings now follow the
+machine. For a harness, every unpinned run on the workstation shared one file: the first run
+wrote it and every later run started warm, whatever directory it ran in. The fork's gates pin
+`A2GSPU_BRAM=default` and did not see it. It surfaced in a consumer check that reproduces
+Rosetta v3's pinned Finder boot, which gets cold BRAM from a fresh directory per run. The first
+run hashed `2E304BF0147B220A` and the second `9774CB5F4633060A`, Rosetta's documented warm-BRAM hash.
+
+An automated run, by the test the preferences gate already uses (`A2GSPU_SPIKE_FRAMES` or
+`A2GSPU_CTRL`), reads and writes `./gs2-bram.bin` again. A windowed run keeps upstream's
+per-machine file. `A2GSPU PINS:` names the source: `cwd`/`cwd-absent` or
+`prefs`/`prefs-absent`, beside `default` and `file`.
+
+**Verified:** three consecutive reproductions of the Rosetta boot (fresh directories, BRAM unpinned)
+gave `2E304BF0147B220A`, distinct 32, 39,710 SHR writes and 84 of 1,269 toolbox returns failing,
+identical to Rosetta's recorded baseline, with identical cycle counts and run hashes.

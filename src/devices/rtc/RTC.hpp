@@ -92,10 +92,13 @@ public:
         for (int i = 0; i < 256; i++) {
             bram[i] = i;
         }
-        // A2GSPU_BRAM pins the starting BRAM; unset keeps the stock cwd file.
+        // A2GSPU_BRAM pins the starting BRAM; unset reads the run's file -- the working
+        // directory's for an automated run, the per-machine preferences file otherwise.
         const char *pin = a2gspu_bram_pin();
         if (!pin) {
-            a2gspu_bram_note(load_bram_from_file(bram_filename.c_str()) ? "cwd" : "cwd-absent", bram);
+            const bool in_cwd = bram_filename == "gs2-bram.bin";
+            const bool loaded = load_bram_from_file(bram_filename.c_str());
+            a2gspu_bram_note(in_cwd ? (loaded ? "cwd" : "cwd-absent") : (loaded ? "prefs" : "prefs-absent"), bram);
         } else if (!strcmp(pin, "default")) {
             a2gspu_bram_note("default", bram);
         } else {

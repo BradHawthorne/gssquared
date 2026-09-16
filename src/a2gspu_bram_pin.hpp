@@ -12,14 +12,27 @@
 // check was never reproducible. A determinism pin that leaves an input
 // unpinned and self-modifying is not a pin.
 //
-//   unset                 stock: read ./gs2-bram.bin if present, write it back at exit
+//   unset, automated run  read ./gs2-bram.bin in the working directory if present, write
+//                         it back at exit (A2GSPU_SPIKE_FRAMES or A2GSPU_CTRL: see below)
+//   unset, windowed run   upstream's per-machine file, <prefs>/bram/<machine-uuid>.bin
 //   A2GSPU_BRAM=default   the built-in initial contents; no file is read or written
 //   A2GSPU_BRAM=<file>    load that 256-byte file; missing or short is fatal (exit 2);
 //                         never written back -- an input is not an output
 //
 // Whatever the source, the RTC records the 256 bytes the machine STARTED with,
 // and `A2GSPU PINS:` carries them as bram=<kind>/<house-FNV>, where kind is
-// cwd | cwd-absent | default | file, or bram=none when the machine has no RTC.
+// cwd | cwd-absent | prefs | prefs-absent | default | file, or bram=none when the
+// machine has no RTC.
+//
+// AN AUTOMATED RUN KEEPS ITS BRAM IN ITS WORKING DIRECTORY. Upstream moved BRAM into
+// the user's preferences folder, one file per machine UUID. For a person at the
+// window that is the point -- settings follow the machine. For a harness it made
+// every unpinned run on the workstation share one file: the first run wrote it and
+// every later run started warm, whatever directory it ran in. Rosetta v3's pinned
+// Finder boot, which gets cold BRAM from a fresh directory per run, hashed
+// 2E304BF0147B220A once and 9774CB5F4633060A (its documented warm-BRAM hash) after.
+// So a run the preferences gate already calls automated (gs2.cpp: A2GSPU_SPIKE_FRAMES
+// or A2GSPU_CTRL) uses ./gs2-bram.bin, as it did before the port.
 // ============================================================================
 #include <cstdint>
 #include <cstdio>
@@ -31,6 +44,11 @@ inline bool        g_bram_pin_probed = false;
 inline const char *g_bram_pin        = nullptr;   // env value; nullptr when unset or empty
 inline const char *g_bram_kind       = "none";    // what the most recently built RTC started from
 inline uint64_t    g_bram_hash       = 0;
+
+// The same test gs2.cpp's preferences gate uses.
+inline bool a2gspu_automated_run() {
+    return getenv("A2GSPU_SPIKE_FRAMES") || getenv("A2GSPU_CTRL");
+}
 
 inline const char *a2gspu_bram_pin() {
     if (!g_bram_pin_probed) {

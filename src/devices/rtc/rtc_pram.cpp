@@ -44,18 +44,25 @@ DebugFormatter *rtc_pram_debug_display(void *context) {
     return st->rtc->debug_display();
 }
 
+static bool fs_has_parent(const std::string &path) {
+    return !std::filesystem::path(path).parent_path().empty();
+}
+
 void init_slot_rtc_pram(computer_t *computer, SlotType_t slot) {
 
     rtc_pram_state_t *st = new rtc_pram_state_t();
 
     std::string bram_path;
     const std::string& mid = computer->get_machine_id();
-    if (!mid.empty()) {
+    if (a2gspu_automated_run()) {
+        // FORK: an automated run keeps BRAM in its working directory (a2gspu_bram_pin.hpp).
+        bram_path = "gs2-bram.bin";
+    } else if (!mid.empty()) {
         Paths::calc_pref(bram_path, "bram/" + mid + ".bin");
     } else {
         Paths::calc_pref(bram_path, "bram/default.bin");
     }
-    {
+    if (fs_has_parent(bram_path)) {
         namespace fs = std::filesystem;
         std::error_code ec;
         fs::create_directories(fs::path(bram_path).parent_path(), ec);
