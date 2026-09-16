@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "serial_devices/SerialDevice.hpp"
+#include "a2gspu_run_kind.hpp"
 #include "util/DeviceFrameDispatcher.hpp"
 #include "util/Event.hpp"
 #include "util/EventQueue.hpp"
@@ -64,6 +65,7 @@ class FileDevice : public SerialDevice {
         EventQueue *event_queue_ = nullptr;
         DeviceFrameDispatcher *frames_ = nullptr;
         size_t frame_handler_id_ = static_cast<size_t>(-1);
+        const bool automated_ = a2gspu_automated_run();
 
         void notify_closed() {
             printf("file %s closed\n", filename);
@@ -124,6 +126,24 @@ class FileDevice : public SerialDevice {
         }
 
         void open_file() {
+            // FORK: an automated run (a2gspu_run_kind.hpp) captures to a STABLE name in its
+            // working directory, appended: parallel.out for a parallel port -- the name both
+            // trees' parallel card used before the connection framework, and the one
+            // consumer checks read -- and GS2.<port>.out otherwise. A name built from the
+            // host's clock is an output a harness cannot find, and differs every run.
+            if (a2gspu_automated_run()) {
+                if (strncmp(port_id, "PARL", 4) == 0) snprintf(filename, sizeof(filename), "parallel.out");
+                else snprintf(filename, sizeof(filename), "GS2.%s.out", port_id);
+                printf("A2GSPU FILEDEV: port=%s file=%s (automated run: stable name, appended)\n", port_id, filename);
+                file = fopen(filename, "a");
+                if (file == NULL) {
+                    printf("Failed to open file %s\n", filename);
+                    filename[0] = '\0';
+                    return;
+                }
+                mark_write();
+                return;
+            }
             // construct file name from "GS2.{Extension}.{YYYYMMDDHHMMSS}"
             time_t now = time(NULL);
             struct tm *tm_now = localtime(&now);
@@ -162,7 +182,9 @@ class FileDevice : public SerialDevice {
             while (true) {
                 SDL_Delay(10);
 
-                if (file && last_write_ticks != 0 &&
+                // FORK: no idle close on an automated run -- when a job "ends" would be
+                // decided by host time, and the capture stays one appended file.
+                if (file && last_write_ticks != 0 && !automated_ &&
                     (SDL_GetTicks() - last_write_ticks) >= idle_close_ms) {
                     close_file();
                 }

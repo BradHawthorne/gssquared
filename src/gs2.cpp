@@ -19,6 +19,7 @@
 #include <SDL3/SDL_main.h>   // main() and the SDL_App* callbacks: this unit only
 
 #include "gs2_app.hpp"
+#include "a2gspu_run_kind.hpp"   // a2gspu_automated_run(): the preferences gate
 
 // The record contract's clock and frame, registered at arm so a rail that holds
 // only a cpu_state (WATCH, CALLSTREAM) can still stamp every record.
@@ -1190,7 +1191,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     // become part of a gate's machine. Such a run's machine is its command line
     // and its pins, the same rule that pins BRAM. Seeding the shipped .gs2 files
     // into the profile is skipped with it: a gate must not write the user's prefs.
-    const bool a2gspu_rail_run = SDL_getenv("A2GSPU_SPIKE_FRAMES") || SDL_getenv("A2GSPU_CTRL");
+    const bool a2gspu_rail_run = a2gspu_automated_run();   // a2gspu_run_kind.hpp
     if (!a2gspu_rail_run) {
         // Load app settings before seeding defaults so dialog-path seed cannot overwrite
         // an existing system_settings.toml with empty in-memory state.

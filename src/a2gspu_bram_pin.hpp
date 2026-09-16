@@ -39,16 +39,12 @@
 #include <cstdlib>
 #include <cstring>
 #include "house_fnv.hpp"
+#include "a2gspu_run_kind.hpp"   // a2gspu_automated_run(): where an unpinned BRAM lives
 
 inline bool        g_bram_pin_probed = false;
 inline const char *g_bram_pin        = nullptr;   // env value; nullptr when unset or empty
 inline const char *g_bram_kind       = "none";    // what the most recently built RTC started from
 inline uint64_t    g_bram_hash       = 0;
-
-// The same test gs2.cpp's preferences gate uses.
-inline bool a2gspu_automated_run() {
-    return getenv("A2GSPU_SPIKE_FRAMES") || getenv("A2GSPU_CTRL");
-}
 
 inline const char *a2gspu_bram_pin() {
     if (!g_bram_pin_probed) {
