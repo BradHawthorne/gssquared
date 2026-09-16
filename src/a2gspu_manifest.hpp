@@ -22,7 +22,7 @@ inline const char *oracle_banner() {
         "cycles= on run/step/run-until/keys is IN-COMMAND (that command's cycles), not absolute: add them, never subtract across acks; `cycles` is the absolute counter.\n"
         "  colour= always named profile (pngc profile=4dot|mono). shot/SDL is human-only.\n"
         "  memory observe= probe_peek / flat-image paths; never toggle RAMRD to look.\n"
-        "  snapshot= CPU+MMU+softswitches+RAM, plus the ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device's RAM-disk overlay on a IIgs; plus the scanner, written disk tracks and whichever card blocks the machine has; the manifest names what is excluded (rtc, serial, clock -- the cycle counter and run hash do not continue across a restore).\n"
+        "  snapshot= CPU+MMU+softswitches+RAM, plus the ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device's RAM-disk overlay on a IIgs; plus the scanner, written disk tracks and whichever card blocks the machine has; the manifest names what is excluded (rtc, clock -- the cycle counter and run hash do not continue across a restore).\n"
         "  dual-mode= no A2GSPU_* env => stock windowed emulator.\n"
         "discover: help | help <file> | manifest <file> | oracle\n"
         "docs: Docs/AGENTIC_ORACLE.md Docs/A2GSPU_RAILS.md Docs/DoubleHiRes.md\n";

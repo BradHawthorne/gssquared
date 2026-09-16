@@ -18,6 +18,7 @@
 #include "gs2_app.hpp"
 #include "util/media_identity.hpp"   // g_a2gspu_media_id_version
 #include "devices/diskii/diskii_controller.hpp"   // g_a2gspu_diskii: the Disk II controllers, by slot
+#include "devices/scc8530/scc8530.hpp"             // the IIgs SCC's block
 
 
 // ---- A2GSPU warm-boot snapshot: file magic + cpu_state value-field (de)serialize ----
@@ -97,7 +98,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2", "tclock", "mousecd", "voc", "ssc", "ssight" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "scc", "clock", "u2", "tclock", "mousecd", "voc", "ssc", "ssight" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -247,6 +248,12 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         names += names.empty() ? "voc" : ",voc";
     }
     // Every Super Serial Card: the switches and the 6551, characters in flight included.
+    // The IIgs SCC: registers, FIFOs, shift registers, interrupt block, line inputs and the
+    // time left on characters in flight. The host connections behind the ports are not saved.
+    if (scc_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "scc", 1); scc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "scc" : ",scc";
+    }
     if (ssc_A2GSPU_present()) {
         long at = a2gspu_snap_dev_begin(f, "ssc", 1); ssc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "ssc" : ",ssc";
@@ -390,6 +397,8 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
             }
         } else if (!strcmp(nm, "voc") && ver == 1) {
             if (voc_A2GSPU_present()) r = voc_A2GSPU_restore(f) ? RESTORED : FAILED;
+        } else if (!strcmp(nm, "scc") && ver == 1) {
+            if (scc_A2GSPU_present()) r = scc_A2GSPU_restore(f) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "ssc") && ver == 1) {
             if (ssc_A2GSPU_present()) {
                 int absent = 0;

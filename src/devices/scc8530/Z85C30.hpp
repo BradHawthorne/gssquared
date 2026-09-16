@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <cassert>
 #include "util/DebugFormatter.hpp"
 #include "util/InterruptController.hpp"
@@ -1171,6 +1173,83 @@ class Z85C30 {
             dcd_in[channel] = true; cts_in[channel] = true; break_in[channel] = false;
             ext_update(channel);
             rx_poll_arm(channel);   // FORK: the receiver takes host bytes without a guest access
+        }
+
+        // ---- A2GSPU snapshot (M5): the chip -- registers, both channels' FIFOs and shift
+        // registers, the interrupt block, the line inputs and their latches, and the time left
+        // on a character in flight. The devices behind the ports are host connections and are
+        // not saved; a restore tells the attached device the port's DTR, RTS and break.
+        void A2GSPU_snapshot(FILE *f) {
+            const uint64_t now = clock ? clock->get_c14m() : 0;
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                const auto &r = registers[c];
+                fwrite(r.w_regs, 1, 16, f);
+                uint8_t rr[8] = { r.r_reg_0, r.r_reg_1, r.r_reg_3, r.r_reg_10, r.char_rx, r.char_tx,
+                                  (uint8_t)r.tx_in_progress, (uint8_t)r.rx_in_progress };
+                fwrite(rr, 1, 8, f);
+                uint16_t sel = reg_select[c]; fwrite(&sel, 2, 1, f);
+                fwrite(rx_fifo[c].data, 1, 3, f); fwrite(&rx_fifo[c].count, 1, 1, f);
+                uint8_t fl[12] = { tx_shift[c], (uint8_t)tx_ip_latch[c], (uint8_t)ext_ip_latch[c], (uint8_t)rx_first_armed[c],
+                                   (uint8_t)tx_stalled[c], (uint8_t)rx_stalled[c], (uint8_t)dcd_in[c], (uint8_t)cts_in[c],
+                                   (uint8_t)break_in[c], (uint8_t)ext_latched[c], ext_latched_bits[c], ext_last_bits[c] };
+                fwrite(fl, 1, 12, f);
+                uint64_t left[2] = {
+                    (r.tx_in_progress && !tx_stalled[c] && tx_due_14m[c] > now) ? tx_due_14m[c] - now : 0,
+                    (r.rx_in_progress && !rx_stalled[c] && rx_due_14m[c] > now) ? rx_due_14m[c] - now : 0 };
+                fwrite(left, 8, 2, f);
+            }
+            uint8_t ib[2] = { ip_bits, ius_bits }; fwrite(ib, 1, 2, f);
+        }
+
+        bool A2GSPU_restore(FILE *f) {
+            struct saved_t { uint8_t w[16]; uint8_t rr[8]; uint16_t sel; uint8_t fifo[3]; uint8_t count; uint8_t fl[12]; uint64_t left[2]; };
+            saved_t sv[SCC_CHANNEL_COUNT];
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                saved_t &s = sv[c];
+                if (fread(s.w, 1, 16, f) != 16 || fread(s.rr, 1, 8, f) != 8 || fread(&s.sel, 2, 1, f) != 1 ||
+                    fread(s.fifo, 1, 3, f) != 3 || fread(&s.count, 1, 1, f) != 1 || fread(s.fl, 1, 12, f) != 12 ||
+                    fread(s.left, 8, 2, f) != 2 || s.count > 3) return false;
+            }
+            uint8_t ib[2]; if (fread(ib, 1, 2, f) != 2) return false;
+            const uint64_t now = clock ? clock->get_c14m() : 0;
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                const scc_channel_t ch = (scc_channel_t)c;
+                const saved_t &s = sv[c];
+                if (event_timer) {
+                    event_timer->cancelEvents(tx_timer_id[c]);
+                    event_timer->cancelEvents(rx_timer_id[c]);
+                    event_timer->cancelEvents(zc_timer_id[c]);
+                }
+                zc_scheduled[c] = false;
+                auto &r = registers[c];
+                memcpy(r.w_regs, s.w, 16);
+                r.r_reg_0 = s.rr[0]; r.r_reg_1 = s.rr[1]; r.r_reg_3 = s.rr[2]; r.r_reg_10 = s.rr[3];
+                r.char_rx = s.rr[4]; r.char_tx = s.rr[5]; r.tx_in_progress = s.rr[6] != 0; r.rx_in_progress = s.rr[7] != 0;
+                reg_select[c] = s.sel;
+                memcpy(rx_fifo[c].data, s.fifo, 3); rx_fifo[c].count = s.count;
+                tx_shift[c] = s.fl[0]; tx_ip_latch[c] = s.fl[1] != 0; ext_ip_latch[c] = s.fl[2] != 0; rx_first_armed[c] = s.fl[3] != 0;
+                tx_stalled[c] = s.fl[4] != 0; rx_stalled[c] = s.fl[5] != 0; dcd_in[c] = s.fl[6] != 0; cts_in[c] = s.fl[7] != 0;
+                break_in[c] = s.fl[8] != 0; ext_latched[c] = s.fl[9] != 0; ext_latched_bits[c] = s.fl[10]; ext_last_bits[c] = s.fl[11];
+                clock_mode[c] = clock_mode_table[r.r4_clock_mode];
+                uint64_t hz = 0, div = 1;
+                baud_rate[c] = (clock_source(ch, true, hz, div) && hz) ? (float)((double)hz / ((double)clock_mode[c] * (double)div)) : 0.0f;
+                if (r.tx_in_progress && !tx_stalled[c] && event_timer && clock) {
+                    tx_due_14m[c] = now + (s.left[0] ? s.left[0] : 1);
+                    event_timer->scheduleEvent(tx_due_14m[c], tx_complete_callback, tx_timer_id[c], this);
+                }
+                if (r.rx_in_progress && !rx_stalled[c] && event_timer && clock) {
+                    rx_due_14m[c] = now + (s.left[1] ? s.left[1] : 1);
+                    event_timer->scheduleEvent(rx_due_14m[c], rx_complete_callback, rx_timer_id[c], this);
+                }
+                zc_arm(ch);
+                rx_poll_arm(ch);
+                line_params_last[c] = ~0ull;
+                push_line_params(ch);
+                lines_out_update(ch, true);
+            }
+            ip_bits = ib[0]; ius_bits = ib[1];
+            update_interrupts();
+            return true;
         }
 
         void debug_output(DebugFormatter *df) {
