@@ -822,3 +822,25 @@ the `setreg pb` lines in scratch tests did nothing.
   the gates re-read, not a tail end of this one.
 - **Frozen or ticking by default, and slot bus format 1 or 2 by default.** Both are opt-in; both
   defaults are the owner's call.
+
+## 17. The long-term answers, acted on (2026-09-16)
+
+The owner asked for the best long-term answer to each open question, then for all of them to be
+carried out. The reasoning is in section 16's "Not done" items and the fidelity README; this is
+what was done.
+
+| Commit | Change | Verified |
+|---|---|---|
+| `90b19ae8` | **The time pin's identity says whether it ticks.** PINS, the snapshot manifest and `rail read` print `faketime=<value>/tick`; a frozen pin prints the value alone, as before | two spikes print `faketime=1000000000` and `.../tick`; railparity registers the reader |
+| `575e1703` | **`$C02D` gates slots 1, 2, 5, 6 and 7.** `$C0nX` reaches the built-in device (the IWM at `$C0E0`) or the card, never both; a card claims `$C800` only on a `$Cn` access that selects it; format 2's `/DEVSEL` and `$Cn` visibility use the same decode. Evidence: ROM 01 clears bits 5 and 6 around its call into the built-in slot 5 firmware (`$FE7026`, `$FE6F63`) | a Super Serial Card in slot 2 and the IWM's Q6 latch follow the register both ways, `$C800` included (6/6); a2engine buscheck, periphcheck, sscheck; IIe baseline unchanged |
+| `b1d83471` | **`tools/hwtruth`**: one bare 65816 program measures eight hardware questions, writes raw bytes back to its boot disk, and prints them; `report.py` turns a run into answers; the emulator runs the same program as the tenth gate, held to its recorded verdicts | the image boots on the emulator and writes its RESULTS block; the load-and-run page is byte-identical twice |
+| `2dceb087` | **Format 2 completed, and the comparator.** Cycles that assert no `/M2SEL` (`$C035-$C037`, reads of `$C02D`, `$C068`, `$C071-$C07F`) are not emitted; bit 7 is set for a slow cycle run in fast mode (TN68's isolated synchronised cycle). `tools/a2rail/buscompare.py` aligns a capture with a reference through gaps and extras and counts address, data and per-bit ctl differences, with masks for what a capture cannot see; its selftest is an offline gate | the fast-cycle and speed-bit checks (10/10) and the format 2 bus test (9/9); buscompare selftest 8/8 |
+| `70fd55a2` | **Parallel capture without a host wait.** A spill queue on the emulator side holds what the host device has not taken, drains on each write and each frame, and is handed to the device when it is let go (bounded wait at teardown only) | a 10240-byte burst ending in `quit` arrives complete and in order, with the queue depth reported and nothing dropped; a2engine pluscheck 10/10 |
+
+**What the emulator run of `hwtruth` exposed:** the IWM's data register does not read `$FF` with the
+motor off (it returns a stale latch), against the IWM specification. Recorded as a verdict and in
+the fidelity README's hardware list, not fixed here.
+
+**Still the owner's:** running `hwtruth` on a real IIgs (`tools/hwtruth/README.md`); flipping the
+slot-bus default once the card's firmware decodes `~BS2` and a real capture compares clean with
+`buscompare.py`; frozen stays the default for the time pin.
