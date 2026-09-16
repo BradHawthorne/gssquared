@@ -19,7 +19,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M3 unhonourable inputs are fatal | done | a few "skipped" paths remain counted warnings by choice |
 | M4 liveness | done | — |
 | M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, iwm and pdblock are saved; the scanner (Class B) and floppy media are not |
-| M6 artifact discipline | partial | coverage (both formats) and snapshots are checked; other `spike_*.bin` artifacts and `vram-raw` have no reader |
+| M6 artifact discipline | done | — |
 | M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table; 42 are also armable live (`rail set`) |
 | M9 determinism asserted | done | — |
@@ -321,8 +321,19 @@ count and recomputes the trailing hash over header+plan+maps, and self-tests
 each of those refusals against a file built to trip it. The CTRL `cov write`
 ack now says `format=` and `hash=` too, because a caller could not otherwise
 tell which of the two formats a run had produced — any `cov map <plan>` quietly
-switches it. Snapshots get a header and manifest-trailer check only; the other
-`spike_*.bin` artifacts are not yet covered.
+switches it. Snapshots get a header and manifest-trailer check only.
+
+**The raw artifacts followed (2026-09-16).** `spike_e1.bin` and its siblings
+cannot take a header -- a consumer's harness reads `spike_e1.bin` as 65,536 raw
+bytes -- so each keeps its bytes and gains a sidecar record, `<file>.meta.json`
+(`src/a2gspu_artifact_meta.hpp`): format, record layout in words, count, the
+writer's content hash with what it covers, and the file's own house-FNV. Covered:
+`spike_e1.bin`, `spike_e1_init.bin`, `spike_trace.bin`, `spike_slot.bin`,
+`spike_mmu_truth.bin` and the `vram` dump. `artifacts.py raw <file>` refuses a
+missing sidecar, an unknown format, a length that is not count x record size, and
+either hash failing to re-derive (the content hash is recomputed from the records
+by the layout), and its self-test trips each refusal. `spike_frame.bmp` is a BMP
+and describes itself.
 
 ### M7 — Symbols by default  (P10) — M
 

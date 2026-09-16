@@ -101,7 +101,7 @@ Where the code lives (by function, not line number — line numbers here went st
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `A2GSPU_SPIKE_FRAMES=N` | run `N` deterministic frames headless (with `-n`), then evaluate the dump/assert/golden gates and exit. The master headless switch. | run | env |
+| `A2GSPU_SPIKE_FRAMES=N` | run `N` deterministic frames headless (with `-n`), then evaluate the dump/assert/golden gates and exit. The master headless switch. Its raw artifacts (`spike_e1.bin`, `spike_e1_init.bin`, `spike_trace.bin`, `spike_slot.bin`, `spike_mmu_truth.bin`) keep their headerless bytes, and each gets `<file>.meta.json` (schema `a2artifact-v1`: format, record layout, count, the writer's content hash and what it covers, the file's own hash) plus a `SPIKE ARTIFACT:` line; `tools/a2rail/artifacts.py raw <file>` reads and verifies one | run | env |
 | `A2GSPU_PACE=fast\|realtime` | **headless frame pacing.** Every frame used to end in a busy-wait to the next 16.69 ms deadline, headless or not: `run 600` on the CTRL rail took 10 s whatever it did, and each session spun a core. `fast` — the default for every headless run, spike or CTRL — skips that wait. Frames end at a cycle count, not a time, so the hash, `cycles=` and `run=` do not move (`unarmedhash.ps1` runs paced-by-default and proves it). Audio is the one thing that read the wall clock: the speaker generated samples only while SDL's real-time-drained queue was short. So `fast` pauses the audio device and empties the streams after each frame; samples are still generated every frame and counted by the `audio` probes, which makes them deterministic rather than host-speed-dependent. `realtime` keeps the stock wait and sound. Windowed runs are never changed. An unknown value is fatal (exit 2). `A2GSPU PINS:` carries `pace=`, and `rail read A2GSPU_PACE` answers it. Wall-clock devices (an unpinned RTC or clock card) see less host time per emulated second when fast: pin `A2GSPU_FAKETIME` for runs that must repeat | run | env |
 | `A2GSPU_SPIKE_KEYS=<str>` | inject keystrokes via the keyboard paste buffer (`\n`→`\r`), paced by the guest's own `$C000` polls | run | env |
 | `A2GSPU_SPIKE_KEYS_AT=N` | frame at which `SPIKE_KEYS` is injected (default `spike_frames/2`) | run | env |
@@ -530,7 +530,7 @@ protocol authority.
 | `vid` | softswitch decode TEXT…DHIRES | CTRL-verb (observe) |
 | `stack [n]` | stack contents above SP | CTRL-verb (observe) |
 | `png` / `pngc` | mono (`profile=bits-mono`) / named-colour (`profile=4dot`, `profile=mono`) DHGR from RAM | CTRL-verb (observe) |
-| `vram` | 8K aux + 8K main raw | CTRL-verb (observe) |
+| `vram` | 8K aux + 8K main raw, with `<file>.meta.json` (`vram-raw-v1`, page, hashes) for `artifacts.py raw` | CTRL-verb (observe) |
 | `load` / `poke` / `setreg` | deliberate RAM/reg splice | CTRL-verb (manipulate) |
 | `cycles` / `cycles reset` | the absolute guest cycle counter. `cycles reset` sets a mark; a later `cycles` adds `delta_from_mark=N model=cross-command(every-command-since-mark)` — true, but it counts every command run since the mark, so it is a routine's cost only when nothing else ran. A routine's cost is the `cycles=` on `run`/`step`/`run-until` | CTRL-verb (observe) |
 | `dhgr-calibrate` / `dhgr-export` | 4-dot self-test + profile files for a2tile | CTRL-verb (calibrate) |

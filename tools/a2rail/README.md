@@ -27,7 +27,7 @@ machine-readable event for every command, acknowledgement, refusal and stall.
 | Gate | Run by | Platforms | What it proves |
 |---|---|---|---|
 | `railparity.ps1` | gates, dualsmoke | offline | every rail the code reads is declared, has a catalogue row under its family, and a whole synopsis; every CTRL verb is dispatched and listed; readers and sinks are registered |
-| `artifacts.py selftest` | gates | offline | the artifact reader refuses every malformed file it should |
+| `artifacts.py selftest` | gates | offline | the artifact reader refuses every malformed file it should: coverage (A2COV1/A2COV2), snapshot headers, and raw artifacts through their `.meta.json` sidecars |
 | `../gdiff/selftest.py` | gates | offline | the differential tools against real captures |
 | ctest | dualsmoke | host | CPU conformance/coverage/cycles, 6522 VIA |
 | `railcheck.ps1` | dualsmoke | 3 and 5 | CTRL verb honesty |

@@ -24,7 +24,17 @@ format. So A2COV2 is read here too, and `cov` dispatches on the magic.
 USAGE
     python artifacts.py cov <file.bin>        # A2COV1 or A2COV2 (dispatched on magic)
     python artifacts.py snap <file.snap>      # GSPS snapshot: magic, version, size
+    python artifacts.py raw <file>            # a headerless artifact, via its <file>.meta.json
     python artifacts.py fnv <file>            # house FNV-1a-64 of the whole file
+
+RAW ARTIFACTS (M6). The headless run's spike_e1.bin, spike_e1_init.bin,
+spike_trace.bin, spike_slot.bin, spike_mmu_truth.bin and the `vram` dump have
+no header -- consumers read spike_e1.bin as raw bytes, so one cannot be added --
+and each is described instead by a sidecar record, <file>.meta.json (schema
+a2artifact-v1, src/a2gspu_artifact_meta.hpp). read_raw() refuses an artifact
+with no sidecar, a format it does not know, a length that is not count x
+record_size, a file hash that does not re-derive, and a content hash (the
+writer's determinism witness, recomputed from the records) that does not.
 
     from artifacts import read_cov, read_cov2, house_fnv
 
@@ -180,6 +190,113 @@ def read_snap_header(path):
     return magic == SNAP_MAGIC, ver, size, manifest
 
 
+# ---- raw artifacts described by a sidecar (M6) ------------------------------------
+import json
+
+def _content_hash(fmt, d, record_size):
+    """Re-derive the writer's content hash for a known format, from the bytes."""
+    h = HOUSE_FNV_BASIS
+    if fmt in ('megaii-e1-64k-v1',):
+        return house_fnv(d[0x2000:0xA000])
+    if fmt in ('megaii-e1-shr-window-v1', 'vram-raw-v1'):
+        return house_fnv(d)
+    if fmt == 'bus-trace-v1':
+        for i in range(0, len(d), record_size):
+            addr17, data, rw = struct.unpack_from('<IBB', d, i + 8)
+            for b in (addr17 & 0xFF, (addr17 >> 8) & 0xFF, (addr17 >> 16) & 0xFF, data, rw):
+                h = ((h ^ b) * HOUSE_FNV_PRIME) & MASK64
+        return h
+    if fmt == 'slot-bus-v1':
+        for i in range(0, len(d), record_size):
+            addr, data, ctl = struct.unpack_from('<HBB', d, i + 8)
+            for b in (addr & 0xFF, addr >> 8, data, ctl, 0):
+                h = ((h ^ b) * HOUSE_FNV_PRIME) & MASK64
+        return h
+    if fmt == 'mmu-state-v1':
+        for i in range(0, len(d), record_size):
+            for b in d[i + 8:i + 13]:
+                h = ((h ^ b) * HOUSE_FNV_PRIME) & MASK64
+        return h
+    return None
+
+RAW_FORMATS = {'megaii-e1-64k-v1': 1, 'megaii-e1-shr-window-v1': 1, 'vram-raw-v1': 1,
+               'bus-trace-v1': None, 'slot-bus-v1': None, 'mmu-state-v1': None}
+
+
+def read_raw(path):
+    """Return (meta, bytes) for a headerless artifact after checking everything.
+
+    The sidecar is the only thing that says what the bytes are; without it the
+    file is refused rather than guessed at.
+    """
+    mp = path + '.meta.json'
+    if not os.path.exists(mp):
+        raise ArtifactError('%s: no %s -- a raw artifact without its description is not read'
+                            % (path, os.path.basename(mp)))
+    try:
+        meta = json.loads(open(mp, 'rb').read().decode('utf-8'))
+    except ValueError as e:
+        raise ArtifactError('%s: sidecar is not one JSON record (%s)' % (mp, e))
+    if meta.get('schema') != 'a2artifact-v1' or meta.get('event') != 'artifact.meta':
+        raise ArtifactError('%s: sidecar schema %r / event %r is not a2artifact-v1 / artifact.meta'
+                            % (mp, meta.get('schema'), meta.get('event')))
+    fmt = meta.get('format')
+    if fmt not in RAW_FORMATS:
+        raise ArtifactError('%s: unknown artifact format %r' % (path, fmt))
+    rs, count = meta.get('record_size'), meta.get('count')
+    if not isinstance(rs, int) or not isinstance(count, int) or rs <= 0 or count < 0:
+        raise ArtifactError('%s: record_size/count are not usable integers (%r, %r)' % (mp, rs, count))
+    if RAW_FORMATS[fmt] is not None and rs != RAW_FORMATS[fmt]:
+        raise ArtifactError('%s: format %s has record_size %d, sidecar says %d' % (path, fmt, RAW_FORMATS[fmt], rs))
+    d = open(path, 'rb').read()
+    if len(d) != rs * count:
+        raise ArtifactError('%s: %d bytes, but the sidecar describes %d records of %d bytes (%d) -- cut off or overwritten'
+                            % (path, len(d), count, rs, rs * count))
+    fh = '%016X' % house_fnv(d)
+    if fh != meta.get('file_hash'):
+        raise ArtifactError('%s: file hash %s does not match the sidecar\'s %s' % (path, fh, meta.get('file_hash')))
+    ch = _content_hash(fmt, d, rs)
+    if '%016X' % ch != meta.get('content_hash'):
+        raise ArtifactError('%s: content hash %016X does not match the writer\'s %s (%s)'
+                            % (path, ch, meta.get('content_hash'), meta.get('content_hash_covers')))
+    return meta, d
+
+
+def _selftest_raw():
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_selftest_raw.bin')
+    recs = [(100, 0x12000, 0x5A, 1, 0, 0), (200, 0x19D00, 0x80, 1, 1, 0)]
+    d = b''.join(struct.pack('<QIBBBB', *r) for r in recs)
+    def meta(dd, **over):
+        m = {'event': 'artifact.meta', 'frame': 0, 'cycles': 0, 'schema': 'a2artifact-v1', 'format': 'bus-trace-v1',
+             'record_size': 16, 'count': len(dd) // 16, 'bytes': len(dd),
+             'content_hash': '%016X' % _content_hash('bus-trace-v1', dd, 16), 'file_hash': '%016X' % house_fnv(dd)}
+        m.update(over)
+        return json.dumps(m)
+    try:
+        open(base, 'wb').write(d); open(base + '.meta.json', 'w').write(meta(d))
+        m, _ = read_raw(base)
+        assert m['count'] == 2
+        cases = [
+            ('missing sidecar', lambda: os.remove(base + '.meta.json')),
+            ('truncated body', lambda: (open(base, 'wb').write(d[:-1]), open(base + '.meta.json', 'w').write(meta(d)))),
+            ('flipped byte', lambda: (open(base, 'wb').write(d[:9] + bytes([d[9] ^ 1]) + d[10:]), open(base + '.meta.json', 'w').write(meta(d)))),
+            ('unknown format', lambda: (open(base, 'wb').write(d), open(base + '.meta.json', 'w').write(meta(d, format='mystery-v9')))),
+            ('wrong content hash', lambda: (open(base, 'wb').write(d), open(base + '.meta.json', 'w').write(meta(d, content_hash='0' * 16)))),
+        ]
+        for name, setup in cases:
+            setup()
+            try:
+                read_raw(base)
+                raise AssertionError('raw reader accepted: ' + name)
+            except ArtifactError:
+                pass
+    finally:
+        for p in (base, base + '.meta.json'):
+            if os.path.exists(p):
+                os.remove(p)
+    return True
+
+
 def _selftest():
     # FNV vector: the empty string hashes to the basis; one byte 'a' is a known step.
     assert house_fnv(b'') == HOUSE_FNV_BASIS
@@ -202,6 +319,7 @@ def _selftest():
     finally:
         os.remove(p)
     _selftest_cov2()
+    _selftest_raw()
     return True
 
 
@@ -325,8 +443,8 @@ def main(argv):
     # that happens to take no argument -- `--selftest`, say, for the `selftest`
     # this module actually has -- is reported as "missing file", which names a
     # problem the caller does not have and hides the one they do.
-    if cmd not in ('cov', 'snap', 'fnv'):
-        print("unknown command %r (want: cov | snap | fnv | selftest)" % cmd)
+    if cmd not in ('cov', 'snap', 'raw', 'fnv'):
+        print("unknown command %r (want: cov | snap | raw | fnv | selftest)" % cmd)
         return 2
     if len(argv) < 3:
         print('%s: missing file' % cmd); return 2
@@ -370,6 +488,11 @@ def main(argv):
             print('GSPS %s magic=%s version=%d size=%d manifest=%s' % (path, 'ok' if ok else 'BAD', ver, size,
                   manifest if manifest else 'absent (pre-manifest snapshot; class A assumed, every device excluded)'))
             if not ok: return 1
+        elif cmd == 'raw':
+            meta, d = read_raw(path)
+            print('%s %s count=%d record_size=%d bytes=%d content_hash=%s (%s) file_hash=%s verified'
+                  % (meta['format'], path, meta['count'], meta['record_size'], len(d), meta['content_hash'],
+                     meta.get('content_hash_covers', '?'), meta['file_hash']))
         elif cmd == 'fnv':
             print('%016X  %s' % (house_fnv(open(path, 'rb').read()), path))
         else:

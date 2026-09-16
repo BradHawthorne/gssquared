@@ -16,6 +16,7 @@
  */
 // The CTRL verb families. Declarations: a2gspu_ctrl_cmds.hpp.
 #include "gs2_app.hpp"
+#include "a2gspu_artifact_meta.hpp"   // M6: vram dumps describe themselves
 
 namespace a2ctrl {
 // A2CTRL-DISPATCH-BEGIN -- railparity.ps1 reads CTRL command words (strncmp/strcmp
@@ -608,6 +609,12 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
                 fwrite(flat + 0x10000 + base, 1, 0x2000, vf);
                 fwrite(flat + base, 1, 0x2000, vf);
                 fclose(vf);
+                uint64_t vh = HOUSE_FNV_BASIS;   // the same bytes, in file order
+                for (uint32_t k = 0; k < 0x2000; k++) { vh ^= flat[0x10000 + base + k]; vh *= HOUSE_FNV_PRIME; }
+                for (uint32_t k = 0; k < 0x2000; k++) { vh ^= flat[base + k]; vh *= HOUSE_FNV_PRIME; }
+                a2gspu_artifact_meta(fbuf, "vram-raw-v1", 1, 0x4000,
+                                     "u8 x 16384: 8192 bytes aux then 8192 bytes main, the HGR page named by page",
+                                     "house-FNV-1a-64 over all 16384 bytes", vh, page);
                 /* 16384, not 8192: two 0x2000 halves are written, and the ack
                  * reported one of them. A caller comparing the number against
                  * a2tile's 16384-byte page.vram would conclude the dump was

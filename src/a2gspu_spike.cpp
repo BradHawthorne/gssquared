@@ -17,6 +17,7 @@
 // The headless spike -- moved out of gs2.cpp; see gs2_app.hpp.
 #include "gs2_app.hpp"
 #include "a2gspu_rail_setters.hpp"   // rails that are also armed live: one apply function each
+#include "a2gspu_artifact_meta.hpp"   // M6: <artifact>.meta.json beside every raw artifact
 
 // A2GSPU_OUT_DIR: parallel-safe output relocation. When set, the fixed-name
 // headless/spike output files (spike_e1.bin, spike_e1_init.bin, spike_frame.bmp,
@@ -460,8 +461,16 @@ void run_headless_spike(GS2AppState *state) {
     {
         uint8_t *m2i = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
         if (m2i) {
-            FILE *fi = fopen(a2gspu_out_path("spike_e1_init.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), "wb");
-            if (fi) { fwrite(m2i + 0x12000, 1, 0x8000, fi); fclose(fi); } // $E1:$2000-$9FFF
+            const std::string ip = a2gspu_out_path("spike_e1_init.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
+            FILE *fi = fopen(ip.c_str(), "wb");
+            if (fi) {
+                fwrite(m2i + 0x12000, 1, 0x8000, fi); fclose(fi); // $E1:$2000-$9FFF
+                uint64_t h = HOUSE_FNV_BASIS;
+                for (int a = 0; a < 0x8000; a++) { h ^= m2i[0x12000 + a]; h *= HOUSE_FNV_PRIME; }
+                a2gspu_artifact_meta(ip.c_str(), "megaii-e1-shr-window-v1", 1, 0x8000,
+                                     "u8 x 32768: Mega II bank $E1 $2000-$9FFF at trace arm",
+                                     "house-FNV-1a-64 over all 32768 bytes", h);
+            }
         }
     }
 
@@ -731,7 +740,9 @@ void run_headless_spike(GS2AppState *state) {
     uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
     if (m2) {
         const uint8_t *e1 = m2 + 0x10000;          // Mega II bank $E1 (64 KB)
-        FILE *f = fopen(a2gspu_out_path("spike_e1.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), "wb");
+        const std::string e1p = a2gspu_out_path("spike_e1.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
+        FILE *f = fopen(e1p.c_str(), "wb");
+        const bool e1_written = (f != nullptr);
         if (f) { fwrite(e1, 1, 0x10000, f); fclose(f); }
         uint64_t hash = HOUSE_FNV_BASIS;    // FNV-1a 64
         int nonzero = 0; uint8_t seen[256] = {0}; int ndist = 0;
@@ -747,6 +758,10 @@ void run_headless_spike(GS2AppState *state) {
         printf("SPIKE E1: SCB[0..7]@$9D00 = %02X %02X %02X %02X %02X %02X %02X %02X\n",
                e1[0x9D00], e1[0x9D01], e1[0x9D02], e1[0x9D03],
                e1[0x9D04], e1[0x9D05], e1[0x9D06], e1[0x9D07]);
+        if (e1_written)
+            a2gspu_artifact_meta(e1p.c_str(), "megaii-e1-64k-v1", 1, 0x10000,
+                                 "u8 x 65536: Mega II bank $E1 $0000-$FFFF at spike end",
+                                 "house-FNV-1a-64 over file bytes $2000-$9FFF (the SHR window; the SPIKE E1 hash)", hash);
         // Headless SHR/video-state summary (mode/palette/pixel histogram).
         if (SDL_getenv("A2GSPU_VIDEOSUM")) iigs_video_summary(e1);
         // Downsampled ASCII map of the screen (SEE a rectangle/layout headless).
@@ -760,11 +775,15 @@ void run_headless_spike(GS2AppState *state) {
     // ---- (1.5) bus-trace oracle: ordered SHR-write golden ----
     {
         uint64_t n = 0;
-        uint64_t th = bus_trace_dump(a2gspu_out_path("spike_trace.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), &n);
+        const std::string tp = a2gspu_out_path("spike_trace.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
+        uint64_t th = bus_trace_dump(tp.c_str(), &n);
         uint64_t c0 = g_bus_trace.empty() ? 0 : g_bus_trace.front().cycle;
         uint64_t c1 = g_bus_trace.empty() ? 0 : g_bus_trace.back().cycle;
         printf("SPIKE TRACE: wrote spike_trace.bin (%llu SHR writes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)th);
+        a2gspu_artifact_meta(tp.c_str(), "bus-trace-v1", (unsigned)sizeof(BusTraceRecord), n,
+                             "u64 cycle, u32 addr17 (bit16 = bank $E1), u8 data, u8 rw (1=write), u8 src (0 direct $E1, 1 shadowed), u8 pad",
+                             "house-FNV-1a-64 over each record's addr17 low 3 bytes (LE), data, rw, in file order", th);
         printf("SPIKE TRACE: cycle span [%llu .. %llu]\n",
                (unsigned long long)c0, (unsigned long long)c1);
         // Bracket the shadow-mirror slot-visibility outcome (provenance-tagged, before any hardware).
@@ -792,9 +811,13 @@ void run_headless_spike(GS2AppState *state) {
     // ---- (1.6) faithful slot-bus stream (the virtual slot; superset of the SHR oracle) ----
     {
         uint64_t n = 0;
-        uint64_t sh = slot_bus_dump(a2gspu_out_path("spike_slot.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), &n);
+        const std::string slp = a2gspu_out_path("spike_slot.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
+        uint64_t sh = slot_bus_dump(slp.c_str(), &n);
         printf("SPIKE SLOT: wrote spike_slot.bin (%llu Mega-II writes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)sh);
+        a2gspu_artifact_meta(slp.c_str(), "slot-bus-v1", (unsigned)sizeof(slot_bus_cycle_t), n,
+                             "u64 cycle, u16 addr, u8 data, u8 ctl (SLOT_CTL_* bits), then padding to the record size",
+                             "house-FNV-1a-64 over each record's addr low byte, addr high byte, data, ctl and a zero byte, in file order", sh);
     }
 
     // ---- (1.65) MEMVU_STOREVIS: store-visibility accounting ----
@@ -813,9 +836,13 @@ void run_headless_spike(GS2AppState *state) {
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {
         uint64_t n = 0;
-        uint64_t mh = mmu_state_trace_dump(a2gspu_out_path("spike_mmu_truth.bin", a2gspu_outbuf, sizeof a2gspu_outbuf), &n);
+        const std::string mp = a2gspu_out_path("spike_mmu_truth.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
+        uint64_t mh = mmu_state_trace_dump(mp.c_str(), &n);
         printf("SPIKE MMU: wrote spike_mmu_truth.bin (%llu mapping-state changes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)mh);
+        a2gspu_artifact_meta(mp.c_str(), "mmu-state-v1", (unsigned)sizeof(MMUStateRecord), n,
+                             "u64 cycle, u8 reg_state ($C068), u8 reg_shadow ($C035), u8 reg_new_video ($C029), u8 reg_speed ($C036), u8 flags (bit0 80STORE, bit1 HIRES, bit2 TEXT, bit3 MIXED), u8 reg_slot ($C02D), u8 disp_vmode, u8 disp_mode, u8 pad x7",
+                             "house-FNV-1a-64 over each record's reg_state, reg_shadow, reg_new_video, reg_speed, flags, in file order", mh);
     }
 
     // ---- (2) backbuffer pixel-readback datum ----
