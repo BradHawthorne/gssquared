@@ -33,9 +33,17 @@
 #include "util/Connections.hpp"
 #include "serial_devices/host/SerialPortManager.hpp"
 #include "util/mount.hpp"
+#include "a2gspu_faketime.hpp"
+
+// FORK: the emulated clock behind a ticking A2GSPU_FAKETIME (a2gspu_faketime.hpp).
+static uint64_t a2gspu_computer_c14m(void *ctx) {
+    NClockII *c = static_cast<NClockII *>(ctx);
+    return c ? c->get_c14m() : 0;
+}
 
 computer_t::computer_t(NClockII *clock) {
     this->clock = clock;
+    a2gspu_timesource_install(a2gspu_computer_c14m, clock);
     breakpoints = new BreakpointTable();
 
     // initialize module store to nullptr.
@@ -378,6 +386,7 @@ void computer_t::reset(bool cold_start) {
 
 void computer_t::set_clock(NClockII *clock) {
     this->clock = clock;
+    a2gspu_timesource_install(a2gspu_computer_c14m, clock);
     event_timer->set_clock(clock);
 }
 

@@ -1098,6 +1098,12 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
         // its IRQ timing from the host clock and did not repeat.
         long long pinned = 0;
         if (a2gspu_faketime_unix(&pinned)) ticks_14m = ds->clock->get_c14m_per_second();
+        // A ticking pin steps its seconds at whole multiples of the 14M second; the edge
+        // lands on the next one, so the RTC and this interrupt change together.
+        if (a2gspu_faketime_unix(&pinned) && a2gspu_faketime_ticking()) {
+            const uint64_t per = ds->clock->get_c14m_per_second();
+            ticks_14m = per - (ds->clock->get_c14m() % per);
+        }
         // set the 14M timer to the number of ticks
         ds->onesec_next_14m = ds->clock->get_c14m() + ticks_14m;
         computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds);

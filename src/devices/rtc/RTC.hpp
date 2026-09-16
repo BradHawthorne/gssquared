@@ -10,6 +10,7 @@
 #include "util/DebugFormatter.hpp"
 #include "debug.hpp"
 #include "a2gspu_bram_pin.hpp"   // A2GSPU_BRAM: which BRAM a run starts from, reported in PINS
+#include "a2gspu_faketime.hpp"  // A2GSPU_FAKETIME_TICK: the pinned clock in emulated time
 
 #define RTC_START_TRANS 0b100
 #define RTC_READ_WRITE 0b010
@@ -38,6 +39,12 @@
 // /timezone entirely (freezing time() alone is insufficient — tm_gmtoff / _timezone
 // still vary by host and would defeat determinism). The emulated OS must run
 // IDENTICALLY against a real RTC; a frozen value is one a real clock could show.
+//
+// FORK: A2GSPU_FAKETIME_TICK=1 makes the pin an origin that advances in emulated time
+// (a2gspu_faketime.hpp). Under either form a guest's write to the seconds registers now
+// sticks, as an offset from the pinned clock: the pin used to overwrite them on every
+// command, so ROM WriteTime could not verify and Control Panel could not set the time --
+// the pin itself was guest-visible.
 inline bool     g_rtc_faketime_active = false;
 inline uint32_t g_rtc_faketime_1904   = 0;
 inline bool     g_rtc_faketime_probed = false;
@@ -50,6 +57,10 @@ inline void rtc_faketime_probe_env() {
         g_rtc_faketime_1904   = (uint32_t)(uxt + (long long)UNIX_EPOCH_DELTA);
         g_rtc_faketime_active = true;
     }
+}
+// The pinned clock now, in 1904 seconds (the origin, plus emulated seconds when ticking).
+inline uint32_t rtc_faketime_now_1904() {
+    return g_rtc_faketime_1904 + (a2gspu_faketime_ticking() ? (uint32_t)a2gspu_emulated_seconds() : 0u);
 }
 
 struct RTC_Control_Reg {
@@ -78,6 +89,7 @@ class RTC {
         uint8_t seconds_bytes[4];
     };
     uint32_t last_seconds = 0;
+    int64_t pin_offset = 0;   // FORK: a guest-set time under A2GSPU_FAKETIME, relative to the pinned clock
     
     uint8_t test_reg = 0;
     uint8_t bram[256] = {0};
@@ -235,8 +247,8 @@ public:
         // a real machine, where the clock advances.
         rtc_faketime_probe_env();
         if (g_rtc_faketime_active) {
-            seconds      = g_rtc_faketime_1904;
-            last_seconds = g_rtc_faketime_1904;
+            seconds      = (uint32_t)((int64_t)rtc_faketime_now_1904() + pin_offset);
+            last_seconds = seconds;
             return;
         }
         // Get current UTC time
@@ -282,6 +294,11 @@ public:
         seconds += time_differential; // update time
     }
 
+    // FORK: under the pin a written seconds byte is kept as an offset from the pinned clock.
+    void note_seconds_write() {
+        if (g_rtc_faketime_active) pin_offset = (int64_t)seconds - (int64_t)rtc_faketime_now_1904();
+    }
+
     void execute_command() {
         uint8_t cmd = command_reg[0];
         update_seconds();
@@ -293,6 +310,7 @@ public:
                 data_reg =  seconds_bytes[0];
             } else { // ignore writes for now
                 seconds_bytes[0] = data_reg;
+                note_seconds_write();
             }; 
         } else if ((cmd & 0b0'1111111) == 0b0'0000101) { // 000'0101 = seconds register next-to-lo
             if (DEBUG(DEBUG_RTC)) printf("   : seconds next-to-lo ");
@@ -301,6 +319,7 @@ public:
                 data_reg = seconds_bytes[1];
             } else {
                 seconds_bytes[1] = data_reg;
+                note_seconds_write();
             }
         } else if ((cmd & 0b0'1111111) == 0b0'0001001) { // 000'1001 = seconds register next-to-hi
             if (DEBUG(DEBUG_RTC)) printf("   : seconds next-to-hi ");
@@ -309,6 +328,7 @@ public:
                 data_reg = seconds_bytes[2];
             } else {
                 seconds_bytes[2] = data_reg;
+                note_seconds_write();
             }
         } else if ((cmd & 0b0'1111111) == 0b0'0001101) { // 000'1101 = seconds register hi
             if (DEBUG(DEBUG_RTC)) printf("   : seconds hi ");
@@ -317,6 +337,7 @@ public:
                 data_reg = seconds_bytes[3];
             } else {
                 seconds_bytes[3] = data_reg;
+                note_seconds_write();
             }
         } else if ((cmd & 0b0'111'00'11) == 0b0'010'00'01) { // 4 RAM addresses - z010ab01
             if (DEBUG(DEBUG_RTC)) printf("   : ram cmd0: %02X, cmd1: %02X\n", command_reg[0], command_reg[1]);
@@ -407,7 +428,13 @@ public:
         DebugFormatter *df = new DebugFormatter();
         df->addLine("state: %s cmd0: %02X cmd1: %02X ", state_to_string(state), command_reg[0], command_reg[1]);
         df->addLine("ctl_reg C034 (7-5): %02X data_reg C033: %02X", ctl_reg_byte, data_reg);
-        df->addLine("seconds: %08X", seconds);
+        df->addLine("seconds: %08X (at the last command)", seconds);
+        if (g_rtc_faketime_active) {
+            // FORK: computed without touching the chip, so the view observes and never advances it.
+            df->addLine("pinned clock now: %08X (%s, guest offset %lld)",
+                        (uint32_t)((int64_t)rtc_faketime_now_1904() + pin_offset),
+                        a2gspu_faketime_ticking() ? "ticking" : "frozen", (long long)pin_offset);
+        }
         for (int i = 0; i < 256; i+=16) {
             df->addLine("%02X: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X", i, 
                 bram[i], bram[i+1], bram[i+2], bram[i+3],
