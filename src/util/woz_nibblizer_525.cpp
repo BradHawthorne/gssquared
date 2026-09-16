@@ -1,3 +1,5 @@
+#include "util/file_safety.hpp"
+#include <vector>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -409,19 +411,23 @@ int Woz_Nibblizer_525::decode_track(const woz_track_t *trk, int track_num,
  * to write the data back to.
  */
 
+// FORK: returns 0 on success (it returned `true`, and its caller tested `!= 0`, so every
+// successful write was reported as a failure and `modified` never cleared). The write is
+// atomic: the payload is patched into a copy at data_offset and the copy replaces the
+// file (util/file_safety.hpp).
 int Woz_Nibblizer_525::write_disk_image_po_do(const media_descriptor *media, const disk_image_t *disk_image) {
-    FILE *out_fp = fopen(media->filename.c_str(), "r+b");
-    if (!out_fp) {
-        std::cerr << "Could not open " << media->filename << " for writing" << std::endl;
-        return false;
-    }
-    fseek(out_fp, media->data_offset, SEEK_SET);
+    std::vector<uint8_t> payload;
+    payload.reserve(static_cast<size_t>(TRACKS_PER_DISK) * SECTORS_PER_TRACK * sizeof(sector_t));
     for (int t = 0; t < TRACKS_PER_DISK; t++) {
-        fwrite(disk_image->sectors[t], sizeof(sector_t), SECTORS_PER_TRACK, out_fp);
+        const uint8_t *p = reinterpret_cast<const uint8_t *>(disk_image->sectors[t]);
+        payload.insert(payload.end(), p, p + SECTORS_PER_TRACK * sizeof(sector_t));
     }
-
-    fclose(out_fp);
-    return true;
+    std::string err;
+    if (!file_safety::atomic_patch(media->filename, media->data_offset, payload.data(), payload.size(), err)) {
+        std::cerr << "Woz_Nibblizer_525: write failed, the original is untouched: " << err << std::endl;
+        return -1;
+    }
+    return 0;
 }
 
 
@@ -472,21 +478,19 @@ int Woz_Nibblizer_525::export_block_image(const Woz& woz, const media_descriptor
         }
     }
 
-    int status = (tracks_with_full_data == TRACKS_PER_DISK) ? 0 : -1;
-
-    if (status < 0) {
+    // FORK: a disk whose every sector does not decode is NOT written back as a block
+    // image. The old path zeroed the sectors it could not decode and wrote the image
+    // anyway, destroying them in the user's file (copy-protected tracks, a half-written
+    // track, anything the block format cannot express). The caller saves a WOZ sidecar.
+    if (tracks_with_full_data != TRACKS_PER_DISK) {
         fprintf(stderr,
-                "Floppy_woz: WOZ->block export had decode errors for '%s'; "
-                "writing partial result\n",
-                media->filename.c_str());
-        // Fall through and write whatever was recovered, matching
-        // Floppy525::writeback()'s always-write behaviour.
+                "Floppy_woz: '%s': %d of %d tracks decode completely; a block image cannot hold "
+                "this disk, so it is NOT written\n",
+                media->filename.c_str(), tracks_with_full_data, TRACKS_PER_DISK);
+        delete out;
+        return EXPORT_LOSSY;
     }
-    if (write_disk_image_po_do(media, out) != 0) {
-        fprintf(stderr, "Floppy_woz: block writeback failed for '%s'\n",
-                media->filename.c_str());
-        return -1;
-    }
-
-    return status;
+    const int rc = write_disk_image_po_do(media, out);
+    delete out;
+    return rc;
 }

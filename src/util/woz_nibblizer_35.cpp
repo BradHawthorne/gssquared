@@ -1,3 +1,4 @@
+#include "util/file_safety.hpp"
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -216,7 +217,7 @@ void Woz_Nibblizer_35::emit_address_field(woz_track_t& trk, int track_num, int s
     emit_data_byte(trk, 0xAA);
     emit_data_byte(trk, 0x96);
 
-/* 
+/*
 +$024 / 3: address prolog ($d5 $aa $96)
 +$027 / 1: 6&2enc low part of track number: 0-79 mod 64
 +$028 / 1: 6&2enc sector number (0-11)
@@ -326,7 +327,7 @@ int Woz_Nibblizer_35::import_block_image(Woz& woz, const media_descriptor* media
     }
 
     // no interleave assumption for 3.5
-    
+
     woz_image_t &m_image = woz.image();
 
     // Reset the in-memory image.
@@ -340,7 +341,7 @@ int Woz_Nibblizer_35::import_block_image(Woz& woz, const media_descriptor* media
     m_image.info.synchronized       = 0;
     m_image.info.cleaned            = 1;
     m_image.info.optimal_bit_timing = 16;  // 2 µs
-    m_image.info.boot_sector_format = 0;   
+    m_image.info.boot_sector_format = 0;
     m_image.info.disk_sides         = 2;
 
     for (int t = 0; t < TRACKS_PER_DISK; t++) {
@@ -349,7 +350,7 @@ int Woz_Nibblizer_35::import_block_image(Woz& woz, const media_descriptor* media
         // in Woz It's T0S0, T0S1, T1S0, T1S1, etc.
         m_image.tracks.push_back(build_track(disk_image, i_logical_to_phys[zone], t, 0));
         m_image.tmap[trk_idx] = trk_idx;  // track side 0
-        
+
         m_image.tracks.push_back(build_track(disk_image, i_logical_to_phys[zone], t, 1));
         m_image.tmap[trk_idx+1] = trk_idx+1;  // track side 1
     }
@@ -467,21 +468,19 @@ int Woz_Nibblizer_35::write_disk_image_po_do(const media_descriptor *media, cons
     //
     // The 5.25 writer alongside this one already used "r+b"; this was the
     // outlier, and 3.5 is exactly where 2MG containers are common.
-    FILE *out_fp = fopen(media->filename.c_str(), "r+b");
-    if (!out_fp) {
-        // Only create if it genuinely does not exist yet -- never as a
-        // fallback that would reintroduce the truncation above.
-        out_fp = fopen(media->filename.c_str(), "w+b");
+    //
+    // FORK, since: the patch is atomic (util/file_safety.hpp) -- the header and anything
+    // else in the file are copied, the payload is written at data_offset in the copy,
+    // and the copy replaces the original only once it is safely on disk. Returns 0 on
+    // success.
+    std::string err;
+    if (!file_safety::atomic_patch(media->filename, media->data_offset,
+                                   reinterpret_cast<const uint8_t *>(disk_image->sectors),
+                                   static_cast<size_t>(SECTOR_SIZE) * SECTORS_PER_DISK, err)) {
+        std::cerr << "Woz_Nibblizer_35: write failed, the original is untouched: " << err << std::endl;
+        return -1;
     }
-    if (!out_fp) {
-        std::cerr << "Could not open " << media->filename << " for writing" << std::endl;
-        return false;
-    }
-    fseek(out_fp, media->data_offset, SEEK_SET);
-    fwrite(disk_image->sectors, SECTOR_SIZE, SECTORS_PER_DISK, out_fp);   
-
-    fclose(out_fp);
-    return true;
+    return 0;
 }
 
 
@@ -498,7 +497,7 @@ int Woz_Nibblizer_35::export_block_image(const Woz& woz, const media_descriptor*
 
     for (int t = 0; t < TRACKS_PER_DISK; t++) {
         for (int side = 0; side < 2; side++) {
-        
+
             const woz_track_t *trk_ptr = woz.get_track_ptr(t*2+side);
             if (trk_ptr == nullptr) {
                 std::cerr << "WOZ: export_to_disk_image: track " << t
@@ -515,22 +514,16 @@ int Woz_Nibblizer_35::export_block_image(const Woz& woz, const media_descriptor*
         }
     }
 
-    int status = (tracks_with_full_data == TRACKS_PER_DISK*2) ? 0 : -1;
-
-    if (status < 0) {
+    // FORK: not written back unless every track decodes -- see the 5.25 exporter.
+    if (tracks_with_full_data != TRACKS_PER_DISK * 2) {
         fprintf(stderr,
-                "Floppy_woz: WOZ->block export had decode errors for '%s'; "
-                "writing partial result\n",
-                media->filename.c_str());
-        // Fall through and write whatever was recovered, matching
-        // Floppy525::writeback()'s always-write behaviour.
+                "Floppy_woz: '%s': %d of %d track sides decode completely; a block image cannot hold "
+                "this disk, so it is NOT written\n",
+                media->filename.c_str(), tracks_with_full_data, TRACKS_PER_DISK * 2);
+        delete out;
+        return EXPORT_LOSSY;
     }
-    if (!write_disk_image_po_do(media, out)) {
-        fprintf(stderr, "Woz_Nibblizer_35: block writeback failed for '%s'\n",
-                media->filename.c_str());
-        status = -1;
-    }
+    const int status = write_disk_image_po_do(media, out);
     delete out;
-
     return status;
 }

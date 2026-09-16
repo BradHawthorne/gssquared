@@ -39,9 +39,10 @@ bool Floppy_woz::mount(uint64_t key, media_descriptor *media_in) {
         auto nibblizer = make_nibblizer(media_in);
         if (!nibblizer) return false;
         rc = nibblizer->import_block_image(woz, media_in);
+        delete nibblizer;   // FORK: make_nibblizer returns a new object; it was never freed
     }
  //                : woz.import_from_media(media_in);
- 
+
     if (rc != 0) {
         fprintf(stderr, "Floppy_woz: failed to load/import '%s'\n",
                 media_in->filename.c_str());
@@ -93,8 +94,30 @@ bool Floppy_woz::unmount(uint64_t key) {
     return true;
 }
 
+// FORK: the disk as written, beside an original whose format cannot hold it.
+static bool save_written_sidecar(Woz &woz, const media_descriptor *media, const char *why) {
+    const std::string sidecar = media->filename + ".written.woz";
+    if (woz.save(sidecar) != 0) {
+        fprintf(stderr, "Floppy_woz: '%s': %s, and the sidecar '%s' could not be written either; "
+                        "the guest's writes to this disk are LOST (the original is untouched)\n",
+                media->filename.c_str(), why, sidecar.c_str());
+        return false;
+    }
+    fprintf(stderr, "Floppy_woz: '%s': %s. The original was NOT touched; the disk as written is saved "
+                    "as '%s'\n", media->filename.c_str(), why, sidecar.c_str());
+    return true;
+}
+
 bool Floppy_woz::writeback() {
     if (!media_d) return false;
+
+    // FORK: nothing is written unless the guest wrote. Every mount through the CTRL
+    // rail and every close through the dialog is a SAVE_AND_UNMOUNT, so a disk that
+    // was only ever read used to be re-encoded back over its own file on every swap.
+    if (!modified) {
+        std::cout << "Floppy_woz: " << media_d->filestub << " unchanged; not written" << std::endl;
+        return true;
+    }
 
     // MEDIA_NYBBLE means the mount source was a 143K block image
     // (.do/.po/.dsk): decode the in-memory WOZ bit stream back into a raw
@@ -104,14 +127,18 @@ bool Floppy_woz::writeback() {
     std::cout << "Floppy_woz: writing back disk image " << media_d->filename
               << " (media_type=" << media_d->media_type << ")" << std::endl;
 
-    auto nibblizer = make_nibblizer(media_d);
-    if (!nibblizer) return false;
-
     if ((media_d->media_type == MEDIA_NYBBLE) || (media_d->media_type == MEDIA_BLK)) {
+        auto nibblizer = make_nibblizer(media_d);
+        if (!nibblizer) return false;
         std::cout << "Floppy_woz: writing back block disk image" << std::endl;
         int rc = nibblizer->export_block_image(woz, media_d);
-        if (rc != 0) {
-            fprintf(stderr, "Floppy_woz: block export failed for '%s'\n",
+        delete nibblizer;
+        if (rc == Woz_Nibblizer::EXPORT_LOSSY) {
+            if (!save_written_sidecar(woz, media_d, "not every sector decodes, so a block image cannot hold it")) {
+                return false;
+            }
+        } else if (rc != 0) {
+            fprintf(stderr, "Floppy_woz: block export failed for '%s' (the original is untouched)\n",
                     media_d->filename.c_str());
             return false;
         }
@@ -130,13 +157,20 @@ bool Floppy_woz::writeback() {
                     media_d->filename.c_str());
             return false;
         }
-#endif    
-    } else {
+#endif
+    } else if (media_d->media_type == MEDIA_WOZ) {
         std::cout << "Floppy_woz: writing back WOZ disk image" << std::endl;
         int rc = woz.save(media_d->filename);
         if (rc != 0) {
             fprintf(stderr, "Floppy_woz: writeback failed for '%s'\n",
                     media_d->filename.c_str());
+            return false;
+        }
+    } else {
+        // FORK: a .nib (or any other source that is not WOZ or a block image) used to
+        // fall through to woz.save(filename) -- overwriting the user's .nib with WOZ
+        // bytes under the .nib name.
+        if (!save_written_sidecar(woz, media_d, "its format cannot hold what the guest wrote")) {
             return false;
         }
     }

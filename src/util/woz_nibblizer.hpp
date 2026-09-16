@@ -4,8 +4,12 @@
 #include "media.hpp"
 
 class Woz_Nibblizer {
-  
+
     public:
+        // FORK: export_block_image returns 0 (written), -1 (I/O failure; the file is
+        // untouched) or EXPORT_LOSSY (the disk does not decode completely, so a block
+        // image cannot hold it and nothing was written).
+        static constexpr int EXPORT_LOSSY = -2;
         virtual ~Woz_Nibblizer() = default;
         // Populate `woz` from a block/nib image described by `media`.
         // `woz` is reset to a clean state before importing.
@@ -51,4 +55,3 @@ class Woz_Nibblizer {
             }
         }
     };
-    

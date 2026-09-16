@@ -15,6 +15,7 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "util/file_safety.hpp"
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -663,15 +664,11 @@ int Woz::save(const std::string& filename) {
     out[10] = (crc >> 16) & 0xFF;
     out[11] = (crc >> 24) & 0xFF;
 
-    FILE* fp = fopen(filename.c_str(), "wb");
-    if (!fp) {
-        std::cerr << "WOZ: cannot create '" << filename << "'\n";
-        return -1;
-    }
-    bool ok = (fwrite(out.data(), 1, out.size(), fp) == out.size());
-    fclose(fp);
-    if (!ok) {
-        std::cerr << "WOZ: write error on '" << filename << "'\n";
+    // FORK: atomic (util/file_safety.hpp). "wb" truncated the image before the
+    // write, so a failed or interrupted save left the file destroyed.
+    std::string err;
+    if (!file_safety::atomic_write(filename, out.data(), out.size(), err)) {
+        std::cerr << "WOZ: save failed, the original is untouched: " << err << "\n";
         return -1;
     }
     return 0;
