@@ -59,13 +59,13 @@ if (-not $Root) { $Root = (Resolve-Path (Join-Path $here '..\..')).Path }
 # ORDER IS BY EVIDENCE, not by convenience. The assertion below is a banner
 # match on the text page, so a candidate only counts if it is known to reach
 # that banner on BOTH platform 3 and platform 5. DOS3.3_MASTER.dsk is the only
-# image that has actually been observed doing so, so it stays first even though
-# it lives outside this repo. The repo-local images follow as fallbacks for a
-# machine without it: they boot, but their banners are NOT yet verified against
-# this assertion -- wizboot/wiz3boot are game loaders that take over the screen.
-# Promote one of them ahead of the a2vga path only after watching it pass on
-# both platforms; until then a wrong order would turn a real check red for a
-# reason that has nothing to do with the rail.
+# image that has actually been observed doing so, so it is first. It lives in the
+# repo's corpus/ (ignored, not redistributed; corpus/README.md) -- it used to be
+# read from a path inside one developer's other checkout, which put that private
+# layout in a public repo and made this check a FAIL on every other machine. The
+# game-loader disks that followed it as unverified fallbacks are gone: an
+# unverified fallback is how a real check turns red for a reason unrelated to
+# the rail.
 #
 # The mount below is s6d1, a 5.25" drive, so .dsk images come before the ProDOS
 # .po ones (gsos601.po is a 3.5" image and will not boot from slot 6 at all --
@@ -73,10 +73,8 @@ if (-not $Root) { $Root = (Resolve-Path (Join-Path $here '..\..')).Path }
 # loudly rather than to be skipped silently).
 $bootSearch = @(
     $env:A2RAIL_BOOTDISK
-    'D:\Projects\a2vga\reference\A2DVI-Firmware\configutil\templates\DOS3.3_MASTER.dsk'
-    (Join-Path $Root 'wizboot.dsk')
-    (Join-Path $Root 'wiz3boot.dsk')
-    (Join-Path $Root 'gsos601.po')
+    (Join-Path $Root 'corpus\DOS3.3_MASTER.dsk')
+    (Join-Path $Root 'corpus\gsos601.po')
 )
 if (-not $BootDisk) {
     $found = $bootSearch | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
@@ -306,7 +304,7 @@ function Test-Platform([int]$p) {
     } else {
         # NOT a pass. This branch used to hand the suite a green tick and a line
         # of the ALL GREEN tally for a check it never ran -- on every machine
-        # without one developer's a2vga checkout, which is every machine but one.
+        # without a boot disk in corpus/, which a fresh clone is until one is supplied.
         # The comment directly above calls this the widest check here; a suite
         # that scores it as passed while skipping it is the perfect score on the
         # wrong exam that comment warns about, printed in green.

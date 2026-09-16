@@ -7,6 +7,7 @@ build that wrote it. Each user supplies their own copies.
 
 | File | Used by | What it is |
 |------|---------|------------|
+| `DOS3.3_MASTER.dsk` | `tools/a2rail/railcheck.ps1` ("boots a real disk", platforms 3 and 5) | Apple DOS 3.3 System Master, 5.25" |
 | `gsos601.po` | `tools/a2rail/unarmedhash.ps1` (baseline row `iigs-gsos601`), a2engine `gsoscheck.ps1`, the MEMVU workload sweep, a2vga `m0` validators | GS/OS 6.0.1 32 MB boot volume |
 | `gsos602.po` | the MEMVU workload sweep, a2vga `morphiigs.ps1` | GS/OS 6.0.2 800K volume |
 | `_finder.po` | Rosetta `ctrl_session_check.py`, `scenarios_smoke.py`; a2engine `gsoscheck.ps1` | boot volume that stops at the Finder splash |
