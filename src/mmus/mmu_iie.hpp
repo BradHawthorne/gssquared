@@ -26,7 +26,7 @@ class MMU_IIe : public MMU_II {
         void map_c1cf_internal_rom(page_t page, uint8_t *data, const char *read_d);
 
         void init_map() override;
-        void reset() override;
+        void reset(bool cold_start = false) override;
 
         // ===== A2GSPU warm-boot snapshot (the embedded Mega-II) =====
         void A2GSPU_snapshot(FILE *f) {

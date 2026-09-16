@@ -18,6 +18,7 @@
 #include "util/SystemSettings.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -36,6 +37,36 @@ int64_t now_unix_seconds() {
 bool file_exists(const std::string& path) {
     std::error_code ec;
     return std::filesystem::is_regular_file(std::filesystem::path(path), ec);
+}
+
+/** Slash- and (on Windows) case-insensitive path identity. */
+std::string path_compare_key(const std::string& path) {
+    std::string key = std::filesystem::path(path).lexically_normal().generic_string();
+#if defined(_WIN32)
+    for (char& c : key) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+#endif
+    return key;
+}
+
+bool paths_are_same(const std::string& a, const std::string& b) {
+    if (a == b) {
+        return true;
+    }
+    if (a.empty() || b.empty()) {
+        return false;
+    }
+    if (path_compare_key(a) == path_compare_key(b)) {
+        return true;
+    }
+    std::error_code ec;
+    const std::filesystem::path pa(a);
+    const std::filesystem::path pb(b);
+    if (!std::filesystem::exists(pa, ec) || !std::filesystem::exists(pb, ec)) {
+        return false;
+    }
+    return std::filesystem::equivalent(pa, pb, ec);
 }
 
 }  // namespace
@@ -91,6 +122,8 @@ bool SystemSettings::load() {
     hud_stats_ = false;
     hud_drives_ = true;
     disconnected_when_no_gamepad_ = false;
+    joyport_select_ = 1; // center
+    ss_text_mode_ = false;
     last_config_path_.clear();
     last_disk_path_.clear();
     host_fst_dir_.clear();
@@ -122,6 +155,7 @@ bool SystemSettings::load() {
                 e.score = (*entry)["score"].value_or(0.0);
                 e.last_used = (*entry)["last_used"].value_or(static_cast<int64_t>(0));
                 if (!e.path.empty()) {
+                    e.path = normalize_path(e.path);
                     recent_.push_back(std::move(e));
                 }
             }
@@ -134,6 +168,18 @@ bool SystemSettings::load() {
         if (const auto* gc = table["game_controller"].as_table()) {
             disconnected_when_no_gamepad_ =
                 (*gc)["disconnected_when_no_gamepad"].value_or(false);
+            if (const auto sel = (*gc)["joyport_select"].value<std::string>()) {
+                if (*sel == "left") {
+                    joyport_select_ = 0;
+                } else if (*sel == "right") {
+                    joyport_select_ = 2;
+                } else {
+                    joyport_select_ = 1;
+                }
+            }
+        }
+        if (const auto* display = table["display"].as_table()) {
+            ss_text_mode_ = (*display)["ss_text_mode"].value_or(false);
         }
         if (const auto* fd = table["file_dialogs"].as_table()) {
             if (const auto p = (*fd)["last_config_path"].value<std::string>()) {
@@ -182,7 +228,18 @@ bool SystemSettings::save() const {
 
     toml::table game_controller;
     game_controller.insert("disconnected_when_no_gamepad", disconnected_when_no_gamepad_);
+    const char *joyport_select_name = "center";
+    if (joyport_select_ == 0) {
+        joyport_select_name = "left";
+    } else if (joyport_select_ == 2) {
+        joyport_select_name = "right";
+    }
+    game_controller.insert("joyport_select", joyport_select_name);
     table.insert("game_controller", std::move(game_controller));
+
+    toml::table display;
+    display.insert("ss_text_mode", ss_text_mode_);
+    table.insert("display", std::move(display));
 
     toml::table file_dialogs;
     file_dialogs.insert("last_config_path", last_config_path_);
@@ -195,12 +252,14 @@ bool SystemSettings::save() const {
 
     const std::string path = settings_path();
     try {
-        std::ofstream out(path);
+        const std::filesystem::path out_path(path);
+        std::ofstream out(out_path);
         if (!out) {
             std::cerr << "Failed to open system_settings.toml for writing: " << path << std::endl;
             return false;
         }
         out << table;
+        out.flush();
         return static_cast<bool>(out);
     } catch (const std::exception& ex) {
         std::cerr << "Failed to write system_settings.toml: " << ex.what() << std::endl;
@@ -232,6 +291,17 @@ void SystemSettings::set_disconnected_when_no_gamepad(bool enabled) {
     save();
 }
 
+void SystemSettings::set_joyport_select(int select) {
+    if (select < 0 || select > 2) {
+        select = 1;
+    }
+    if (joyport_select_ == select) {
+        return;
+    }
+    joyport_select_ = select;
+    save();
+}
+
 void SystemSettings::toggle_hud_stats() {
     hud_stats_ = !hud_stats_;
     save();
@@ -244,6 +314,19 @@ void SystemSettings::toggle_hud_drives() {
 
 void SystemSettings::toggle_disconnected_when_no_gamepad() {
     disconnected_when_no_gamepad_ = !disconnected_when_no_gamepad_;
+    save();
+}
+
+void SystemSettings::set_ss_text_mode(bool enabled) {
+    if (ss_text_mode_ == enabled) {
+        return;
+    }
+    ss_text_mode_ = enabled;
+    save();
+}
+
+void SystemSettings::toggle_ss_text_mode() {
+    ss_text_mode_ = !ss_text_mode_;
     save();
 }
 
@@ -344,10 +427,13 @@ void SystemSettings::record_use(const std::string& path) {
 
     const int64_t now = now_unix_seconds();
     auto it = std::find_if(recent_.begin(), recent_.end(),
-                           [&](const RecentConfigEntry& e) { return e.path == normalized; });
+                           [&](const RecentConfigEntry& e) {
+                               return paths_are_same(e.path, normalized);
+                           });
     if (it != recent_.end()) {
         it->score += 1.0;
         it->last_used = now;
+        it->path = normalized;
     } else {
         RecentConfigEntry e;
         e.path = normalized;
@@ -411,7 +497,7 @@ std::vector<RecentConfigEntry> SystemSettings::display_entries() const {
     std::vector<RecentConfigEntry> others;
     others.reserve(candidates.size());
     for (const auto& e : candidates) {
-        if (e.path != mru_it->path) {
+        if (!paths_are_same(e.path, mru_it->path)) {
             others.push_back(e);
         }
     }

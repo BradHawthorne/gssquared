@@ -4,6 +4,17 @@
 #include "cpu.hpp"
 #include "util/DebugHandlerIDs.hpp"
 
+void secondsight_log_yield_mux(computer_t *computer, const char *why,
+    bool yielded, uint16_t old_vga, uint16_t new_vga) {
+    uint32_t pc = 0;
+    if (computer && computer->cpu) {
+        pc = computer->cpu->full_pc & 0x00FFFFFFu;
+    }
+    printf("SecondSight: GPUText yield mux %s yielded=%d vga_active %u->%u pc=%06X\n",
+        why, yielded ? 1 : 0, old_vga, new_vga, pc);
+    fflush(stdout);
+}
+
 /*
 ssCOMMAND =    $E0C0B0
 ssWRITEDATA =  $E0C0B1
@@ -37,8 +48,8 @@ uint8_t secondsight_read_08(void *context, uint32_t address) {
 
 void init_secondsight(computer_t *computer, SlotType_t slot) {
     secondsight_state_t *st = new secondsight_state_t();
-    // we pass in the "CPU" MMU, i.e., the one that has access to full IIgs memory.
-    st->secondsight = new SecondSight(computer->video_system, computer->cpu->mmu, computer->clock);
+    // for now, pass in the megaii MMU, which has access to just the IIe shadowed video memory.
+    st->secondsight = new SecondSight(computer->video_system, computer->mmu, computer->clock, computer);
 
     uint16_t slot_base = 0xC080 + (slot * 0x10);
     

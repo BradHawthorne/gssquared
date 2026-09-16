@@ -18,8 +18,13 @@
 //#include <algorithm>
 #include <cstring>
 #include <stdio.h>
+//#include <stdio.h>
+#include <filesystem>
 #include <iostream>
 #include <cstring>      // memset, for Format
+#include <string>
+#include <unordered_map>
+#include <vector>
 #include "gs2.hpp"
 #include "cpu.hpp"
 #include "mmus/mmu_ii.hpp"
@@ -55,6 +60,40 @@ private:
 
     std::unordered_map<storage_key_t, key_info_t> key_info;
 
+    struct open_file_t {
+        FILE *fp = nullptr;
+        int refs = 0;
+    };
+    std::unordered_map<std::string, open_file_t> open_files;
+
+    FILE *acquire_file(const std::string& filename, bool write_protected) {
+        auto it = open_files.find(filename);
+        if (it != open_files.end() && it->second.fp) {
+            it->second.refs++;
+            return it->second.fp;
+        }
+        const char *mode = write_protected ? "rb" : "r+b";
+        FILE *fp = fopen(filename.c_str(), mode);
+        if (fp == nullptr) return nullptr;
+        open_files[filename] = {fp, 1};
+        return fp;
+    }
+
+    void release_file(FILE *fp) {
+        if (fp == nullptr) return;
+        for (auto it = open_files.begin(); it != open_files.end(); ++it) {
+            if (it->second.fp == fp) {
+                it->second.refs--;
+                if (it->second.refs <= 0) {
+                    fclose(fp);
+                    open_files.erase(it);
+                }
+                return;
+            }
+        }
+        fclose(fp);
+    }
+
 public:
     // Emulated-clock-based disk timing (deterministic). Replaces host wall-clock
     // (SDL_GetTicksNS) so a headless boot trace is reproducible: the disk "motor on"
@@ -85,7 +124,7 @@ public:
     ~PDBlock3() {
         for (int j = 0; j < PDB3_MAX_UNITS; j++) {
             if (drives[j].file) {
-                fclose(drives[j].file);
+                release_file(drives[j].file);
                 drives[j].file = nullptr;
             }
         }
@@ -397,7 +436,7 @@ public:
                         s.id_str_length = 9;
                         memcpy(s.id_str, "BAZFAST3        ", 16);
                         s.id_str[8]      = 'A' + effunit;
-                        s.device_type    = 0x02;        // hard disk
+                        s.device_type    = 0x02;        // hard disk — GS/OS treats $05 as SCSI and demands a SCSI driver
                         s.device_subtype = 0b1100'0000; // extended smartport + disk-switch errors
                         s.version_1      = 0x03;        // version 3
                         s.version_0      = 0x00;        // .0
@@ -541,8 +580,7 @@ public:
         //if (DEBUG(DEBUG_PD_BLOCK)) printf("Mounting ProDOS block device %s slot %d drive %d\n", media->filename, slot, drive);
         if (DEBUG(DEBUG_PD_BLOCK)) std::cout << "Mounting PDB3 device " << media->filename << " slot: " << _slot << " drive " << key.drive << std::endl;
         
-        const char *mode = media->write_protected ? "rb" : "r+b";
-        FILE *fp = fopen(media->filename.c_str(), mode);
+        FILE *fp = acquire_file(media->filename, media->write_protected);
         if (fp == nullptr) {
             std::cerr << "Could not open PDB3 device file: " << media->filename << std::endl;
             return false;
@@ -567,44 +605,100 @@ public:
         return nullptr;
     }
 
+    /* Same host path, or two paths that resolve to the same inode. */
+    static bool same_host_file(const std::string& a, const std::string& b) {
+        if (a.empty() || b.empty()) return false;
+        if (a == b) return true;
+        std::error_code ec;
+        const std::filesystem::path pa(a);
+        const std::filesystem::path pb(b);
+        if (!std::filesystem::exists(pa, ec) || !std::filesystem::exists(pb, ec)) {
+            return false;
+        }
+        return std::filesystem::equivalent(pa, pb, ec);
+    }
+
+    bool host_file_already_mounted(const std::string& filename) const {
+        for (int j = 0; j < PDB3_MAX_UNITS; j++) {
+            if (drives[j].media && same_host_file(drives[j].media->filename, filename)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool mount(storage_key_t key, std::vector<media_descriptor *> media_list) {
         if (media_list.empty()) return false;
         if (key.drive >= PDB3_MAX_DEVICES) return false;
 
         // Vet every volume before opening any of them, so a bad entry in a
         // .pmap can't leave us with a half-populated set of units.
-        for (const media_descriptor *media : media_list) {
+        // Sharing one host file across units is allowed only for APM partitions
+        // in this same mount (same file, different data_offset). Remounting that
+        // file onto another drive, or listing it twice at the same offset,
+        // would give two writers the same bytes.
+        for (size_t i = 0; i < media_list.size(); i++) {
+            const media_descriptor *media = media_list[i];
             if (const char *why = media_reject_reason(media)) {
                 std::cerr << "BazFast: refusing '" << media->filename << "': " << why << std::endl;
                 return false;
+            }
+            if (host_file_already_mounted(media->filename)) {
+                std::cerr << "BazFast: refusing '" << media->filename << "': already mounted" << std::endl;
+                return false;
+            }
+            for (size_t k = 0; k < i; k++) {
+                if (same_host_file(media_list[k]->filename, media->filename) &&
+                    media_list[k]->data_offset == media->data_offset) {
+                    std::cerr << "BazFast: refusing '" << media->filename << "': already mounted" << std::endl;
+                    return false;
+                }
             }
         }
 
         int unused_unit = 0;
         int first_mounted_unit = -1;
+        std::vector<int> assigned;
+        const size_t tooltip_before = key_info[key].tooltip.size();
         for (media_descriptor *media : media_list) {
             // find unused unit
             while (unused_unit < PDB3_MAX_UNITS) {
                 if (drives[unused_unit].file == nullptr) break;
                 unused_unit++;
             }
-            if (unused_unit == PDB3_MAX_UNITS) return false; // no units free
+            if (unused_unit == PDB3_MAX_UNITS) {
+                for (int u : assigned) {
+                    release_file(drives[u].file);
+                    drives[u].file = nullptr;
+                    drives[u].media = nullptr;
+                    drives[u].key = storage_key_t();
+                }
+                key_info[key].tooltip.resize(tooltip_before);
+                return false; // no units free
+            }
 
-            key_info[key].tooltip.push_back(media->filename);
+            key_info[key].tooltip.push_back(media->filestub.empty() ? media->filename : media->filestub);
 
             //if (DEBUG(DEBUG_PD_BLOCK)) printf("Mounting ProDOS block device %s slot %d drive %d\n", media->filename, slot, drive);
             if (DEBUG(DEBUG_PD_BLOCK)) std::cout << "Mounting PDB3 device " << media->filename << " slot: " << _slot << " drive " << key.drive << std::endl;
             
-            const char *mode = media->write_protected ? "rb" : "r+b";
-            FILE *fp = fopen(media->filename.c_str(), mode);
+            FILE *fp = acquire_file(media->filename, media->write_protected);
             if (fp == nullptr) {
                 std::cerr << "Could not open PDB3 device file: " << media->filename << std::endl;
+                for (int u : assigned) {
+                    release_file(drives[u].file);
+                    drives[u].file = nullptr;
+                    drives[u].media = nullptr;
+                    drives[u].key = storage_key_t();
+                }
+                key_info[key].tooltip.resize(tooltip_before);
                 return false;
             }
             drives[unused_unit].file = fp;
             drives[unused_unit].media = media;
             drives[unused_unit].key = key;  // mark this as being mounted on this key
             disk_switched[unused_unit] = true;
+            assigned.push_back(unused_unit);
 
             // In-memory COW lever (opt-in via A2GSPU_RAMDISK): slurp the whole
             // image into RAM once at mount. Reads/writes then hit RAM, never the
@@ -624,7 +718,7 @@ public:
     bool unmounto(storage_key_t key) {
         if (key.drive >= PDB3_MAX_UNITS) return true;
         if (drives[key.drive].file) {
-            fclose(drives[key.drive].file);
+            release_file(drives[key.drive].file);
             drives[key.drive].file = nullptr;
             drives[key.drive].media = nullptr;
             disk_switched[key.drive] = true;
@@ -639,9 +733,12 @@ public:
 
         for (int i = 0; i < PDB3_MAX_UNITS; i++) {
             if (drives[i].key == key) {
-                fclose(drives[i].file);
-                drives[i].file = nullptr;
+                if (drives[i].file) {
+                    release_file(drives[i].file);
+                    drives[i].file = nullptr;
+                }
                 drives[i].media = nullptr;
+                drives[i].key = storage_key_t();
                 disk_switched[i] = true;
             }
         }
@@ -680,7 +777,8 @@ public:
             mounted = true;
         }
         
-        return {mounted, fname, motor, seldrive.last_block_accessed, seldrive.media->write_protected};
+        return {mounted, fname, motor, seldrive.last_block_accessed, false,
+                seldrive.media->write_protected};
     }
 
     drive_status_t status(storage_key_t key) {
@@ -711,7 +809,8 @@ public:
             mounted = true;
         }
         
-        return {mounted, fname, motor, seldrive.last_block_accessed, seldrive.media->write_protected};
+        return {mounted, fname, motor, seldrive.last_block_accessed, false,
+                seldrive.media->write_protected};
     }
 
 

@@ -196,6 +196,8 @@ similar to noisetracker, now starts and plays a song for a couple seconds, then 
 
 with ensoniq interrupt fix, Does not trigger RESTART SYSTEM 01 but does not play songs correctly.
 
+Now working correctly with latest ensoniq fixes.
+
 ## Telcom 0.28 (1991)
 
 my baby!
@@ -321,4 +323,4 @@ with ensoniq interrupt fix, intro music and game sound effects play correctly no
 
 Works right up until you are actually playing a level, then the screen is black where level should be. Say wha.
 
-Retested after IIgs fast-RAM sizing matched KEGS (ROM01 8.125MB / ROM03 9MB): still black playfield with HUD + music. Blit LocInfo at DP `$0C28+` can hold long-pointer junk in the Y/rows fields, so the mask blit reads nonsense banks; not fixed by RAM size alone.
+Retested after IIgs fast-RAM sizing (FPI 23-bit cap, banks `$00`–`$7F` on ROM01/ROM03): still black playfield with HUD + music. Blit LocInfo at DP `$0C28+` can hold long-pointer junk in the Y/rows fields, so the mask blit reads nonsense banks; not fixed by RAM size alone.

@@ -48,6 +48,7 @@ public:
 	void toggleHudStats();
 	void toggleHudDrives();
 	void toggleDisconnectedWhenNoGamepad();
+	void toggleSsTextMode();
 	void displayFullScreen();
 	void editCopyScreen();
 	void editPasteText();
@@ -58,6 +59,7 @@ public:
 	void openSystemConfig();
 
 	void setControllerMode(int mode);
+	void setJoyportSelect(int select);
 
 	int  getCurrentSpeed();
 	int  getCurrentMonitor();
@@ -69,12 +71,15 @@ public:
 	bool getHudStats();
 	bool getHudDrives();
 	bool getDisconnectedWhenNoGamepad();
+	bool getSsTextMode();
 	bool isEmulationRunning();
 	bool isPaused();
 	bool isMouseCaptured();
 	bool hasBazFast();
+	bool hasSecondSight();
 	bool getMountDrivers();
 	int  getCurrentControllerMode();
+	int  getJoyportSelect();
 	std::vector<MenuDriveInfo> getDriveList();
 };
 

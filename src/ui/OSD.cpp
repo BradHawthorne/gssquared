@@ -57,6 +57,8 @@
 #include "ConfigSelectors.hpp"
 #include "SerialPortsOSD.hpp"
 #include "util/Connections.hpp"
+#include "serial_devices/host/HostSerial.hpp"
+#include "serial_devices/host/SerialPortManager.hpp"
 #include "StorageButtonFactory.hpp"
 #include "version.h"
 
@@ -221,14 +223,14 @@ void bazfast_button_click(void *userdata) {
     }
     
     static const SDL_DialogFileFilter filters[] = {
-        { "Disk Images",  "po;dsk;hdv;2mg;img;pmap" },
+        { "Disk Images",  "po;dsk;hdv;2mg;img;pmap;iso" },
         { "All files",   "*" }
     };
 
     printf("unidisk button clicked\n");
 #if defined(__EMSCRIPTEN__)
     web_open_file_dialog(file_dialog_callback, userdata,
-        ".po,.dsk,.hdv,.2mg,.img,.pmap");
+        ".po,.dsk,.hdv,.2mg,.img,.pmap,.iso");
 #else
     const std::string last_path =
         SystemSettings::instance().get_file_dialog_default_location(FileDialogKind::Disk);
@@ -350,7 +352,7 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
     };
     serial_ports_container = new SerialPortsOSD_t(&ui_ctx, SP);
     serial_ports_container->set_position(360, 140);
-    serial_ports_container->size(220, 304);
+    serial_ports_container->size(230, 304);
     serial_ports_container->set_button_style(SPB);
     serial_ports_container->set_click_handler([this](SerialPortButton *button, const SDL_Event&) {
         show_connection_picker(button->get_key(), button->get_kind());
@@ -401,22 +403,33 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
     speed_btn_8 = speed_btns[4];
     speed_btn_10->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_1_024MHZ);
+        display_state_t *ds = (display_state_t *)this->computer->get_module_state(MODULE_DISPLAY);
+        if (ds) display_update_video_scanner(ds);
         return true;
     });
     speed_btn_28->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_2_8MHZ);
+        display_state_t *ds = (display_state_t *)this->computer->get_module_state(MODULE_DISPLAY);
+        if (ds) display_update_video_scanner(ds);
         return true;
     });
     speed_btn_71->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_7_159MHZ);
+        display_state_t *ds = (display_state_t *)this->computer->get_module_state(MODULE_DISPLAY);
+        if (ds) display_update_video_scanner(ds);
         return true;
     });
     speed_btn_14->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_14_3MHZ);
+        display_state_t *ds = (display_state_t *)this->computer->get_module_state(MODULE_DISPLAY);
+        if (ds) display_update_video_scanner(ds);
         return true;
     });
     speed_btn_8->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_FREE_RUN);
+        this->computer->begin_ludicrous_calibration();
+        display_state_t *ds = (display_state_t *)this->computer->get_module_state(MODULE_DISPLAY);
+        if (ds) display_update_video_scanner(ds);
         return true;
     });
 
@@ -474,7 +487,7 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
     SB.border_color = 0x000000FF;
     SB.padding = 0;
 
-    hover_controls_con = new HoverControls_t(&ui_ctx, SB, clock);
+    hover_controls_con = new HoverControls_t(&ui_ctx, SB, computer);
     ncontainers.push_back(hover_controls_con);
 
     system_config = computer->get_system();
@@ -593,6 +606,7 @@ void OSD::refresh_serial_ports() {
         spec.display_name = info.display_name;
         spec.kind = info.kind;
         spec.device = info.device;
+        spec.path = info.path;
         specs.push_back(std::move(spec));
     }
     serial_ports_container->rebuild(specs);
@@ -606,6 +620,7 @@ void OSD::dismiss_connection_picker() {
 void OSD::show_connection_picker(connection_key_t key, connection_port_kind_t kind) {
     dismiss_connection_picker();
     picking_connection_key_ = key;
+    picking_connection_kind_ = kind;
 
     // Dark slate panel; choice buttons use white text on ocean blue (not black-on-purple).
     Style_t MS{
@@ -626,9 +641,9 @@ void OSD::show_connection_picker(connection_key_t key, connection_port_kind_t ki
     connection_picker = new Container_t(&ui_ctx, MS);
     connection_picker->set_position(380, 160);
 
-    constexpr float kBtnW = 180.0f;
+    constexpr float kBtnW = 280.0f;
     constexpr float kBtnH = 28.0f;
-    constexpr float kPanelW = 220.0f;
+    constexpr float kPanelW = 320.0f;
 
     auto add_choice = [this, btn_style](connection_device_type_t type, const char *label) {
         Button_t *b = new Button_t(&ui_ctx, label, btn_style);
@@ -647,9 +662,31 @@ void OSD::show_connection_picker(connection_key_t key, connection_port_kind_t ki
     for (connection_device_type_t type : connection_allowed_devices(kind)) {
         const char *label = "Nothing";
         if (type == connection_device_type_t::FILE) label = "File";
+        else if (type == connection_device_type_t::CLIPBOARD) label = "Clipboard";
         else if (type == connection_device_type_t::MODEM) label = "Modem";
         add_choice(type, label);
     }
+
+#if !defined(__EMSCRIPTEN__)
+    if (kind == connection_port_kind_t::SERIAL && computer && computer->serial_ports) {
+        computer->serial_ports->poll(SDL_GetTicks());
+        picker_generation_ = computer->serial_ports->generation();
+        for (const host_serial_info_t &info : computer->serial_ports->ports()) {
+            Button_t *b = new Button_t(&ui_ctx, host_serial_basename(info.display).c_str(), btn_style);
+            b->size(kBtnW, kBtnH);
+            b->on_click([this, path = info.path](const SDL_Event&) -> bool {
+                if (computer && computer->connections) {
+                    computer->connections->attach(picking_connection_key_,
+                                                  connection_device_type_t::SERIAL, path);
+                    refresh_serial_ports();
+                }
+                dismiss_connection_picker();
+                return true;
+            });
+            connection_picker->add(b);
+        }
+    }
+#endif
 
     const size_t n = connection_picker->count();
     const float pad = static_cast<float>(MS.padding);
@@ -660,6 +697,13 @@ void OSD::show_connection_picker(connection_key_t key, connection_port_kind_t ki
 }
 
 void OSD::update() {
+    if (is_control_panel_active() && computer && computer->serial_ports) {
+        computer->serial_ports->poll(SDL_GetTicks());
+        if (connection_picker &&
+            computer->serial_ports->generation() != picker_generation_) {
+            show_connection_picker(picking_connection_key_, picking_connection_kind_);
+        }
+    }
 
     if (!mstack.stack.empty()) {
         mstack.stack.top()->update();
@@ -848,7 +892,17 @@ void OSD::render() {
         // display the MHz at the bottom of the screen.
         if (getMenuInterface()->getHudStats()) {
             char hud_str[150];
-            snprintf(hud_str, sizeof(hud_str), "MHz: %8.4f / FPS %8.4f / Idle: %5.1f%%", computer->e_mhz, computer->fps, computer->get_idle_percent());
+            if (clock->get_clock_mode() == CLOCK_FREE_RUN) {
+                uint32_t n = clock->get_cpu_per_14m();
+                const char *tag = computer->is_ludicrous_calibrating() ? " (cal)" :
+                    (computer->is_ludicrous_locked() ? "" : " (cal)");
+                snprintf(hud_str, sizeof(hud_str),
+                    "MHz: %8.4f (%ux14.3%s) / FPS %8.4f / Idle: %5.1f%%",
+                    computer->e_mhz, n, tag, computer->fps, computer->get_idle_percent());
+            } else {
+                snprintf(hud_str, sizeof(hud_str), "MHz: %8.4f / FPS %8.4f / Idle: %5.1f%%",
+                    computer->e_mhz, computer->fps, computer->get_idle_percent());
+            }
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
             SDL_RenderDebugText(renderer, 20, window_height - 30, hud_str);
 

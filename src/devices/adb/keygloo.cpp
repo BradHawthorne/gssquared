@@ -143,6 +143,12 @@ bool keygloo_process_event(keygloo_state_t *kb_state, const SDL_Event &event) {
     return true;
 }
 
+void keygloo_start_paste(keygloo_state_t *kb_state, const std::string &text) {
+    if (kb_state && kb_state->kg) {
+        kb_state->kg->start_paste(text);
+    }
+}
+
 DebugFormatter *debug_keygloo(keygloo_state_t *kb_state) {
     DebugFormatter *df = new DebugFormatter();
     kb_state->kg->debug_display(df);
@@ -159,13 +165,29 @@ void init_slot_keygloo(computer_t *computer, SlotType_t slot) {
     kb_state->mmu = computer->mmu;
     kb_state->reset_control = computer->reset_control;
 
-    KeyGloo *kg = new KeyGloo(kb_state->reset_control);
+    // FORK: the ROM generation comes from the memory controller, which derives it
+    // from the ROM image's size, not from the platform ID. The fork's ROM 03 and
+    // ROM 04 personalities run as PLATFORM_APPLE_IIGS with their own ROM folder,
+    // and they need the ROM 03 microcontroller firmware just as upstream's ROM 03
+    // platform does.
+    MMU_IIgs *gs_mmu = computer->cpu ? dynamic_cast<MMU_IIgs *>(computer->cpu->mmu) : nullptr;
+    bool rom03 = gs_mmu ? gs_mmu->is_rom03_machine() : (computer->platform->id == PLATFORM_APPLE_IIGS_ROM3);
+
+    KeyGloo *kg = new KeyGloo(kb_state->reset_control, rom03);
     kb_state->kg = kg;
     // Observatory: register the ADB microcontroller RAM/vars image as a memory window.
     obs_add_memwindow(OBS_SUB_ADB, 0, "adb.uc_ram", kg->obs_uc_window(), kg->obs_uc_len(), OBS_F_INTERNAL_ONLY);
     kg->set_host_context(kb_state);
 
     computer->dispatch->registerHandler(SDL_EVENT_KEY_DOWN, [kb_state](const SDL_Event &event) {
+        if (event.key.key == SDLK_INSERT && event.key.mod & SDL_KMOD_SHIFT) {
+            char *text = SDL_GetClipboardText();
+            if (text) {
+                keygloo_start_paste(kb_state, std::string(text));
+                SDL_free(text);
+            }
+            return true;
+        }
         return keygloo_process_event(kb_state, event);
     });
     computer->dispatch->registerHandler(SDL_EVENT_KEY_UP, [kb_state](const SDL_Event &event) {
@@ -220,8 +242,9 @@ void init_slot_keygloo(computer_t *computer, SlotType_t slot) {
                 bool is_shr = (c029 & 0x80) != 0;
                 bool is_640 = false;
                 if (is_shr) {
-                    uint8_t *ram = mmu_gs->get_megaii_memory_base();
-                    if (ram) is_640 = (ram[0x19D00] & 0x80) != 0;
+                    // SCB line 0 as the CPU addresses it ($E1:9D00): with SHR on the
+                    // store is interleaved, so a raw 0x19D00 is a pixel byte.
+                    if (mmu_gs->get_megaii_memory_base()) is_640 = (mmu_gs->megaii_cpu_peek(0x19D00) & 0x80) != 0;
                 }
                 mouse->set_shr_320(is_shr && !is_640);
 
@@ -250,6 +273,7 @@ void init_slot_keygloo(computer_t *computer, SlotType_t slot) {
         // guest's position back) is upstream's closed-loop mouse sync, recorded
         // in Docs/UPSTREAM_SYNC.md for the upstream port.
 
+        keygloo_update_interrupt_status(kb_state, kb_state->kg);
         return true;
     });
     computer->register_debug_display_handler(

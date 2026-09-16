@@ -107,9 +107,15 @@ void run_headless_spike(GS2AppState *state) {
     // bits0-3=palette#) and the 16-palette RAM ($E1:$9E00, 16x16 entries of $0RGB). These
     // live in STABLE Mega II $E1 memory (not the transient VideoScannerIIgs), and their
     // writes are BUS_OBSERVABLE -> the card snoop can arbitrate them (task #60).
+    //
+    // A memory window is a host pointer, and since upstream 18f5d04c the Mega II keeps
+    // $E1:$2000-$9FFF INTERLEAVED whenever the aux window is linearized (SHR on). The
+    // SCB and palette tables are then not contiguous in the store, so pointers to
+    // $19D00/$19E00 would sample pixel bytes. The window is the whole physical SHR
+    // store instead, named for what it is; CPU-order SCB and palette bytes come from
+    // MMU_IIgs::megaii_cpu_peek / megaii_cpu_view.
     if (uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr) {
-        obs_add_memwindow(OBS_SUB_VGC, 0, "vgc.scb",     m2 + 0x19D00, 200, OBS_F_BUS_OBSERVABLE);
-        obs_add_memwindow(OBS_SUB_VGC, 1, "vgc.palette", m2 + 0x19E00, 512, OBS_F_BUS_OBSERVABLE);
+        obs_add_memwindow(OBS_SUB_VGC, 0, "vgc.shr_store", m2 + 0x12000, 0x8000, OBS_F_BUS_OBSERVABLE);
     }
     }  // end if(!a2gspu_ctrl_mode): bus/obs oracle arming is spike-only
 
@@ -383,7 +389,7 @@ void run_headless_spike(GS2AppState *state) {
     // (init + every captured write) must byte-match the final $E1 below -> proves
     // the two taps capture 100% of SHR-affecting writes (snoop-completeness test).
     {
-        uint8_t *m2i = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+        const uint8_t *m2i = state->mmu_iigs ? state->mmu_iigs->megaii_cpu_view() : nullptr;   // CPU order
         if (m2i) {
             const std::string ip = a2gspu_out_path("spike_e1_init.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
             FILE *fi = fopen(ip.c_str(), "wb");
@@ -661,9 +667,9 @@ void run_headless_spike(GS2AppState *state) {
     g_mmu_state_trace_enabled = false;
 
     // ---- (1) renderer-free $E1 oracle ----
-    uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+    const uint8_t *m2 = state->mmu_iigs ? state->mmu_iigs->megaii_cpu_view() : nullptr;   // CPU order
     if (m2) {
-        const uint8_t *e1 = m2 + 0x10000;          // Mega II bank $E1 (64 KB)
+        const uint8_t *e1 = m2 + 0x10000;          // Mega II bank $E1 (64 KB), as the CPU addresses it
         const std::string e1p = a2gspu_out_path("spike_e1.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
         FILE *f = fopen(e1p.c_str(), "wb");
         const bool e1_written = (f != nullptr);
@@ -799,7 +805,7 @@ void run_headless_spike(GS2AppState *state) {
 
     // ---- (3) optional headless memory-range hexdump + final CPU state ----
     if (const char *dg = SDL_getenv("A2GSPU_DUMP")) {
-        uint8_t *mb = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+        const uint8_t *mb = state->mmu_iigs ? state->mmu_iigs->megaii_cpu_view() : nullptr;   // CPU order
         iigs_mem_range_dump(computer->cpu, mb, dg);
     }
     if (g_iigs_brkdump_enabled) iigs_cpu_state_dump_regs(computer->cpu, "SPIKE-END");
@@ -830,7 +836,7 @@ void run_headless_spike(GS2AppState *state) {
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
     {
-        uint8_t *m2a = state->mmu_iigs ? state->mmu_iigs->get_megaii_memory_base() : nullptr;
+        const uint8_t *m2a = state->mmu_iigs ? state->mmu_iigs->megaii_cpu_view() : nullptr;   // CPU order
         if (m2a) {
             const uint8_t *e1a = m2a + 0x10000;
             int nz = 0; uint8_t sn[256] = {0}; int nd = 0;

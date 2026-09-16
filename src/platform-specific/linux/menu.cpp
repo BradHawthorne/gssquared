@@ -206,6 +206,22 @@ static void build_menu_bar()
                     mi->setControllerMode(c.mode);
             }
             ImGui::Separator();
+            bool joyport_on = (cur_ctrl == 2);
+            if (ImGui::BeginMenu("Joyport Controller Select", joyport_on)) {
+                int cur_sel = mi->getJoyportSelect();
+                struct { const char *label; int select; } selects[] = {
+                    { "Left",   0 },
+                    { "Center", 1 },
+                    { "Right",  2 },
+                };
+                for (auto &s : selects) {
+                    bool checked = (cur_sel == s.select);
+                    if (ImGui::MenuItem(s.label, nullptr, checked))
+                        mi->setJoyportSelect(s.select);
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
             bool absent_disconnected = mi->getDisconnectedWhenNoGamepad();
             if (ImGui::MenuItem("Disconnected When No Gamepad", nullptr, absent_disconnected))
                 mi->toggleDisconnectedWhenNoGamepad();
@@ -266,6 +282,24 @@ static void build_menu_bar()
 
         if (ImGui::MenuItem("Full Screen"))
             mi->displayFullScreen();
+
+        {
+            bool ss_on = mi->getSsTextMode();
+            bool has_ss = mi->hasSecondSight();
+            if (!has_ss) ImGui::BeginDisabled();
+            if (ImGui::MenuItem("Second Sight Text", nullptr, ss_on))
+                mi->toggleSsTextMode();
+            if (!has_ss) ImGui::EndDisabled();
+        }
+
+        {
+            bool crt_on = mi->getCrtShader();
+            bool crt_avail = mi->getCrtShaderAvailable();
+            if (!crt_avail) ImGui::BeginDisabled();
+            if (ImGui::MenuItem("CRT Shader", "F7", crt_on))
+                mi->toggleCrtShader();
+            if (!crt_avail) ImGui::EndDisabled();
+        }
 
         if (!running) ImGui::EndDisabled();
         ImGui::EndMenu();

@@ -39,8 +39,15 @@ inline uint8_t bank_e1_read(void *context, uint32_t address) {
         return mmu_iigs->megaii->read(address & 0xFFFF);
     } else 
     {
+        uint16_t a16 = (uint16_t)address;
+        /* $FF ROM overlays the LC window here just as it does in bank $E0; verified
+           against a real ROM 01. Cycle type stays SYNC - whether the FPI serves this
+           as a fast ROM cycle instead is unverified. */
+        if (a16 >= 0xD000 && !mmu_iigs->is_lc_read_enable()) {
+            return mmu_iigs->get_rom_base()[mmu_iigs->rom_bank_ff_offset() + a16];
+        }
         uint8_t *ram = mmu_iigs->megaii->get_memory_base();
-        return ram[address & 0x1FFFF];   
+        return ram[mmu_iigs->e1_aux_index(a16)];
     }
 }
 
@@ -48,15 +55,24 @@ inline void bank_e1_write(void *context, uint32_t address, uint8_t value) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
     mmu_iigs->set_next_cycle_type(CYCLE_TYPE_SYNC);
 
-    if ((address & 0xF000) == 0xC000) { mmu_iigs->megaii->write(address & 0xFFFF, value); return; } // mmu_iigs->write_c0xx(address, value); -- return so we don't fall through into the RAM/slot path below (the read path already returns)
+    if ((address & 0xF000) == 0xC000) { 
+        mmu_iigs->megaii->write(address & 0xFFFF, value); 
+        return;
+    }
 
     if (!mmu_iigs->is_bank_latch()) {
         mmu_iigs->megaii->write(address & 0xFFFF, value);
         mmu_iigs->slot_emit(address & 0xFFFF, value, false, false);           // $E0/main (M2B0=0)
     } else
     {
+        uint16_t a16 = (uint16_t)address;
+        if (a16 >= 0xD000 && !mmu_iigs->is_lc_write_enable()) return; // LC write protected
         uint8_t *ram = mmu_iigs->megaii->get_memory_base();
-        ram[address & 0x1FFFF] = value;
+        // The index goes through the aux linearization map (upstream 18f5d04c), so the
+        // store lands where the Mega II keeps it; the trace and observer records keep
+        // the LOGICAL address, the one the CPU wrote, so bus-trace goldens and every
+        // consumer keyed by CPU address are unchanged.
+        ram[mmu_iigs->e1_aux_index(a16)] = value;
         uint64_t _cyc = mmu_iigs->get_cycle_count();
         bus_trace_note(_cyc, address & 0x1FFFF, value, 0); // direct $E1 write (provenance 0)
         // Observatory: same store, as a general BUS_TXN carrying the reclaimed true cycle cost
@@ -157,6 +173,7 @@ inline uint8_t MMU_IIgs::read_c0xx(uint16_t address) {
 
 uint8_t read_c068(void *context, uint32_t address) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
     return mmu_iigs->state_register();
 }
 
@@ -204,6 +221,7 @@ void write_c02d(void *context, uint32_t address, uint8_t value) {
 
 uint8_t read_c02d(void *context, uint32_t address) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
     return mmu_iigs->get_slot_register();
 }
 
@@ -265,9 +283,11 @@ void MMU_IIgs::megaii_compose_map() {
         megaii->map_page_write(0x00, memory_base + altoffset + 0x0000, n_zp ? TAG_ALT : TAG_MAIN);
         megaii->map_page_read(0x01, memory_base + altoffset + 0x0100, n_zp ? TAG_ALT : TAG_MAIN);
         megaii->map_page_write(0x01, memory_base + altoffset + 0x0100, n_zp ? TAG_ALT : TAG_MAIN);
-        
-        // handle mapping the "language card" portion.
-        //bsr_map_memory(iiememory_d); // handle the 'language card' portion.
+
+        /* ALTZP moves the LC window too, so $D0-$FF has to be recomposed. Without
+           this, $C008/$C009 left those pages on whichever bank the last $C08x or
+           $C068 access selected, and a stale aux mapping made $E0's LC alias $E1's. */
+        bsr_map_memory();
     }
     if (n_text1_r != m_text1_r) {
         // change $04 - $07
@@ -457,24 +477,40 @@ TODO: need to add: c015, c016, c017, c018, c01a, c01b, c01c, c01d
 // set shadow register
 void c035_write(void *context, uint32_t address, uint8_t value) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
     mmu_iigs->set_shadow_register(value);
 }
 
 uint8_t c035_read(void *context, uint32_t address) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
     return mmu_iigs->shadow_register();
 }
 
 uint8_t c036_read(void *context, uint32_t address) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
     return mmu_iigs->speed_register();
 }
 
 // set speed register
 void c036_write(void *context, uint32_t address, uint8_t value) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
     mmu_iigs->set_speed_register(value);
     mmu_iigs->set_ram_shadow_banks();
+}
+
+uint8_t c037_read(void *context, uint32_t address) {
+    MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
+    return mmu_iigs->get_dma_bank_register();
+}
+
+void c037_write(void *context, uint32_t address, uint8_t value) {
+    MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
+    mmu_iigs->set_dma_bank_register(value);
 }
 
 /*
@@ -578,6 +614,10 @@ uint8_t bank_shadow_read(void *context, uint32_t address) {
 
     address += mmu_iigs->calc_aux_read(address);    // handle RAMRD, 80STORE, ALTZP, PAGE2, HIRES (cuz we can have this AND LC at same time)
     if (DEBUG(DEBUG_MMUGS)) printf("Read: Effective address: %06X\n", address);
+    // Unpopulated banks (SPEED_SHADOW_ALL past ram_banks): float = bank number.
+    if (address >= mmu_iigs->get_memory_size()) {
+        return (uint8_t)(address >> 16);
+    }
     return mmu_iigs->get_memory_base()[address];
 }
 
@@ -622,12 +662,16 @@ void bank_shadow_write(void *context, uint32_t address, uint8_t value) {
         mmu_iigs->megaiiWrite(address & 0x1'FFFF, value); // this will cover case of writing to bank 01 -> shadow to E1
     }
     if (DEBUG(DEBUG_MMUGS)) printf("Write: Effective address: %06X\n", address);
-    // goes to RAM
+    // Unpopulated banks: Mega II shadow already applied; discard RAM store.
+    if (address >= mmu_iigs->get_memory_size()) {
+        return;
+    }
     mmu_iigs->get_memory_base()[address] = value;
 }
 
 uint8_t iolc_rom_read(void *context, uint32_t address) {
     MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
     return mmu_iigs->get_rom_base()[mmu_iigs->rom_bank_ff_offset() + (address & 0xFFFF)];
 }
 
@@ -677,19 +721,50 @@ void MMU_IIgs::init_c0xx_handlers() {
 }
 
 void MMU_IIgs::set_ram_shadow_banks() {
-    uint32_t max_shadow_bank = (reg_speed & SPEED_SHADOW_ALL) ? ram_banks : 0x02;
-    if (DEBUG(DEBUG_MMUGS)) printf("setting ram shadow banks: 0x00 - 0x%02X\n", max_shadow_bank - 1);
+    const bool all_banks = (reg_speed & SPEED_SHADOW_ALL) != 0;
+    uint32_t max_shadow_bank = all_banks ? ram_banks : 0x02;
+    if (DEBUG(DEBUG_MMUGS)) printf("setting ram shadow banks: 0x00 - 0x%02X (all=%d)\n", max_shadow_bank - 1, all_banks);
 
-    for (int i = 0x00; i < max_shadow_bank; i++) {
+    for (int i = 0x00; i < (int)max_shadow_bank; i++) {
         map_page_both(i, nullptr, "MAIN_RAM");
         set_page_read_h(i, {bank_shadow_read, this}, "SHADRD");
         set_page_write_h(i, {bank_shadow_write, this}, "SHADWR");       
     }
-    for (int i = max_shadow_bank; i < ram_banks; i++) {
+    for (int i = max_shadow_bank; i < (int)ram_banks; i++) {
         map_page_both(i, main_ram + i * BANK_SIZE, "MAIN_RAM");
         set_page_read_h(i, {nullptr, nullptr}, "MAIN_RAM");
         set_page_write_h(i, {nullptr, nullptr}, "MAIN_RAM");
     }
+
+    // SPEED_SHADOW_ALL shadows through $EF (not only installed RAM). Skip $E0/$E1 (Mega II).
+    auto map_float_shadow = [this](int bank) {
+        map_page_both(bank, nullptr, "Float");
+        set_page_read_h(bank, {bank_shadow_read, this}, "SHADRD");
+        set_page_write_h(bank, {bank_shadow_write, this}, "SHADWR");
+    };
+    auto map_float_plain = [this](int bank) {
+        map_page_both(bank, nullptr, "Float");
+        set_page_read_h(bank, float_read_handler, "Float");
+        set_page_write_h(bank, {nullptr, nullptr}, "Float");
+    };
+
+    if (all_banks) {
+        for (int i = (int)ram_banks; i <= 0xDF; i++) {
+            map_float_shadow(i);
+        }
+        for (int i = 0xE2; i <= 0xEF; i++) {
+            map_float_shadow(i);
+        }
+    } else {
+        // Restore unpopulated banks to float (same as init_map for $80-$DF / $E2+).
+        for (int i = (int)ram_banks; i <= 0xDF; i++) {
+            map_float_plain(i);
+        }
+        for (int i = 0xE2; i <= 0xEF; i++) {
+            map_float_plain(i);
+        }
+    }
+
     if (DEBUG(DEBUG_MMUGS)) {
         dump_page_table(0x00, 0x03);
         dump_page_table(0xE0, 0xE1);
@@ -734,7 +809,7 @@ void MMU_IIgs::init_map() {
     map_initialized = true;
 }
 
-void MMU_IIgs::reset() {
+void MMU_IIgs::reset(bool cold_start) {
     //reg_new_video = 0x01; reg_shadow = 0x08; reg_state = 0; g_80store = false; g_hires = false; g_rdrom = true; 
 
     reg_new_video = 0x01;
@@ -745,7 +820,7 @@ void MMU_IIgs::reset() {
 
     // on RESET, set:
     set_slot_register(0x00);
-    set_speed_register(0x80); // so this can set nclock correctly.
+    set_speed_register(cold_start && is_rom03 ? 0xC0u : 0x80u); // bit 7 slow; ROM03 bit 6 = power-on on cold start
     reg_shadow = 0x08;
     set_state_register(0x0C); // KEGS does 0x0D - enable ROM RD, 
     set_intcxrom(g_intcxrom); // this is needed to set the C1-CF map correctly.

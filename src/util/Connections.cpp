@@ -22,11 +22,13 @@
 #include <iostream>
 
 #include "serial_devices/SerialDevice.hpp"
+#include "serial_devices/clipboard/ClipboardDevice.hpp"
 #include "serial_devices/file/FileDevice.hpp"
 #include "util/DeviceFrameDispatcher.hpp"
 #include "util/EventQueue.hpp"
 #if !defined(__EMSCRIPTEN__)
 #include "serial_devices/modem/ModemDevice.hpp"
+#include "serial_devices/serial/SerialPortDevice.hpp"
 #endif
 
 Connections::Connections(EventQueue *event_queue, DeviceFrameDispatcher *device_frame_dispatcher)
@@ -36,18 +38,28 @@ Connections::~Connections() {
     clear();
 }
 
-SerialDevice *Connections::create_device(connection_device_type_t type, const std::string &port_id) {
+SerialDevice *Connections::create_device(connection_device_type_t type, const std::string &port_id,
+                                         const std::string &path) {
     switch (type) {
         case connection_device_type_t::NONE:
             return nullptr;
         case connection_device_type_t::FILE:
             return new FileDevice(event_queue_, device_frame_dispatcher_, port_id.c_str());
+        case connection_device_type_t::CLIPBOARD:
+            return new ClipboardDevice(event_queue_, device_frame_dispatcher_, port_id.c_str());
         case connection_device_type_t::MODEM:
 #if defined(__EMSCRIPTEN__)
             // No SDL_net/modem on the web; fall back to file capture.
             return new FileDevice(event_queue_, device_frame_dispatcher_, port_id.c_str());
 #else
             return new ModemDevice(nullptr, port_id.c_str());
+#endif
+        case connection_device_type_t::SERIAL:
+#if defined(__EMSCRIPTEN__)
+            return nullptr;
+#else
+            return new SerialPortDevice(event_queue_, device_frame_dispatcher_,
+                                        port_id.c_str(), path);
 #endif
     }
     return nullptr;
@@ -81,7 +93,8 @@ int Connections::register_port(connection_key_t key,
     return 0;
 }
 
-bool Connections::attach(connection_key_t key, connection_device_type_t type) {
+bool Connections::attach(connection_key_t key, connection_device_type_t type,
+                         const std::string &path) {
     auto it = ports_.find(key);
     if (it == ports_.end()) {
         std::cerr << "Connections: no port registered at slot " << key.slot
@@ -89,6 +102,11 @@ bool Connections::attach(connection_key_t key, connection_device_type_t type) {
         return false;
     }
     port_registration_t &reg = it->second;
+#if defined(__EMSCRIPTEN__)
+    if (type == connection_device_type_t::SERIAL) {
+        type = connection_device_type_t::NONE;
+    }
+#endif
     if (!connection_device_allowed(reg.kind, type)) {
         std::cerr << "Connections: device " << connection_device_type_name(type)
                   << " not allowed on " << reg.display_name << "\n";
@@ -102,10 +120,12 @@ bool Connections::attach(connection_key_t key, connection_device_type_t type) {
     delete reg.device;
     reg.device = nullptr;
     reg.current_device = connection_device_type_t::NONE;
+    reg.path.clear();
 
-    SerialDevice *dev = create_device(type, reg.port_id);
+    SerialDevice *dev = create_device(type, reg.port_id, path);
     reg.device = dev;
     reg.current_device = type;
+    reg.path = (type == connection_device_type_t::SERIAL) ? path : std::string{};
     reg.attached_once = true;
     if (reg.attach_fn) {
         reg.attach_fn(dev);
@@ -137,6 +157,7 @@ const std::vector<connection_port_info_t> &Connections::get_all_ports() const {
         info.display_name = kv.second.display_name;
         info.kind = kv.second.kind;
         info.device = kv.second.current_device;
+        info.path = kv.second.path;
         cached_ports_.push_back(std::move(info));
     }
     std::sort(cached_ports_.begin(), cached_ports_.end(),
@@ -174,6 +195,7 @@ void Connections::clear() {
         delete reg.device;
         reg.device = nullptr;
         reg.current_device = connection_device_type_t::NONE;
+        reg.path.clear();
     }
     ports_.clear();
     cached_ports_.clear();

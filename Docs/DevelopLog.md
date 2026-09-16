@@ -6059,7 +6059,7 @@ this means, display and iiememory BOTH need to track these. More specifically, i
    keyboard kept reading joystick button 0 down and rebooting.
    turn joystick on, then the reading clears to 0 and ctrl-reset works as exepcted.
 
-[ ] ds->video_system->set_full_frame_redraw(); <-- we can get rid of all these once we're confident we're sticking with the "redraw full frames in LS mode.
+[X] ds->video_system->set_full_frame_redraw(); <-- we can get rid of all these once we're confident we're sticking with the "redraw full frames in LS mode.
 
 [ ] check condition after reset on table 5.4 of understanding iie - make sure we are implementing those reset conditions.  
 [ ] per table 5.4 also, C018 is MMU, C01C/C01D are IOU (display).
@@ -12391,3 +12391,288 @@ Should avoid features for the most part, however, it makes sense to clean stuff 
 [X] installer setup on the virtual disk that includes the host FST, but also the Marinetti stuff. 
 [ ] IIe multi-language support. 
 
+## August 12, 2026
+
+I know what I said about new features, but, new features are sexy!
+
+There is some low hanging fruit that shouldn't be too hard to do.
+
+But there are significant bugs. The weirdest one is the ROM03 speaker beep frequency error. (FIXED). This was a CPU instruction bug where cross and not cross a page boundary are same on 65816. Whupped its ass real good.
+
+## August 16, 2026
+
+digging into AppleTalk support again. Why? Don't know!
+
+First: this uses Marinetti to directly do IPTalk encap from a GS. 
+
+https://sheumann.github.io/AFPBridge/
+
+Then of course you need NetAtalk to act as a AFP server/router. (or, a real -old- Mac with Ethernet/EtherTalk.)
+
+So, AFPBridge would likely work as-is from GS2 with Marinetti set up.
+
+However, we could also have GS2 internally convert IPTalk to-from LocalTalk via the SCC emulation. We'd have a serial port module for this. Then that would send/recv the IPTalk UDP packets. We'd need to handle various SCC register settings for appletalk (synchronous mode etc.) but I bet clanker could help with that.
+
+Also thinking about something to start to tie a lot of this together. For instance, a Second Sight text console for GNO. That is something people always wanted!!
+
+We would default to using the ANSI termcap. That might need to be improved/updated somewhat, I don't think anyone ever did one!
+
+Options:
+1) implement using existing interface. Not the fastest thing. This would be the same as 
+2) could we implement with shadowing (e.g. hgr area) and then have the card do a copy of the shadowed area using its Move cmd, every vblank? 
+
+There is an existing ANSI emulation for secondsight inside Spectrum. Maybe we can pull that out rather than implement from scratch.
+
+Some anciliary things: would want to define some cool colored prompts etc (if gsh/termcap support that).
+
+And we would want the driver to be able to support both 80x25 and 80x43. I suppose that would be switched by an IOCTL, and, somehow the system would need to report console dimensions.
+
+1. Black box state machine.
+
+I envision a few steps to develop and test. First would be a black box state-machine module that would do the ANSI character processing. Of course we might get fed partial character streams so we have to track that. (I did a lot of that in telcom for vt100). 
+
+2. tie that in to a gno driver container.
+
+3. auto detection
+
+On gno boot, detect second sight and auto-select this console driver. 
+
+4. other work
+
+CLI tool to switch between x25 and x43 modes.
+
+The GNO drivers folder is flat and this driver should be built in the src tree as a subfolder.
+
+## Aug 19, 2026
+
+ran the new Arekkusu CPU test and only had 3 issues - XCE (which I fixed a few days ago); WAI (there was an odd edge condition where we weren't releasing if an IRQ was already set); and PLB was 2 cycles instead of 4. Those are all fixed!
+
+Had zero impact on TextFunk. Augh! ha ha. Comparing TF in GS2 and CR. One notable thing that stands out is in GS2, border changes are locked to cycle boundaries. This is because we model on 1MHz boundaries for everything. CR shows border changes at any number of 14M modulos. I think this implies two things: 1) the border color is NOT a slow cycle register; 2) we need to model border rendering on something else.
+
+For TextFunk, JUST border writes being locked to slow cycles could maybe account for differences in the border color? Worth checking out.
+
+References I find are that C034 clock/border are slow cycles. But that definitely doesn't match border changing on various 14Ms.
+
+Real GS testing indicates the border color changes happen on slow cycles and are perfectly aligned with text character cells
+
+Implemented fast cycles for FPI registers - AND TEXTFUNK HAS BEEN CONQUERED!!!
+
+## Aug 20, 2026
+
+dealing with the N multiplier on GS. on IIe it's great. On GS, what happens is:
+let's say we're at N=8.
+If we hit a SYNC cycle, then we could blow potentially:
+N * 28
+
+cycles, or 224 ultrafast CPU cycles waiting to sync with the MegaII.
+Get enough of these in a frame, and suddenly instead of an 8X speedup you're stuck with a many times slowdown.
+
+I tested: 
+```
+honor C036 system speed setting
+ok I think I get it. the SYNC cycles are not something present in the IIe NClock and that only affect the GS, and ONE sync cycle at ludicrous speed can wipe out hundreds of cycles of potential cpu processing.
+
+When I had the original "run flat out by time" ludicrous speed, it would run many more cpu cycles because it just kept going until wall clock got close to end of a 16ms frame.
+
+SO. Given the key constraints (we MUST clock based on 14M multiples so we can maintain synchronization with the video scanner) where would it make the most sense to modify NClockIIgs to speed up the ludicrous speed emulation?
+
+What if in Ludicrous speed we clocked more like the IIe, treating sync cycles like fast ram 
+instead of dropping 2N on a slip, just drop 1.
+I feel like even in ludicrous speed, if the system requests 1MHz mode (slow_mode) we should respect that. 
+```
+
+however, this breaks seeks in the IWM/floppy525 code. Here is the analysis:
+```
+Seek delay
+Floppy525_woz::set_phase does not step the head immediately. It queues a ~0.5 ms settle:
+
+
+Floppy525_woz.cpp
+Ln 86–87
+event_timer->scheduleEvent(clock->get_cycles() + 520, phase_change_callback,
+                           instanceID, this);
+520 is 520 CPU cycles (about 0.5 ms at 1 MHz). The callback is what actually runs update_track().
+
+Rotation is also CPU-cycle based: get_current_time() is clock->get_cycles(), and head_advance_per_cycle() converts elapsed CPU cycles into bit cells. That affects spin, not the stepper.
+
+Two different timers
+Same Floppy525 class, two wirings:
+
+Path	Timer injected	processEvents uses
+Disk II (ndiskii_woz.cpp)
+cpu_event_timer
+get_cycles()
+IWM (iwm_device.cpp)
+event_timer
+get_c14m()
+Disk II: stamp and compare are both CPU cycles. After LS, a new phase change still fires 520 CPU cycles later. Seeks should still happen (just too soon while N is large).
+
+IWM: stamp is CPU cycles, compare is 14M. Floppy35 already documents that mix as wrong:
+
+
+Floppy35_woz.cpp
+Ln 128–133
+// The shared `event_timer` is processed against clock->get_c14m()
+// Scheduling in CPU-cycle units against a 14M-driven event timer
+// would fire ~immediately because c_14M outpaces (cycles + hz_rate)
+During LS, get_cycles() runs about N× ahead of c_14M. A settle event is queued at cycles+520 ≈ N × c_14M. The 14M timer will not reach that value while you stay in LS, and after you leave LS the two counters do not re-sync — they keep their absolute values. New seeks keep scheduling at “current cycles + 520”, still far above c_14M. update_track() never runs, so the head never moves, including after you drop back to 2.8/1 MHz. Catch-up at 2.8 MHz would take on the order of tens of seconds to minutes per second spent in LS.
+
+That matches “broken after any LS, still broken after switching back.”
+
+Extra landmine (other 14M events)
+EventTimer::scheduleEvent rejects anything with triggerCycles < clock->get_cycles(), always vs CPU cycles, even on the 14M timer. After LS, cycles can be ahead of c_14M, so a correctly 14M-stamped event (get_c14m() + delay) can be dropped as “in the past.” That is the 3.5 motor-off / IWM 1 s enable-off class of bug, not the 5.25 stepper stamp itself.
+
+Bottom line: 5.25 seek is timed in CPU cycles. On IWM that is the wrong domain for the timer it uses, and LS makes the mismatch permanent. Disk II’s CPU timer is consistent; IWM 5.25 is not.
+```
+
+So. The thing was definitely much much faster, however, floppies not working is bad. (esp when floppy works fine on IIe at LS).
+
+So, something I've been avoiding for a while is having a wall-clock queue, I guess. The wallclock is not reliable because of OS interruption. So I've always used various proxies.
+
+Hm, is this a bug? "IWM stamp is CPU compare is 14M". 
+
+## Aug 21, 2026
+
+Thinking about things to do to wrap this up:
+
+Create a bunch of Profiles for testing with Mike. I do have AppleII image generation now so we're basically good to go to do profiles there.
+
+investigate DynaPro support in KEGS. This seems potentially fragile. And complex. ProDOS supports AppleTalk by wrapping the ProDOS MLI and detecting when it's an appletalk-related call. So, we could just do a PV there. Intercept the MLI vector and do the same thing ATINIT does. More general appletalk info at:
+
+http://apple2.guidero.us/doku.php
+
+AppleTalk-type injection to ProDOS 8 but for: host folders, and maybe smb or FujiNet file system or something like that. Fuji might be more appropriate for IIe's. OTOH SMB is universal.
+
+I still have the super-annoying Zany Golf problem. What would be ideal, would be to run it in GS2 and BP at a certain point, and then do the same in another emulator, and then compare RAM dumps.
+
+Agh, the draw of new features! Henri forked and ported AppleTini functionality. That is pretty cool. Needs some rework to get its tendrils out of display and pdblock3. But certainly doable.
+
+And we got the GSOS source, so we could go ahead and do the QuickDraw GPU stuff!  <- v1.0 roadmap
+
+How about allow sprites to be arbitrary NxM where N and M are multiples of 8. Also allow the tile map to be varying dimensions. For Ms PacMan. 
+
+## Aug 22, 2026
+
+See Arqyv docs..
+
+Print to clipboard (#165). New `ClipboardDevice` — same idle-close / MESSAGE_CLOSE / reopen-on-write path as FileDevice, but a 128KB RAM buffer instead of a capture file. Worker strips bit 7, maps CR to LF, skips NULs; on close it snapshots to the main thread, which calls `SDL_SetClipboardText` and toasts the byte count. `device = "clipboard"` on serial and parallel (OSD, config editor, TOML). Does not steal the clipboard on emulator quit.
+
+IIgs Slot 1 printer defaults to “Add LF after CR: YES”, so a listing is CRLF. Clipboard must collapse CR+LF (and LF+CR) to a single LF; otherwise paste is double-spaced. Bare CR-only (typical II/IIe printer) still becomes one LF.
+
+## Aug 25, 2026
+
+Discussion on how to set up ssh server to give me an msys2 shell!
+
+https://claude.ai/share/a73e36fd-c180-40b5-b47f-8eeff31319d7
+
+Getting there.. why so hard, Windoze.
+
+## Aug 27, 2026
+
+implemented a basic GPU - right now, it only does upload texture, free texture, render texture at x,y, clear and present. 
+
+Whipped out 80x25 and 80x43 text modes. That is some fun! 
+
+Thinking about how to dig in to testing video modes.
+
+https://man7.org/linux/man-pages/man4/console_codes.4.html
+https://en.wikipedia.org/wiki/ANSI_escape_code
+
+there are a couple approaches. First, implement a VT100/linux/ANSI console as a standalone GS/OS app - most broadly applicable.
+And/or build a GNO console the same way.
+
+The other main way, is to build the terminal type into the card, so that the card is doing -all- the processing. The Apple II simply chucks a byte-stream to the card, not doing much else but reading the keyboard. This has the following benefits: prototype rapidly in C++ emu-side; do it as a sub-thread that does all the code decoding, manipulating a frame buffer shared with the SS card code itself; 
+
+this would be yet another new SS mode. 
+
+This was a suggestion Rikkles put into AppleTini. I think he did VT100, but, we could do anything (I like ANSI for color support). 
+
+Once a solid C++ version was done, we could port that to 65816 assembly for the GNO console version. 
+
+Pro's/Con's: having it in 816 code is more flexible - you can implement any video regime you want. But it's slower for the 816 to move video memory around (even with hw scroll support).
+
+Reading the docs, GNO has like "delete line" and "insert line" commands, which can't be acclerated with hw scroll. 
+
+There's actually a THIRD approach we could take, which is to implement GPU commands for text mode. That would make quick work of scroll (vert and horz), even moving rectangles around. At the higher cost of sending chars to the card.
+
+How about a optimized interface - we activate a mode where we just accept an ongoing stream of bytes. Command "stream on"; then just bytes under command "stream off". So sending a byte to the card is just STA C0B1 instead of the whole command sequence and handshake thing... that could work well for the text mode generally.
+
+Scrolling a VGA buf in bank 0 RAM is very expensive - basically it costs us a whole frame (1/60th sec). No matter what we're eating a bunch of MegaII cycles.
+
+So maybe we can think about this as a mix of these two models: have a GPU-ish language, or another way to think of it, a terminal emulation language, but have some of it be handled host-side. So let's say we assume 16-bit writes to C0B1/C0B2. That lets us shove in a 16-bit attr+char at once.
+Primitives will be:
+char
+repeated char
+scroll up / scroll down
+insert line / delete line
+move cursor
+
+So "char" would be four bytes - 16-bit command and 16-bit char. 16 bits gives us lots of room for fancy encoded stuff like high byte is a code, low byte is a count.
+Four bytes for a char sounds crazy except it's literally just:
+```
+LDA #0100     ; char out + advance, 0 = 1 char
+STA C0B1
+LDA #0041     ; letter A, no attributes
+STA C0B2
+```
+In terms of cycles, this is 14 cycles per character.
+NOW. Don't get too fancy with the behavior here. If the card only does character advance under controlled circumstances, then we never have to read the cursor x/y back. Basically, the II would set the cursor - if we are end of line and send a char, it sticks at end of line - but the II has been keeping tracking of cursor. So in addition to the above, 
+```
+inc ch
+lda #40
+cmp ch
+branch if blah blah
+```
+the II is then responsible for translating its language to the card's language - but you see that it knows all its cursor info. One, to stay synced with Apple II land. Two, to prevent unintended behavior.
+
+```
+LDA #0101    ; three characters
+STA C0B1
+LDA #0041
+STA C0B1
+LDA #0042
+STA C0B1
+LDA #0043
+STA C0B1
+```
+
+Now what about cases where we need to readback data. OK, I guess we could just:
+
+```
+LDA #0200    ; readback chars from screen
+LDA C0B1     ; the next interaction is a read, not a write
+```
+
+I suppose there could be a operating mode where we use the split char/attributes.
+
+Now we're not going to SCROLL this way (you could, but it would be pretty slow). This is optimized for writing data to screen.
+
+OK, so we can optimize this somewhat: bit 15 (bit 7 of attribute portion) is a flag. If =0, means "this is a bare character". This gives up blink.
+If =1, means "this is a command code". Command codes are then $80 - $FF, and you can pass a full char (with blink) by using $80 - essentially like quoting it.
+
+Thus: a bunch of single character writes (non-blink) become just: a bunch of 16-bit stores, 2 bytes per character:
+```
+<-- enters with A=character in lo byte (no blink)
+ORA zp_attr   ; 3
+STA C0B1      ; 4
+```
+
+With replacement firmware say on a IIe, you just
+```
+STA C0B1
+LDA dp_saved_attribute
+STA C0B1
+```
+that's pretty crazy right there compared to everything the 80-col firmware has to do.
+
+## Sep 8, 2026
+
+tried having Grok iterate the IWMTEST. It DID clear the tests. However, it broke writing to 3.5's. So it's clearly important when taking this approach, to make sure you have ALL tests and ALL constraints put in.
+
+I think a good starting point is making sure the speed control when there's a disk motor-on is working correctly. That is likely to break some timers.
+
+Another thing: the AI itself waiting for input and switching disks is slow. This is a case where maybe the python tool would be better, as the AI can delegate wait, read screen, switch disks, etc. to it esp when you have to keep repeating testing. BUT perhaps it could by a python tool controlling the MCP interface. The Python is a higher level interface. Some commands can go straight through but others can be more sophisticated recipes, a specific test harness for a specific purpose.
+
+For example: re-testing is pretty slow when it's all manual. After each serious modification, we need to run a regression test. That should also be under control of a python. Some folks have done this with mame LUA scripting, but would python be more expressive and easier for an AI to write? The regression test can be simple like: boot, wait 20 seconds, snapshot screen. Or more complex, like exercising stuff.
+
+Anyway that work is on lappy branch iwmtest.

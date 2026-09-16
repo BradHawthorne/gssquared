@@ -86,12 +86,35 @@ static inline MMU *rail_mmu(computer_t *computer) {
 // MMU_II branch -- not because they overlap today, but because a cast-based
 // dispatch that happens to work is how the original bug got in.
 // ---------------------------------------------------------------------------
-static inline uint8_t *rail_video_base(computer_t *computer) {
+// READ-ONLY, and in CPU order. On a IIgs this is MMU_IIgs::megaii_cpu_view(): with
+// the aux window linearized (SHR on), the Mega II store is interleaved and a raw
+// index would read the wrong byte, so the view is a refreshed copy there. Writers
+// use rail_video_poke below, never this pointer.
+static inline const uint8_t *rail_video_base(computer_t *computer) {
     MMU *m = rail_mmu(computer);
     if (!m) return nullptr;
-    if (MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(m)) return gs->get_megaii_memory_base();
+    if (MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(m)) return gs->megaii_cpu_view();
     if (MMU_II  *ii = dynamic_cast<MMU_II  *>(m))  return ii->get_memory_base();
     return nullptr;
+}
+
+// The write-side twin of rail_video_base: store `v` at 17-bit video-image address
+// `a17` (bit 16 = aux / $E1) where the CPU would have put it.
+static inline bool rail_video_poke(computer_t *computer, uint32_t a17, uint8_t v) {
+    MMU *m = rail_mmu(computer);
+    if (!m) return false;
+    if (MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(m)) {
+        if (!gs->get_megaii_memory_base()) return false;
+        gs->megaii_cpu_poke(a17, v);
+        return true;
+    }
+    if (MMU_II *ii = dynamic_cast<MMU_II *>(m)) {
+        uint8_t *mb = ii->get_memory_base();
+        if (!mb) return false;
+        mb[a17 & 0x1FFFF] = v;
+        return true;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------

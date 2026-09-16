@@ -1,8 +1,12 @@
 #pragma once
 
+#include <vector>
+#include <cstring>
+
 #include "mmu.hpp"
 #include "mmu_iie.hpp"
 #include "iigs_shadow_flags.hpp"
+#include "iigs_aux_linear.hpp"
 #include "debug.hpp"
 #include "NClock.hpp"
 #include "bus_trace.hpp"
@@ -17,6 +21,11 @@ class MMU_IIgs : public MMU {
         uint32_t rom_banks;
         uint8_t *main_rom = nullptr;
         constexpr static uint32_t BANK_SIZE = 65536;
+        /* The FPI decodes banks $F0-$FF as ROM space and runs those cycles at full
+           speed with no RAM-refresh stretch, whether or not a ROM answers. Motherboard
+           ROM sits at the top of the window (ROM01: $FE-$FF, ROM03: $FC-$FF); the rest
+           is where expansion-card ROM lands. */
+        constexpr static uint32_t ROM_SPACE_BASE = 0xF00000;
 
         uint8_t reg_slot = 0;
         uint8_t reg_shadow = 0;
@@ -66,8 +75,12 @@ class MMU_IIgs : public MMU {
 
         bool is_rom03 = false;
 
+        uint8_t dma_bank_register = 0;
+
         //cpu_state *cpu = nullptr;
         NClock *clock = nullptr;
+
+        std::vector<uint8_t> megaii_view_buf;   // FORK: megaii_cpu_view()'s copy
 
     public:
         MMU_IIe *megaii = nullptr;
@@ -80,12 +93,14 @@ class MMU_IIgs : public MMU {
             is_rom03 = (rom_size > 0x20000); // 256KB image = ROM3/ROM4 memory controller (enables TEXT2 shadowing)
             main_rom = rom;
             map_initialized = false;
-            reset();
+            dma_bank_register = 0;
+            reset(true); // power-on: ROM03 CYAREG bit 6 set when cold_start
         };
+
         virtual ~MMU_IIgs() { delete[] main_ram; /* main_rom is owned by caller */ }
 
         virtual uint8_t read(uint32_t address) override {
-            if (address >= 0xFC0000) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
+            if (address >= ROM_SPACE_BASE) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
 
             uint8_t value = MMU::read(address);
             // $C0xx I/O is slot-visible; soft-switches toggle on READS too (per the IIe IOU 74LS259
@@ -97,7 +112,7 @@ class MMU_IIgs : public MMU {
         }
 
         virtual void write(uint32_t address, uint8_t value) override {
-            if (address >= 0xFC0000) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
+            if (address >= ROM_SPACE_BASE) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
 
             MMU::write(address, value);
             if (g_slot_bus_enabled && (address & 0xFF00) == 0xC000)
@@ -107,6 +122,7 @@ class MMU_IIgs : public MMU {
         inline bool shadow_is_enabled(uint32_t address) {
             uint32_t address_16 = address & 0xFFFF;
             uint32_t address_17 = address & 0x1FFFF;
+            const bool odd_bank = (address & 0x10000) != 0;
             
             if ((address_16 >= 0x0400 && address_16 <= 0x07FF) && !(reg_shadow & SHADOW_INH_TEXT1)) {
                 return true;
@@ -114,11 +130,15 @@ class MMU_IIgs : public MMU {
             if (is_rom03 && ((address_16 >= 0x0800 && address_16 <= 0x0BFF) && !(reg_shadow & SHADOW_INH_TEXT2))) {
                 return true;
             }
-            if ((address_16 >= 0x2000 && address_16 <= 0x3FFF) && !(reg_shadow & SHADOW_INH_HGR1)) {
-                return true;
-            }
-            if ((address_16 >= 0x4000 && address_16 <= 0x5FFF) && !(reg_shadow & SHADOW_INH_HGR2)) {
-                return true;
+            // HGR1/HGR2: even banks only. Odd-bank $2000-$5FFF is gated by AUXHGR|SHR
+            // (inhibit only when both are set; see SHADOW.s inhbt1).
+            if (!odd_bank) {
+                if ((address_16 >= 0x2000 && address_16 <= 0x3FFF) && !(reg_shadow & SHADOW_INH_HGR1)) {
+                    return true;
+                }
+                if ((address_16 >= 0x4000 && address_16 <= 0x5FFF) && !(reg_shadow & SHADOW_INH_HGR2)) {
+                    return true;
+                }
             }
             if ((address_17 >= 0x12000 && address_17 <= 0x19FFF) && !(reg_shadow & SHADOW_INH_SHR)) {
                 return true;
@@ -141,7 +161,12 @@ class MMU_IIgs : public MMU {
 
         inline void megaiiWrite(uint32_t address, uint8_t value) {
             if ((address & 0x1'0000) && g_bank_latch) {
-                megaii->get_memory_base()[address & 0x1'FFFF] = value;
+                uint32_t idx = address & 0x1'FFFF;
+                if (is_aux_linear()) {
+                    idx = 0x1'0000 | iigs_aux_linear_to_phys((uint16_t)idx);
+                }
+                megaii->get_memory_base()[idx] = value;
+                // Records carry the LOGICAL address (see bank_e1_write).
                 uint64_t _cyc = get_cycle_count();
                 bus_trace_note(_cyc, address & 0x1'FFFF, value, 1); // shadowed SHR write (provenance 1)
                 // Observatory: the shadowed store as a BUS_TXN (provenance flag), so obs_hash_bus
@@ -150,8 +175,7 @@ class MMU_IIgs : public MMU {
                 obs_note(_cyc, obs_sigid(OBS_SUB_BUS, 0, 0), OBS_K_BUS_TXN, address & 0x1'FFFF, value,
                          ((uint32_t)g_obs_c14m_cost << 8) | g_obs_cycle_type, OBS_F_PROVENANCE_SH);
                 slot_emit(address & 0xFFFF, value, false, true);             // Mega-II write to $E1/aux (M2B0=1)
-            }
-            else {
+            } else {
                 megaii->write(address & 0xFFFF, value);
                 slot_emit(address & 0xFFFF, value, false, (address & 0x1'0000) != 0);
             }
@@ -162,6 +186,57 @@ class MMU_IIgs : public MMU {
 
         inline bool is_iolc_shadowed() { return !(reg_shadow & SHADOW_INH_IOLC); }
         inline bool is_bank_latch() { return g_bank_latch; }
+        /* Enabling SHR ($C029 bit 7) linearizes aux $2000-$9FFF too, not just the
+           explicit linearize bit 6. GS/OS draws its boot screen with $41 (linear,
+           display off) then switches to $81, and expects the mapping to persist. */
+        inline bool is_aux_linear() override { return g_aux_linear || g_shr_enabled; }
+        MMU *get_megaii_mmu() override { return megaii; }
+
+        /* Physical aux index for a direct bank $E1 access (bank latch on). Aux is
+           forced, so ALTZP / RAMRD / RAMWRT / 80STORE / PAGE2 do not apply here -
+           those select main vs aux for bank $E0. The LC bank 1 $D000 image (parked in
+           the $C000 I/O hole, as in bsr_map_memory) and the linear/SHR aux mapping do
+           still apply; the two ranges are disjoint. */
+        inline uint32_t e1_aux_index(uint16_t a16) {
+            if (a16 >= 0xD000 && a16 <= 0xDFFF && is_lc_bank1()) return 0x1'0000 | (a16 - 0x1000);
+            if (is_aux_linear()) return 0x1'0000 | iigs_aux_linear_to_phys(a16);
+            return 0x1'0000 | a16;
+        }
+
+        // FORK: THE MEGA II IMAGE AS THE CPU ADDRESSES IT. Since upstream 18f5d04c the
+        // physical Mega II store keeps $E1:$2000-$9FFF interleaved whenever the aux
+        // window is linearized (NEWVIDEO bit 6, or SHR on, which implies it), so
+        // megaii_base[0x1xxxx] is no longer the byte the CPU reads at $E1:xxxx.
+        // Every observer that means "what the program sees" -- SHR hashes and
+        // goldens, the $E1 dumps, SCB and palette reads, the probes -- goes through
+        // these; the snapshot keeps saving the physical store, which is what
+        // restores it. `a17` is the 17-bit Mega II address: bit 16 = bank $E1.
+        inline uint32_t megaii_cpu_index(uint32_t a17) {
+            const uint16_t a16 = (uint16_t)a17;
+            if ((a17 & 0x1'0000) && is_aux_linear()) return 0x1'0000 | iigs_aux_linear_to_phys(a16);
+            return a17 & 0x1'FFFF;
+        }
+        inline uint8_t megaii_cpu_peek(uint32_t a17) {
+            uint8_t *mb = megaii ? megaii->get_memory_base() : nullptr;
+            return mb ? mb[megaii_cpu_index(a17)] : 0;
+        }
+        inline void megaii_cpu_poke(uint32_t a17, uint8_t v) {
+            uint8_t *mb = megaii ? megaii->get_memory_base() : nullptr;
+            if (mb) mb[megaii_cpu_index(a17)] = v;
+        }
+        // The whole 128 KB image in CPU order. Outside linearization that is the
+        // store itself (no copy); inside it, a de-interleaved copy refreshed on
+        // every call -- a read-only view for readers that index at fixed offsets.
+        // Do not write through it, and do not hold it across a run.
+        const uint8_t *megaii_cpu_view() {
+            uint8_t *mb = megaii ? megaii->get_memory_base() : nullptr;
+            if (!mb || !is_aux_linear()) return mb;
+            megaii_view_buf.resize(0x2'0000);
+            memcpy(megaii_view_buf.data(), mb, 0x2'0000);
+            for (uint32_t a = 0x2000; a <= 0x9FFF; a++)
+                megaii_view_buf[0x1'0000 | a] = mb[0x1'0000 | iigs_aux_linear_to_phys((uint16_t)a)];
+            return megaii_view_buf.data();
+        }
 
         // Faithful slot-3 signal decode for a Mega-II-side (slot-visible) cycle (the virtual slot).
         inline uint8_t slot_ctl(uint16_t a, bool is_read, bool m2b0) {
@@ -232,8 +307,10 @@ class MMU_IIgs : public MMU {
         inline void set_intcxrom(bool value);
         
         inline void set_slot_register(uint8_t value);
-        
         inline uint8_t get_slot_register() { return reg_slot; }
+
+        inline void set_dma_bank_register(uint8_t value) { dma_bank_register = value; }
+        inline uint8_t get_dma_bank_register() { return dma_bank_register; }
 
         void bsr_map_memory();
         virtual uint8_t vp_read(uint32_t address) override;
@@ -254,11 +331,6 @@ class MMU_IIgs : public MMU {
         // embedded IIe-compat ROM pointer) key off bank $FF and used to
         // hardcode 0x10000, silently only correct for a 128KB ROM.
         inline uint32_t rom_bank_ff_offset() const { return (rom_banks - 1) * BANK_SIZE; }
-        // FORK: the ROM generation, derived from the image size in the
-        // constructor. Consumers that need "ROM 03 or later" ask here rather
-        // than testing the platform ID, which is PLATFORM_APPLE_IIGS for the
-        // fork's ROM 03 and ROM 04 personalities.
-        bool rom03() const { return is_rom03; }
         uint8_t *get_memory_base() override { return main_ram; }
         uint32_t get_memory_size() override { return ram_banks * BANK_SIZE; }
         // Base of ROM bank $FF (the last 64KB) — the language-card / $D000-$FFFF ROM
@@ -287,7 +359,7 @@ class MMU_IIgs : public MMU {
                     return floating_bus_read();
                 }
                 uint8_t *mb = get_megaii_memory_base();
-                if (mb) return mb[((bank & 1) << 16) | (addr24 & 0xFFFF)];
+                if (mb) return mb[megaii_cpu_index(((bank & 1) << 16) | (addr24 & 0xFFFF))];
             }
             // BANKS $00/$01 ARE HANDLER PAGES. set_ram_shadow_banks() installs
             // bank_shadow_read/write over them, so read_raw sees no read pointer
@@ -360,7 +432,7 @@ class MMU_IIgs : public MMU {
                 // is a byte nothing will read.
                 if ((addr24 & 0xF000) == 0xC000) return false;
                 uint8_t *mb = get_megaii_memory_base();
-                if (mb) { mb[((bank & 1) << 16) | (addr24 & 0xFFFF)] = value; return true; }
+                if (mb) { mb[megaii_cpu_index(((bank & 1) << 16) | (addr24 & 0xFFFF))] = value; return true; }
             }
             if (bank <= 0x01) {
                 uint32_t page = (addr24 & 0xFF00) >> 8;
@@ -396,7 +468,7 @@ class MMU_IIgs : public MMU {
                 // this is the write-side twin of that, and nothing else.
                 if (shadow_is_enabled(a)) {
                     uint8_t *mm = get_megaii_memory_base();
-                    if (mm) mm[a & 0x1FFFF] = value;
+                    if (mm) mm[megaii_cpu_index(a & 0x1FFFF)] = value;   // CPU order -> store
                 }
                 uint8_t *mb = get_memory_base();
                 if (mb) { mb[a] = value; return true; }
@@ -460,8 +532,10 @@ class MMU_IIgs : public MMU {
             }
         }
         inline uint64_t get_cycle_count() { return clock ? clock->get_cycles() : 0; } // for the bus-trace oracle
+        inline bool is_rom03_machine() const { return is_rom03; }
+
         virtual void init_map();
-        virtual void reset() override;
+        virtual void reset(bool cold_start = false) override;
         void debug_dump(DebugFormatter *df);
 
         inline void set_clock(NClockII *clock) { this->clock = clock; }

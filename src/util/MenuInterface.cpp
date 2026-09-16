@@ -82,6 +82,10 @@ void MenuInterface::toggleDisconnectedWhenNoGamepad() {
 	SystemSettings::instance().toggle_disconnected_when_no_gamepad();
 }
 
+void MenuInterface::toggleSsTextMode() {
+	SystemSettings::instance().toggle_ss_text_mode();
+}
+
 int MenuInterface::getCurrentSpeed() {
 	if (!computer_ || !computer_->clock) return -1;
 	return (int)computer_->clock->get_clock_mode();
@@ -134,12 +138,20 @@ bool MenuInterface::getDisconnectedWhenNoGamepad() {
 	return SystemSettings::instance().disconnected_when_no_gamepad();
 }
 
+bool MenuInterface::getSsTextMode() {
+	return SystemSettings::instance().ss_text_mode();
+}
+
 bool MenuInterface::isEmulationRunning() {
 	return computer_ != nullptr;
 }
 
 bool MenuInterface::hasBazFast() {
 	return computer_ && computer_->has_bazfast();
+}
+
+bool MenuInterface::hasSecondSight() {
+	return computer_ && computer_->has_second_sight();
 }
 
 bool MenuInterface::getMountDrivers() {
@@ -167,6 +179,18 @@ int MenuInterface::getCurrentControllerMode() {
 	gamec_state_t *gc = (gamec_state_t *)computer_->get_module_state(MODULE_GAMECONTROLLER);
 	if (!gc) return JOYSTICK_APPLE_GAMEPAD;
 	return (int)get_joystick_mode(gc);
+}
+
+void MenuInterface::setJoyportSelect(int select) {
+	switch (select) {
+		case JOYPORT_SELECT_LEFT:   pushMenuEvent(MENU_CONTROLLER_JOYPORT_LEFT);   break;
+		case JOYPORT_SELECT_CENTER: pushMenuEvent(MENU_CONTROLLER_JOYPORT_CENTER); break;
+		case JOYPORT_SELECT_RIGHT:  pushMenuEvent(MENU_CONTROLLER_JOYPORT_RIGHT);  break;
+	}
+}
+
+int MenuInterface::getJoyportSelect() {
+	return (int)get_joyport_select();
 }
 
 std::vector<MenuDriveInfo> MenuInterface::getDriveList() {

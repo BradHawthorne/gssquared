@@ -29,7 +29,7 @@ project(gssquared)
 
 # Define base version (major.minor)
 set(VERSION_MAJOR "0")
-set(VERSION_MINOR "10")
+set(VERSION_MINOR "11")
 
 # Get git commit count for patch version (auto-incrementing)
 find_package(Git QUIET)
@@ -426,13 +426,23 @@ target_link_libraries(gs2_devices_ssc PUBLIC gs2_serial_devices)
 
 add_library(gs2_devices_secondsight
     src/devices/secondsight/secondsight.cpp
+    src/devices/secondsight/ss_a2_text_sync.cpp
+    src/devices/secondsight/ss_host_text.cpp
+    src/devices/secondsight/ss_gpu_text.cpp
+    src/devices/secondsight/ss_gpu.cpp
+    src/devices/secondsight/ppu_render.cpp
     src/devices/secondsight/vga_render_8.cpp
     src/devices/secondsight/vga_render_16.cpp
     src/devices/secondsight/vga_render_24.cpp
     src/devices/secondsight/vga_render_text_9x16.cpp
     src/devices/secondsight/vga_render_text_9x16_present.cpp
+    src/devices/secondsight/vga_render_text_8x8.cpp
+    src/devices/secondsight/vga_render_text_8x8_present.cpp
 )
-target_link_libraries(gs2_devices_secondsight PRIVATE ${GS2_SDL3_IMAGE})
+target_link_libraries(gs2_devices_secondsight PRIVATE ${GS2_SDL3_IMAGE} gs2_displaypp gs2_paths)
+
+add_library(gs2_devices_voc src/devices/voc/voc.cpp)
+target_link_libraries(gs2_devices_voc PRIVATE gs2_displaypp)
 
 add_library(gs2_devices_iwm src/devices/iwm/iwm_device.cpp)
 
@@ -444,28 +454,46 @@ add_library(gs2_devices_a2gspu    src/devices/a2gspu/a2gspu.cpp src/devices/a2gs
 
 add_library(gs2_devices_adb     src/devices/adb/keygloo.cpp )
 
-# Host FST (GSPlus / Kelvin Sherlock) — full Unix/macOS; stub elsewhere
+# Host FST (GSPlus / Kelvin Sherlock) — Unix/macOS/Windows; stub on Emscripten
 set(GS2_HOSTFST_SOURCES
     src/devices/hostfst/hostfst.cpp
     src/devices/hostfst/hostfst_engine.cpp
 )
-if(NOT WIN32 AND NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN)
     list(APPEND GS2_HOSTFST_SOURCES
-        src/devices/hostfst/host_fst.c
         src/devices/hostfst/host_common.c
-        src/devices/hostfst/unix_host_common.c
     )
+    if(WIN32)
+        list(APPEND GS2_HOSTFST_SOURCES
+            src/devices/hostfst/win32_host_fst.c
+            src/devices/hostfst/win32_host_common.c
+        )
+    else()
+        list(APPEND GS2_HOSTFST_SOURCES
+            src/devices/hostfst/host_fst.c
+            src/devices/hostfst/unix_host_common.c
+        )
+    endif()
 endif()
 add_library(gs2_devices_hostfst ${GS2_HOSTFST_SOURCES})
 target_include_directories(gs2_devices_hostfst PRIVATE ${CMAKE_SOURCE_DIR}/src/devices/hostfst)
 target_link_libraries(gs2_devices_hostfst PUBLIC gs2_systemconfig gs2_paths gs2_cpu gs2_mmu)
-if(NOT WIN32 AND NOT EMSCRIPTEN)
-    set_source_files_properties(
-        src/devices/hostfst/host_fst.c
-        src/devices/hostfst/host_common.c
-        src/devices/hostfst/unix_host_common.c
-        PROPERTIES LANGUAGE C
-    )
+if(NOT EMSCRIPTEN)
+    if(WIN32)
+        set_source_files_properties(
+            src/devices/hostfst/host_common.c
+            src/devices/hostfst/win32_host_fst.c
+            src/devices/hostfst/win32_host_common.c
+            PROPERTIES LANGUAGE C
+        )
+    else()
+        set_source_files_properties(
+            src/devices/hostfst/host_fst.c
+            src/devices/hostfst/host_common.c
+            src/devices/hostfst/unix_host_common.c
+            PROPERTIES LANGUAGE C
+        )
+    endif()
 endif()
 
 # Uthernet II + libslirp (stubbed on Emscripten)
@@ -493,7 +521,8 @@ add_library(gs2_trace src/debugger/trace.cpp src/debugger/trace_opcodes.cpp)
 
 add_library(gs2_debugger  src/debugger/debugwindow.cpp src/debugger/Monitor.cpp
     src/debugger/MemoryWatch.cpp src/debugger/disasm.cpp
-    src/debugger/DebugProtocolServer.cpp src/debugger/BreakpointTable.cpp)
+    src/debugger/DebugProtocolServer.cpp src/debugger/BreakpointTable.cpp
+    src/debugger/DebugVideoView.cpp)
 
 add_library(gs2_mmu src/mmus/mmu.cpp src/mmus/mmu_ii.cpp src/mmus/mmu_iie.cpp src/mmus/mmu_iigs.cpp)
 
@@ -507,9 +536,20 @@ add_library(gs2_computer src/computer.cpp )
 
 add_library(gs2_event_dispatcher src/util/EventDispatcher.cpp )
 
-add_library(gs2_serial_devices src/serial_devices/SerialDevice.cpp
+if(APPLE)
+    set(GS2_HOST_SERIAL_SRC src/serial_devices/host/HostSerial_macos.cpp)
+elseif(WIN32)
+    set(GS2_HOST_SERIAL_SRC src/serial_devices/host/HostSerial_win32.cpp)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(GS2_HOST_SERIAL_SRC src/serial_devices/host/HostSerial_linux.cpp)
+else()
+    set(GS2_HOST_SERIAL_SRC src/serial_devices/host/HostSerial_stub.cpp)
+endif()
+add_library(gs2_serial_devices
+    src/serial_devices/SerialDevice.cpp
+    ${GS2_HOST_SERIAL_SRC}
 )
-add_library(gs2_util src/util/media.cpp src/util/ResourceFile.cpp src/util/dialog.cpp src/util/mount.cpp
+add_library(gs2_util src/util/media.cpp src/util/apm.cpp src/util/ResourceFile.cpp src/util/dialog.cpp src/util/mount.cpp
     src/util/Connections.cpp
     #src/util/soundeffects.cpp 
     src/util/SoundEffect.cpp
@@ -528,7 +568,9 @@ add_library(gs2_ui src/ui/AssetAtlas.cpp src/ui/Container.cpp src/ui/DiskII_Butt
     src/ui/SerialPortButton.cpp src/ui/SerialPortsOSD.cpp
 )
 
-add_library(gs2_displaypp src/devices/displaypp/frame/frame_bit.cpp src/devices/displaypp/frame/frame_byte.cpp src/devices/displaypp/CharRom.cpp src/devices/displaypp/AppleIIgsColors.cpp)
+add_library(gs2_displaypp src/devices/displaypp/frame/frame_bit.cpp src/devices/displaypp/frame/frame_byte.cpp
+    src/devices/displaypp/CharRom.cpp src/devices/displaypp/AppleIIgsColors.cpp
+    src/devices/displaypp/generate/AppleII.cpp)
 
 add_library(gs2_ntsc
     src/display/ntsc.cpp
@@ -537,6 +579,8 @@ add_library(gs2_ntsc
     src/display/filters.cpp
     src/display/shaders/GpuShaderLoader.cpp
 )
+
+target_link_libraries(gs2_displaypp PUBLIC gs2_ntsc)
 
 #add_library(gs2_diskii src/devices/diskii/ndiskii.cpp)
 
@@ -582,6 +626,7 @@ set(GS2_DEVICE_REGISTRY_LIBS
     gs2_devices_scc8530
     gs2_devices_ssc
     gs2_devices_secondsight
+    gs2_devices_voc
     gs2_devices_iwm
     gs2_devices_mouse
     gs2_devices_rtc_pram
@@ -632,8 +677,11 @@ target_link_libraries(gs2_video_scanner PUBLIC gs2_displaypp)
 add_library(gs2_devices_rtc_pram src/devices/rtc/rtc_pram.cpp)
 target_link_libraries(gs2_devices_rtc_pram PUBLIC gs2_paths)
 
-target_link_libraries(gs2_ui ${GS2_SDL3_IMAGE} ${GS2_SDL3_TTF} gs2_systemconfig gs2_devices_hostfst)
-target_link_libraries(gs2_debugger gs2_trace gs2_util ${GS2_SDL3} ${GS2_SDL3_TTF})
+target_link_libraries(gs2_ui ${GS2_SDL3_IMAGE} ${GS2_SDL3_TTF} gs2_systemconfig gs2_devices_hostfst gs2_serial_devices)
+target_link_libraries(gs2_debugger gs2_trace gs2_util gs2_displaypp ${GS2_SDL3} ${GS2_SDL3_TTF})
+if(WIN32)
+    target_link_libraries(gs2_debugger ws2_32)
+endif()
 # Connections.cpp constructs SerialDevice subclasses; link after gs2_util for GNU ld.
 target_link_libraries(gs2_util PUBLIC gs2_serial_devices ${GS2_SDL3_TTF})
 target_link_libraries(gs2_computer ${GS2_SDL3_TTF})
@@ -697,6 +745,7 @@ target_link_libraries(GSSquared
     gs2_devices_scc8530
     gs2_devices_ssc
     gs2_devices_secondsight
+    gs2_devices_voc
     gs2_devices_iwm
     gs2_serial_devices
     gs2_debugger
@@ -779,6 +828,8 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(apps/mousebugtest)
 
     add_subdirectory(apps/systemconfigtest)
+
+    add_subdirectory(apps/ssgputexttest)
 endif()
 
 ################################################################################
@@ -1191,6 +1242,10 @@ if((UNIX) AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND NOT EMSCRIPTEN)
             COMPONENT Runtime
         )
         install(DIRECTORY "${CMAKE_BINARY_DIR}/resources/vdisk"
+            DESTINATION "${GS2_INSTALL_DATADIR}"
+            COMPONENT Runtime
+        )
+        install(DIRECTORY "${CMAKE_BINARY_DIR}/resources/shaders"
             DESTINATION "${GS2_INSTALL_DATADIR}"
             COMPONENT Runtime
         )

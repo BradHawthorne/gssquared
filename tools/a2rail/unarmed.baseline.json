@@ -19,9 +19,9 @@
       "frames": 300,
       "disk": "gsos601.po",
       "rom": "4E6B6EE5B32F63CF",
-      "hash": "5F78F7C15131F43F",
-      "cycles": 10635192,
-      "run": "F37832422CA8F090"
+      "hash": "D29F204D690D417F",
+      "cycles": 10647366,
+      "run": "FEF5234F63151E9B"
     },
     {
       "name": "iigs-rom",
@@ -30,8 +30,8 @@
       "disk": "",
       "rom": "4E6B6EE5B32F63CF",
       "hash": "6D9886E3B3EE0383",
-      "cycles": 6043351,
-      "run": "B773A6FF455DD39A"
+      "cycles": 6045727,
+      "run": "16483AADEFF4F8C1"
     }
   ]
 }

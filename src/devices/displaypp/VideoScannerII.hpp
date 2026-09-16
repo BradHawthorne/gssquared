@@ -293,17 +293,18 @@ public:
     inline bool is_text()   { return !graf;  }
     inline bool is_graf()   { return  graf;  }
 
-    // The two mode flags that had no getter.  is_80col/is_altchrset/is_dblres
-    // already exist below; 80STORE and SHR did not, which forced the CTRL `vid`
-    // verb to guess the whole set by peeking the $C01x status switches -- a read
-    // that does not work through probe_peek and made `vid` report fabricated
-    // values on BOTH platforms (all-1s on IIe, all-0s on IIgs).
-    inline bool is_80store() { return f_80store; }
+    // SHR had no getter (upstream has since added is_80store below), which forced
+    // the CTRL `vid` verb to guess the mode set by peeking the $C01x status
+    // switches -- a read that does not work through probe_peek and made `vid`
+    // report fabricated values on BOTH platforms (all-1s on IIe, all-0s on IIgs).
+    // These report the APPLIED display state; a switch still in the latency
+    // queue shows once it takes effect.
     inline bool is_shr()     { return shr;       }
 
     inline bool is_80col()        { return sw80col;   }
     inline bool is_altchrset()    { return altchrset; }
     inline bool is_dblres()       { return dblres; }
+    inline bool is_80store()      { return f_80store; }
 
     inline void set_80col()       { queue_mode_change(vs_mode_switch_t::COL80, 1); }
     inline void set_altchrset()   { queue_mode_change(vs_mode_switch_t::ALTCHAR, 1); }

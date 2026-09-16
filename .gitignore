@@ -9,7 +9,17 @@ build/
 build/*
 gs2.dSYM/
 hw.dSYM/
-testdev/
+testdev/*
+!testdev/gputest/
+testdev/gputest/*
+!testdev/gputest/*.s
+!testdev/gputest/Makefile
+!testdev/gputest/README.md
+!testdev/hosttext/
+testdev/hosttext/*
+!testdev/hosttext/*.s
+!testdev/hosttext/Makefile
+!testdev/hosttext/README.md
 CMakeCache.txt
 **/cmake_install.cmake
 cmake_install.cmake
@@ -33,6 +43,7 @@ packages/*
 .DS_Store
 site/
 6502_65C02_functional_tests/*
+tools/dxc/
 cfg/
 cfg/*
 *.AppImage
@@ -100,6 +111,10 @@ test.asm
 # what belongs here IS tracked.
 /corpus/*
 !/corpus/README.md
+
+# Release orchestrator (local host aliases / collected assets)
+scripts/release/hosts.toml
+.release/
 
 # Python
 __pycache__/

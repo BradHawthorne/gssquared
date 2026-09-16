@@ -63,6 +63,7 @@ static const DeviceInfo_t DeviceInfos[NUM_DEVICE_IDS - 1] = {
         PLATFLAG_APPLE_IIE | PLATFLAG_APPLE_IIE_ENHANCED | PLATFLAG_APPLE_IIE_65816
             | PLATFLAG_ANY_IIGS},
     {DEVICE_ID_SUPER_SERIAL, "Apple Super Serial Card", true, 0b11111110, PLATFLAG_ALL},
+    {DEVICE_ID_VOC, "Video Overlay Card", false, 0b00001000, PLATFLAG_ANY_IIGS},
     // FORK: the A2GSPU card, after upstream's IDs (Device_ID.hpp).
     {DEVICE_ID_A2GSPU, "A2GSPU Video Card", true, 0b11111110, PLATFLAG_ANY_IIGS},
 };

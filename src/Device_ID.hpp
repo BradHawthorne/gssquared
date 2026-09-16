@@ -32,6 +32,7 @@ typedef enum device_id {
     DEVICE_ID_HOST_FST,
     DEVICE_ID_UTHERNET2,
     DEVICE_ID_SUPER_SERIAL,
+    DEVICE_ID_VOC,
     // Fork devices after upstream's. Upstream appends its own IDs after SECOND_SIGHT
     // (HOST_FST, UTHERNET2, SUPER_SERIAL, then VOC); keeping those in upstream's order
     // and A2GSPU last makes a future merge add lines instead of reordering them.

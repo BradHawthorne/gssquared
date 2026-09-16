@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #include <cstdio>
 #include <functional>
+#include <string>
 #include <vector>
 
 #include "device_reset_id.hpp"
@@ -87,6 +88,10 @@ class KeyGloo
         ADB_Mouse * adb_mouse = nullptr;
         keygloo_state_t *host_ctx = nullptr;
         bool em_active = false;
+        // SDL button bits forwarded to the guest while EM tracking is on.
+        // Used so a press that started inside the content area can still
+        // release if the pointer leaves before button-up.
+        uint8_t em_forwarded_buttons = 0;
         bool reported_valid = false;
         int target_x = 0;
         int target_y = 0;
@@ -104,7 +109,32 @@ class KeyGloo
         bool step_outstanding = false;
         int stale_frames = 0;
 
-        uint8_t rom[3072];
+        uint8_t rom[4096];
+        uint32_t uc_rom_bytes = 3072;
+        bool uc_rom03 = false;
+
+        uint16_t uc_rom_base() const { return uc_rom03 ? 0x1000u : 0x1400u; }
+
+        uint8_t read_uc_memory(uint16_t addr) const {
+            if (addr < 96) {
+                return ram[addr];
+            }
+            const uint16_t rom_base = uc_rom_base();
+            if (addr >= rom_base && addr <= 0x1FFF) {
+                const uint32_t idx = addr - rom_base;
+                if (idx < uc_rom_bytes) {
+                    return rom[idx];
+                }
+            }
+            // $0060-$00DF (4-bit ports), $00E0-$00FF (P0-P3, timers, IRQ), etc.
+            return 0;
+        }
+
+        void write_uc_memory(uint16_t addr, uint8_t value) {
+            if (addr < 96) {
+                ram[addr] = value;
+            }
+        }
 
         union {
             uint8_t ram[96];
@@ -121,8 +151,11 @@ class KeyGloo
                     3-0: set keyboard layout language
             byte 3: 7-4: repeat delay
                         0: 1/4 sec; 1: 1/2 sec; 2: 3/4 sec; 3: 1 sec; 4: no repeat.
-                    3-0: repeat rate
+                    3-0: repeat rate (uC-facing nibble; host ROM already mapped)
+                        ROM01 (nibble 0 = fastest, 0-7):
                         0: 40/sec; 1: 30/sec; 2: 24/sec; 3: 20/sec; 4: 15/sec; 5: 11/sec; 6: 8/sec; 7: 4/sec
+                        ROM03 (nibble 0 = slowest, 0-9; SETUPCNFG sends USERRSPD as-is):
+                        0-1 extra-slow, 2-9 reverse of ROM01 7-0. CP rightmost bars are 8-9 (fastest).
         */
         uint8_t configuration_bytes[3] = {0};
 
@@ -139,6 +172,7 @@ class KeyGloo
         uint8_t error_byte = 0;
 
         key_code_t key_latch;
+        std::string paste_buffer;
 
         uint8_t last_key_down = 0;
 
@@ -154,9 +188,33 @@ class KeyGloo
 
         ResetController *reset_control = nullptr;
 
+        // 60 Hz frame divisors. ROM01: nibble 0 = fastest. ROM03: nibble 0 = slowest, 9 = fastest.
         const uint8_t repeat_rate[8] = { 1, 2, 2, 3, 4, 5, 8, 15 };
+        const uint8_t repeat_rate_rom03[10] = { 30, 20, 15, 8, 5, 4, 3, 2, 2, 1 };
 
         const uint8_t delay_to_repeat[5] = { 15, 30, 45, 60, 0 };
+
+        uint8_t delay_frames() const {
+            uint8_t dlyval = (vars.dlyrpt & 0xF0) >> 4;
+            if (dlyval > 4) {
+                dlyval = 4;
+            }
+            return delay_to_repeat[dlyval];
+        }
+
+        uint8_t repeat_frames() const {
+            uint8_t idx = vars.dlyrpt & 0x0F;
+            if (uc_rom03) {
+                if (idx >= 10) {
+                    idx = 9;
+                }
+                return repeat_rate_rom03[idx];
+            }
+            if (idx >= 8) {
+                idx = 7;
+            }
+            return repeat_rate[idx];
+        }
         
         union {
             struct {
@@ -198,8 +256,10 @@ class KeyGloo
         // before it reaches the ADB keyboard buffer (used for file-driven input).
         std::function<bool(uint8_t keycode, uint8_t keymods)> key_intercept;
 
-        KeyGloo(ResetController *reset_control) : reset_control(reset_control) {
-            const char *rom_filename = (true /* is rom 01 */) ? "roms/cards/keyglu/rom01-adb-341s0345.bin" : "roms/cards/keyglu/rom03-adb-341s0632-2.bin";
+        KeyGloo(ResetController *reset_control, bool is_rom03 = false) : reset_control(reset_control), uc_rom03(is_rom03) {
+            const char *rom_filename = is_rom03
+                ? "roms/cards/keyglu/rom03-adb-341s0632-2.bin"
+                : "roms/cards/keyglu/rom01-adb-341s0345.bin";
 
             ResourceFile *rom = new ResourceFile(rom_filename, READ_ONLY);
             if (rom == nullptr) {
@@ -208,7 +268,13 @@ class KeyGloo
             }
             rom->load();
             uint8_t *rom_data = (uint8_t *)(rom->get_data());
-            memcpy(this->rom, rom_data, 3072);
+            uc_rom_bytes = (uint32_t)rom->size();
+            if (uc_rom_bytes > sizeof(this->rom)) {
+                fprintf(stderr, "KeyGloo ROM too large (%u bytes, max %zu)\n",
+                    uc_rom_bytes, sizeof(this->rom));
+                uc_rom_bytes = (uint32_t)sizeof(this->rom);
+            }
+            memcpy(this->rom, rom_data, uc_rom_bytes);
             delete rom;
 
             // "power on" the RAM here should be all 0's.
@@ -227,6 +293,7 @@ class KeyGloo
         void set_host_context(keygloo_state_t *ctx);
         void detect_and_update_em_active();
         void handle_em_mouse_motion(float wx, float wy);
+        bool em_mouse_button_should_deliver(const SDL_Event &event);
         void queue_motion_toward_target();
         void drain_motion_queue();
         void deliver_mouse_reg0();
@@ -240,6 +307,10 @@ class KeyGloo
         // zero out 0x51 to force a power-on reset.
         void zero_0x51() {
             ram[0x51] = 0;
+        }
+
+        void start_paste(std::string text) {
+            paste_buffer = std::move(text);
         }
 
         void reset() {
@@ -263,6 +334,7 @@ class KeyGloo
             data_register_full = false;
             kb_register_full = false;
             mouse_data_full = false;
+            paste_buffer.clear();
             update_interrupt_status();
         }
 
@@ -286,6 +358,7 @@ class KeyGloo
 
             keysdown = 0;
             data_register_full = false;
+            paste_buffer.clear();
 
         }
 
@@ -294,6 +367,7 @@ class KeyGloo
             vars.outpt = 0;
             key_latch = {0,0};
             keysdown = 0;
+            paste_buffer.clear();
         }
 
         void flush_key_queue() {
@@ -539,16 +613,12 @@ class KeyGloo
                         configuration_bytes[2] = cmd[4];
                         set_vals_from_configuration();
                     } else if (value == 0x08) { // WRITE uC MEMORY
-                        // write 1 byte to uC memory
-                        ram[cmd[1]] = cmd[2];
+                        // write 1 byte to uC RAM (address is one byte)
+                        write_uc_memory(cmd[1], cmd[2]);
                     } else if (value == 0x09) { // READ uC MEMORY
                         // read 1 byte from uC memory
                         uint16_t addr = cmd[1] | (cmd[2] << 8);
-                        if (addr < 96) {
-                            response[0] = ram[addr];
-                        } else {
-                            response[0] = rom[addr - 0x1400];
-                        }
+                        response[0] = read_uc_memory(addr);
                         response_bytes = 1;
                     } else if (value == 0x0A) { // READ MODES BYTE
                         response[0] = modes_byte;
@@ -1120,9 +1190,7 @@ class KeyGloo
         }
 
         void start_repeat() {
-            uint8_t dlyval = (vars.dlyrpt & 0xF0) >> 4;
-            printf("start_repeat: %02X %d\n", vars.dlyrpt, delay_to_repeat[dlyval]);
-            vars.dncntr = delay_to_repeat[dlyval]; 
+            vars.dncntr = delay_frames();
         }
         void stop_repeat() {
             vars.dncntr = 0;
@@ -1137,6 +1205,14 @@ class KeyGloo
                 detect_and_update_em_active();
                 if (em_active) {
                     handle_em_mouse_motion(event.motion.x, event.motion.y);
+                    return true;
+                }
+            }
+
+            if ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                 event.type == SDL_EVENT_MOUSE_BUTTON_UP) && host_ctx) {
+                detect_and_update_em_active();
+                if (em_active && !em_mouse_button_should_deliver(event)) {
                     return true;
                 }
             }
@@ -1239,7 +1315,7 @@ class KeyGloo
                 vars.dncntr--;
                 if (vars.dncntr == 0) {
                     store_key_to_buffer(last_key_down, vars.currmod.value);
-                    vars.dncntr = repeat_rate[vars.dlyrpt & 0x0F]; // repeat rate
+                    vars.dncntr = repeat_frames();
                 }
             }
             if (reset_counter) {
@@ -1247,6 +1323,14 @@ class KeyGloo
                 if (reset_counter == 0) {
                     reset_control->assert_reset(RST_ID_KEYMICRO, false);
                 }
+            }
+            if (!paste_buffer.empty() && !(key_latch.keycode & 0x80)) {
+                uint8_t key = static_cast<uint8_t>(paste_buffer[0]);
+                if (key == '\n') {
+                    key = '\r';
+                }
+                store_key_to_buffer(key, vars.currmod.value);
+                paste_buffer.erase(0, 1);
             }
         }
 

@@ -34,6 +34,18 @@ The physical REPT key is not modeled. Host keyboards already supply autorepeat; 
 
 ---
 
+## DMABank
+
+The IIgs DMABank register is currently unimplemented.
+
+---
+
+## Diagnostic register
+
+The IIgs diagnostic register (used to read back the contents of the character rom) is unimplemented.
+
+---
+
 ## When to put something here vs. a todo
 
 | Put it here | Put it on the todo / roadmap |

@@ -103,7 +103,10 @@ upstream's: the Host FST is Kelvin Sherlock's GSPlus code (GPL 2.0); the Apple M
 Card emulation (PIA + 6805 protocol) is adapted from the
 [A2Pico mouse-interface](https://github.com/oliverschmidt/mouse-interface) firmware by Thorsten Brehm
 and Oliver Schmidt (MIT License); the ADB mouse tracking technique is based in part on the one used in
-KEGS (GPL 2.0).
+KEGS (GPL 2.0). The ThunderClock Plus card derives from the protocol and hardware work in
+[web-a2e](https://github.com/mikedaley/web-a2e) by Mike Daley, [a2fpga_core](https://github.com/BrentRector/a2fpga_core)
+by Brent Rector, and MAME's `a2thunderclock` / `upd1990a` by R. Belmont; its firmware image is the
+Thunderware 2716 (MAME CRC `1b99c4e3`).
 
 The emulator core, models, and UI are **Jawaid Bazyar's** work. This fork inherits upstream's license;
 our additions are offered under the same terms. Thanks to the upstream project for a clean, hackable

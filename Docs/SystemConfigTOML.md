@@ -142,7 +142,7 @@ If omitted, derive from `platform` and `clock` (e.g. PAL //e → `"apple2e_pal"`
 
 String enum → `device_id` (`src/Device_ID.hpp`). Slot/platform/multiplicity rules live only in `DeviceInfos[]` (`src/device_info.cpp`: `slots_allowed`, `platform_flags`, `multipleInstances`); `Devices[]` derives from that table. Load, editor save, and computer composition all validate against it. `slots_allowed == 0` means motherboard/non-slot (not assignable via `[[cards]]`).
 
-The TOML key **`device`** is reserved for `[[connections]]` — the virtual peripheral attached to a serial port (`file`, `modem`, `echo`, `none`). It MUST NOT be used as the card-type field.
+The TOML key **`device`** is reserved for `[[connections]]` — the virtual peripheral attached to a serial port (`file`, `clipboard`, `modem`, `echo`, `serial`, `none`). It MUST NOT be used as the card-type field.
 
 ### Slot-assignable card types
 
@@ -162,6 +162,7 @@ The TOML key **`device`** is reserved for `[[connections]]` — the virtual peri
 | `"vidhd"` | `DEVICE_ID_VIDHD` | VIDHD | 65816 //e only |
 | `"bazfast3"` | `DEVICE_ID_PD_BLOCK3` | BazFast 3 (DMA Storage) | Multiple instances allowed |
 | `"second_sight"` | `DEVICE_ID_SECOND_SIGHT` | Second Sight | IIgs only, slot 3 only |
+| `"voc"` | `DEVICE_ID_VOC` | Video Overlay Card | IIgs only, slot 3 only; see [Cards_VOC.md](Cards_VOC.md) |
 | `"uthernet2"` | `DEVICE_ID_UTHERNET2` | Uthernet II | IIe + IIgs; slots 1–7; multiple instances allowed; see `Docs/Networking.md` |
 
 Aliases (optional, loader MAY accept):
@@ -264,10 +265,10 @@ All serial and parallel port attachments use `[[connections]]`, whether the port
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `device` | string | yes | Virtual peripheral: `file`, `modem`, `echo`, `none` |
+| `device` | string | yes | Virtual peripheral: `file`, `modem`, `echo`, `clipboard`, `serial`, `none` |
 | `slot` | integer | yes* | Firmware/expansion slot: IIgs SCC A=`1`, B=`2`; cards use their slot |
 | `port` | string | no | Channel `"a"` or `"b"` (defaults to `"a"`; legacy bare `port` without `slot` still loads) |
-| `path` | string | no | Optional host file when `device = "file"` (runtime may auto-generate capture names) |
+| `path` | string | no | Capture file when `device = "file"` (optional); host port name when `device = "serial"` (required; stored as-is, not relative to the config) |
 | `remote_url` | string | no | Remote URL when `device = "modem"` (future) e.g. telnet://1.2.3.4:5566 |
 
 \* Preferred form always includes `slot`. Legacy IIgs entries may omit `slot` and use `port = "a"|"b"`; the loader normalizes those to slots 1 and 2.
@@ -280,10 +281,12 @@ Aligned with `src/serial_devices/`:
 |-------|-------------|
 | `"none"` | No attachment |
 | `"file"` | Capture / file sink (`path` optional) |
+| `"clipboard"` | Capture to host clipboard (high-bit stripped; CR/LF/CRLF → one LF; idle-close like file) |
 | `"echo"` | Loopback for testing (schema only; not offered in UI) |
 | `"modem"` | Hayes-compatible virtual modem (native builds; serial ports only) |
+| `"serial"` | Real host UART; `path` is the OS port name (macOS `/dev/cu.*`, Windows `COMn`, Linux `/dev/ttyUSB*`) |
 
-**Allowed devices by port kind:** serial (SCC, SSC) → none / file / modem; parallel → none / file only.
+**Allowed devices by port kind:** serial (SCC, SSC) → none / file / clipboard / modem / serial; parallel → none / file / clipboard.
 
 ### Port addressing
 
@@ -366,7 +369,7 @@ Rules:
 - **Absolute paths** are used as-is.
 - **Relative paths** are resolved relative to the directory containing the `.gs2` file (recommended for portable configs).
 
-Supported image types are whatever `identify_media()` accepts (`.po`, `.dsk`, `.woz`, `.2mg`, `.hdv`, `.pmap` etc.).
+Supported image types are whatever `identify_media()` accepts (`.po`, `.dsk`, `.woz`, `.2mg`, `.hdv`, `.iso`, `.pmap` etc.). APM `.iso` / block images expand to multiple BazFast units the same way a `.pmap` does.
 
 ### Drive map (reference)
 

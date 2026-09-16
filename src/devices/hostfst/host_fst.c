@@ -1382,13 +1382,13 @@ static int filter_directory_entry(const char *name) {
   }
   /* Skip rather than truncate: truncated names would not open on the host. */
   if (strlen(name) > HOST_FST_MAX_NAME_LEN) {
-    fprintf(stderr, "Host FST: skip long name (%zu > %d): %s\n",
-            strlen(name), HOST_FST_MAX_NAME_LEN, name);
+    HOST_FST_LOG("Host FST: skip long name (%zu > %d): %s\n",
+                 strlen(name), HOST_FST_MAX_NAME_LEN, name);
     return 1;
   }
   /* GS/OS path separator — not valid in a single path component. */
   if (strchr(name, ':') != NULL || strchr(name, '/') != NULL) {
-    fprintf(stderr, "Host FST: skip name with path separator: %s\n", name);
+    HOST_FST_LOG("Host FST: skip name with path separator: %s\n", name);
     return 1;
   }
   return 0;
@@ -1514,7 +1514,7 @@ static word32 fst_get_dir_entry(int class) {
   struct  file_info fi;
   rv = host_get_file_info(fullpath, &fi);
 
-  if (dname) fprintf(stderr, " - %s", dname);
+  if (dname) HOST_FST_LOG(" - %s", dname);
 
   // p16 and gs/os both use truncating c1 output string.
   rv = set_gsstr_truncate(name, dname);
@@ -1738,11 +1738,11 @@ void host_fst(void) {
   word32 acc = 0;
   word16 call = engine.xreg;
 
-  fprintf(stderr, "Host FST: %04x %s", call, call_name(call));
+  HOST_FST_LOG("Host FST: %04x %s", call, call_name(call));
 
 
   if (call & 0x8000) {
-    fputs("\n", stderr);
+    HOST_FST_LOG("\n");
     // system level.
     switch(call) {
       case 0x8001:
@@ -1761,7 +1761,7 @@ void host_fst(void) {
       acc = networkError;
       engine.acc =  acc;
       SEC();
-      fprintf(stderr, "          %02x   %s\n", acc, host_error_name(acc));
+      HOST_FST_LOG("          %02x   %s\n", acc, host_error_name(acc));
 
       return;
     }
@@ -1773,7 +1773,7 @@ void host_fst(void) {
       acc = invalidClass;
       engine.acc = acc;
       SEC();
-      fprintf(stderr, "          %02x   %s\n", acc, host_error_name(acc));
+      HOST_FST_LOG("          %02x   %s\n", acc, host_error_name(acc));
 
       return;
     }
@@ -1799,8 +1799,8 @@ void host_fst(void) {
         break;
     }
 
-    if (path1) fprintf(stderr, " - %s", path1);
-    if (path2) fprintf(stderr, " - %s", path2);
+    if (path1) HOST_FST_LOG(" - %s", path1);
+    if (path2) HOST_FST_LOG(" - %s", path2);
 
     switch(call & 0xff) {
       case 0x01:
@@ -1898,10 +1898,10 @@ void host_fst(void) {
         acc = invalidFSTop;
         break;
     }
-    fputs("\n", stderr);
+    HOST_FST_LOG("\n");
   }
 
-  if (acc) fprintf(stderr, "          %02x   %s\n", acc, host_error_name(acc));
+  if (acc) HOST_FST_LOG("          %02x   %s\n", acc, host_error_name(acc));
 
   host_gc_free();
 

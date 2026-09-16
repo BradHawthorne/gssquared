@@ -750,8 +750,10 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
         // We read from the MegaII because that's where the VideoScanner reads —
         // it's the canonical copy. computer->mmu->get_memory_base() is the MegaII's
         // 128KB buffer (bank $00 + $01), NOT the IIgs's full RAM.
-        uint8_t *megaii_ram = ad->mmu_gs ? ad->mmu_gs->get_megaii_memory_base() : nullptr;
-        uint8_t *shr = megaii_ram ? &megaii_ram[0x12000] : &ram[0x12000];
+        // In CPU order: with SHR on, the Mega II store keeps $E1:$2000-$9FFF interleaved
+        // (upstream 18f5d04c), so megaii_cpu_view() is the image the program drew.
+        const uint8_t *megaii_ram = ad->mmu_gs ? ad->mmu_gs->megaii_cpu_view() : nullptr;
+        const uint8_t *shr = megaii_ram ? &megaii_ram[0x12000] : &ram[0x12000];
 
         // Skip if nothing changed since last SUCCESSFUL send.
         // Why "successful": if the previous send was skipped (busy), prev state

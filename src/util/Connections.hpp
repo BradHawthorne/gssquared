@@ -55,7 +55,9 @@ enum class connection_port_kind_t {
 enum class connection_device_type_t {
     NONE,
     FILE,
+    CLIPBOARD,
     MODEM,
+    SERIAL,
 };
 
 using ConnectionAttachFn = std::function<void(SerialDevice *device)>;
@@ -65,6 +67,7 @@ struct connection_port_info_t {
     std::string display_name;
     connection_port_kind_t kind = connection_port_kind_t::SERIAL;
     connection_device_type_t device = connection_device_type_t::NONE;
+    std::string path;
 };
 
 /** Spec for building a serial-port UI button (live OSD or config editor). */
@@ -73,6 +76,7 @@ struct connection_port_spec_t {
     std::string display_name;
     connection_port_kind_t kind = connection_port_kind_t::SERIAL;
     connection_device_type_t device = connection_device_type_t::NONE;
+    std::string path;
 };
 
 /**
@@ -109,36 +113,52 @@ inline connection_key_t normalize_connection_key(int slot, const std::string &po
 
 inline const char *connection_device_type_name(connection_device_type_t type) {
     switch (type) {
-        case connection_device_type_t::NONE:  return "none";
-        case connection_device_type_t::FILE:  return "file";
-        case connection_device_type_t::MODEM: return "modem";
+        case connection_device_type_t::NONE:      return "none";
+        case connection_device_type_t::FILE:      return "file";
+        case connection_device_type_t::CLIPBOARD: return "clipboard";
+        case connection_device_type_t::MODEM:     return "modem";
+        case connection_device_type_t::SERIAL:    return "serial";
     }
     return "none";
 }
 
 inline connection_device_type_t connection_device_type_from_string(const std::string &s) {
     if (s == "file") return connection_device_type_t::FILE;
+    if (s == "clipboard") return connection_device_type_t::CLIPBOARD;
     if (s == "modem") return connection_device_type_t::MODEM;
+    if (s == "serial") return connection_device_type_t::SERIAL;
     return connection_device_type_t::NONE;
 }
 
 inline bool connection_device_allowed(connection_port_kind_t kind, connection_device_type_t type) {
-    if (type == connection_device_type_t::NONE || type == connection_device_type_t::FILE) {
+    if (type == connection_device_type_t::NONE ||
+        type == connection_device_type_t::FILE ||
+        type == connection_device_type_t::CLIPBOARD) {
         return true;
     }
     if (type == connection_device_type_t::MODEM) {
         return kind == connection_port_kind_t::SERIAL;
     }
+#if !defined(__EMSCRIPTEN__)
+    if (type == connection_device_type_t::SERIAL) {
+        return kind == connection_port_kind_t::SERIAL;
+    }
+#endif
     return false;
 }
 
 inline std::vector<connection_device_type_t> connection_allowed_devices(connection_port_kind_t kind) {
     if (kind == connection_port_kind_t::PARALLEL) {
-        return {connection_device_type_t::NONE, connection_device_type_t::FILE};
+        return {
+            connection_device_type_t::NONE,
+            connection_device_type_t::FILE,
+            connection_device_type_t::CLIPBOARD,
+        };
     }
     return {
         connection_device_type_t::NONE,
         connection_device_type_t::FILE,
+        connection_device_type_t::CLIPBOARD,
         connection_device_type_t::MODEM,
     };
 }
@@ -152,6 +172,7 @@ class Connections {
         bool attached_once = false; // true after any attach(), including explicit none
         ConnectionAttachFn attach_fn;
         std::string port_id;
+        std::string path;
         SerialDevice *device = nullptr;
     };
 
@@ -160,7 +181,8 @@ class Connections {
     std::unordered_map<connection_key_t, port_registration_t, connection_key_hash> ports_;
     mutable std::vector<connection_port_info_t> cached_ports_;
 
-    SerialDevice *create_device(connection_device_type_t type, const std::string &port_id);
+    SerialDevice *create_device(connection_device_type_t type, const std::string &port_id,
+                                const std::string &path);
 
 public:
     Connections(EventQueue *event_queue, DeviceFrameDispatcher *device_frame_dispatcher);
@@ -173,7 +195,8 @@ public:
                       ConnectionAttachFn attach_fn,
                       const std::string &port_id);
 
-    bool attach(connection_key_t key, connection_device_type_t type);
+    bool attach(connection_key_t key, connection_device_type_t type,
+                const std::string &path = {});
     connection_device_type_t current_device(connection_key_t key) const;
     std::vector<connection_device_type_t> allowed_devices(connection_key_t key) const;
     const std::vector<connection_port_info_t> &get_all_ports() const;

@@ -161,6 +161,18 @@ void frame_appevent(computer_t *computer, cpu_state *cpu) {
  */
 void frame_video_update(computer_t *computer, bool force_full_frame = false) {
     video_system_t *vs = computer->video_system;
+    display_state_t *ds = (display_state_t *)computer->cached_display_state;
+
+    // Step-into does not run a full frame of scanner ticks during CPU execution.
+    // Advance one video frame here so VBL / QTR / scanline IRQs still fire even if a
+    // higher-weight processor (Second Sight, Videx) skips Apple II rendering.
+    // Ludicrous (N×14M) keeps the scanner hooked and ticks it during execute.
+    if (force_full_frame && ds && ds->video_scanner) {
+        const int n = (int)computer->clock->get_vid_cycles_per_frame();
+        for (int i = 0; i < n; i++) {
+            ds->video_scanner->video_cycle();
+        }
+    }
 
     vs->update_display(force_full_frame);
 
@@ -194,8 +206,10 @@ void frame_sleep(computer_t *computer, uint64_t last_cycle_time, uint64_t ns_per
     // In the browser the main thread must return promptly so requestAnimationFrame
     // can drive the next SDL_AppIterate. Busy-waiting / sleeping here would hang the
     // tab, so we let vsync (RAF) pace the frame instead.
+    computer->frame_slipped = false;
     return;
 #endif
+    computer->frame_slipped = false;
     if (gs2_app_values.modal_tracking) return;
 
     uint64_t wakeup_time = last_cycle_time + ns_per_frame; /*  + (frame_count & 1); */ // even frames have 16688154, odd frames have 16688154 + 1
@@ -205,6 +219,7 @@ void frame_sleep(computer_t *computer, uint64_t last_cycle_time, uint64_t ns_per
     uint64_t current_time = SDL_GetTicksNS();
     if (current_time > wakeup_time) {
         computer->clock_slip++;
+        computer->frame_slipped = true;
         // TODO: log clock slip for later display.
         //printf("Clock slip: event_time: %10llu, audio_time: %10llu, display_time: %10llu, app_event_time: %10llu, total: %10llu\n", event_time, audio_time, display_time, app_event_time, event_time + audio_time + display_time + app_event_time);
     } else {
@@ -240,7 +255,18 @@ void register_clock_debug(computer_t *computer) {
         "clock",
         DH_CLOCK, // unique ID for this, need to have in a header.
         [computer]() -> DebugFormatter * {
-            return computer->clock->debug();
+            DebugFormatter *f = computer->clock->debug();
+            if (computer->clock->get_clock_mode() == CLOCK_FREE_RUN) {
+                const char *cal = "idle";
+                switch (computer->ludicrous_cal_state) {
+                    case LS_CAL_PROBE: cal = "probe"; break;
+                    case LS_CAL_DROPPING: cal = "calibrating"; break;
+                    case LS_CAL_LOCKED: cal = "locked"; break;
+                    default: break;
+                }
+                f->addLine("Ludicrous Cal: %s", cal);
+            }
+            return f;
         }
     );
 
@@ -284,7 +310,6 @@ false if the user requested a halt.
 bool run_one_frame(computer_t *computer) {
     cpu_state *cpu = computer->cpu;
     NClock *clock = computer->clock;
-    speaker_state_t *speaker_state = (speaker_state_t *)computer->cached_speaker_state;
     display_state_t *ds = (display_state_t *)computer->cached_display_state;
 
     // WIZ5 / A2GSPU_TAP lazy arm — run_one_frame is the SINGLE funnel for BOTH
@@ -318,8 +343,6 @@ bool run_one_frame(computer_t *computer) {
         return false;
     }
 
-    uint64_t c14M_per_frame = clock->get_c14m_per_frame();
-
     if (computer->execution_mode == EXEC_PAUSED) {
         return true;
     }
@@ -337,23 +360,14 @@ bool run_one_frame(computer_t *computer) {
     if (computer->speed_shift) {
         computer->speed_shift = false;
 
-        if (clock->get_clock_mode() == CLOCK_FREE_RUN) {
-            speaker_state->sp->reset(clock->get_frame_start_c14M());
-            int x = ds->video_scanner->get_frame_scan()->get_count();
-            if (x > 100) {
-                printf("Video scanner has %d samples @ speed shift [%d,%d]\n", x, ds->video_scanner->get_hcount(), ds->video_scanner->get_vcount());
-            }
-        } else {
-            int x = ds->video_scanner->get_frame_scan()->get_count();
-            if (x > 100) {
-                printf("Video scanner has %d samples @ speed shift [%d,%d]\n", x, ds->video_scanner->get_hcount(), ds->video_scanner->get_vcount());
-            }
+        int x = ds->video_scanner->get_frame_scan()->get_count();
+        if (x > 100) {
+            printf("Video scanner has %d samples @ speed shift [%d,%d]\n", x, ds->video_scanner->get_hcount(), ds->video_scanner->get_vcount());
         }
 
         clock->set_clock_mode(computer->speed_new);
-
         if (computer->speed_new == CLOCK_FREE_RUN) {
-            assert(true);
+            computer->begin_ludicrous_calibration();
         }
         display_update_video_scanner(ds);
     }
@@ -413,9 +427,117 @@ bool run_one_frame(computer_t *computer) {
         SDL_DelayPrecise(wakeup_time - SDL_GetTicksNS());
 #endif
         
-    } else if ((computer->execution_mode == EXEC_NORMAL) && (clock->get_clock_mode() != CLOCK_FREE_RUN)) {
+    } else if (computer->execution_mode == EXEC_NORMAL) {
 
         computer->set_frame_start_cycle();
+        uint64_t frame_cpu_start = clock->get_cycles();
+
+#ifndef LUDICROUS_BINARY_SEARCH_PROBE
+        // One wall-timed probe frame: count CPU cycles with scanner on (N=1),
+        // then pick N0 and enter drop/lock. Keeps 14M advancing so IRQs fire.
+        if (clock->get_clock_mode() == CLOCK_FREE_RUN &&
+            computer->ludicrous_cal_state == LS_CAL_PROBE) {
+            uint64_t frame_length_ns = (computer->frame_count & 1)
+                ? clock->get_us_per_frame_odd() : clock->get_us_per_frame_even();
+            uint64_t deadline = computer->last_cycle_time + frame_length_ns;
+            uint64_t cycles_start = clock->get_cycles();
+
+            if (computer->debug_window->needs_breakpoint_checks()) {
+                while (SDL_GetTicksNS() < deadline && !cpu->halt) { // halt: see the frame loops below
+                    if (computer->event_timer->isEventPassed(clock->get_c14m())) {
+                        computer->event_timer->processEvents(clock->get_c14m());
+                    }
+                    if (computer->vid_event_timer->isEventPassed(clock->get_vid_cycles())) {
+                        computer->vid_event_timer->processEvents(clock->get_vid_cycles());
+                    }
+                    if (computer->cpu_event_timer->isEventPassed(clock->get_cycles())) {
+                        computer->cpu_event_timer->processEvents(clock->get_cycles());
+                    }
+                    StopHit hit{};
+                    if (computer->debug_window->check_pre_breakpoint(cpu, &hit)) {
+                        uint32_t prev = computer->execution_mode;
+                        computer->execution_mode = EXEC_STEP_INTO;
+                        computer->instructions_left = 0;
+                        if (computer->debug_protocol) {
+                            computer->debug_protocol->emit_stopped(computer, hit);
+                            computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
+                        }
+                        break;
+                    }
+                    uint32_t pc_before = cpu->full_pc;
+                    (cpu->cpun->execute_next)(cpu);
+                    if (computer->breakpoints) {
+                        computer->breakpoints->on_instruction_retired(pc_before);
+                    }
+                    if (computer->debug_window->check_post_breakpoint(cpu, &cpu->trace_entry, &hit)) {
+                        uint32_t prev = computer->execution_mode;
+                        computer->execution_mode = EXEC_STEP_INTO;
+                        computer->instructions_left = 0;
+                        if (computer->debug_protocol) {
+                            computer->debug_protocol->emit_stopped(computer, hit);
+                            computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
+                        }
+                        break;
+                    }
+                    if (cpu->trace_entry.opcode == 0x00) {
+                        computer->execution_mode = EXEC_STEP_INTO;
+                        computer->instructions_left = 0;
+                        break;
+                    }
+                    // Keep frame counters aligned if we run past end during probe.
+                    if (clock->get_c14m() >= clock->get_frame_end_c14M()) {
+                        clock->next_frame();
+                    }
+                }
+            } else {
+                while (SDL_GetTicksNS() < deadline && !cpu->halt) { // halt: see the frame loops below
+                    if (computer->event_timer->isEventPassed(clock->get_c14m())) {
+                        computer->event_timer->processEvents(clock->get_c14m());
+                    }
+                    if (computer->vid_event_timer->isEventPassed(clock->get_vid_cycles())) {
+                        computer->vid_event_timer->processEvents(clock->get_vid_cycles());
+                    }
+                    if (computer->cpu_event_timer->isEventPassed(clock->get_cycles())) {
+                        computer->cpu_event_timer->processEvents(clock->get_cycles());
+                    }
+                    (cpu->cpun->execute_next)(cpu);
+                    if (clock->get_c14m() >= clock->get_frame_end_c14M()) {
+                        clock->next_frame();
+                    }
+                }
+            }
+
+            uint64_t dc = clock->get_cycles() - cycles_start;
+            uint64_t cpf = clock->get_cycles_per_frame();
+            uint32_t n0 = (cpf > 0) ? (uint32_t)(dc / cpf) : LUDICROUS_CPU_PER_14M_MIN;
+            if (n0 < LUDICROUS_CPU_PER_14M_MIN) n0 = LUDICROUS_CPU_PER_14M_MIN;
+            if (n0 > LUDICROUS_CPU_PER_14M_MAX) n0 = LUDICROUS_CPU_PER_14M_MAX;
+            clock->set_cpu_per_14m(n0);
+            computer->ludicrous_cal_state = LS_CAL_DROPPING;
+            computer->ludicrous_slip_streak = 0;
+            computer->ludicrous_stable_frames = 0;
+            fprintf(stdout, "Ludicrous probe: %llu cycles -> N=%u (%.1f MHz)\n",
+                (unsigned long long)dc, n0, (n0 * 14.31818));
+
+            /* Process Events */
+            MEASURE(computer->event_times, frame_event(computer, cpu));
+
+            /* Process Internal Event Queue */
+            MEASURE(computer->app_event_times, frame_appevent(computer, cpu));
+
+            /* Execute Device Frames - 60 fps */
+            MEASURE(computer->device_times, computer->device_frame_dispatcher->dispatch());
+
+            /* Emit Video Frame */
+            if (computer->execution_mode != EXEC_STEP_INTO) {
+                MEASURE(computer->display_times, frame_video_update(computer));
+            }
+            computer->frame_status_update();
+            computer->last_start_frame_c14m = clock->get_frame_start_c14M();
+            computer->last_cycle_time = SDL_GetTicksNS();
+            return true;
+        }
+#endif
 
         if (computer->debug_window->needs_breakpoint_checks()) {
             while (clock->get_c14m() < clock->get_frame_end_c14M() && !cpu->halt) { // 1/60th second. (halt: see the fast loop below)
@@ -518,120 +640,31 @@ bool run_one_frame(computer_t *computer) {
             computer->last_start_frame_c14m = clock->get_frame_start_c14M();
         }
 
-        uint64_t time_to_sleep = frame_length_ns - (SDL_GetTicksNS() - computer->last_cycle_time);
-        computer->set_idle_percent(((float)time_to_sleep / (float)frame_length_ns) * 100.0f);
+        // Measure against the same baseline frame_sleep uses for its deadline, so
+        // idle% and slip detection agree even when pre-loop work runs long.
+        uint64_t frame_work_ns = SDL_GetTicksNS() - computer->last_cycle_time;
+        uint64_t time_to_sleep =
+            (frame_work_ns < frame_length_ns)
+                ? frame_length_ns - frame_work_ns
+                : 0;
+        computer->set_idle_percent(
+            ((float)time_to_sleep / (float)frame_length_ns) * 100.0f);
 
         if (g_a2gspu_pace_fast) {
             // A2GSPU_PACE=fast (a2gspu_pace.hpp; the headless default): no wait for
             // the wall clock, and the audio this frame generated is dropped rather
-            // than left for a paused device to never drain.
+            // than left for a paused device to never drain. No ludicrous-speed
+            // calibration either: it measures host time, which a paced-fast run
+            // must never feed back into.
             if (computer->audio_system) computer->audio_system->clear_all_streams();
         } else {
             frame_sleep(computer, computer->last_cycle_time, frame_length_ns);
+            computer->update_ludicrous_calibration(
+                gs2_app_values.modal_tracking,
+                clock->get_cycles() - frame_cpu_start);
         }
         computer->last_cycle_time = SDL_GetTicksNS(); 
 
-    } else { // Ludicrous Speed!
-
-        // TODO: how to handle VBL timing here. estimate it based on realtime?
-        computer->set_frame_start_cycle(); // todo: unsure if this is right..
-        uint64_t frame_length_ns = (computer->frame_count & 1) ? clock->get_us_per_frame_odd() : clock->get_us_per_frame_even();
-        uint64_t next_frame_time = computer->last_cycle_time + frame_length_ns;
-
-        computer->last_start_frame_c14m = clock->get_frame_start_c14M();
-        
-        if (computer->debug_window->needs_breakpoint_checks()) {
-            while (SDL_GetTicksNS() < next_frame_time && !cpu->halt) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast.
-                if (computer->event_timer->isEventPassed(clock->get_c14m())) {
-                    computer->event_timer->processEvents(clock->get_c14m());
-                }
-                if (computer->vid_event_timer->isEventPassed(clock->get_vid_cycles())) {
-                    computer->vid_event_timer->processEvents(clock->get_vid_cycles());
-                }
-                if (computer->cpu_event_timer->isEventPassed(clock->get_cycles())) {
-                    computer->cpu_event_timer->processEvents(clock->get_cycles());
-                }
-                StopHit hit{};
-                if (computer->debug_window->check_pre_breakpoint(cpu, &hit)) {
-                    uint32_t prev = computer->execution_mode;
-                    computer->execution_mode = EXEC_STEP_INTO;
-                    computer->instructions_left = 0;
-                    if (computer->debug_protocol) {
-                        computer->debug_protocol->emit_stopped(computer, hit);
-                        computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
-                    }
-                    break;
-                }
-
-                uint32_t pc_before = cpu->full_pc;
-                (cpu->cpun->execute_next)(cpu);
-                if (computer->breakpoints) {
-                    computer->breakpoints->on_instruction_retired(pc_before);
-                }
-
-                if (computer->debug_window->check_post_breakpoint(cpu, &cpu->trace_entry, &hit)) {
-                    uint32_t prev = computer->execution_mode;
-                    computer->execution_mode = EXEC_STEP_INTO;
-                    computer->instructions_left = 0;
-                    if (computer->debug_protocol) {
-                        computer->debug_protocol->emit_stopped(computer, hit);
-                        computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
-                    }
-                    break;
-                }
-                if (cpu->trace_entry.opcode == 0x00) { // catch a BRK and stop execution.
-                    computer->execution_mode = EXEC_STEP_INTO;
-                    computer->instructions_left = 0;
-                    break;
-                }
-
-            }
-        } else { // skip all debug checks if debug window is not open - this may seem repetitious but it saves all kinds of cycles where every cycle counts (GO FAST MODE)
-            while (SDL_GetTicksNS() < next_frame_time && !cpu->halt) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast. (halt: see above)
-                if (computer->event_timer->isEventPassed(clock->get_c14m())) {
-                    computer->event_timer->processEvents(clock->get_c14m());
-                }
-                if (computer->vid_event_timer->isEventPassed(clock->get_vid_cycles())) {
-                    computer->vid_event_timer->processEvents(clock->get_vid_cycles());
-                }
-                if (computer->cpu_event_timer->isEventPassed(clock->get_cycles())) {
-                    computer->cpu_event_timer->processEvents(clock->get_cycles());
-                }
-                (cpu->cpun->execute_next)(cpu);
-            }
-        }
-
-        // this was roughly one video frame so let's pretend we went that many.
-        clock->adjust_c14m(c14M_per_frame);
-
-            /* Process Events */
-            MEASURE(computer->event_times, frame_event(computer, cpu));
-    
-            /* Emit Audio Frame */
-            // TODO: reevaluate disable audio output in ludicrous speed.
-
-            /* Process Internal Event Queue */
-            MEASURE(computer->app_event_times, frame_appevent(computer, cpu));
-    
-            /* Execute Device Frames - 60 fps */
-            MEASURE(computer->device_times, computer->device_frame_dispatcher->dispatch());
-    
-            /* Emit Video Frame */
-    
-            MEASURE(computer->display_times, frame_video_update(computer, true));
-    
-
-        // update frame window counters.
-        // this gets wildly out of sync because we're not actually executing this many cycles in the loop,
-        // because we are basing loop on time. So, maybe loop should be based on cycles per below after all,
-        // while just periodically doing the frame update stuff here.
-        computer->last_cycle_time = SDL_GetTicksNS(); 
-        
-        // update frame status; calculate stats; move these variables into computer;
-        computer->frame_status_update();
-
-        clock->next_frame(); // TODO: now redundant to above.
-        computer->last_start_frame_c14m = clock->get_frame_start_c14M();
     }
 
     // A2GSPU_LIVENESS: hash the screen every N frames so a run that stopped
@@ -834,7 +867,7 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
             const size_t main_rom_size = rd->main_rom_file->size();
             const size_t rom_bank_ff_offset = main_rom_size - 65536;
             // Contiguous FPI RAM = motherboard base (ROM-dependent) + 8MB expansion
-            // card, matching KEGS. Not a flat 8MB total — that left banks $80+ floating.
+            // card, hard-capped at bank $7F (FPI decodes 23 RAM address bits).
             const size_t mobo_ram = iigs_memory::mobo_ram_bytes(main_rom_size);
             const size_t exp_ram = iigs_memory::kDefaultExpBytes;
             const size_t fast_ram = iigs_memory::fast_ram_bytes(main_rom_size, exp_ram);
@@ -934,7 +967,7 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
         for (const auto& conn : state->loaded_config->connections()) {
             const connection_key_t key = normalize_connection_key(conn.slot, conn.port);
             const connection_device_type_t dtype = connection_device_type_from_string(conn.device);
-            if (!computer->connections->attach(key, dtype)) {
+            if (!computer->connections->attach(key, dtype, conn.path)) {
                 printf("Warning: connection slot %d device=%s not applied (port not registered?)\n",
                        key.slot, conn.device.c_str());
             }
@@ -973,7 +1006,7 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
         computer->video_system->set_display_engine(DM_ENGINE_RGB);
 
         computer->register_reset_handler([state](bool cold_start) {
-            state->mmu_iigs->reset();
+            state->mmu_iigs->reset(cold_start);
             return true;
         });
     }

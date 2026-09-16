@@ -391,9 +391,17 @@ class MMU {
             printf("\n");
         }
 
-        virtual void reset() {
+        virtual void reset(bool cold_start = false) {
             // do nothing.
         }
+
+        // IIgs C029: aux $2000–$9FFF is linearized (bit 6) or SHR is on (bit 7).
+        // Default false so IIe/II+ and test apps need no MMU_IIgs RTTI.
+        virtual bool is_aux_linear() { return false; }
+
+        // IIgs Mega II (display RAM for banks $E0/$E1). Null on II/IIe so
+        // debugger/tests need no dynamic_cast / MMU_IIgs typeinfo.
+        virtual MMU *get_megaii_mmu() { return nullptr; }
 
         const char *get_read_d(page_t page) {
             return page_table[page].read_d;

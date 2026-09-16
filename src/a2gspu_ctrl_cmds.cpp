@@ -413,8 +413,7 @@ bool load_vram_raw(computer_t *computer, const char *path, int page,
     }
     if (page != 2) page = 1;
     uint32_t base = (page == 2) ? 0x4000u : 0x2000u;
-    uint8_t *flat = rail_video_base(computer);
-    if (!flat) {
+    if (!rail_video_base(computer)) {
         if (err && errsz) snprintf(err, errsz, "no-flat-image");
         return false;
     }
@@ -431,8 +430,10 @@ bool load_vram_raw(computer_t *computer, const char *path, int page,
             snprintf(err, errsz, "need 16384 bytes, got %zu from %s", n, path);
         return false;
     }
-    memcpy(flat + 0x10000 + base, buf, 0x2000);       // AUX
-    memcpy(flat + base, buf + 0x2000, 0x2000);         // MAIN
+    for (uint32_t k = 0; k < 0x2000; k++) {            // CPU order (rail_video_poke)
+        rail_video_poke(computer, 0x10000 + base + k, buf[k]);          // AUX
+        rail_video_poke(computer, base + k, buf[0x2000 + k]);           // MAIN
+    }
     return true;
 }
 
@@ -1379,7 +1380,7 @@ bool try_assert_dhgr(const char *line, char *result, size_t rsz,
         // come back unevaluated, which is the true answer.
         const uint8_t *e1 = nullptr;
         if (MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(rail_mmu(computer)))
-            e1 = gs->get_megaii_memory_base() + 0x10000;
+            if (const uint8_t *v = gs->megaii_cpu_view()) e1 = v + 0x10000;   // CPU order
         char detail[600] = {0};
         a2assert::Tally t =
             a2assert::eval(line + 7, computer ? computer->cpu : nullptr, e1,

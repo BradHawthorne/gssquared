@@ -21,7 +21,7 @@ NTSC, RGB, and three colors of monochrome
 
 ### Speed
 
-1MHz, 2.8MHz, 7.1MHz, 14.3MHz, and Ludicrous speed
+1MHz, 2.8MHz, 7.1MHz, 14.3MHz, and Ludicrous speed. Ludicrous speed still ties into the normal 1MHz video system so speaker, Ensoniq, and disk devices keep running (if ludicrously).
 
 ### Slots
 
@@ -31,7 +31,7 @@ If you are seeing the Control Panel from the System Select screen, it's because 
 
 ### Serial / Parallel
 
-Buttons for each serial or parallel port on the machine (IIgs built-in SCC, Super Serial, Parallel, etc.). Click a button to attach **None**, **File**, or **Modem**. See [Serial & Parallel Connections](SerialConnections.md).
+Buttons for each serial or parallel port on the machine (IIgs built-in SCC, Super Serial, Parallel, etc.). Click a button to attach **None**, **File**, **Clipboard**, **Modem**, or a listed host serial port. See [Serial & Parallel Connections](SerialConnections.md).
 
 ### Disk Drives / Storage
 

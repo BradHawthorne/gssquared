@@ -489,6 +489,331 @@ inline const std::vector<Test> ALL_TESTS = {
             AssertOp{0xE1'C200, {0xE2, 0x40}},
         }
     },
+
+    // AUXHGR|SHR: odd-bank HGR shadows unless BOTH inhibits are set (SHADOW.s inhbt1=$18).
+    Test{
+        28,
+        "odd HGR1 shadows with SHR inhibit only (AUXHGR still enables)",
+        {
+            WriteOp{0xE1'2000, {0x00, 0x00}},
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+            WriteOp{0x01'2000, {0x56, 0x78}},
+            AssertOp{0xE1'2000, {0x56, 0x78}},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+        }
+    },
+    Test{
+        29,
+        "odd HGR1 shadows with AUXHGR inhibit only (SHR still enables)",
+        {
+            WriteOp{0xE1'2000, {0x00, 0x00}},
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, SHADOW_INH_AUXHGR},
+            WriteOp{0x01'2000, {0x56, 0x78}},
+            AssertOp{0xE1'2000, {0x56, 0x78}},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+        }
+    },
+    Test{
+        30,
+        "odd HGR1 inhibited when AUXHGR+SHR both set",
+        {
+            WriteOp{0xE1'2000, {0x00, 0x00}},
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR | SHADOW_INH_AUXHGR},
+            WriteOp{0x01'2000, {0x56, 0x78}},
+            AssertOp{0xE1'2000, {0x00, 0x00}},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+        }
+    },
+    Test{
+        31,
+        "even HGR1 still shadows when AUXHGR+SHR both set",
+        {
+            WriteOp{0xE0'2000, {0x00, 0x00}},
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR | SHADOW_INH_AUXHGR},
+            WriteOp{0x00'2000, {0x56, 0x78}},
+            AssertOp{0xE0'2000, {0x56, 0x78}},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+        }
+    },
+    Test{
+        32,
+        "odd HGR2 inhibited when AUXHGR+SHR both set",
+        {
+            WriteOp{0xE1'4000, {0x00, 0x00}},
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR | SHADOW_INH_AUXHGR},
+            WriteOp{0x01'4000, {0x56, 0x78}},
+            AssertOp{0xE1'4000, {0x00, 0x00}},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+        }
+    },
+
+    // SPEED_SHADOW_ALL shadows through $EF, including unpopulated banks past RAM.
+    Test{
+        33,
+        "all-banks shadow from unpopulated bank $82 text page to E0",
+        {
+            WriteOp{0xE0'0400, {0x00, 0x00}},
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+            WriteOp{0xE0'C036, 0x94},
+            WriteOp{0x82'0400, {0x12, 0x34}},
+            WriteOp{0xE0'C036, 0x84},
+            AssertOp{0xE0'0400, {0x12, 0x34}},
+            AssertOp{0x82'0000, 0x82},
+        }
+    },
+    Test{
+        34,
+        "all-banks shadow from unpopulated bank $EE text page to E0",
+        {
+            WriteOp{0xE0'0400, {0x00, 0x00}},
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+            WriteOp{0xE0'C036, 0x94},
+            WriteOp{0xEE'0400, {0x56, 0x78}},
+            AssertOp{0xE0'0400, {0x56, 0x78}},
+            AssertOp{0xEE'0000, 0xEE},
+            WriteOp{0xE0'C036, 0x84},
+            WriteOp{0xEE'0400, {0x9A, 0xBC}},
+            AssertOp{0xE0'0400, {0x56, 0x78}},
+        }
+    },
+
+    // C029 aux linearization (bit 6): E1 $2000-$9FFF interleaved when latch on.
+    // Matches SHADOW.s linexp for C029=$41 / $00 / $40.
+    Test{
+        35,
+        "C029=$41 linear: read E1/2001 sees physical E1/6000",
+        {
+            WriteOp{0xE0'C029, 0x01}, // latch on, linear off — plant physical markers
+            WriteOp{0xE1'2000, 0x20},
+            WriteOp{0xE1'2001, 0x21},
+            WriteOp{0xE1'6000, 0x60},
+            WriteOp{0xE0'C029, 0x41}, // latch on, linear on
+            AssertOp{0xE1'2000, 0x20}, // still physical 2000
+            AssertOp{0xE1'2001, 0x60}, // remapped to physical 6000
+            WriteOp{0xE0'C029, 0x01},
+        }
+    },
+    Test{
+        36,
+        "C029=$41 linear: write 01/2001 shadows to physical E1/6000",
+        {
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, 0x00}, // allow all video shadow
+            WriteOp{0xE1'2001, 0x21},
+            WriteOp{0xE1'6000, 0x60},
+            WriteOp{0xE0'C029, 0x41},
+            WriteOp{0x01'2001, 0x41}, // linear 2001 → phys 6000 via shadow
+            WriteOp{0xE0'C029, 0x01}, // linear off to inspect physical
+            AssertOp{0xE1'6000, 0x41},
+            AssertOp{0xE1'2001, 0x21}, // untouched
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+        }
+    },
+    Test{
+        37,
+        "C029=$40 linear+latch-off: no remap (same as latch-off)",
+        {
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'2000, 0x10},
+            WriteOp{0xE0'2001, 0x11},
+            WriteOp{0xE1'2000, 0x20},
+            WriteOp{0xE1'2001, 0x21},
+            WriteOp{0xE0'C029, 0x40}, // linear on but latch off → E1 reads as E0
+            AssertOp{0xE1'2000, 0x10},
+            AssertOp{0xE1'2001, 0x11},
+            WriteOp{0xE0'C029, 0x01},
+        }
+    },
+
+    // Enabling SHR (bit 7) linearizes as well, even with bit 6 clear. GS/OS runs
+    // its desktop at $81 and expects aux $2000-$9FFF to stay linearized.
+    Test{
+        38,
+        "C029=$81 (SHR on, bit 6 clear): read E1/2001 sees physical E1/6000",
+        {
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE1'2000, 0x20},
+            WriteOp{0xE1'2001, 0x21},
+            WriteOp{0xE1'6000, 0x60},
+            WriteOp{0xE0'C029, 0x81},
+            AssertOp{0xE1'2000, 0x20},
+            AssertOp{0xE1'2001, 0x60},
+            WriteOp{0xE0'C029, 0x01},
+        }
+    },
+    Test{
+        39,
+        "C029=$81: write 01/2001 shadows to physical E1/6000",
+        {
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'C035, 0x00}, // allow all video shadow
+            WriteOp{0xE1'2001, 0x21},
+            WriteOp{0xE1'6000, 0x60},
+            WriteOp{0xE0'C029, 0x81},
+            WriteOp{0x01'2001, 0x41},
+            WriteOp{0xE0'C029, 0x01}, // linear off to inspect physical
+            AssertOp{0xE1'6000, 0x41},
+            AssertOp{0xE1'2001, 0x21}, // untouched
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},
+        }
+    },
+    Test{
+        40,
+        "C029=$80 (SHR on, latch off): no remap, E1 reads as E0",
+        {
+            WriteOp{0xE0'C029, 0x01},
+            WriteOp{0xE0'2000, 0x10},
+            WriteOp{0xE0'2001, 0x11},
+            WriteOp{0xE1'2000, 0x20},
+            WriteOp{0xE1'2001, 0x21},
+            WriteOp{0xE0'C029, 0x80},
+            AssertOp{0xE1'2000, 0x10},
+            AssertOp{0xE1'2001, 0x11},
+            WriteOp{0xE0'C029, 0x01},
+        }
+    },
+
+    /* Bank $E1 language card decode. With the bank latch on, aux is forced, but the
+       LC arrangement still applies in bank $E1 exactly as it does in $E0 - see the
+       bank latch section of Docs/AppleIIgs-Memory.md. Test 41 is a transcription of a
+       read-only program run on a real ROM 01 machine, which returned ROM in both LC
+       banks:
+           $E1/D000 bank2 = 6F   $E1/E000 = 4C   $E0/D000 = 6F
+           $FF/D000 = 6F         $FF/E000 = 4C   $E1/D000 bank1 = 6F           */
+    Test{
+        41,
+        "$FF ROM appears in the E1 LC window when RDROM set",
+        {
+            ReadOp{0xE0'C082, 0x00},        // LC bank 2, read ROM, no write
+            AssertOp{0xE1'D000, 0x6F},
+            AssertOp{0xE1'E000, 0x4C},
+            AssertOp{0xE0'D000, 0x6F},      // control: E0 goes through the Mega II page table
+            AssertOp{0xFF'D000, 0x6F},      // reference: the ROM bytes themselves
+            AssertOp{0xFF'E000, 0x4C},
+            ReadOp{0xE0'C08A, 0x00},        // LC bank 1, read ROM, no write
+            AssertOp{0xE1'D000, 0x6F},      // ROM regardless of which LC bank is selected
+            ReadOp{0xE0'C082, 0x00},
+        }
+    },
+    Test{
+        42,
+        "E1 LC bank 1 $D000 is a different 4K page than LC bank 2 $D000",
+        {
+            ReadOp{0xE0'C08B, 0x00},        // LC bank 1, read RAM, write RAM
+            ReadOp{0xE0'C08B, 0x00},
+            WriteOp{0xE1'D000, 0xB1},
+            ReadOp{0xE0'C083, 0x00},        // LC bank 2, read RAM, write RAM
+            ReadOp{0xE0'C083, 0x00},
+            WriteOp{0xE1'D000, 0xB2},
+            ReadOp{0xE0'C088, 0x00},        // LC bank 1, read RAM
+            AssertOp{0xE1'D000, 0xB1},
+            ReadOp{0xE0'C080, 0x00},        // LC bank 2, read RAM
+            AssertOp{0xE1'D000, 0xB2},
+            ReadOp{0xE0'C082, 0x00},
+        }
+    },
+    Test{
+        43,
+        "E1 $E000 is the same RAM under both LC banks",
+        {
+            ReadOp{0xE0'C08B, 0x00},        // LC bank 1, read RAM, write RAM
+            ReadOp{0xE0'C08B, 0x00},
+            WriteOp{0xE1'E000, 0xE1},
+            ReadOp{0xE0'C083, 0x00},        // LC bank 2, read RAM, write RAM
+            ReadOp{0xE0'C083, 0x00},
+            AssertOp{0xE1'E000, 0xE1},      // only $D000-$DFFF is banked
+            ReadOp{0xE0'C082, 0x00},
+        }
+    },
+    Test{
+        44,
+        "E1 LC RAM is write protected when LC writes are disabled",
+        {
+            ReadOp{0xE0'C083, 0x00},        // LC bank 2, read RAM, write RAM
+            ReadOp{0xE0'C083, 0x00},
+            WriteOp{0xE1'D000, 0x55},
+            ReadOp{0xE0'C080, 0x00},        // LC bank 2, read RAM, writes disabled
+            WriteOp{0xE1'D000, 0xAA},
+            AssertOp{0xE1'D000, 0x55},      // write discarded
+            ReadOp{0xE0'C082, 0x00},
+        }
+    },
+    /* ALTZP is driven through the state register here; test 47 covers the
+       $C008/$C009 route to the same mapping. */
+    Test{
+        45,
+        "bank latch forces E1 LC to aux; E0 LC follows ALTZP",
+        {
+            ReadOp{0xE0'C083, 0x00},        // LC bank 2, read RAM, write RAM
+            ReadOp{0xE0'C083, 0x00},
+            WriteOp{0xE0'C068, 0x04},       // ALTZP off, LC bank 2, read RAM
+            WriteOp{0xE0'E001, 0x22},       // main LC
+            WriteOp{0xE1'E001, 0x11},       // aux LC, forced by the bank latch
+            AssertOp{0xE0'E001, 0x22},
+            WriteOp{0xE0'C068, 0x84},       // ALTZP on: E0 LC moves to aux
+            AssertOp{0xE0'E001, 0x11},
+            AssertOp{0xE1'E001, 0x11},      // E1 unaffected either way
+            WriteOp{0xE0'C068, 0x04},       // ALTZP off again
+            AssertOp{0xE0'E001, 0x22},
+            AssertOp{0xE1'E001, 0x11},
+            WriteOp{0xE0'C068, 0x0C},       // restore the reset state
+        }
+    },
+    /* Derived from the hardware reference (the shadow register governs the shadowed
+       banks $00/$01, not the Mega II's own banks), not yet measured on a real GS. */
+    Test{
+        46,
+        "IOLC inhibit does not remove I/O or the LC decode from banks E0/E1",
+        {
+            ReadOp{0xE0'C082, 0x00},                // LC bank 2, read ROM
+            WriteOp{0xE0'C035, SHADOW_INH_IOLC | SHADOW_INH_SHR},
+            AssertOp{0xE0'C200, {0xE2, 0x40}},      // slot ROM still present
+            AssertOp{0xE1'C200, {0xE2, 0x40}},
+            AssertOp{0xE0'D000, 0x6F},              // LC decode still active
+            AssertOp{0xE1'D000, 0x6F},
+            WriteOp{0xE0'C035, SHADOW_INH_SHR},     // restore
+        }
+    },
+    /* Regression for the ROM 03 built-in diagnostic, test 04 (RAM_ADDR in
+       Bank FF/diag.tests.asm). It fills banks $E1 then $E0 with an address pattern
+       and compares them back in the same order, and read bank $E0's pattern out of
+       bank $E1: $C008/$C009 remapped pages $00/$01 but left the LC pages $D0-$FF on
+       whichever bank the last $C08x / $C068 access had selected, so a stale aux
+       mapping put $E0's LC on top of $E1's. */
+    Test{
+        47,
+        "toggling ALTZP through $C008/$C009 remaps the E0 LC window",
+        {
+            WriteOp{0xE0'C029, 0x01},       // bank latch on
+            WriteOp{0xE0'C009, 0x00},       // ALTZP on
+            ReadOp{0xE0'C08B, 0x00},        // LC bank 1, read RAM, write RAM - composes on aux
+            ReadOp{0xE0'C08B, 0x00},
+            WriteOp{0xE1'D000, 0x11},
+            WriteOp{0xE1'E000, 0x22},
+            AssertOp{0xE0'D000, 0x11},      // ALTZP on: the E0 LC window is E1's RAM
+            AssertOp{0xE0'E000, 0x22},
+            WriteOp{0xE0'C008, 0x00},       // ALTZP off: the window must move back to main
+            WriteOp{0xE0'D000, 0xE0},       // ... so these land in main, not on top of E1
+            WriteOp{0xE0'E000, 0xE0},
+            AssertOp{0xE1'D000, 0x11},
+            AssertOp{0xE1'E000, 0x22},
+            AssertOp{0xE0'D000, 0xE0},
+            AssertOp{0xE0'E000, 0xE0},
+            WriteOp{0xE0'C009, 0x00},       // ALTZP on again: back to E1's RAM
+            AssertOp{0xE0'D000, 0x11},
+            AssertOp{0xE0'E000, 0x22},
+            WriteOp{0xE0'C008, 0x00},       // restore
+            ReadOp{0xE0'C082, 0x00},        // restore: LC bank 2, read ROM
+        }
+    },
+
     // Test: when IOLC not inhibited, interrupt vector pull reads from ROM.
     // Test: when IOLC inhibited, interrupt vector pull reads from RAM.
     // Test: when LC RAM READ enabled, bit 3 in State tracks.
@@ -502,8 +827,9 @@ inline const std::vector<Test> ALL_TESTS = {
         0x99,
         "floating bus behavior: ram bank higher than real RAM data reads as the bank number",
         {
-            AssertOp{0x81'0000, 0x81},
-            AssertOp{0x82'0000, 0x82},
+            // FPI 23-bit RAM decode: last bank is $7F; first unpopulated is $80.
+            AssertOp{0x80'0000, 0x80},
+            AssertOp{0xEE'0000, 0xEE},
         }
     },
 

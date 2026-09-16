@@ -3561,6 +3561,7 @@ int execute_next(cpu_state *cpu) override {
                     stack_pull(cpu, cpu->p);
                     cpu->_M = 1;
                     cpu->_X = 1;
+                    // XY should be $00nn here already if E=1
                 } else {
                     stack_pull(cpu, cpu->p);
                     cpu->p &= ~FLAG_B; // break flag is cleared.
@@ -4094,7 +4095,6 @@ int execute_next(cpu_state *cpu) override {
         /* RTI --------------------------------- */
         case OP_RTI_IMP: /* RTI */
             {
-                // TODO: make sure you finish this.
                 if constexpr (CPUTraits::has_65816_ops) {
                     // "different order from N6502"
                     byte_t oldp = cpu->p & (FLAG_B | FLAG_UNUSED);
@@ -4113,6 +4113,10 @@ int execute_next(cpu_state *cpu) override {
                     } else {
                         p = p & ~(FLAG_B | FLAG_UNUSED);
                         cpu->p = p | oldp;
+                    }
+                    if (cpu->_X == 1) {
+                        cpu->x_hi = 0;
+                        cpu->y_hi = 0;
                     }
                     cpu->pc = pop_word(cpu);
                     if constexpr (!CPUTraits::e_mode) cpu->pb = pop_byte(cpu);
@@ -4922,7 +4926,10 @@ int execute_next(cpu_state *cpu) override {
 
         case OP_INOP_CB: /* INOP CB */ /* OP_WAI_IMP */
             if constexpr (CPUTraits::has_65816_ops) {
-                cpu->rdy = true;
+                // If IRQ is already asserted, do not pull RDY low — continue to next insn.
+                if (!cpu->irq_asserted) {
+                    cpu->rdy = true;
+                }
                 incr_cycles(cpu); // ticks 2 cycles past the opcode.
                 incr_cycles(cpu);
             } else if constexpr (CPUTraits::has_65c02_ops) {
@@ -4979,7 +4986,6 @@ int execute_next(cpu_state *cpu) override {
                 invalid_nop(cpu, 1, 1);
             } else invalid_opcode(cpu, opcode); // invalid opcode
             break;
-
 
             
         /* End of Opcodes -------------------------- */

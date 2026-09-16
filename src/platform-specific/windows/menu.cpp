@@ -13,7 +13,7 @@
 #include "util/MenuInterface.h"
 
 // ── Local command IDs (items not in MenuEventCode) ────────────────────────────
-// Ranges already occupied: 1-4, 100-103, 200-204, 300-302, 400-401, 501, 600-6xx, 700-703
+// Ranges already occupied: 1-4, 100-103, 200-204, 300-304, 400-401, 501, 600-6xx, 700-706
 #define IDM_FILE_CLOSE       800
 #define IDM_APP_QUIT         801
 #define IDM_SETTINGS_SLEEP        802
@@ -34,6 +34,7 @@ static HMENU g_drivesMenu     = NULL;
 static HMENU g_settingsPopup  = NULL;
 static HMENU g_speedMenu      = NULL;
 static HMENU g_controllerMenu = NULL;
+static HMENU g_joyportSelectMenu = NULL;
 static HMENU g_monitorMenu    = NULL;
 static HMENU g_hudMenu        = NULL;
 static HMENU g_displayPopup   = NULL;
@@ -181,25 +182,42 @@ static void updatePopupState(HMENU popup)
     if (popup == g_controllerMenu) {
         int current = mi->getCurrentControllerMode(); // 0..2
         bool absentDisconnected = mi->getDisconnectedWhenNoGamepad();
+        bool joyport_on = (current == 2);
         int n = GetMenuItemCount(g_controllerMenu);
         for (int i = 0; i < n; ++i) {
             MENUITEMINFOW mii = {};
             mii.cbSize = sizeof(mii);
-            mii.fMask  = MIIM_FTYPE | MIIM_ID;
+            mii.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
             GetMenuItemInfoW(g_controllerMenu, static_cast<UINT>(i), TRUE, &mii);
             if (mii.fType & MFT_SEPARATOR) {
                 continue;
             }
             UINT id = mii.wID;
-            if (id == static_cast<UINT>(MENU_CONTROLLER_ABSENT_DISCONNECTED)) {
+            if (mii.hSubMenu) {
+                setItemEnable(g_controllerMenu, i, running && joyport_on);
+            } else if (id == static_cast<UINT>(MENU_CONTROLLER_ABSENT_DISCONNECTED)) {
                 setItemCheck(g_controllerMenu,  i, absentDisconnected);
                 setItemEnable(g_controllerMenu, i, running);
-            } else {
-                // IDs: MENU_CONTROLLER_GAMEPAD(700), MOUSE(701), JOYPORT(702)
+            } else if (id == static_cast<UINT>(MENU_CONTROLLER_GAMEPAD)
+                    || id == static_cast<UINT>(MENU_CONTROLLER_MOUSE)
+                    || id == static_cast<UINT>(MENU_CONTROLLER_JOYPORT)) {
                 int mode = static_cast<int>(id) - static_cast<int>(MENU_CONTROLLER_GAMEPAD);
                 setItemCheck(g_controllerMenu,  i, mode == current);
                 setItemEnable(g_controllerMenu, i, running);
             }
+        }
+        return;
+    }
+
+    if (popup == g_joyportSelectMenu) {
+        int current = mi->getJoyportSelect(); // 0=left, 1=center, 2=right
+        bool joyport_on = (mi->getCurrentControllerMode() == 2);
+        int n = GetMenuItemCount(g_joyportSelectMenu);
+        for (int i = 0; i < n; ++i) {
+            int id = static_cast<int>(getItemId(g_joyportSelectMenu, i));
+            int select = id - static_cast<int>(MENU_CONTROLLER_JOYPORT_LEFT);
+            setItemCheck(g_joyportSelectMenu,  i, select == current);
+            setItemEnable(g_joyportSelectMenu, i, running && joyport_on);
         }
         return;
     }
@@ -247,6 +265,29 @@ static void updatePopupState(HMENU popup)
         return;
     }
 
+    // ── Display (top-level popup) ────────────────────────────────────────────
+    if (popup == g_displayPopup) {
+        bool has_ss = mi->hasSecondSight();
+        bool ss_text_on = mi->getSsTextMode();
+        int n = GetMenuItemCount(g_displayPopup);
+        for (int i = 0; i < n; ++i) {
+            UINT id = getItemId(g_displayPopup, i);
+            if (id == static_cast<UINT>(MENU_DISPLAY_SS_TEXT)) {
+                setItemCheck(g_displayPopup, i, ss_text_on);
+                setItemEnable(g_displayPopup, i, running && has_ss);
+            } else if (id == static_cast<UINT>(MENU_DISPLAY_CRT_SHADER)) {
+                setItemCheck(g_displayPopup, i, mi->getCrtShader());
+                setItemEnable(g_displayPopup, i, running && mi->getCrtShaderAvailable());
+            } else if (id == static_cast<UINT>(MENU_DISPLAY_FULLSCREEN)) {
+                setItemEnable(g_displayPopup, i, running);
+            } else {
+                // Monitor / HUD submenu parents
+                setItemEnable(g_displayPopup, i, running);
+            }
+        }
+        return;
+    }
+
     // ── Help (always enabled regardless of emulation state) ──────────────────
     if (popup == g_helpPopup) {
         int n = GetMenuItemCount(g_helpPopup);
@@ -255,7 +296,7 @@ static void updatePopupState(HMENU popup)
         return;
     }
 
-    // ── Generic fallback (Edit, Machine, Display popups) ─────────────────────
+    // ── Generic fallback (Edit, Machine popups) ──────────────────────────────
     // Enable/disable every non-separator item based on running state.
     int n = GetMenuItemCount(popup);
     for (int i = 0; i < n; ++i) {
@@ -265,6 +306,17 @@ static void updatePopupState(HMENU popup)
         GetMenuItemInfoW(popup, static_cast<UINT>(i), TRUE, &mii);
         if (mii.fType & MFT_SEPARATOR) continue;
         setItemEnable(popup, i, running);
+    }
+}
+
+// SDL3's callback loop does not treat WM_QUIT as SDL_EVENT_QUIT, so File>Quit
+// must request exit the same way Close Emulation / WM_CLOSE already do.
+static void requestAppQuit()
+{
+    if (SDL_EventEnabled(SDL_EVENT_QUIT)) {
+        SDL_Event ev = {};
+        ev.type = SDL_EVENT_QUIT;
+        SDL_PushEvent(&ev);
     }
 }
 
@@ -280,14 +332,8 @@ static void dispatchCommand(UINT id)
         mi->openSystemConfig();
         return;
     case IDM_FILE_CLOSE:
-        if (SDL_EventEnabled(SDL_EVENT_QUIT)) {
-            SDL_Event ev = {};
-            ev.type = SDL_EVENT_QUIT;
-            SDL_PushEvent(&ev);
-        }
-        return;
     case IDM_APP_QUIT:
-        PostQuitMessage(0);
+        requestAppQuit();
         return;
 
     // Machine
@@ -313,6 +359,8 @@ static void dispatchCommand(UINT id)
     case MENU_DISPLAY_FULLSCREEN: mi->displayFullScreen(); return;
     case MENU_HUD_STATS:          mi->toggleHudStats();    return;
     case MENU_HUD_DRIVES:         mi->toggleHudDrives();   return;
+    case MENU_DISPLAY_SS_TEXT:    mi->toggleSsTextMode();  return;
+    case MENU_DISPLAY_CRT_SHADER: mi->toggleCrtShader();   return;
 
     // Edit / File
     case MENU_EDIT_COPY_SCREEN:      mi->editCopyScreen();      return;
@@ -338,6 +386,9 @@ static void dispatchCommand(UINT id)
     case MENU_CONTROLLER_MOUSE:   mi->setControllerMode(1); return;
     case MENU_CONTROLLER_JOYPORT: mi->setControllerMode(2); return;
     case MENU_CONTROLLER_ABSENT_DISCONNECTED: mi->toggleDisconnectedWhenNoGamepad(); return;
+    case MENU_CONTROLLER_JOYPORT_LEFT:   mi->setJoyportSelect(0); return;
+    case MENU_CONTROLLER_JOYPORT_CENTER: mi->setJoyportSelect(1); return;
+    case MENU_CONTROLLER_JOYPORT_RIGHT:  mi->setJoyportSelect(2); return;
 
     default:
         // Drive toggle: IDs [MENU_DISK_TOGGLE, MENU_DISK_TOGGLE + N)
@@ -452,6 +503,7 @@ static void setupMenus()
     g_settingsPopup  = CreatePopupMenu();
     g_speedMenu      = CreatePopupMenu();
     g_controllerMenu = CreatePopupMenu();
+    g_joyportSelectMenu = CreatePopupMenu();
 
     AppendMenuW(g_speedMenu, MF_STRING, MENU_SPEED_1_0,  L"1.0 MHz");
     AppendMenuW(g_speedMenu, MF_STRING, MENU_SPEED_2_8,  L"2.8 MHz");
@@ -463,6 +515,12 @@ static void setupMenus()
     AppendMenuW(g_controllerMenu, MF_STRING, MENU_CONTROLLER_GAMEPAD, L"Joystick - Gamepad");
     AppendMenuW(g_controllerMenu, MF_STRING, MENU_CONTROLLER_MOUSE,   L"Joystick - Mouse");
     AppendMenuW(g_controllerMenu, MF_STRING, MENU_CONTROLLER_JOYPORT, L"Sirius / Atari Joyport");
+    AppendMenuW(g_controllerMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(g_joyportSelectMenu, MF_STRING, MENU_CONTROLLER_JOYPORT_LEFT,   L"Left");
+    AppendMenuW(g_joyportSelectMenu, MF_STRING, MENU_CONTROLLER_JOYPORT_CENTER, L"Center");
+    AppendMenuW(g_joyportSelectMenu, MF_STRING, MENU_CONTROLLER_JOYPORT_RIGHT,  L"Right");
+    AppendMenuW(g_controllerMenu, MF_STRING | MF_POPUP,
+                reinterpret_cast<UINT_PTR>(g_joyportSelectMenu), L"Joyport Controller Select");
     AppendMenuW(g_controllerMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(g_controllerMenu, MF_STRING, MENU_CONTROLLER_ABSENT_DISCONNECTED,
                 L"Disconnected When No Gamepad");
@@ -495,6 +553,8 @@ static void setupMenus()
                 reinterpret_cast<UINT_PTR>(g_hudMenu), L"HUD");
 
     AppendMenuW(g_displayPopup, MF_STRING, MENU_DISPLAY_FULLSCREEN, L"Full Screen");
+    AppendMenuW(g_displayPopup, MF_STRING, MENU_DISPLAY_SS_TEXT, L"Second Sight Text");
+    AppendMenuW(g_displayPopup, MF_STRING, MENU_DISPLAY_CRT_SHADER, L"CRT Shader");
     AppendMenuW(g_menuBar, MF_STRING | MF_POPUP,
                 reinterpret_cast<UINT_PTR>(g_displayPopup), L"Display");
 

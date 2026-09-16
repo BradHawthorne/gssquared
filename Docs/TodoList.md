@@ -13,7 +13,7 @@ GitHub issue list last synced: 2026-07-19. Re-check with `gh issue list --state 
 From [Roadmap.md](Roadmap.md):
 
 ### Release 0.10
-- [ ] Provide flexible AI-drivable binary protocol debugger interface
+- [X] Provide flexible AI-drivable binary protocol debugger interface
 
 ### Release 1.0
 - [ ] Fix all known / pending bugs
@@ -29,17 +29,17 @@ From [Roadmap.md](Roadmap.md):
 From [jawaidbazyar2/gssquared](https://github.com/jawaidbazyar2/gssquared/issues) (`gh issue list --state open`):
 
 ### Bugs
-- [ ] [#133](https://github.com/jawaidbazyar2/gssquared/issues/133) Unclaimed Sound Interrupt — QFTO (standard Sound Tools) dies to blue-screen after intro sound starts
+- [X] [#133](https://github.com/jawaidbazyar2/gssquared/issues/133) Unclaimed Sound Interrupt — QFTO (standard Sound Tools) dies to blue-screen after intro sound starts
 - [ ] [#125](https://github.com/jawaidbazyar2/gssquared/issues/125) 5.25" drive missing when returning to Finder from GS/OS app; returning via P8 can leave continuous polling
 - [X] [#124](https://github.com/jawaidbazyar2/gssquared/issues/124) Floating bus / edge artifacts on Sather Little Text Window demo
 - [ ] [#117](https://github.com/jawaidbazyar2/gssquared/issues/117) Locksmith 6.0 fails to copy Bilestoad (half/quarter-track read)
 - [ ] [#112](https://github.com/jawaidbazyar2/gssquared/issues/112) `$C021` (IIgs): determine correct RESET state (mono bit not cleared by RESET)
-- [ ] [#101](https://github.com/jawaidbazyar2/gssquared/issues/101) textfunk timing incorrect — white border starts too early (memory access slowdown missing?)
+- [X] [#101](https://github.com/jawaidbazyar2/gssquared/issues/101) textfunk timing incorrect — white border starts too early (memory access slowdown missing?)
 
 ### Enhancements / features
 - [ ] [#140](https://github.com/jawaidbazyar2/gssquared/issues/140) International keyboards on GS (e.g. AZERTY)
 - [ ] [#81](https://github.com/jawaidbazyar2/gssquared/issues/81) Make OA / CA key assignments configurable
-- [ ] [#77](https://github.com/jawaidbazyar2/gssquared/issues/77) Debugger: render specified display page (`hgr1`, `80text1`, …) into watch pane
+- [X] [#77](https://github.com/jawaidbazyar2/gssquared/issues/77) Debugger: render specified display page (`hgr1`, `80text1`, …) into Video pane
 - [ ] [#73](https://github.com/jawaidbazyar2/gssquared/issues/73) Disasm: share trace disassembly; M/X width commands; track REP/SEP
 - [X] [#69](https://github.com/jawaidbazyar2/gssquared/issues/69) Debugger UI: play/pause/step/step-over buttons; scrollbar click; section panes; monitor scrollback
 - [ ] [#51](https://github.com/jawaidbazyar2/gssquared/issues/51) Printer emulation (ImageWriter II → PostScript/PDF / host print)
@@ -77,7 +77,6 @@ From [Documentation.md](Documentation.md), [Woz.md](Woz.md), [IWM.md](IWM.md), [
 - [ ] WOZ 2.1 support
 - [X] Respect WOZ bit-timing field (Border Zone disk 2 is very slow)
 - [ ] .nib 13-sector disks (size collision with DOS 3.3 .nib; need better detection)
-- [ ] Successful writeback for non-WOZ formats (e.g. `.po`) where still failing
 - [ ] DOS 3.2 Disk II ROM variant + import conversion for 116K images
 - [X] Disk II: return floating bus on reads instead of `0xEE`
 - [X] Disk II: schedule true motor-off with a timer (sometimes stays on)
@@ -86,15 +85,15 @@ From [Documentation.md](Documentation.md), [Woz.md](Woz.md), [IWM.md](IWM.md), [
 - [ ] IWM 5.25: make `motor_on` follow enable explicitly
 - [ ] Gate `fast_forward` on `motor_on` (current `lss_disk_spinning`/enable check wrong for 3.5)
 - [ ] Implement Disk Speed register
-- [ ] Multi-volume hard drive support
-- [ ] Quarter / half track support (Locksmith nibble copy / some utils)
+- [X] Multi-volume hard drive support
+- [X] Quarter / half track support (Locksmith nibble copy / some utils)
 - [ ] DiskII volume byte from DOS 3.3 VTOC when formatting image
 - [ ] pdblock3: boot from lowest numbered unit, not always unit 1
-- [ ] pdblock3: ignore mount if that file is already mounted elsewhere
+- [X] pdblock3: ignore mount if that file is already mounted elsewhere
 - [X] Rename Generic ProDOS Block 3 to "BazFast"
 - [ ] Mount error status codes for distinct user messages
-- [ ] Drag/drop: save/discard prompt before remounting over modified media
-- [ ] Drag/drop: smart target anywhere in window; drop onto a specific drive icon
+- [X] Drag/drop: save/discard prompt before remounting over modified media
+- [X] Drag/drop: smart target anywhere in window; drop onto a specific drive icon
 - [X] Stereo drive sound effects (drive 1 left / drive 2 right)
 - [ ] 3.5 sound effects: low-volume spin; auto eject / insert spring-snap
 - [ ] AppleDisk 5.25 effects: spin; eject/close (distinct recordings)
@@ -109,20 +108,20 @@ From [DevelopLog.md](DevelopLog.md), [AppleIIgs.md](AppleIIgs.md), [Compatibilit
 - [ ] Aspect ratio correction in VPP; correct defaults / window sizes
 - [ ] Hot key for II-friendly vs GS-friendly window size toggles
 - [ ] Disable invalid mixed modes (e.g. no 40-col text in double graphics)
-- [ ] Split GR/text in Ludicrous Speed should be color/NTSC, not mono
-- [ ] First pixel of HGR row disappears in Ludicrous Speed
-- [ ] Mid-line text→hires transitions (Crazy Cycles-style) need correct monochrome bit emission
+- [X] Split GR/text in Ludicrous Speed should be color/NTSC, not mono
+- [X] First pixel of HGR row disappears in Ludicrous Speed
+- [-] Mid-line text→hires transitions (Crazy Cycles-style) need correct monochrome bit emission
 - [ ] Make SHR work again in composite
 - [X] Mono DHGR / graphics when `$C05E` active (incl. HIRES_NODELAY)
 - [ ] IIe/65816: missing composite SHR; ctrl-reset should reset video registers based on scanner, not platform
 - [ ] PAL //e broken (needs more scanlines; garbage/overrun)
 - [ ] Implement PAL timing on GS; re-run irqtest
 - [ ] Test RGB monitor colors
-- [ ] Lower Planes: right border offset by 1–2 scanlines ([CompatibilityGS.md](CompatibilityGS.md))
+- [X] Lower Planes: right border offset by 1–2 scanlines ([CompatibilityGS.md](CompatibilityGS.md))
 - [ ] FTA XMAS: slight cycle timing defect on lower-right border
 - [ ] Phosphor persistence effect (multi-texture fade)
-- [ ] VideoScanner asserts so bad state can't crash
-- [ ] Clean up leftover `set_full_frame_redraw()` once LS full-frame path is settled
+- [-] VideoScanner asserts so bad state can't crash
+- [X] Clean up leftover `set_full_frame_redraw()` once LS full-frame path is settled
 
 ---
 
@@ -172,7 +171,7 @@ From [ADB.md](ADB.md), [UserInterface.md](UserInterface.md), [Networking.md](Net
 
 From [Roadmap.md](Roadmap.md), [DebugProtocol.md](DebugProtocol.md), [DevelopLog.md](DevelopLog.md), [65816.md](65816.md):
 
-- [ ] Ship flexible AI-drivable binary debug protocol (roadmap 0.10)
+- [X] Ship flexible AI-drivable binary debug protocol (roadmap 0.10)
 - [X] Trace option: hide raw bytes (`PCPC: LDA $xxxx` only) — debug window `B)ytes`
 - [X] Scrollable text widget + clickable scrollbar (click-to-jump position)
 - [ ] Trace cursor → show regs / P decode for that record
@@ -185,7 +184,7 @@ From [Roadmap.md](Roadmap.md), [DebugProtocol.md](DebugProtocol.md), [DevelopLog
 - [X] Debug frame-step: don't consume/modify normal frame-end path; interrupts shouldn't fire while CPU frozen
 - [-] Debug window near screen edge + flash → runaway flash / slow debug updates (pretty sure this is a MacOS problem)
 - [ ] Store `e` bit in trace flags; polish immediate-operand display
-- [ ] STP / WAI; abort/IRQ/NMI/RES stack paths if still incomplete ([65816.md](65816.md))
+- [X] STP / WAI; abort/IRQ/NMI/RES stack paths if still incomplete ([65816.md](65816.md))
 
 ---
 
@@ -199,7 +198,7 @@ From [UserInterface.md](UserInterface.md), [SystemConfigTOML.md](SystemConfigTOM
 - [X] On first run, copy default extra configs into user systems folder
 - [ ] Cache Control Panel template texture (static chrome vs dynamic widgets)
 - [ ] Platform specifies allowed CPU speed settings in OSD
-- [ ] Remove "IIgs with 5.25 only" test config tile
+- [-] Remove "IIgs with 5.25 only" test config tile
 - [ ] Professional cleanup of artwork / higher-res assets scaled down
 - [ ] UI texture redraw only when dirty
 - [ ] "Lots of buttons" polish pass
@@ -213,16 +212,18 @@ From [SCC8530_Serial.md](SCC8530_Serial.md), [Parallel.md](Parallel.md), [Imagew
 - [ ] Simulate SCC modem control signals (CTS/RTS/DSR/DTR, etc.)
 - [ ] Clear SCC queues on reset
 - [X] Implement "file" serial device (complete path)
+- [X] Print to clipboard serial/parallel device (#165)
 - [ ] ImageWriter II emulation
-- [x] OSD gizmo when a capture file finishes writing (path toast)
-- [x] Refactor parallel card onto threads; connect to file (ImageWriter later)
-- [x] Parallel: flush/close after inactivity; reopen on write; close on ctrl-reset (via FileDevice)
+- [X] OSD gizmo when a capture file finishes writing (path toast)
+- [X] Refactor parallel card onto threads; connect to file (ImageWriter later)
+- [X] Parallel: flush/close after inactivity; reopen on write; close on ctrl-reset (via FileDevice)
 - [ ] Full printer→PDF pipeline (libHaru / preview window) beyond raw dump
 - [X] Serial-to-telnet / Hayes path hardening as needed
-- [x] Super Serial Card (`super_serial`) — 6551 + ROM + Modem/File attach; see [SSC.md](SSC.md)
-- [x] Apply `[[connections]]` at runtime for SCC and SSC
+- [X] Super Serial Card (`super_serial`) — 6551 + ROM + Modem/File attach; see [SSC.md](SSC.md)
+- [X] Host serial port attachment (#155) — macOS `/dev/cu.*`; Windows `COMn`; Linux `/dev/ttyUSB*`
+- [X] Apply `[[connections]]` at runtime for SCC and SSC
 - [ ] Optional FujiNet-PC / NetSIO bridge
-- [x] Uthernet II emulation
+- [X] Uthernet II emulation
 - [ ] Optional pcap/bpf Uthernet backend
 - [X] SMB FST via Uthernet (noted as preferred home-network path)
 

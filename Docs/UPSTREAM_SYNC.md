@@ -21,6 +21,7 @@ ledger below and change the affected dispositions in the table.
 | 2026-08-02 – 08-04 | about 23 upstream commits, chosen by subject and file | **12 ported** (`6b91d9c1`, `9420cac6`, `f6a9a5c6`, `e0729c93`, `be5c869e`, `a359889a`, `cf946618`, `6f296ee6`, `160721cc`, `d2a0e056`, `5bd804a2`, half of `605a2c3f`); **5 judged present** (`94c1f2de`, `a9c7d1c6`, `282f8973`, `ad5f436b`, `ba91cf63`); **6 deferred** (`3d4efff1`, `0d95d93c`, `829bd5ea`, `d79be3c0`, `0e606364`, `cba9c847`) | `f646760c`, `3999d40e`, `486fb60e`, `0c601905`, `49822387`, `8d6f6cb5`, `05c2a46b`, `5814d86c`, `c7ae46e9` |
 | 2026-09-16 | **all of** `c4b1fa69..d380e055` (258 commits, to upstream 2026-09-14) | triage only — nothing ported. Dispositions: 30 PORT, 89 PORT-LATER, 12 PORTED, 12 HAVE, 6 DEFERRED, 83 SKIP, 26 MERGE. The fork removed its ungated mouse-coordinate writes into guest memory (`a820c356`), leaving upstream's closed-loop ADB mouse sync (`d03c9783`, `b299b98d`, `19fe1f67`, `1f95ff78`, `533d8763`, `d380e055`) as the faithful replacement to port | this file |
 | 2026-09-16 | stage 1: `c4b1fa69..29dadbbb` (upstream first-parent 1-133, to 2026-08-05; every commit in that range) | **ported by hand** as one fork commit with a single parent (no upstream parent, see "How syncs land"). Conflicts resolved per component (section 7); fork hooks carried; boot baseline re-blessed with attribution | this row's commit |
+| 2026-09-16 | stage 2: `29dadbbb..d380e055` (upstream first-parent 134-194, to 2026-09-14; every commit in that range, so the fork now covers all of upstream to `d380e055`) | **ported by hand** as one single-parent fork commit; conflicts resolved per component (section 8); boot baseline re-blessed with attribution | this row's commit |
 
 ### How syncs land
 
@@ -580,3 +581,34 @@ came from; items marked OPEN are recorded to be re-decided on hardware evidence.
 
 - `iigs-rom`: cycles 7,892,937 to 6,043,351; `iigs-gsos601`: cycles 10,635,389 to 10,635,192. Both runs first diverge at the ROM's IWM status poll (`FF/65DE`, `$C0EE`): bit 7 reads 1 for an empty drive under upstream `3d4efff1`. Found with `tools/gdiff/itracediff.py` against the pre-port build.
 - `iie-rom`: run witness only. The ROM's slot scan reads `$C705` = `$03` (the block device now in slot 7) instead of `$38` (the mouse card), from upstream's IIe Enhanced device map.
+
+## 8. Port of `29dadbbb..d380e055` (stage 2, 2026-09-16)
+
+Merged against an explicit base of `29dadbbb`, straight into `a2gspu`. The next sync starts from `d380e055`.
+
+| Component | Result |
+|---|---|
+| CPU | The fork's implementations of `34022cf7` (no native-mode page-cross penalty), `8fbca782` (WAI wake, PLB = 4 cycles) and `c9883d94` (PLP/RTI clear XH/YH) stay; upstream's equivalents merged to the same cycle counts. Upstream `d981a267` merged cleanly on top of the fork's own XCE fix and made XCE 3 cycles. The duplicate phantom read is removed, and upstream's `cycletest816` XCE record now guards it. |
+| `$E1` layout (`18f5d04c`, `42fd845e`) | Taken: with the aux window linearized (NEWVIDEO bit 6, or SHR on) the Mega II store keeps `$E1:$2000-$9FFF` interleaved, and upstream's own readers (scanner, mouse sync, debug view) translate. Fork additions: bus-trace and observer records keep the LOGICAL address, and `MMU_IIgs::megaii_cpu_index/peek/poke/view` give every fork observer CPU-order bytes. That covers the probes, the CTRL video verbs and asserts, the spike's `$E1` dumps, hash and golden, `A2GSPU_DUMP`, the A2GSPU card's SHR reads and the KeyGloo 640-mode test. The observatory's SCB and palette windows pointed at fixed store offsets; they become one `vgc.shr_store` window over the physical store. Snapshots keep the physical store. |
+| RAM size | Upstream's 23-bit FPI decode is taken: fast RAM ends at bank `$7F` on ROM 01 and ROM 03, replacing the `$81`/`$8F` top bank from `e0729c93`. |
+| FPI registers (`7333660a`) | Taken: `$C035`/`$C036`/`$C037`/`$C068`/`$C02D` are fast cycles, and `$C037` is the DMA bank register. |
+| Reset (`35505bd6`, `992a5233`) | `reset(cold_start)` across the MMU hierarchy. The ADB microcontroller firmware (ROM 01 or ROM 03) is chosen from `MMU_IIgs::is_rom03_machine()`, the image size, not the platform ID, so the fork's ROM 03 and ROM 04 personalities get the ROM 03 micro. |
+| Run loop (`e169b2bc`) | Upstream's ludicrous-speed calibration is taken, but not run under `A2GSPU_PACE=fast`: it measures host time. The calibration probe loops stop on a rail halt like the frame loops. |
+| SecondSight | Upstream's card is taken whole: PPU, GPU, host text, GPU text, the VGA fence, and version/capabilities. That also replaces the fork's older forward-ported copy, which had dropped PPU mode. `secondsight1.hpp` is deleted as upstream did. |
+| Video Overlay Card, ThunderClock Plus, two-joystick Joyport, host serial and clipboard devices | Taken. `DEVICE_ID_VOC` sits before the fork's `DEVICE_ID_A2GSPU`. |
+| Scanner | Upstream's `is_80store()` accessor replaces the fork's duplicate. |
+
+**Owed after this port** (the per-component study of real-hardware behaviour, 2026-09-16, is the input):
+- **Fused Uthernet II:** upstream register model and slirp, plus the fork's interrupt, state-machine, listen and reporting behaviour, plus new fixes and emulated-time delivery.
+- **Snapshot blocks** for the new cards (Apple Mouse, SecondSight, VOC, ThunderClock, Super Serial, Uthernet II), and ThunderClock time through `A2GSPU_FAKETIME`.
+- **Side-effect-free reads** for the debug protocol's `READMEM`/`FINDMEM`, which today read through the CPU's bus path.
+- **Hardware-evidence decisions still open:**
+  - game switches with nothing attached (the IIe manual's pull-downs are in the hand controller, which favours upstream's floating reads);
+  - `$C011-$C01F` low bits and the `$C02E`/`$C02F` scan-line clear (the fork's fixes 5 and 6 contradict MAME);
+  - MVN/MVP stepping with x=1 (the documentation favours upstream's 8-bit stepping with the fork's explicit banks).
+
+**Baseline shift, attributed** (`tools/a2rail/unarmed.baseline.json`; `iie-rom` unchanged):
+- `iigs-rom`: cycles 6,043,351 to 6,045,727; SHR hash unchanged.
+- `iigs-gsos601`: cycles 10,635,192 to 10,647,366; the frame-300 SHR hash changes (`5F78F7C15131F43F` to `D29F204D690D417F`).
+- Both runs first diverge in frame 0 right after `STA $C036`: the next `$C015` read samples the floating bus one beam position earlier because `$C036` is now a fast cycle (`7333660a`). With that one cycle type reverted, frame 0 matches the pre-port build.
+- The GS/OS boot converges: at frame 900 both builds show the identical desktop (`1691807AD9B30BAA`), which also confirms the CPU-order SHR hash reads the same picture through the new store layout.

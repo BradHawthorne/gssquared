@@ -10,15 +10,18 @@ http://umich.edu/~archive/apple2/technotes/tn/iigs/TN.IIGS.032
 
 ## Installed fast RAM size
 
-GSSquared sizes contiguous FPI RAM as **motherboard + expansion card** (KEGS-compatible),
+GSSquared sizes contiguous FPI RAM as **motherboard + expansion card**,
 implemented in `src/mmus/iigs_memory.hpp`:
 
-- **ROM01** (128KB ROM file): 128KB motherboard + default 8MB card → **8.125MB** (banks `$00`–`$81`)
-- **ROM03** (256KB ROM file): 1MB motherboard + default 8MB card → **9MB** (banks `$00`–`$8F`)
+- **ROM01** (128KB ROM file): 128KB motherboard + default 8MB card
+- **ROM03** (256KB ROM file): 1MB motherboard + default 8MB card
 
-The expansion argument is card size, not total system RAM. Total is clamped to `$DF0000`.
-Mega II banks `$E0`/`$E1` are separate and not included. A flat 8MB map (banks `$00`–`$7F` only)
-is wrong for real ROM01+8MB / ROM03+8MB machines and leaves `$80+` floating.
+The FPI only decodes **23 address bits** for RAM, so both are hard-capped at **8MB**
+(banks `$00`–`$7F`). Excess card banks above that window are inaccessible
+(ROM01: 128KB; ROM03: 1MB with an 8MB card).
+
+The expansion argument is card size, not total system RAM.
+Mega II banks `$E0`/`$E1` are separate and not included.
 
 ## Shadow Register - $C035
 
@@ -86,6 +89,8 @@ Text Page 1 is $0400 - $07FF.
 
 ### 6: Power-on status
 
+On a ROM03, 
+
 ### 5: reserved - do not modify
 
 ### 4: Shadowing enable for ALL FAST RAM banks
@@ -121,6 +126,15 @@ When 1, memory address bus is tri-stated during PHI1 except for refresh. Also ch
 
 When 0, memory map is same as normal Apple II.
 When 1, memory map is linear and starts at $2000 and ends at $9FFF in Aux memory.
+
+Bit 7 (SHR enabled) also forces the linear map, independent of bit 6 — the
+effective condition is `(C029 & $C0) != 0` (and the bank latch, bit 0, must be
+on). GS/OS relies on this: it prepares its boot screen with C029=$41 (linear
+map, SHR display off), then switches to C029=$81 to turn the display on, and
+keeps drawing — with bit 6 now clear. Gating linearization on bit 6 alone makes
+everything drawn after that point (the INIT/driver icon row along the bottom)
+land unlinearized, which the VGC then de-interleaves into scattered garbage.
+Bit 6 exists so you can get the linear map *without* enabling the SHR display.
 
 When linearization is enabled, e1/2000..9fff is remapped per below, to allow the SHR stuff to read two bytes of SHR data per cycle.
 
@@ -189,6 +203,54 @@ how to use this bit to select a memory bank.
 So, "data bit" is just "we're going to hack another address bit by using the data bus" because the MegaII has only a 16-bit input. So that really can be treated as address bit 17.
 
 ugh this is still not clear which banks this works against.
+
+#### Measured: the LC arrangement in bank $E1 (real ROM 01)
+
+A read-only probe run on a real ROM 01 machine, with the bank latch on, sampling the
+LC window in `$E1` against the same bytes read straight out of bank `$FF`:
+
+| Sampled | Value |
+|-|-|
+| `$E1/D000`, LC bank 2, RDROM | `6F` |
+| `$E1/E000`, RDROM | `4C` |
+| `$E0/D000`, RDROM | `6F` |
+| `$FF/D000` (reference) | `6F` |
+| `$FF/E000` (reference) | `4C` |
+| `$E1/D000`, LC bank 1, RDROM | `6F` |
+
+So bank `$FF` ROM overlays `$E1/D000-$FFFF` when reads are switched to ROM, under
+either LC bank, exactly as it does in `$E0`. Together with the LC bank 1 `$D000`
+image and write protection, that is the full "LC arrangement must still be
+respected" requirement noted above. GSSquared returned `CC CC 6F 6F 4C CC` before
+this was implemented in `bank_e1_read` / `bank_e1_write`; see tests 41-46 in
+`apps/iigsmmutest/tests.hpp`.
+
+Still unmeasured: whether the FPI serves that ROM read as a fast cycle. Our `$E1`
+handlers keep `CYCLE_TYPE_SYNC` for it, unlike banks `$00`/`$01` where
+`bank_shadow_read` switches to `CYCLE_TYPE_FAST_ROM`.
+
+#### ALTZP moves the bank $E0 LC window, and $C008/$C009 must recompose it
+
+Bank `$E0`'s LC window follows ALTZP into aux - which is to say, into the same RAM
+that a direct bank `$E1` access reaches with the bank latch on. `$E0/D000` with
+ALTZP set really is `$E1/D000`. Only the `$E0` side moves; `$E1` is always aux.
+
+`MMU_IIgs::megaii_compose_map()` used to remap only pages `$00`/`$01` on an ALTZP
+change, leaving `$D0-$FF` wherever the last `$C08x` or `$C068` access had put them.
+Software that sets ALTZP, touches the LC, then clears ALTZP through `$C008` was left
+with the LC window stuck on aux, so writes through `$E0` landed on top of `$E1`.
+
+The ROM 03 built-in diagnostic catches this. Test 04 (`RAM_ADDR`, in
+`Bank FF/diag.tests.asm`) fills banks `$E1`, `$E0`, `$01`, `$00` with an
+address+bank pattern and compares them back in the same order, so bank `$E1` is
+written first and `$E0`'s stale-aux writes clobbered it before the compare:
+`04E1E000` before the `$E1` LC decode above was implemented, `04E1D000` after, since
+that moved which address collides first. Regression test 47 in
+`apps/iigsmmutest/tests.hpp`.
+
+Note the diagnostic inhibits all shadowing (`$C035 = $7F`) while it runs, so its own
+`LDA $C08B` with DB=0 reads bank `$00` RAM rather than the softswitch - the LC
+arrangement it tests with is whichever one test 03 left behind.
 
 ## $C068 - State Register
 

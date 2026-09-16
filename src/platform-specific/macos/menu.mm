@@ -116,6 +116,7 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 - (void)toggleAudioDecorrelation:(id)sender;
 - (void)toggleRightMouseAccel:(id)sender;
 - (void)controllerMode:(id)sender;
+- (void)joyportSelect:(id)sender;
 - (void)toggleDisconnectedWhenNoGamepad:(id)sender;
 - (void)monitorComposite:(id)sender;
 - (void)monitorGSRGB:(id)sender;
@@ -126,6 +127,7 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 - (void)toggleCrtShader:(id)sender;
 - (void)toggleHudStats:(id)sender;
 - (void)toggleHudDrives:(id)sender;
+- (void)toggleSsTextMode:(id)sender;
 - (void)editCopyScreen:(id)sender;
 - (void)editPasteText:(id)sender;
 - (void)diskToggleDrive:(id)sender;
@@ -174,6 +176,12 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 		int current = getMenuInterface()->getCurrentControllerMode();
 		[menuItem setState:([menuItem tag] == current) ? NSControlStateValueOn : NSControlStateValueOff];
 	}
+	if (menuItem.action == @selector(joyportSelect:)) {
+		int current = getMenuInterface()->getJoyportSelect();
+		[menuItem setState:([menuItem tag] == current) ? NSControlStateValueOn : NSControlStateValueOff];
+		return getMenuInterface()->isEmulationRunning()
+			&& getMenuInterface()->getCurrentControllerMode() == 2;
+	}
 	if (menuItem.action == @selector(toggleDisconnectedWhenNoGamepad:)) {
 		[menuItem setState:getMenuInterface()->getDisconnectedWhenNoGamepad() ? NSControlStateValueOn : NSControlStateValueOff];
 	}
@@ -182,6 +190,10 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 	}
 	if (menuItem.action == @selector(toggleHudDrives:)) {
 		[menuItem setState:getMenuInterface()->getHudDrives() ? NSControlStateValueOn : NSControlStateValueOff];
+	}
+	if (menuItem.action == @selector(toggleSsTextMode:)) {
+		[menuItem setState:getMenuInterface()->getSsTextMode() ? NSControlStateValueOn : NSControlStateValueOff];
+		return getMenuInterface()->isEmulationRunning() && getMenuInterface()->hasSecondSight();
 	}
 	if (menuItem.action == @selector(toggleCrtShader:)) {
 		[menuItem setState:getMenuInterface()->getCrtShader() ? NSControlStateValueOn : NSControlStateValueOff];
@@ -222,6 +234,11 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 	getMenuInterface()->setControllerMode((int)[item tag]);
 }
 
+- (void)joyportSelect:(id)sender {
+	NSMenuItem *item = (NSMenuItem *)sender;
+	getMenuInterface()->setJoyportSelect((int)[item tag]);
+}
+
 - (void)toggleDisconnectedWhenNoGamepad:(id)sender {
 	getMenuInterface()->toggleDisconnectedWhenNoGamepad();
 	(void)sender;
@@ -236,6 +253,7 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 - (void)toggleCrtShader:(id)sender   { getMenuInterface()->toggleCrtShader(); (void)sender; }
 - (void)toggleHudStats:(id)sender    { getMenuInterface()->toggleHudStats(); (void)sender; }
 - (void)toggleHudDrives:(id)sender   { getMenuInterface()->toggleHudDrives(); (void)sender; }
+- (void)toggleSsTextMode:(id)sender  { getMenuInterface()->toggleSsTextMode(); (void)sender; }
 - (void)editCopyScreen:(id)sender    { getMenuInterface()->editCopyScreen(); (void)sender; }
 - (void)editPasteText:(id)sender     { getMenuInterface()->editPasteText(); (void)sender; }
 
@@ -312,8 +330,14 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 - (void)menuNeedsUpdate:(NSMenu *)menu {
 	int current = getMenuInterface()->getCurrentControllerMode();
 	bool absentDisconnected = getMenuInterface()->getDisconnectedWhenNoGamepad();
+	bool joyport_on = (current == 2);
+	bool running = getMenuInterface()->isEmulationRunning();
 	for (NSMenuItem *item in [menu itemArray]) {
 		if ([item isSeparatorItem]) {
+			continue;
+		}
+		if ([item hasSubmenu]) {
+			[item setEnabled:running && joyport_on];
 			continue;
 		}
 		if ([item tag] == CONTROLLER_TAG_ABSENT_DISCONNECTED) {
@@ -603,6 +627,31 @@ static void setupMenus(void) {
 		[controllerMenu addItem:item];
 	}
 	[controllerMenu addItem:[NSMenuItem separatorItem]];
+
+	NSMenu *joyportSelectMenu = [[[NSMenu alloc]
+		initWithTitle:NSLocalizedString(@"Joyport Controller Select", nil)] autorelease];
+	struct { NSString *title; NSInteger tag; } selectItems[] = {
+		{ @"Left",   0 },
+		{ @"Center", 1 },
+		{ @"Right",  2 },
+	};
+	for (auto &si : selectItems) {
+		NSMenuItem *item = [[[NSMenuItem alloc]
+			initWithTitle:si.title
+			       action:@selector(joyportSelect:)
+			keyEquivalent:@""] autorelease];
+		[item setTarget:sMenuHandler];
+		[item setTag:si.tag];
+		[joyportSelectMenu addItem:item];
+	}
+	NSMenuItem *joyportSelectMenuItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Joyport Controller Select", nil)
+		       action:nil
+		keyEquivalent:@""] autorelease];
+	[joyportSelectMenuItem setSubmenu:joyportSelectMenu];
+	[controllerMenu addItem:joyportSelectMenuItem];
+
+	[controllerMenu addItem:[NSMenuItem separatorItem]];
 	NSMenuItem *absentDisconnectedItem = [[[NSMenuItem alloc]
 		initWithTitle:NSLocalizedString(@"Disconnected When No Gamepad", nil)
 		       action:@selector(toggleDisconnectedWhenNoGamepad:)
@@ -707,6 +756,13 @@ static void setupMenus(void) {
 		keyEquivalent:@""] autorelease];
 	[fullScreenItem setTarget:sMenuHandler];
 	[displayMenu addItem:fullScreenItem];
+
+	NSMenuItem *ssTextItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Second Sight Text", nil)
+		       action:@selector(toggleSsTextMode:)
+		keyEquivalent:@""] autorelease];
+	[ssTextItem setTarget:sMenuHandler];
+	[displayMenu addItem:ssTextItem];
 
 	NSMenuItem *crtShaderItem = [[[NSMenuItem alloc]
 		initWithTitle:NSLocalizedString(@"CRT Shader", nil)

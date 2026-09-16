@@ -12,6 +12,8 @@
 #include "mmus/mmu_iigs.hpp"
 #include "debug.hpp"
 
+#include "mmus/iigs_aux_linear.hpp"
+
 #include "devices/adb/keygloo_state.hpp"
 #include "devices/adb/ADB_Micro.hpp"
 
@@ -56,7 +58,7 @@ static constexpr uint32_t EM_MOUSE_X_LO_BANK = 0x10190;
 static constexpr uint32_t EM_MOUSE_X_HI_BANK = 0x10192;
 static constexpr uint32_t EM_MOUSE_Y_LO_BANK = 0x10191;
 static constexpr uint32_t EM_MOUSE_Y_HI_BANK = 0x10193;
-static constexpr uint32_t SHR_SCB_LINE0 = 0x19D00;
+static constexpr uint16_t SHR_SCB_LINE0_CPU = 0x9D00;
 static constexpr int MOTION_CHUNK_MAX = 63;
 
 inline int clamp_int(int value, int lo, int hi) {
@@ -67,12 +69,23 @@ inline uint8_t read_megaii_linear(MMU_II *megaii, uint32_t addr) {
     return megaii->get_memory_base()[addr & 0x1FFFF];
 }
 
-inline bool shr_320_mode(MMU_II *megaii) {
-    if (!megaii) {
-        return false;
+inline uint8_t read_shr_scb_line0(computer_t *computer) {
+    if (!computer || !computer->mmu) {
+        return 0x80; // treat as 640 so we do not half-scale
     }
-    // KEGS adb_update_mouse(): line 0 SCB bit 7 clear => 320-column SHR desktop.
-    return (read_megaii_linear(megaii, SHR_SCB_LINE0) & 0x80) == 0;
+    // CPU $E1/9D00. With C029 SHR/linearize the Mega II aux window is
+    // interleaved ($2000/$6000); raw 0x19D00 is a pixel byte, not the SCB
+    // (#170). Same mapping as VideoScannerIIgs / generate_shr.
+    uint16_t phys = SHR_SCB_LINE0_CPU;
+    if (computer->cpu && computer->cpu->mmu && computer->cpu->mmu->is_aux_linear()) {
+        phys = iigs_aux_linear_to_phys(SHR_SCB_LINE0_CPU);
+    }
+    return read_megaii_linear(computer->mmu, 0x10000u | phys);
+}
+
+inline bool shr_320_mode(computer_t *computer) {
+    // Line 0 SCB bit 7 clear => 320-column SHR (KEGS adb_update_mouse).
+    return (read_shr_scb_line0(computer) & 0x80) == 0;
 }
 
 inline void read_em_mouse_pos(MMU_II *mmu, int &x, int &y, bool rom03) {
@@ -99,7 +112,7 @@ inline bool em_mouse_pos_from_bank_globals(computer_t *computer) {
     // their own ROM folder, so the platform ID says ROM 01 for both; the MMU
     // derives is_rom03 from the ROM image it was actually given.
     MMU_IIgs *gs = (computer && computer->cpu) ? dynamic_cast<MMU_IIgs *>(computer->cpu->mmu) : nullptr;
-    return gs && gs->rom03();
+    return gs && gs->is_rom03_machine();
 }
 
 inline void write_em_axis(keygloo_state_t *kb_state, uint32_t lo, uint32_t hi,
@@ -160,7 +173,7 @@ inline void host_to_a2(computer_t *computer, float render_x, float render_y, int
     py = clamp_int(py, 0, 399);
     ay = py >> 1;
     ax = px;
-    if (computer && computer->mmu && shr_320_mode(computer->mmu)) {
+    if (shr_320_mode(computer)) {
         ax = ax >> 1;
     }
 }
@@ -195,6 +208,18 @@ inline std::vector<MotionChunk> split_motion_delta(int dx, int dy) {
     return chunks;
 }
 
+// TODO: this is accessing via mmu->read(), which will probably work here, however, there
+// is potential for side effects if we're not careful, so should modify this to have
+// direct access to SHR status. OR, maybe we can look into the IIgs for quickdraw active also?
+inline bool shr_active(keygloo_state_t *kb_state) {
+    if (!kb_state || !kb_state->mmu) {
+        return false;
+    }
+    // C029 NEWVIDEO bit 7: Super Hi-Res display. Mega II hosts both the
+    // display and MMU_IIgs handlers for this register.
+    return (kb_state->mmu->read(0xC029) & 0x80) != 0;
+}
+
 inline bool compute_em_active(keygloo_state_t *kb_state) {
     if (!kb_state->mmu || !kb_state->computer || !kb_state->computer->cpu ||
         !kb_state->computer->cpu->mmu) {
@@ -220,6 +245,13 @@ inline bool compute_em_active(keygloo_state_t *kb_state) {
         uint8_t active_lo = fpi->probe_peek(tool_start + EM_TOOL_ACTIVE_OFFSET);
         uint8_t active_hi = fpi->probe_peek(tool_start + EM_TOOL_ACTIVE_OFFSET + 1);
         active = (active_lo | (active_hi << 8)) != 0;
+    }
+
+    // GNO/ME starts Event Manager without the SHR desktop. Targeting —
+    // including hiding the host cursor for the guest pointer — is only
+    // meaningful while Super Hi-Res is on.
+    if (active && !shr_active(kb_state)) {
+        active = false;
     }
 
     if (kb_state->computer->video_system &&
@@ -264,6 +296,7 @@ inline void KeyGloo::detect_and_update_em_active() {
             pending_target = false;
             step_outstanding = false;
             stale_frames = 0;
+            em_forwarded_buttons = 0;
             restore_em_host_cursor();
         }
     }
@@ -421,6 +454,35 @@ inline void KeyGloo::update_em_host_cursor(float wx, float wy) {
     }
 }
 
+inline bool KeyGloo::em_mouse_button_should_deliver(const SDL_Event &event) {
+    if (!host_ctx || !host_ctx->computer || !host_ctx->computer->video_system) {
+        return true;
+    }
+
+    video_system_t *vs = host_ctx->computer->video_system;
+    float rx = event.button.x;
+    float ry = event.button.y;
+    keygloo_mouse_sync::window_to_render_coords(vs, event.button.x, event.button.y, rx, ry);
+    const bool inside = keygloo_mouse_sync::render_point_in_guest_content(vs, rx, ry);
+    const uint8_t bit = static_cast<uint8_t>(1u << event.button.button);
+
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        if (!inside) {
+            return false;
+        }
+        em_forwarded_buttons |= bit;
+        return true;
+    }
+
+    // Button-up: still deliver if the matching press was accepted inside the
+    // content area, so a drag that leaves the guest cannot stick the button.
+    if (!inside && (em_forwarded_buttons & bit) == 0) {
+        return false;
+    }
+    em_forwarded_buttons &= static_cast<uint8_t>(~bit);
+    return true;
+}
+
 inline void KeyGloo::handle_em_mouse_motion(float wx, float wy) {
     if (!host_ctx) {
         return;
@@ -451,8 +513,10 @@ inline void KeyGloo::handle_em_mouse_motion(float wx, float wy) {
         // (step_em_closed_loop) reads the guest's live EM position and injects.
         pending_target = true;
         if (keygloo_mouse_sync::sync_trace_enabled()) {
-            printf("KeyGloo sync: closed-loop target (%d,%d) from SDL (%.0f,%.0f)\n",
-                target_x, target_y, wx, wy);
+            printf("KeyGloo sync: closed-loop target (%d,%d) from SDL (%.0f,%.0f) scb=%02X %s\n",
+                target_x, target_y, wx, wy,
+                keygloo_mouse_sync::read_shr_scb_line0(host_ctx->computer),
+                keygloo_mouse_sync::shr_320_mode(host_ctx->computer) ? "320" : "640");
         }
         return;
     }

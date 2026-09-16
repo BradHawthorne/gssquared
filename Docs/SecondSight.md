@@ -428,9 +428,18 @@ SetMode byte $02, is "emulation flag". Currently:
 I think we add:
 * $02: PPU mode
 * $03: GPU mode
+* $04: Host Text mode
+* $05: GPU Text mode
 
 PPU mode is where we render PPU style like a NES.
-GPU mode is where we process a command language. and render 
+GPU mode is where we process a command language and render. Spec:
+[SecondSight_GPU.md](SecondSight_GPU.md).
+Host Text mode scans an 80-column VGA-style cell buffer out of shadowed Apple RAM
+(hardware row scroll, page-flip, planar or interleaved). Spec:
+[SecondSight_Text.md](SecondSight_Text.md).
+GPU Text mode keeps cells in card VRAM and accepts a 16-bit word stream on
+`$C0B1` (putc / scroll / IL / DL). Spec:
+[SecondSight_GPUText.md](SecondSight_GPUText.md). 
 
 Since all addon video cards (from SecondSight in 1995 to the present day) shadow Apple II video memory writes to the cards, and store in card memory, that is a fast and convenient way to put data into the cards. The PPU buffers just need to be mapped.
 
@@ -638,12 +647,14 @@ This would work for emulators and memory-card expansion. Particularly in emulato
 
 ## GPU Mode
 
-GPU Mode provides software the ability to more generically than PPU:
+Full spec: [SecondSight_GPU.md](SecondSight_GPU.md).
 
-* upload textures
-* execute drawing and rendering primitives, including blitting from textures
+GPU Mode (`SetMode` emulation flag `$03`) is a high-level drawing processor,
+not another VGA modeline. The host uploads textures, then transmits and
+executes a command sequence buffer (clear, blit, QuickDraw II rects, present).
+Resolution numbers are the existing SS graphics modes (`$13`, `$53`, `$5C`,
+`$5F`, `$61`); VGA registers stay fenced off.
 
-Helps apps avoid cost of 1MHz bus by moving all this stuff to a high speed device.
-
-The quickdraw acceleration above, where it refers to GPU, is referring to this.
+QuickDraw acceleration above, where it refers to GPU, is this ISA — one card
+mode, two client policies (game swap-chain vs retained desktop framebuffer).
 

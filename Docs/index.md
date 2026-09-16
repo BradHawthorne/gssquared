@@ -26,17 +26,21 @@
 
 * [Writing Config Files Manually](ConfigFiles.md)
 
+* [Using the Debugger](UsingTheDebugger.md)
+
 ## Cards
 
 Slot cards and how to use them:
 
 * [Uthernet II](Cards_UthernetII.md) — Ethernet / TCP/IP
 
-* [Super Serial Card](Cards_SuperSerial.md) — serial port + modem or file
+* [Super Serial Card](Cards_SuperSerial.md) — serial port: modem, file, clipboard, or host serial port
 
 * [Apple Mouse III](Cards_AppleMouse.md) — mouse card for //e
 
-* [Parallel Interface](Cards_Parallel.md) — printer / parallel capture to file
+* [Parallel Interface](Cards_Parallel.md) — printer / parallel capture to file or clipboard
+
+* [Video Overlay Card](Cards_VOC.md) — IIgs 640×400 SHR interlace
 
 # Instrumentation & the Agentic Oracle
 

@@ -30,4 +30,4 @@ This provides seamless movement of the mouse cursor in and out of the IIgs deskt
 
 You will still want to use Mouse Capture mode when using many games, or 8-bit programs, that don't use the Event Manager to read the mouse.
 
-ROM 01 and ROM 03 IIgs platforms both use this tracking path.
+ROM 01 and ROM 03 IIgs platforms both use this tracking path, including 640-pixel GS/OS desktops.
