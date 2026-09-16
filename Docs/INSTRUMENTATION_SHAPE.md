@@ -18,7 +18,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M2 attribution in summaries | done | — |
 | M3 unhonourable inputs are fatal | done | a few "skipped" paths remain counted warnings by choice |
 | M4 liveness | done | — |
-| M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, iwm and pdblock are saved; the scanner (Class B) and floppy media are not |
+| M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, scanner (Class B), iwm and pdblock are saved; floppy media and the clock are not |
 | M6 artifact discipline | done | — |
 | M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table; 42 are also armable live (`rail set`) |
@@ -288,10 +288,18 @@ loaded, so a restored GS/OS sees the volume it left rather than the file on
 disk. The image stays out; a unit's block names its image and block count and
 is applied only when the same image is mounted now and only in RAM mode (the
 host file is never written from a snapshot), and anything else is a counted
-warning. Still out: the scanner (Class B) and floppy media. The scanner used
-to wait on display-pipeline work that sat uncommitted in the owner's working
-tree; that work was committed on 2026-09-11 (`4bcab908`), so Class B is no
-longer blocked on anything but being built. The test the roadmap
+warning. **Class B followed (2026-09-16):** a `scanner` block holds the video
+scanner's own copy of the display switches, its text and border colours, the SCB
+and palette index being scanned, the per-scanline state, and the display module's
+NEWVIDEO. The MMU block had restored the switches in the MMU but not the copies
+the scanner and the display module draw from, so a restored GS/OS desktop
+rendered black (the scanner still in text mode) and, once the scanner was
+restored, stretched (the display still choosing the non-SHR frame rectangle).
+Measured against the continuing run: `vid` agrees exactly after restore, and the
+rendered frame differs in 336 pixels of host window chrome instead of everywhere.
+The scan position is saved but not applied: it belongs to the clock, which is not
+in the snapshot, and restoring it against another clock's frame boundaries drew
+the picture shifted. Still out: floppy media and the clock. The test the roadmap
 named passes: the Dealer Demo, saved at frame 1200 and restored for 1200
 frames with STOREVIS armed, reports 3,517,548 stores, 851,529 visible,
 469,605 device, 46,494 slow-side, 335,430 shadowed; the cold-run difference

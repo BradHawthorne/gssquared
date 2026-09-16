@@ -197,6 +197,9 @@ void display_dump_hires_page(MMU_II *mmu, int page);
 void display_dump_text_page(MMU_II *mmu, int page);
 
 void display_update_video_scanner(display_state_t *ds);
+// A2GSPU snapshot, Class B (M5): NEWVIDEO as the display module holds it.
+void display_A2GSPU_new_video_snapshot(display_state_t *ds, FILE *f);
+bool display_A2GSPU_new_video_restore(display_state_t *ds, FILE *f);
 
 void update_vgc_interrupt(display_state_t *ds, bool assert_now);
 void update_megaii_interrupt(display_state_t *ds, bool assert_now);

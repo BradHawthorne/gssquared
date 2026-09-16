@@ -646,6 +646,18 @@ void update_megaii_interrupt(display_state_t *ds, bool assert_now) {
 }
 
 // ---- A2GSPU snapshot (M5) --------------------------------------------------
+// Class B: the display module's own copy of $C029 NEWVIDEO. It chooses the frame's
+// source rectangle (SHR or not) and the DHGR mono mode, so a restore that left it at
+// power-on drew a restored SHR desktop through the non-SHR rectangle -- measured,
+// stretched and cropped. Applied through set_new_video, the same path a guest write
+// takes, so the scanner's SHR switch and the generator follow it.
+void display_A2GSPU_new_video_snapshot(display_state_t *ds, FILE *f) { fwrite(&ds->new_video, 1, 1, f); }
+bool display_A2GSPU_new_video_restore(display_state_t *ds, FILE *f) {
+    uint8_t nv = 0;
+    if (fread(&nv, 1, 1, f) != 1) return false;
+    set_new_video(ds, nv);
+    return true;
+}
 void display_A2GSPU_snapshot(display_state_t *ds, FILE *f) {
     uint8_t r[4] = { ds->f_INTEN, ds->f_VGCINT, ds->f_INTFLAG, ds->f_langsel };
     fwrite(r, 1, 4, f);

@@ -503,3 +503,47 @@ void VideoScannerII::allocate()
  * Finally the address to be scanned is formed by summing the individual parts
  * A2-A0, A6-A3, A9-A7, A15-A10.
  */
+
+// ---- A2GSPU snapshot, Class B (M5) --------------------------------------------------
+void VideoScannerII::A2GSPU_snapshot(FILE *f) {
+    const uint32_t si = scan_index;
+    fwrite(&si, 4, 1, f); fwrite(&h_counter, 2, 1, f);
+    uint16_t sw = (graf ? 1 : 0) | (hires ? 2 : 0) | (mixed ? 4 : 0) | (page2 ? 8 : 0) |
+                  (sw80col ? 16 : 0) | (altchrset ? 32 : 0) | (dblres ? 64 : 0) | (f_80store ? 128 : 0) |
+                  (shr ? 256 : 0);
+    fwrite(&sw, 2, 1, f);
+    fwrite(&text_bg, 2, 1, f); fwrite(&text_fg, 2, 1, f); fwrite(&text_color, 1, 1, f);
+    fwrite(&border_color, 2, 1, f);
+    fwrite(&current_scb, 1, 1, f); fwrite(&video_byte, 1, 1, f);
+    // Samples scanned but not yet rendered (a save between frames has none).
+    const uint32_t pending = frame_scan ? frame_scan->get_count() : 0;
+    fwrite(&pending, 4, 1, f);
+    for (uint32_t i = 0; i < pending; i++) { Scan_t sc = frame_scan->get(i); fwrite(&sc, sizeof(Scan_t), 1, f); }
+    fwrite(scanline_state, sizeof(scanline_state_t), 262, f);
+}
+bool VideoScannerII::A2GSPU_restore(FILE *f) {
+    uint32_t si = 0; uint16_t hc = 0, sw = 0, bg = 0, fg = 0, bc = 0; uint8_t tc = 0, scb = 0, vb = 0;
+    if (fread(&si, 4, 1, f) != 1 || fread(&hc, 2, 1, f) != 1 || fread(&sw, 2, 1, f) != 1) return false;
+    if (fread(&bg, 2, 1, f) != 1 || fread(&fg, 2, 1, f) != 1 || fread(&tc, 1, 1, f) != 1) return false;
+    if (fread(&bc, 2, 1, f) != 1 || fread(&scb, 1, 1, f) != 1 || fread(&vb, 1, 1, f) != 1) return false;
+    uint32_t pending = 0;
+    if (fread(&pending, 4, 1, f) != 1 || pending > 32767) return false;
+    // POSITION IS THE CLOCK'S, AND THE CLOCK IS NOT IN THE SNAPSHOT. The saved scan
+    // position and the samples scanned since the frame began are read and dropped:
+    // restored into this session's frame boundaries they put the picture at the
+    // saved phase against a clock at another one -- measured, a restored desktop
+    // drawn shifted right with its 640-mode dither lost. Keeping this machine's own
+    // position draws the first whole frame in the saved mode, aligned.
+    (void)si; (void)hc;
+    for (uint32_t i = 0; i < pending; i++) {
+        Scan_t sc;
+        if (fread(&sc, sizeof(Scan_t), 1, f) != 1) return false;
+    }
+    if (fread(scanline_state, sizeof(scanline_state_t), 262, f) != 262) return false;
+    graf = sw & 1; hires = sw & 2; mixed = sw & 4; page2 = sw & 8;
+    sw80col = sw & 16; altchrset = sw & 32; dblres = sw & 64; f_80store = sw & 128; shr = sw & 256;
+    text_bg = bg; text_fg = fg; text_color = tc; border_color = bc;
+    current_scb = scb; video_byte = vb;
+    set_video_mode();          // video_mode / vmode / mode_flags follow from the switches
+    return true;
+}

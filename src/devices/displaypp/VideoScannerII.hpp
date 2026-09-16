@@ -272,6 +272,17 @@ public:
     ScanBuffer *get_frame_scan();
 
     const scanline_state_t *get_scanline_state() const { return scanline_state; }
+
+    // A2GSPU snapshot, Class B (M5): the scanner's own state. The MMU block restores
+    // the soft switches in the MMU, but the scanner caches its own copy of them, so a
+    // restored machine drew in whatever mode the scanner last saw until the guest
+    // happened to write the switch again -- a static SHR desktop could stay in text
+    // mode indefinitely. Switches, colours, the SCB and palette index being scanned
+    // and the per-scanline state are restored, and the mode tables derived again. The
+    // scan position and unrendered samples are saved but not applied: position
+    // belongs to the clock, which the snapshot does not hold (see the .cpp).
+    virtual void A2GSPU_snapshot(FILE *f);
+    virtual bool A2GSPU_restore(FILE *f);
 };
 
 void init_mb_video_scanner(computer_t *computer, SlotType_t slot);

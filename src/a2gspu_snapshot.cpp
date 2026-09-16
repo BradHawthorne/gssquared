@@ -170,6 +170,13 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "vgcint", 1); display_A2GSPU_snapshot(ds, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "vgcint" : ",vgcint";
     }
+    if (ds && ds->video_scanner) {
+        long at = a2gspu_snap_dev_begin(f, "scanner", 1);
+        display_A2GSPU_new_video_snapshot(ds, f);          // the display's NEWVIDEO first
+        ds->video_scanner->A2GSPU_snapshot(f);
+        a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "scanner" : ",scanner";
+    }
     if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
         long at = a2gspu_snap_dev_begin(f, "iwm", 1); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "iwm" : ",iwm";
@@ -205,6 +212,14 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
         } else if (!strcmp(nm, "vgcint") && ver == 1) {
             display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
             if (ds && ds->video_scanner_type == Scanner_AppleIIgs) r = display_A2GSPU_restore(ds, f) ? RESTORED : FAILED;
+        } else if (!strcmp(nm, "scanner") && ver == 1) {
+            // Class B (M5). A block from a different scanner type does not fit this
+            // one's layout; the length check below realigns and the read fails loud.
+            display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
+            if (ds && ds->video_scanner) {
+                r = (display_A2GSPU_new_video_restore(ds, f) && ds->video_scanner->A2GSPU_restore(f)) ? RESTORED : FAILED;
+                if (r == RESTORED && ftell(f) != payload + (long)len) r = FAILED;   // not this scanner's layout
+            }
         } else if (!strcmp(nm, "iwm") && ver == 1) {
             if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
                 int mismatch = 0;
