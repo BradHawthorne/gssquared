@@ -497,6 +497,7 @@ protocol authority.
 |------|--------|-------|-------|
 | `A2GSPU_CTRL=<dir>` | enable the interactive stepping rail: 20 Hz poll of `<dir>/cmd.N`, atomic `<dir>/ack.N` reply; replaces the fixed-frame spike. Also forces headless when set | ctrl | env |
 | `A2GSPU_CTRL_TIMEOUT=<s>` | idle timeout in seconds before an orphaned session quits (default 300) | ctrl | env |
+| `A2GSPU_CTRL_ATOMIC=1` | the client declares it writes `cmd.N` atomically (a temp file, then rename). The rail then skips the 20 ms re-read guard it keeps for clients that write in place, which could otherwise be seen mid-write. `tools/a2rail/session.ps1` sets it; `protocol` reports `cmd_guard=`. With the poll hot for a second after each ack, the emulator's side of a command is its execution time plus about a millisecond | ctrl | env |
 | `A2GSPU_BACKGROUND_WINDOW=1` | keep the window out of the way: created not-focusable, not activated when shown or raised, pushed to the back of the z-order. `A2GSPU_CTRL` implies this; this rail gives it to an automated **windowed** run without the CTRL rail — the co-pilot gate, whose window otherwise took focus mid-suite. Interactive use never sets it | ctrl | env |
 | `A2GSPU_COPILOT=<dir>` | windowed agent rail: human input stays live. Observe verbs, plus `pause`, `resume`, `key`, `press`, `reset`, `mount` and `quit`; it **refuses** memory and register splices (`poke`, `load`, `setreg`) rather than racing the human. The `copilot` verb states the contract | ctrl | env |
 

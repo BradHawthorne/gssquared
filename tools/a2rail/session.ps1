@@ -66,8 +66,12 @@ if (Test-Path $Dir) {
 # way personalitycheck.ps1 already does it.
 $a2railOldCtrl        = $env:A2GSPU_CTRL
 $a2railOldCtrlTimeout = $env:A2GSPU_CTRL_TIMEOUT
+$a2railOldCtrlAtomic  = $env:A2GSPU_CTRL_ATOMIC
 $env:A2GSPU_CTRL         = $Dir
 $env:A2GSPU_CTRL_TIMEOUT = "$TimeoutS"
+# ctl.ps1 writes cmd.N as a temp file and renames it into place, so the rail can
+# skip the re-read guard it keeps for clients that write in place.
+$env:A2GSPU_CTRL_ATOMIC  = "1"
 
 # libstdc++-6.dll and friends must be discoverable before launch. Keep this in
 # one shared preflight so ctest, personality gates and sessions cannot drift.
@@ -105,6 +109,7 @@ $proc = Start-Process -FilePath $Exe -ArgumentList $launchArgs -WorkingDirectory
 # The child has inherited them; put the caller's environment back.
 $env:A2GSPU_CTRL         = $a2railOldCtrl
 $env:A2GSPU_CTRL_TIMEOUT = $a2railOldCtrlTimeout
+$env:A2GSPU_CTRL_ATOMIC  = $a2railOldCtrlAtomic
 
 @{
     schema = "a2rail-session-v1"

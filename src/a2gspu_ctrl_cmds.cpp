@@ -952,7 +952,9 @@ bool try_meta(const char *line, char *result, size_t rsz) {
     }
     if (!strcmp(line, "protocol")) {
         snprintf(result, rsz,
-                 "status=OK protocol version=2 transport=atomic-files sequence=strict ownership=session-json replies=text json_wrapper='json <command>' schemas=a2systems-v1,a2suite-event-v1");
+                 "status=OK protocol version=2 transport=atomic-files sequence=strict ownership=session-json replies=text json_wrapper='json <command>' schemas=a2systems-v1,a2suite-event-v1"
+                 " poll=1ms-for-1s-after-ack,then-50ms cmd_guard=%s",
+                 SDL_getenv("A2GSPU_CTRL_ATOMIC") ? "none(client-declares-atomic)" : "20ms-reread");
         return true;
     }
     if (!strcmp(line,"limitations") || !strncmp(line,"limitations ",12)) {

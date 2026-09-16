@@ -60,6 +60,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_CPUTEST",             "run",         "short-circuit the spike: run one CPU micro-test case, print === CPUTEST COMPLETE (PASS/FAIL) ===, exit with its rc"},
     {"A2GSPU_CTRL",                "ctrl",        "enable the interactive stepping rail: 20 Hz poll of <dir>/cmd.N, atomic <dir>/ack.N reply; replaces the fixed-frame spike. Also forces headless when set"},
     {"A2GSPU_CTRL_TIMEOUT",        "ctrl",        "idle timeout in seconds before an orphaned session quits (default 300)"},
+    {"A2GSPU_CTRL_ATOMIC",         "ctrl",        "the client declares it writes cmd.N atomically (write a temp file, then rename), so the rail skips the 20 ms re-read guard it keeps for clients that write in place; tools/a2rail/session.ps1 sets it. The protocol verb reports cmd_guard="},
     {"A2GSPU_DHGR_GOLDEN",         "assert",     "SPIKE-end IIe DHGR gate (bless if missing; MATCH/DIFF exit). A bless compared nothing: it reports gate=BLESSED, not gate=PASS, and raises a WARNING so A2GSPU_STRICT=1 refuses it"},
     {"A2GSPU_DHGR_GOLDEN_PROFILE", "assert",     "vram-raw (default) or 4dot -- must match how the golden file was blessed"},
     {"A2GSPU_DHGR_PAGE",           "assert",     "which page the SPIKE-end IIe DHGR golden reads: 1 or 2 (default 1)"},

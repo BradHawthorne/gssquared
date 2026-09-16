@@ -93,13 +93,32 @@ function Test-SessionAlive {
   return $false
 }
 
+# WAIT ON THE FILESYSTEM, NOT ON A TICK. This slept 100 ms between Test-Path
+# checks, so no ack could be seen sooner than ~100 ms after the command was
+# issued, whatever the emulator did: with the rail's own poll it made a command
+# cost ~125 ms from PowerShell (medians measured across the gate runs). A watcher
+# on the one ack file wakes when the emulator renames it into place. The existence
+# check at the top of every slice covers the ack that lands between two waits, and
+# the 250 ms slice bounds how late that rare case can be seen; the session is
+# still checked for life about every two seconds, as before.
 function Wait-Ack([string]$path, [int]$ms) {
-  $w = 0
-  while (-not (Test-Path $path) -and $w -lt $ms) {
-    Start-Sleep -Milliseconds 100; $w += 100
-    if (($w % 2000) -eq 0 -and -not (Test-SessionAlive)) { return $false }
+  if ([IO.File]::Exists($path)) { return $true }
+  $watcher = New-Object IO.FileSystemWatcher ([IO.Path]::GetDirectoryName($path)), ([IO.Path]::GetFileName($path))
+  try {
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $lastLife = 0
+    while ($clock.ElapsedMilliseconds -lt $ms) {
+      if ([IO.File]::Exists($path)) { return $true }
+      $null = $watcher.WaitForChanged([IO.WatcherChangeTypes]::All, 250)
+      if ($clock.ElapsedMilliseconds - $lastLife -ge 2000) {
+        $lastLife = $clock.ElapsedMilliseconds
+        if (-not [IO.File]::Exists($path) -and -not (Test-SessionAlive)) { return $false }
+      }
+    }
+    return [IO.File]::Exists($path)
+  } finally {
+    $watcher.Dispose()
   }
-  return (Test-Path $path)
 }
 
 if (-not (Test-SessionAlive)) {
@@ -122,7 +141,10 @@ if (-not (Test-SessionAlive)) {
   exit 2
 }
 
+# cmd.N only: a client's cmd.N.tmp caught mid-rename would otherwise fail the [int]
+# cast and abort this invocation.
 $existing = Get-ChildItem (Join-Path $Dir "cmd.*") -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^cmd\.\d+$' } |
             ForEach-Object { [int]($_.Name -replace '^cmd\.','') }
 $seq = 1
 if ($existing) { $seq = ([int]($existing | Measure-Object -Maximum).Maximum) + 1 }

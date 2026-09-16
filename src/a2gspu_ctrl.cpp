@@ -36,9 +36,11 @@
 //                           quiescent points; the scanner and media are not in
 //                           the file and self-heal over the next frames)
 //   quit                    end the session
-// Pacing: the poll ticks at 20Hz (SDL_Delay(50)) so an idle session neither
-// spins the CPU nor floods the filesystem; A2GSPU_CTRL_TIMEOUT seconds
-// (default 300) of silence auto-quits an orphaned session.
+// Pacing: for one second after each ack the poll ticks every millisecond (an
+// agent's next command usually follows within milliseconds), then at 20Hz
+// (SDL_Delay(50)) so an idle session neither spins the CPU nor floods the
+// filesystem; A2GSPU_CTRL_TIMEOUT seconds (default 300) of wall-clock silence
+// auto-quits an orphaned session.
 static void a2gspu_ctrl_dump_text(computer_t *computer, const char *path) {
     FILE *tfp = fopen(path, "wb");
     if (!tfp) { printf("A2GSPU CTRL: text open fail '%s'\n", path); return; }
@@ -91,7 +93,16 @@ void a2gspu_ctrl_loop(GS2AppState *state) {
     printf("A2GSPU CTRL: agentic oracle — send 'oracle' or 'help' / 'manifest <file>' "
            "(no black boxes; Docs/AGENTIC_ORACLE.md)\n");
     int seq = 1;
-    uint64_t idle_ms = 0;
+    // COMMAND LATENCY. The poll slept 50 ms per miss and every command paid a
+    // 20 ms re-read guard, so the emulator side alone cost 20-70 ms per command
+    // (measured medians 41-63 ms) on top of whatever the client added -- about
+    // nine commands a second for an agent that must go one at a time. Now: a hot
+    // window after each ack, and no guard for a client that declares it writes
+    // cmd.N atomically (A2GSPU_CTRL_ATOMIC=1; session.ps1 sets it). Waiting never
+    // advances the machine, so none of this can move a cycle count.
+    const bool atomic_client = SDL_getenv("A2GSPU_CTRL_ATOMIC") != nullptr;
+    uint64_t last_ack_ms = SDL_GetTicks();
+    uint64_t idle_since_ms = SDL_GetTicks();
     // Harvested (wiz5): a persistent frame clock for the interactive rail so the
     // frame-armed instruments work here too — WATCH `ts`, ITRACE_FRAME, and the
     // loadtrace frame attribution all key off g_iigs_cur_frame, which was only
@@ -106,15 +117,14 @@ void a2gspu_ctrl_loop(GS2AppState *state) {
         snprintf(cmdpath, sizeof cmdpath, "%s/cmd.%d", dir, seq);
         FILE *f = fopen(cmdpath, "rb");
         if (!f) {
-            SDL_Delay(50);              // 20Hz poll tick — no spin, no fs flood
-            idle_ms += 50;
-            if (idle_ms >= (uint64_t)idle_timeout_s * 1000) {
+            const uint64_t now_ms = SDL_GetTicks();
+            SDL_Delay(now_ms - last_ack_ms < 1000 ? 1 : 50);   // hot after an ack, else 20Hz
+            if (SDL_GetTicks() - idle_since_ms >= (uint64_t)idle_timeout_s * 1000) {
                 printf("A2GSPU CTRL: idle timeout — quitting orphaned session\n");
                 break;
             }
             continue;
         }
-        idle_ms = 0;
         char line[2048] = {0};
         size_t n = fread(line, 1, sizeof line - 1, f);
         fclose(f);
@@ -135,8 +145,14 @@ void a2gspu_ctrl_loop(GS2AppState *state) {
         // the first result if the file changed underneath. Costs 20ms per
         // command and cannot mask a genuine error, because a command that is
         // still growing was never a command yet.
-        SDL_Delay(20);
-        FILE *f2 = fopen(cmdpath, "rb");
+        //
+        // A client that renames into place (A2GSPU_CTRL_ATOMIC=1) cannot be seen
+        // mid-write, so it does not pay for the ones that can.
+        FILE *f2 = nullptr;
+        if (!atomic_client) {
+            SDL_Delay(20);
+            f2 = fopen(cmdpath, "rb");
+        }
         if (f2) {
             char line2[2048] = {0};
             size_t n2 = fread(line2, 1, sizeof line2 - 1, f2);
@@ -888,6 +904,7 @@ void a2gspu_ctrl_loop(GS2AppState *state) {
             a2gspu_ctrl_ack(dir, seq, json);
         } else a2gspu_ctrl_ack(dir, seq, result);
         seq++;
+        last_ack_ms = idle_since_ms = SDL_GetTicks();
     }
 }
 
