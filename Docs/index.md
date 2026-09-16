@@ -70,3 +70,4 @@ never silently happens again.
 * [Instrumentation Shape](INSTRUMENTATION_SHAPE.md) — the mechanisms and their status
 
 * [Upstream Sync Ledger](UPSTREAM_SYNC.md) — what has been ported from upstream, and what is owed
+* [Fidelity Study](fidelity/README.md) — the ideal shape of each subsystem against real hardware, and what is still open
