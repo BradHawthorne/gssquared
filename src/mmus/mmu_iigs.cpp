@@ -693,6 +693,7 @@ uint8_t iolc_rom_read(void *context, uint32_t address) {
 read_handler_t float_read_handler = { (memory_read_func)float_area_read, nullptr };
 
 void MMU_IIgs::init_c0xx_handlers() {
+    megaii->gs_slot_register = true;   // FORK: $C02D gates slots 1, 2, 5, 6 and 7 (mmu_iie.hpp)
     for (uint32_t i = 0xC000; i <= 0xC009; i++) {
         megaii->set_C0XX_write_handler(i, {megaii_c0xx_write, this});
     }

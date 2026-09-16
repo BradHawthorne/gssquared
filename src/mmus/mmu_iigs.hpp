@@ -255,7 +255,9 @@ class MMU_IIgs : public MMU {
             if (m2b0)    ctl |= SLOT_CTL_M2B0;
             if (!v2 && !is_iolc_shadowed()) ctl |= SLOT_CTL_INH;   // format 2: /INH is a card output
             if (a >= 0xC000 && a <= 0xCFFF) {                   // slot I/O strobes (this card's slot)
-                if ((a & 0xFFF0) == (uint16_t)(0xC080 + slot * 0x10)) ctl |= SLOT_CTL_DEVSEL;
+                // FORMAT 2: /DEVSEL only when the slot register gives this slot's I/O to the card.
+                if ((a & 0xFFF0) == (uint16_t)(0xC080 + slot * 0x10) && (!v2 || !megaii || megaii->c0xx_gate((uint8_t)a) != 0))
+                    ctl |= SLOT_CTL_DEVSEL;
                 if ((a >> 8)     == (uint16_t)(0xC0   + slot))        ctl |= SLOT_CTL_IOSEL;
                 if (a >= 0xC800)                                     ctl |= SLOT_CTL_IOSTRB;
             }
@@ -268,10 +270,7 @@ class MMU_IIgs : public MMU {
         inline bool cxxx_card_visible(uint16_t a) {
             if (!megaii || megaii->f_intcxrom) return false;
             const uint8_t page = (uint8_t)(a >> 8);
-            if (page >= 0xC1 && page <= 0xC7) {
-                const int n = page & 0x0F;
-                return n == 3 ? megaii->f_slotc3rom : ((megaii->get_slot_register() >> n) & 1) != 0;
-            }
+            if (page >= 0xC1 && page <= 0xC7) return megaii->slot_card_selected(page & 0x07);   // the one slot decode
             if (page >= 0xC8) {
                 const int owner = megaii->get_C8xx_slot();
                 return owner >= 1 && owner <= 7;

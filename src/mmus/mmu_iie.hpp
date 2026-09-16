@@ -16,6 +16,13 @@ class MMU_IIe : public MMU_II {
     public:
         bool f_intcxrom = false;
         bool f_slotc3rom = false;
+        // FORK: set by MMU_IIgs. The IIgs slot register $C02D gates slots 1, 2, 5, 6 and 7:
+        // bit n selects the card's $Cn00 ROM AND its $C0nX I/O, clear selects the built-in
+        // port [HW Ref Table 8-2]. Slots 3 and 4 always give their I/O to the card. Apple's
+        // own ROM relies on it: before calling the built-in slot 5 firmware it saves $C02D,
+        // clears bits 5 and 6 so the IWM at $C0E0-$C0EF answers, and restores it after
+        // (ROM 01 $FE7026 and $FE6F63).
+        bool gs_slot_register = false;
 
         MMU_IIe(int page_table_size, int ram_amount, uint8_t *rom_pointer);
         virtual ~MMU_IIe();
@@ -23,6 +30,20 @@ class MMU_IIe : public MMU_II {
         void compose_c1cf() override;
         void set_slot_register(uint8_t value) { reg_slot = value; compose_c1cf(); }
         uint8_t get_slot_register() { return reg_slot; }
+
+        int c0xx_gate(uint8_t sub) override {
+            if (!gs_slot_register || sub < 0x90) return -1;
+            const uint8_t slot = (uint8_t)((sub >> 4) - 8);
+            if (slot == 3 || slot == 4) return -1;          // always the card's
+            return (reg_slot >> slot) & 1;
+        }
+        // The same rule compose_c1cf uses to map the page: INTCXROM off, and SLOTC3ROM for
+        // slot 3, the slot register bit for the others on a IIgs (a IIe has no register).
+        bool slot_card_selected(uint8_t slot) override {
+            if (f_intcxrom) return false;
+            if (slot == 3) return f_slotc3rom;
+            return gs_slot_register ? ((reg_slot >> slot) & 1) != 0 : true;
+        }
         void map_c1cf_internal_rom(page_t page, uint8_t *data, const char *read_d);
 
         void init_map() override;

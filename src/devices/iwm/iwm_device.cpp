@@ -47,9 +47,11 @@ void init_iwm_slot(computer_t *computer, SlotType_t slot) {
     st->iwm = new IWM(computer->sound_effect, computer->clock, computer->event_timer);
     g_a2gspu_iwm = st;   // the snapshot code reaches the controller through this
 
+    // FORK: registered as the BUILT-IN slot 6 device, so on a IIgs $C02D bit 6 decides
+    // between the IWM and a card in slot 6 (mmu_iie.hpp).
     for (uint32_t i = 0xC0E0; i <= 0xC0EF; i++) {
-        computer->mmu->set_C0XX_write_handler(i, { iwm_write_C0xx, st });
-        computer->mmu->set_C0XX_read_handler(i, { iwm_read_C0xx, st });
+        computer->mmu->set_C0XX_write_handler_internal(i, { iwm_write_C0xx, st });
+        computer->mmu->set_C0XX_read_handler_internal(i, { iwm_read_C0xx, st });
     }
 
     computer->mmu->set_C0XX_read_handler(0xC031, { iwm_read_C031, st });

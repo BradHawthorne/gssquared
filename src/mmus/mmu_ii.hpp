@@ -20,6 +20,10 @@ class MMU_II : public MMU {
 
         read_handler_pair_t C0xx_memory_read_handlers[C0X0_SIZE] = { {nullptr, nullptr}, {nullptr, nullptr} };          // Table of memory read handlers
         write_handler_pair_t C0xx_memory_write_handlers[C0X0_SIZE] = { {nullptr, nullptr}, {nullptr, nullptr} };        // Table of memory write handlers
+        // FORK: which of each address's two handlers belongs to a BUILT-IN device (bit k set:
+        // hs[k] is internal) rather than a slot card. Only the IIgs's slot register uses it.
+        uint8_t C0xx_read_internal[C0X0_SIZE] = { 0 };
+        uint8_t C0xx_write_internal[C0X0_SIZE] = { 0 };
 
         int8_t C8xx_slot;
         C8XX_handler_t C8xx_handlers[8] = {nullptr};
@@ -38,6 +42,19 @@ class MMU_II : public MMU {
         
         virtual void set_C8xx_handler(SlotType_t slot, void (*handler)(void *context, SlotType_t slot), void *context);
         virtual void set_C0XX_read_handler(uint16_t address, read_handler_t handler);
+        // FORK: a built-in device's $C0xx handler (the IIgs IWM at $C0E0-$C0EF), which the
+        // IIgs slot register ($C02D) switches against the slot card's (c0xx_gate).
+        void set_C0XX_read_handler_internal(uint16_t address, read_handler_t handler);
+        void set_C0XX_write_handler_internal(uint16_t address, write_handler_t handler);
+        // FORK: THE SLOT DECODE, one place for both questions a slot access asks.
+        //   c0xx_gate(sub): -1 every handler at $C0<sub> answers; 0 only built-in ones;
+        //                   1 only the slot card's.
+        //   slot_card_selected(n): a $Cn00-$CnFF access selects slot n's card (its /IOSEL,
+        //                   and so its claim on $C800-$CFFF).
+        // The II and II+ have no switches for either; MMU_IIe answers for the IIe and the
+        // IIgs's Mega II.
+        virtual int c0xx_gate(uint8_t sub) { (void)sub; return -1; }
+        virtual bool slot_card_selected(uint8_t slot) { (void)slot; return true; }
         virtual void set_C0XX_write_handler(uint16_t address, write_handler_t handler);
 /*         virtual void get_C0XX_read_handler(uint16_t address, read_handler_t &handler);
         virtual void get_C0XX_write_handler(uint16_t address, write_handler_t &handler); */

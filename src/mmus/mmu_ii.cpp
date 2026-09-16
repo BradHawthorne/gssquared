@@ -213,18 +213,20 @@ uint8_t MMU_II::read(uint32_t address) {
     if (bank == 0xC) {
         if (page == 0xC0) {
             uint16_t subaddr = eaddress & 0xFF;
-            read_handler_t funcptr =  C0xx_memory_read_handlers[subaddr].hs[0];
+            // FORK: on a IIgs the slot register decides whether a slot's $C0nX reaches the
+            // card or the built-in device (c0xx_gate); both used to answer, OR-ed together.
+            const int gate = c0xx_gate((uint8_t)subaddr);
             uint8_t retval = 0x00;
-            if (funcptr.read != nullptr) {
+            bool answered = false;
+            for (int k = 0; k < 2; k++) {
+                read_handler_t funcptr = C0xx_memory_read_handlers[subaddr].hs[k];
+                if (funcptr.read == nullptr) continue;
+                if (gate >= 0 && (((C0xx_read_internal[subaddr] >> k) & 1) != 0) == (gate == 1)) continue;
                 retval |= (*funcptr.read)(funcptr.context, eaddress);
+                answered = true;
             }
-            read_handler_t funcptr2 = C0xx_memory_read_handlers[subaddr].hs[1];
-            if (funcptr2.read != nullptr) {
-                retval |= (*funcptr2.read)(funcptr2.context, eaddress);
-            }
-            // if neither was called then get floating bus here.
-            //retval |= floating_bus_read();
-            if (funcptr.read == nullptr && funcptr2.read == nullptr) {
+            // if nothing answered then get floating bus here.
+            if (!answered) {
                 retval |= floating_bus_read();
             }
             // A2GSPU gap #6 -- the $C0xx soft-switch READ tap for the II family.
@@ -246,7 +248,8 @@ uint8_t MMU_II::read(uint32_t address) {
 
         if (page < 0xC8) { // it's not C0, but it's less than C8 - Slot-card firmware.
             uint8_t slot = page & 0x7; // slot number is just the lower digit of page
-            if (C8xx_slot != slot) call_C8xx_handler((SlotType_t)slot);
+            // FORK: only an access that selects the card (its /IOSEL) claims $C800 for it.
+            if (C8xx_slot != slot && slot_card_selected(slot)) call_C8xx_handler((SlotType_t)slot);
         } else 
             if (eaddress == 0xCFFF) set_default_C8xx_map(); // When CFFF is read, reset the C8xx map to default, then execute the underlying read of CFFF.
     }
@@ -269,12 +272,11 @@ void MMU_II::write(uint32_t address, uint8_t value) {
     if (bank == 0xC) {
         if (page == 0xC0) {
             uint16_t subaddr = eaddress & 0xFF;
-            write_handler_t funcptr =  C0xx_memory_write_handlers[subaddr].hs[0];
-            if (funcptr.write != nullptr) {
-                (*funcptr.write)(funcptr.context, eaddress, value);
-            }
-            funcptr = C0xx_memory_write_handlers[subaddr].hs[1];
-            if (funcptr.write != nullptr) {
+            const int gate = c0xx_gate((uint8_t)subaddr);   // FORK: as the read side
+            for (int k = 0; k < 2; k++) {
+                write_handler_t funcptr = C0xx_memory_write_handlers[subaddr].hs[k];
+                if (funcptr.write == nullptr) continue;
+                if (gate >= 0 && (((C0xx_write_internal[subaddr] >> k) & 1) != 0) == (gate == 1)) continue;
                 (*funcptr.write)(funcptr.context, eaddress, value);
             }
             // Same gap on the write side: soft-switch WRITES (mode changes, page
@@ -286,7 +288,7 @@ void MMU_II::write(uint32_t address, uint8_t value) {
         /** Handle the C800-CFFF mapping  */
         if (page < 0xC8) { // it's not C0, and less than C8 - Slot-card firmware area.
             uint8_t slot = (eaddress / 0x100) & 0x7; // TODO: use a bit shift instead
-            if (C8xx_slot != slot) call_C8xx_handler((SlotType_t)slot);            
+            if (C8xx_slot != slot && slot_card_selected(slot)) call_C8xx_handler((SlotType_t)slot);   // FORK: as the read side
         } else if (eaddress == 0xCFFF) set_default_C8xx_map();
     }
 
@@ -313,6 +315,20 @@ void MMU_II::set_C0XX_read_handler(uint16_t address, read_handler_t handler) {
         assert(false); // Bug out if out of handler slots
     }
     //C0xx_memory_read_handlers[address - C0X0_BASE] = handler;
+}
+
+void MMU_II::set_C0XX_read_handler_internal(uint16_t address, read_handler_t handler) {
+    uint16_t base = address & 0xFF;
+    const int k = C0xx_memory_read_handlers[base].hs[0].read == nullptr ? 0 : 1;
+    set_C0XX_read_handler(address, handler);
+    C0xx_read_internal[base] |= (uint8_t)(1u << k);
+}
+
+void MMU_II::set_C0XX_write_handler_internal(uint16_t address, write_handler_t handler) {
+    uint16_t base = address & 0xFF;
+    const int k = C0xx_memory_write_handlers[base].hs[0].write == nullptr ? 0 : 1;
+    set_C0XX_write_handler(address, handler);
+    C0xx_write_internal[base] |= (uint8_t)(1u << k);
 }
 
 void MMU_II::set_C0XX_write_handler(uint16_t address, write_handler_t handler) {
