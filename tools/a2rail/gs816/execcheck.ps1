@@ -52,12 +52,33 @@ function Say([string]$c) { return ((& $ctl -Dir $Dir -Cmd $c) -join "`n") }
 # nobody on the other end and then wait out the full ctl timeout for an ack that
 # could never come. session.ps1 writes session.json with the pid before it
 # launches, so this $Dir's pid is the only witness to whether THIS rail is live.
+# A PID IS NOT A SESSION. Windows reuses process ids, and a gate run launches
+# emulators back to back: a session.json left by an earlier run named a pid that
+# another process -- often the next suite's emulator -- now held, so the suite
+# "quit" a session that did not exist and waited out the 180 s ack timeout
+# (measured: IIgs railcheck 184 s, every command in its last 2 s). The pid counts
+# only if it is a GSSquared that started within 30 s of this session's
+# started_utc, which session.ps1 writes just before it launches.
+function Test-A2RailSessionProcess($s) {
+    if (-not $s -or -not $s.pid) { return $false }
+    $p = Get-Process -Id ([int]$s.pid) -ErrorAction SilentlyContinue
+    if (-not $p -or $p.ProcessName -ne 'GSSquared') { return $false }
+    if ($s.started_utc) {
+        try {
+            # ConvertFrom-Json (PowerShell 7) already made it a DateTime; a [string]
+            # cast would drop its UTC kind and shift it by the zone offset.
+            $t0 = if ($s.started_utc -is [DateTime]) { $s.started_utc.ToUniversalTime() }
+                  else { [DateTime]::Parse([string]$s.started_utc, $null, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime() }
+            if ([Math]::Abs(($p.StartTime.ToUniversalTime() - $t0).TotalSeconds) -gt 30) { return $false }
+        } catch { }
+    }
+    return $true
+}
 function Get-LiveSessionPid([string]$d) {
     $f = Join-Path $d 'session.json'
     if (-not (Test-Path $f)) { return 0 }
     try { $s = Get-Content $f -Raw | ConvertFrom-Json } catch { return 0 }
-    if (-not $s.pid) { return 0 }
-    if (Get-Process -Id ([int]$s.pid) -ErrorAction SilentlyContinue) { return [int]$s.pid }
+    if (Test-A2RailSessionProcess $s) { return [int]$s.pid }
     return 0
 }
 $pass = 0; $fail = 0

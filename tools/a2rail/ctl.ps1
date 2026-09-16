@@ -86,11 +86,30 @@ if ($Owner -and $session -and $session.owner -ne $Owner) {
 # nobody to read. session.ps1 always writes session.json before it launches
 # anything, so an absent file means no session here, full stop; there is no case
 # where the name fallback was right and the pid was not available.
+# A PID IS NOT A SESSION. Windows reuses process ids, and a gate run launches
+# emulators back to back: a session.json left by an earlier run named a pid that
+# another process -- often the next suite's emulator -- now held, so the suite
+# "quit" a session that did not exist and waited out the 180 s ack timeout
+# (measured: IIgs railcheck 184 s, every command in its last 2 s). The pid counts
+# only if it is a GSSquared that started within 30 s of this session's
+# started_utc, which session.ps1 writes just before it launches.
+function Test-A2RailSessionProcess($s) {
+    if (-not $s -or -not $s.pid) { return $false }
+    $p = Get-Process -Id ([int]$s.pid) -ErrorAction SilentlyContinue
+    if (-not $p -or $p.ProcessName -ne 'GSSquared') { return $false }
+    if ($s.started_utc) {
+        try {
+            # ConvertFrom-Json (PowerShell 7) already made it a DateTime; a [string]
+            # cast would drop its UTC kind and shift it by the zone offset.
+            $t0 = if ($s.started_utc -is [DateTime]) { $s.started_utc.ToUniversalTime() }
+                  else { [DateTime]::Parse([string]$s.started_utc, $null, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime() }
+            if ([Math]::Abs(($p.StartTime.ToUniversalTime() - $t0).TotalSeconds) -gt 30) { return $false }
+        } catch { }
+    }
+    return $true
+}
 function Test-SessionAlive {
-  if ($session -and $session.pid) {
-    return [bool](Get-Process -Id ([int]$session.pid) -ErrorAction SilentlyContinue)
-  }
-  return $false
+  return (Test-A2RailSessionProcess $session)
 }
 
 # WAIT ON THE FILESYSTEM, NOT ON A TICK. This slept 100 ms between Test-Path
