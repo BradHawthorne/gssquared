@@ -24,17 +24,30 @@ namespace a2ctrl {
 // verb the CTRL rail answers inside a marked region, and nothing else (the co-pilot's
 // allow-list is deliberately outside).
 
+// FORK (F7): the whole token must be hex -- "BB:AAAA" or "AAAAAA". sscanf("%x") took the
+// hex prefix of anything ("12zz" was $12, "zz" failed only by luck of the first char), so
+// a mistyped address armed a trap somewhere else and said OK.
+static bool parse_hex_token(const char *s, const char *end, unsigned long *out) {
+    if (s == end) return false;
+    char *e = nullptr;
+    unsigned long v = strtoul(s, &e, 16);
+    if (e != end) return false;
+    *out = v;
+    return true;
+}
 bool parse_addr(const char *s, uint32_t *out) {
-    unsigned bank = 0, addr = 0;
-    if (sscanf(s, "%x:%x", &bank, &addr) == 2) {
-        *out = ((bank & 0xFF) << 16) | (addr & 0xFFFF);
+    if (!s || !*s) return false;
+    const char *end = s + strlen(s);
+    const char *colon = strchr(s, ':');
+    unsigned long bank = 0, addr = 0;
+    if (colon) {
+        if (!parse_hex_token(s, colon, &bank) || !parse_hex_token(colon + 1, end, &addr)) return false;
+        *out = (uint32_t)(((bank & 0xFF) << 16) | (addr & 0xFFFF));
         return true;
     }
-    if (sscanf(s, "%x", &addr) == 1) {
-        *out = addr & 0xFFFFFF;
-        return true;
-    }
-    return false;
+    if (!parse_hex_token(s, end, &addr)) return false;
+    *out = (uint32_t)(addr & 0xFFFFFF);
+    return true;
 }
 
 // Soft watch state: the type and the one instance are declared in a2gspu_ctrl_cmds.hpp.
@@ -205,8 +218,12 @@ bool try_watch(const char *line, char *result, size_t rsz, computer_t *computer)
 // Same safety policy as CTRL `load`: refuse I/O $C000 span and bank overrun
 // for bank-0 low-address loads. Returns true on success; writes a short
 // diagnostic into err (if non-null).
+// Set when the last load_file_at switched the language card (F2): the ack names it.
+static bool g_load_lc_banked = false;
+
 bool load_file_at(computer_t *computer, uint32_t addr, const char *path,
                          long *out_n, char *err, size_t errsz) {
+    g_load_lc_banked = false;
     if (!computer || !rail_mmu(computer) || !path || !path[0]) {
         if (err && errsz) snprintf(err, errsz, "no-mmu-or-path");
         return false;
@@ -319,13 +336,24 @@ bool load_file_at(computer_t *computer, uint32_t addr, const char *path,
         rail_mmu(computer)->read(0xC08B);
         rail_mmu(computer)->read(0xC08B);
         lc_banked = true;
+        g_load_lc_banked = true;   // FORK: the ack says so (F2)
     }
 
+    // FORK (F2): the bytes go where `poke BB:AAAA` puts them -- probe_poke, resolved the
+    // way the CPU's own write resolves -- not through mmu->write. The bus write logged
+    // the rail's bytes in iolog and the bus traces as if the guest had written them.
+    long refused = 0;
     while ((c = fgetc(f)) != EOF) {
-        rail_mmu(computer)->write(
-            (uint32_t)((addr & 0xFF0000) | ((start + n) & 0xFFFF)),
-            (uint8_t)c);
+        if (!rail_mmu(computer)->probe_poke(
+                (uint32_t)((addr & 0xFF0000) | ((start + n) & 0xFFFF)), (uint8_t)c)) refused++;
         n++;
+    }
+    if (refused) {
+        fclose(f);
+        if (err && errsz)
+            snprintf(err, errsz, "refused %ld of %ld byte(s): nothing writable backs part of that range%s",
+                     refused, n, lc_banked ? " even with the language card banked in" : "");
+        return false;
     }
 
     // VERIFY BY READING BACK. Both silent-load bugs found in this rail -- bank 1
@@ -641,10 +669,11 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
                 uint16_t start = (uint16_t)(addr & 0xFFFF);
                 snprintf(result, rsz,
                          "status=OK loaded %ld byte(s) %02X/%04lX-%02X/%04lX from %s "
-                         "(DELIBERATE splice)",
+                         "(DELIBERATE splice)%s",
                          n, (unsigned)((addr >> 16) & 0xFF), (unsigned long)start,
                          (unsigned)((addr >> 16) & 0xFF),
-                         (unsigned long)(start + n - 1), fbuf);
+                         (unsigned long)(start + n - 1), fbuf,
+                         g_load_lc_banked ? " switched=$C08Bx2(language card RAM read+write, bank 1; left so)" : "");
             } else {
                 snprintf(result, rsz, "status=FAIL load-%s", err);
             }
@@ -961,7 +990,7 @@ bool try_meta(const char *line, char *result, size_t rsz) {
     }
     if (!strcmp(line, "protocol")) {
         snprintf(result, rsz,
-                 "status=OK protocol version=2 transport=atomic-files sequence=strict ownership=session-json replies=text json_wrapper='json <command>' schemas=a2systems-v1,a2suite-event-v1"
+                 "status=OK protocol version=2 transport=atomic-files sequence=strict ownership=session-json(enforced-by-client-script) replies=text json_wrapper='json <command>' schemas=a2systems-v1,a2suite-event-v1"
                  " poll=1ms-for-1s-after-ack,then-50ms cmd_guard=%s",
                  SDL_getenv("A2GSPU_CTRL_ATOMIC") ? "none(client-declares-atomic)" : "20ms-reread");
         return true;
@@ -1227,9 +1256,21 @@ bool try_trace_break(const char *line, char *result, size_t rsz) {
             char *ep = nullptr;
             unsigned long v = strtoul(spec, &ep, 16);
             int width = 3;
-            if (ep && *ep == ':') width = atoi(ep + 1);
-            if (width < 1) width = 1;
-            if (width > 4) width = 4;
+            // FORK (F7): a value that does not parse, or a width outside 1-4, is refused --
+            // it used to arm value 0 (or clamp the width) and say LIVE.
+            bool bad = (ep == spec);
+            if (!bad && *ep == ':') {
+                char *we = nullptr;
+                long w = strtol(ep + 1, &we, 10);
+                bad = (we == ep + 1) || (*we && *we != ' ') || w < 1 || w > 4;
+                width = (int)w;
+            } else if (!bad && *ep && *ep != ' ') {
+                bad = true;
+            }
+            if (bad) {
+                snprintf(result, rsz, "status=FAIL valtrap-parse '%s' -- need: set <hex>[:1-4]", spec);
+                return true;
+            }
             g_valtrap_val = (uint32_t)v;
             g_valtrap_width = width;
             g_valtrap_hits = 0;
@@ -1268,17 +1309,27 @@ bool try_trace_break(const char *line, char *result, size_t rsz) {
             snprintf(result, rsz, "status=OK itrace LIVE armed now n=%d path=execute",
                      g_iigs_itrace_n);
         } else if (!strncmp(rest, "from ", 5)) {
-            unsigned long pc = strtoul(rest + 5, nullptr, 16);
-            g_iigs_itrace_from = (uint32_t)pc & 0xFFFFFF;
+            uint32_t pc = 0;   // FORK (F7): garbage used to arm $000000 and say LIVE
+            char tok[64] = {0};
+            if (sscanf(rest + 5, "%63s", tok) != 1 || !parse_addr(tok, &pc)) {
+                snprintf(result, rsz, "status=FAIL itrace-parse '%s' -- need: from <pc> (hex, or BB:AAAA)", rest + 5);
+                return true;
+            }
+            g_iigs_itrace_from = pc & 0xFFFFFF;
             g_iigs_itrace_use_pc = true;
             g_iigs_itrace_enabled = true;
             g_iigs_itrace_armed = false;
             g_iigs_itrace_logged = 0;
-            snprintf(result, rsz, "status=OK itrace LIVE from=$%06lX n=%d path=execute",
-                     pc & 0xFFFFFF, g_iigs_itrace_n);
+            snprintf(result, rsz, "status=OK itrace LIVE from=$%06X n=%d path=execute",
+                     (unsigned)(pc & 0xFFFFFF), g_iigs_itrace_n);
         } else if (!strncmp(rest, "n ", 2)) {
-            int v = atoi(rest + 2);
-            if (v > 0) g_iigs_itrace_n = v;
+            char *e = nullptr;
+            long v = strtol(rest + 2, &e, 10);
+            if (e == rest + 2 || (*e && *e != ' ') || v <= 0) {   // FORK (F7): was ignored and acked OK
+                snprintf(result, rsz, "status=FAIL itrace-parse n '%s' -- need a positive count", rest + 2);
+                return true;
+            }
+            g_iigs_itrace_n = (int)v;
             snprintf(result, rsz, "status=OK itrace n=%d", g_iigs_itrace_n);
         } else {
             snprintf(result, rsz,
@@ -1825,20 +1876,31 @@ bool try_input(const char *line, char *result, size_t rsz,
         const char *s = line + 5;
         if (kb) {
             kb->paste_buffer += s;
+            // FORK (F3): nothing ran; the buffer drains as the machine runs.
+            snprintf(result, rsz, "status=OK keys queued=%zu frames=0 cycles=0 (in-command; the paste buffer drains while the machine runs)",
+                     strlen(s));
         } else if (kg && kg->kg) {
             // IIgs has no MODULE_KEYBOARD paste path. One force_key per
             // char, no hold_key (ADB would repeat).
-            for (; *s; s++) {
+            const uint64_t c0 = computer->clock ? computer->clock->get_cycles() : 0;
+            int frames = 0;
+            size_t keys = 0;
+            for (; *s; s++, keys++) {
                 uint8_t ch = (uint8_t)*s;
                 if (ch == '\n') ch = '\r';
                 kg->kg->force_key(ch);
                 keygloo_update_interrupt_status(kg, kg->kg);
                 for (int i = 0; i < 2; i++) {
                     if (!run_one_frame(computer)) break;
+                    frames++;
                 }
                 kg->kg->hold_key(0);
                 kg->kg->key_up();
             }
+            // FORK (F3): each key RAN the machine for two frames; the ack used to be a bare OK.
+            const uint64_t c1 = computer->clock ? computer->clock->get_cycles() : 0;
+            snprintf(result, rsz, "status=OK keys typed=%zu frames=%d cycles=%llu (in-command; two frames per key)",
+                     keys, frames, (unsigned long long)(c1 - c0));
         } else {
             snprintf(result, rsz, "status=FAIL no-keyboard");
         }

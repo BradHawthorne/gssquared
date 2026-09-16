@@ -131,13 +131,14 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     const char *cls = (holds("adb") && holds("ensoniq") && holds("iwm")) ? "C"
                     : (holds("vgcint") || holds("scanner"))              ? "B"
                                                                          : "A";
-    char buf[768];
+    char buf[1024];
     snprintf(buf, sizeof buf,
              "class=%s devices=%s included=%s excluded=%s "
-             "frame=%d seed=%s faketime=%s ramdisk=%d bram=%s build=%s exe=%s",
+             "frame=%d seed=%s faketime=%s ramdisk=%d bram=%s build=%s exe=%s%s%s",
              cls, devices.empty() ? "-" : devices.c_str(), included.c_str(), excluded.c_str(),
              frame, seed ? seed : "unset", ft, getenv("A2GSPU_RAMDISK") ? 1 : 0,
-             bram, BUILD_VERSION, exe);
+             bram, BUILD_VERSION, exe,
+             g_a2gspu_machine_ident.empty() ? "" : " ", g_a2gspu_machine_ident.c_str());
     return buf;
 }
 
@@ -433,7 +434,32 @@ std::string a2gspu_snap_read_manifest(FILE *f) {
     if (fread(&m[0], 1, n, f) != n) return std::string();
     return m;
 }
+// FORK (F8): the value of " key=" in a manifest, or "" when it has none.
+static std::string a2gspu_manifest_field(const std::string &m, const char *key) {
+    const std::string k = std::string(" ") + key + "=";
+    size_t at = (" " + m).find(k);
+    if (at == std::string::npos) return std::string();
+    at += k.size() - 1;                       // index into m (the leading space was added)
+    size_t end = m.find(' ', at);
+    return m.substr(at, end == std::string::npos ? std::string::npos : end - at);
+}
+
 void a2gspu_snap_print_manifest(const std::string &m) {
+    // FORK (F8): a snapshot restored into a different machine says so. Device blocks for
+    // cards this machine lacks are already skipped by name; this names the mismatch whole.
+    if (!m.empty() && !g_a2gspu_machine_ident.empty()) {
+        const std::string saved_slots = a2gspu_manifest_field(m, "slots");
+        const std::string saved_machine = a2gspu_manifest_field(m, "machine");
+        const std::string now = " " + g_a2gspu_machine_ident;
+        const std::string now_slots = a2gspu_manifest_field(g_a2gspu_machine_ident, "slots");
+        const std::string now_machine = a2gspu_manifest_field(now.substr(1), "machine");
+        if (!saved_slots.empty() && (saved_slots != now_slots || saved_machine != now_machine)) {
+            char w[512];
+            snprintf(w, sizeof w, "the snapshot was taken on machine=%s slots=%s; this is machine=%s slots=%s",
+                     saved_machine.c_str(), saved_slots.c_str(), now_machine.c_str(), now_slots.c_str());
+            a2gspu_warn("A2GSPU SNAP", w);
+        }
+    }
     if (m.empty())
         printf("A2GSPU SNAP: manifest absent (pre-manifest snapshot) -- class A assumed: cpu, mmu, soft switches, "
                "RAM; every device excluded (adb, ensoniq, vgcint, iwm, media, scanner, rtc, serial, clock). A restored machine "

@@ -226,7 +226,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         true,
         CLOCK_SET_US,
         Scanner_AppleIIe,
-        "128K RAM; Disk II; Clock; Mouse",
+        "128K RAM; RAM card; Mouse; block device; Disk II",
         "7992bd60-89df-411c-8ec0-9c038fd81340",
         {
             DEVICE_ID_NONE,
@@ -246,7 +246,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         true,
         CLOCK_SET_US,
         Scanner_AppleIIe,
-        "128K RAM; Disk II; Clock; DUAL Mockingboard",
+        "128K RAM; DUAL Mockingboard; block device; Disk II",
         "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c01",
         {
             DEVICE_ID_NONE,
@@ -266,7 +266,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         true,
         CLOCK_SET_US,
         Scanner_AppleIIgs,
-        "128K RAM; Disk II; Clock; Mouse; 65816",
+        "128K RAM; 65816; RAM card; Mouse; block device; Disk II; VidHD",
         "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c02",
         {
             DEVICE_ID_NONE,
@@ -286,7 +286,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         true,
         CLOCK_SET_PAL,
         Scanner_AppleIIePAL,
-        "PAL Video; 128K RAM; Disk II; Clock; Parallel Port; Mockingboard",
+        "PAL Video; 128K RAM; RAM card; Mockingboard; block device; Disk II; Mouse",
         "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c03",
         {
             DEVICE_ID_NONE,

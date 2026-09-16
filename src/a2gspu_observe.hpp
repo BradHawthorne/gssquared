@@ -44,17 +44,17 @@ inline bool a2obs_is_iigs(MMU *m) {
 // Side-effect-free byte at a 24-bit (IIgs) or 16-bit (II family) address.
 inline uint8_t a2obs_peek(MMU *m, uint32_t addr) {
     if (a2obs_is_iigs(m)) return m->probe_peek(addr & 0xFFFFFF);
-    uint16_t off = (uint16_t)(addr & 0xFFFF);
-    if (off >= 0xC000 && off <= 0xCFFF) return m->probe_peek(off);
-    return m->read(off);
+    // FORK (F13): probe_peek everywhere. The II family's only handler-backed read pages are
+    // $C1-$CF (card ROM and card RAM windows), which were already probed; every other page
+    // has a read pointer, so probe_peek returns the same byte without going through the
+    // bus read, whose taps and handlers an observer must never reach.
+    return m->probe_peek((uint16_t)(addr & 0xFFFF));
 }
 
 // Whether a2obs_peek returned memory or a placeholder it could not avoid.
 inline bool a2obs_readable(MMU *m, uint32_t addr) {
     if (a2obs_is_iigs(m)) return m->probe_readable(addr & 0xFFFFFF);
-    uint16_t off = (uint16_t)(addr & 0xFFFF);
-    if (off >= 0xC000 && off <= 0xCFFF) return m->probe_readable(off);
-    return true;
+    return m->probe_readable((uint16_t)(addr & 0xFFFF));
 }
 
 // Display soft-switch state for rails that report it, read from the video

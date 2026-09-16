@@ -828,6 +828,21 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
     rom_data *rd = load_platform_roms(platform, system_config->rom_dir);
     // Kept for the PINS line: the ROM actually loaded is part of a run's identity.
     g_a2gspu_rom_data = rd ? (const uint8_t *)rd->main_rom_data : nullptr;
+    {
+        // FORK (F8): the machine identity the PINS line and a snapshot manifest carry.
+        std::string ident = "machine=";
+        ident += state->loaded_config ? std::string("file") : std::to_string(builtin_system_id);
+        ident += "/p" + std::to_string((int)system_config->platform_id) + " slots=";
+        bool any = false;
+        for (int s = 0; s < NUM_SLOTS; s++) {
+            if (system_config->slot_devices[s] == DEVICE_ID_NONE) continue;
+            if (any) ident += ",";
+            ident += std::to_string(s) + ":" + card_type_name(system_config->slot_devices[s]);
+            any = true;
+        }
+        if (!any) ident += "-";
+        g_a2gspu_machine_ident = ident;
+    }
     g_a2gspu_rom_size = (rd && rd->main_rom_file) ? (size_t)rd->main_rom_file->size() : 0;
     if (!rd) {
         system_failure("Failed to load platform roms, exiting.");
@@ -1215,10 +1230,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         };
         while ((opt = getopt_long(argc, argv, "snxgp:d:c:D:", long_options, nullptr)) != -1) {
             switch (opt) {
-                case 'p':
-                    platform_id = std::stoi(optarg);
+                case 'p': {
+                    // FORK (F10): std::stoi threw on a non-number, taking the process down with
+                    // an unhandled exception.
+                    char *e = nullptr;
+                    long v = strtol(optarg, &e, 10);
+                    if (e == optarg || *e) {
+                        std::cerr << "-p: '" << optarg << "' is not a platform number\n";
+                        return SDL_APP_FAILURE;
+                    }
+                    platform_id = (int)v;
                     platform_explicit = true;
                     break;
+                }
                 case 'd':
                     {
                         std::string filename;
@@ -1245,10 +1269,17 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
                 case 'n':
                     gs2_app_values.no_input = true;
                     break;
-                case 'c':
-                    config_index = std::stoi(optarg);
+                case 'c': {
+                    char *e = nullptr;   // FORK (F10): as -p
+                    long v = strtol(optarg, &e, 10);
+                    if (e == optarg || *e || v < 0) {
+                        std::cerr << "-c: '" << optarg << "' is not a builtin configuration index\n";
+                        return SDL_APP_FAILURE;
+                    }
+                    config_index = (int)v;
                     platform_explicit = true;  // reuse the auto-launch path
                     break;
+                }
                 case 'g':
                     gs2_app_values.crt_shader_at_boot = true;
                     break;
@@ -1386,8 +1417,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
             transition_to_emulation(state, get_system_config(system_id), system_id);
             state->auto_launched = true;
         } else {
-            std::cerr << "No system config for index/platform "
-                      << system_id << ", staying in selector\n";
+            // FORK (F10): the caller named a machine that does not exist. Staying in the
+            // selector left a harness waiting on a window instead of an exit code.
+            std::cerr << "No system config for " << (config_index >= 0 ? "index " : "platform ")
+                      << (config_index >= 0 ? config_index : platform_id) << " -- exiting\n";
+            return SDL_APP_FAILURE;
         }
     }
 

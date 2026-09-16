@@ -565,7 +565,7 @@ protocol authority.
 | `callstream on <file>` / `off` / `status` | LIVE NDJSON toolbox/GSOS call stream | CTRL-verb (trace) |
 | `key` | inject key + wait for consume receipt | CTRL-verb (manipulate) |
 | `protocol` | CTRL v2 framing, ownership and `json <command>` reply wrapper | CTRL-verb (meta) |
-| `json <command>` | run any CTRL command and wrap its reply as an `a2ctrl-reply-v2` JSON envelope (`ok`, `command`, `text`), for a consumer that must not scrape human-oriented text | CTRL-verb (meta) |
+| `json <command>` | run any CTRL command and wrap its reply as an `a2ctrl-reply-v2` JSON envelope (`ok`, `status`, `command`, `text`), for a consumer that must not scrape human-oriented text. `status` is the reply's own word (`OK`, `PASS`, `HALT`, `BUDGET`, `HANG`, `FAIL`); `ok` is true for `OK`, `PASS` (an assertion held) and `HALT` (a run stopped where a breakpoint asked) -- it used to be true for `OK` alone | CTRL-verb (meta) |
 | `systems [file]` | platform/configuration/ROM/slot-device inventory | CTRL-verb (meta) |
 | `limitations [file]` | known unsupported or partial fidelity surfaces | CTRL-verb (meta) |
 | `shr-golden <file> [bless]` | live IIgs SHR-window golden without relaunch | CTRL-verb (calibrate) |

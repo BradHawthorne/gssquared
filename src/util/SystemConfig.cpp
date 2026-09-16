@@ -166,6 +166,7 @@ std::optional<device_id> parse_card_type(const std::string& value, std::string& 
         {"uthernet2", DEVICE_ID_UTHERNET2},
         {"super_serial", DEVICE_ID_SUPER_SERIAL},
         {"voc", DEVICE_ID_VOC},
+        {"a2gspu", DEVICE_ID_A2GSPU},   // FORK: nameable in a config file and in a run's identity
     };
     const std::string canonical = canonical_card_name(value);
     const auto it = map.find(canonical);
@@ -439,6 +440,7 @@ const char* card_type_name(device_id id) {
         case DEVICE_ID_UTHERNET2: return "uthernet2";
         case DEVICE_ID_SUPER_SERIAL: return "super_serial";
         case DEVICE_ID_VOC: return "voc";
+        case DEVICE_ID_A2GSPU: return "a2gspu";
         default: return "none";
     }
 }

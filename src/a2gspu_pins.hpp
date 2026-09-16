@@ -46,6 +46,10 @@ inline const uint8_t *g_a2gspu_rom_data = nullptr;
 inline size_t         g_a2gspu_rom_size = 0;
 inline const char    *g_a2gspu_build_version = "unknown";   // set by main() from the generated version.h
 inline std::string    g_a2gspu_base_path;                    // set by main(): where roms/ and assets/ live (ResourceFile's base)
+// FORK (F8): WHICH MACHINE. "machine=<builtin index|file>/<platform>" and
+// "slots=<n>:<card>,..." -- `-c 10` and `-c 15` printed equal PINS lines, and a snapshot
+// could be restored into a different machine without a word. Set when emulation starts.
+inline std::string    g_a2gspu_machine_ident;
 
 inline uint64_t a2gspu_fnv_bytes(const uint8_t *p, size_t n) {
     uint64_t h = HOUSE_FNV_BASIS;
@@ -86,13 +90,14 @@ inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames,
     else snprintf(exe, sizeof exe, "unreadable");
     if (platform_id >= 0 && frames >= 0) snprintf(pf, sizeof pf, " platform=%d frames=%d", platform_id, frames);
     else pf[0] = 0;
-    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s pace=%s%s rom=%s build=%s(configure-time) exe=%s",
+    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s pace=%s%s rom=%s build=%s(configure-time) exe=%s%s%s",
              seed ? seed : "unset", ft, ram ? 1 : 0, bram, g_a2gspu_pace_name, pf, rom,
-             build_version ? build_version : "unknown", exe);
+             build_version ? build_version : "unknown", exe,
+             g_a2gspu_machine_ident.empty() ? "" : " ", g_a2gspu_machine_ident.c_str());
 }
 
 inline void a2gspu_pins_print(int platform_id, int frames, const char *build_version) {
-    char line[400];
+    char line[640];
     a2gspu_pins_format(line, sizeof line, platform_id, frames, build_version);
     printf("A2GSPU PINS: %s\n", line);
     fflush(stdout);
@@ -101,7 +106,7 @@ inline void a2gspu_pins_print(int platform_id, int frames, const char *build_ver
 // The pins' readback, supplied with the rails (M8): `rail read A2GSPU_SEED` (and
 // FAKETIME, FAKETIME_TICK, RAMDISK) answers with the whole PINS line, since they are one fact.
 inline void a2gspu_pins_read(char *buf, size_t n) {
-    char pins[400]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version);
+    char pins[640]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version);
     snprintf(buf, n, "status=OK %s", pins);
 }
 inline a2rails::Registrar g_reader_seed    {"A2GSPU_SEED",     a2gspu_pins_read};

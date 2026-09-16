@@ -19,10 +19,10 @@ inline const char *oracle_banner() {
         "goal: no black boxes; maximal agent control+observability for closed-loop toolchains\n"
         "contracts:\n"
         "  cycles= ONLY valid as in-command deltas (run/step/run-until acks). "
-        "NEVER subtract cycles across separate acks (can jump/go backwards).\n"
+        "cycles= on run/step/run-until/keys is IN-COMMAND (that command's cycles), not absolute: add them, never subtract across acks; `cycles` is the absolute counter.\n"
         "  colour= always named profile (pngc profile=4dot|mono). shot/SDL is human-only.\n"
         "  memory observe= probe_peek / flat-image paths; never toggle RAMRD to look.\n"
-        "  snapshot= CPU+MMU+softswitches+RAM, plus the ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device's RAM-disk overlay on a IIgs; the manifest names the rest (floppy media, scanner self-heal).\n"
+        "  snapshot= CPU+MMU+softswitches+RAM, plus the ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device's RAM-disk overlay on a IIgs; plus the scanner, written disk tracks and whichever card blocks the machine has; the manifest names what is excluded (rtc, serial, clock -- the cycle counter and run hash do not continue across a restore).\n"
         "  dual-mode= no A2GSPU_* env => stock windowed emulator.\n"
         "discover: help | help <file> | manifest <file> | oracle\n"
         "docs: Docs/AGENTIC_ORACLE.md Docs/A2GSPU_RAILS.md Docs/DoubleHiRes.md\n";
@@ -90,7 +90,7 @@ inline const char *verb_when(const char *name) {
         {"rail",       "what can be OBSERVED here at all, and arming it without a relaunch: `rail live` lists what a verb reaches, `rail set` arms a settable rail now. Asking the binary beats reading a catalogue that has drifted before (128 rails read, 96 described, when this was added)"},
         {"read",       "dump guest memory to a host file, including aux as bank 01"},
         {"reset",      "recover a wedged machine; cold with the argument"},
-        {"restore",    "reload a snapshot: CPU+MMU+softswitches+RAM plus whichever device blocks the file holds (the ack carries its manifest). Media and scanner self-heal -- not full time travel. A file that does not fit is rolled back, never half-applied"},
+        {"restore",    "reload a snapshot: CPU+MMU+softswitches+RAM plus whichever device blocks the file holds (the ack carries its manifest). Excluded devices (the manifest lists them) keep this session's state, and the cycle counter does not continue -- not full time travel. A file that does not fit is rolled back, never half-applied"},
         {"resume",     "continue past a breakpoint hit without losing the breakpoint"},
         {"run",        "advance N video frames. Use run-until when you can name a destination instead"},
         {"run-until",  "run to a named PC with an instruction budget. THE timing primitive: its cycles= is an in-command delta, the only form the oracle certifies. Arriving proves this run executed that address -- a value in RAM cannot imitate a program counter"},
