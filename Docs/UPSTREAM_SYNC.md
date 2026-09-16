@@ -23,7 +23,7 @@ ledger below and change the affected dispositions in the table.
 
 ## Triage of `c4b1fa69..upstream/main` (2026-09-16)
 
-- **Fork side analysed:** `a2gspu` at `a779d807`, with `6d835a9f` (the control plane moved out of
+- **Fork side analysed:** `a2gspu` at `e35908d2`, with `3be31a3a` (the control plane moved out of
   `gs2.cpp`) landing during the analysis. That commit shrinks the fork's `gs2.cpp` delta against the
   merge-base from +3553/-14 to +224/-84, so the `gs2.cpp` conflicts noted below are smaller at HEAD.
 - **Method:** emulation-affecting commits were classified from their diff hunks (`git show`), docs,
@@ -149,7 +149,7 @@ The groups are listed in dependency order. Within a group, keep upstream order.
 | `7333660a` | `mmu_iigs.cpp`, `mmu_iigs.hpp` | New `dma_bank_register` (`$C037`) state; add it to the fork's MMU snapshot (`MMU_IIgs::A2GSPU_snapshot`). Fast cycle types for `$C035`/`$C036`/`$C068`/`$C02D` change cycle timing, so the fork's cycle-count gates may shift. |
 | `b87142f3` | `VideoScanGenerator_RGB.cpp`, `VideoScanGenerator_RGB.hpp` | The fork changed SHR fill-mode seeding in the same generators (`4bcab908`). |
 | `03c52c82` | `src/display/display.cpp`, `src/gs2.cpp` | `frame_video_update()` in gs2.cpp. |
-| `e169b2bc` | `src/NClock.hpp`, `src/gs2.cpp`, `src/display/display.cpp`, `src/devices/es5503/soundglu.cpp` | Rewrites `run_one_frame` and `slow_incr_cycles`. The fork's NClock carries a per-cycle 14M cost reclaim and cycle timeline (`d7380d95`, `6828a03a`); its run loop carries the instrumentation funnels (now partly moved out by `6d835a9f`). Free-run mode only, but the IIgs `slow_incr_cycles` fast path is on the hot path of every run. |
+| `e169b2bc` | `src/NClock.hpp`, `src/gs2.cpp`, `src/display/display.cpp`, `src/devices/es5503/soundglu.cpp` | Rewrites `run_one_frame` and `slow_incr_cycles`. The fork's NClock carries a per-cycle 14M cost reclaim and cycle timeline (`d7380d95`, `6828a03a`); its run loop carries the instrumentation funnels (now partly moved out by `3be31a3a`). Free-run mode only, but the IIgs `slow_incr_cycles` fast path is on the hot path of every run. |
 | `709653da` | `src/util/media.cpp` (also `diskii_controller.hpp`, `ndiskii_woz.cpp`, `Floppy525_woz.hpp` for protocol hooks that should not be taken) | Take the `.po` `dos33_volume = 254` line only. Nibblized `.po` images change, so any disk-surface golden hashes change. |
 | `e2f6ab5a` | `src/util/woz_nibblizer_35.cpp` (the fork already has `r+b`) | The real change is in unmodified `woz_nibblizer_525.cpp/.hpp`. |
 | `f1691706` | `src/util/media.cpp` | The fork's 2MG block rejects `block_count == 0` (`f4bca2ca`) and zero or inconsistent `bytes_count` (`e17e046c`), and range-validates `data_offset` (`d4c57c67`). Upstream instead accepts such headers and derives sizes from the file. Merge by hand; keep the fork's comment/creator blob validation (`f4bca2ca`). |
@@ -203,7 +203,7 @@ Each item below was checked against both trees.
    - On `upstream/main`, `run_one_frame()`, `run_cpus_init()` and `frame_sleep()` are still in `src/gs2.cpp`; they already were at the merge-base.
    - What `e169b2bc` moved into `src/computer.cpp`/`computer.hpp` is the ludicrous-speed calibration state machine (`begin_ludicrous_calibration`, `update_ludicrous_calibration`, `LS_CAL_*` state) and related frame state. It also rewrote about 268 lines of `run_one_frame`.
    - Later upstream commits (`16066ec9`, `99fbb448`, `bf8471d4`, `29b57cba`, `fb52cc70`, `a65700ea`, `7de4cafc`, `992a5233`) add more behaviour to `computer.cpp`, a file the fork never modified.
-   - The fork's run-loop instrumentation lives in `gs2.cpp` and, since `6d835a9f`, in `a2gspu_spike.cpp`, `a2gspu_ctrl_cmds.cpp` and related files.
+   - The fork's run-loop instrumentation lives in `gs2.cpp` and, since `3be31a3a`, in `a2gspu_spike.cpp`, `a2gspu_ctrl_cmds.cpp` and related files.
 8. **Deliberate fork semantics that upstream contradicts:**
    - **Game switches.** The fork keeps an absent game switch reading not-pressed; upstream's `d79be3c0`/`0e606364` make it float. DEFERRED.
    - **Guest memory.** The fork never writes guest memory from the host (`a820c356`). Upstream's mouse sync still defines the Event Manager write path (`write_em_axis`), compiled out by `KEYGLOO_MOUSE_SYNC_INJECTION_ONLY=1` and with no remaining callers. Do not carry it over.
@@ -242,7 +242,7 @@ Each item was checked by reading `upstream/main` source.
 ## 5. Open questions not settled here
 
 - **`18f5d04c` impact count.** The "~44 direct-read sites" figure was not re-counted exactly.
-  - A quick grep of `a779d807` finds 18 `get_megaii_memory_base()`/`megaii->get_memory_base()` call sites outside `src/mmus`, in `a2gspu_ctrl_cmds`, `a2gspu.cpp`, `keygloo.cpp`, `gs2.cpp` and others.
+  - A quick grep of `e35908d2` finds 18 `get_megaii_memory_base()`/`megaii->get_memory_base()` call sites outside `src/mmus`, in `a2gspu_ctrl_cmds`, `a2gspu.cpp`, `keygloo.cpp`, `gs2.cpp` and others.
   - There are also hard-coded `0x1xxxx` aux offsets in `iigs_shr_layout.hpp` and the CTRL commands.
   - The authoritative list needs a per-site review.
 - **Whether the fork's 16-bit MVN/MVP rule matches silicon.** Upstream and the fork disagree, and this triage did not settle which is right.
