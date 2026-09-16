@@ -502,6 +502,7 @@ inline void wiz5_config_arm(computer_t *computer) {
     if (const char *kd = kd_env) { int n = atoi(kd); if (n > 0) g_wiz5_key_delay = n; }
 
     // --- KEYRAM (per-keystroke RAM dump; needs a session dir to write into) ---
+    // A flag: its presence arms it (A2GSPU_KEYRAM, live via `rail set`; or the alias).
     g_wiz5_keyram_on = (getenv("A2GSPU_KEYRAM") != nullptr) ||
                        (getenv("WIZ5_KEYRAM") != nullptr);
     g_wiz5_session_dir.clear();

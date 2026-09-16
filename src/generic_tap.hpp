@@ -80,6 +80,7 @@
 #include "a2gspu_progress_taps.hpp"   // g_tap_key_event / g_tap_disk_write_event
 #include "a2gspu_artifact_meta.hpp"   // sidecars for the RAM and HGR dumps (M6)
 #include "mmus/mmu_iie.hpp"           // the IIe's 128K RAM array
+#include "a2gspu_rail_setters.hpp"    // the launch applies each tap rail through its setter
 
 // ---- watch table ------------------------------------------------------------
 struct GenericTapWatch {
@@ -121,6 +122,7 @@ struct GenericTap {
     int      post_seq[64] = {0};
     uint64_t post_due[64] = {0};
     int      npost = 0;
+    char     dump_on[32] = {0};           // A2GSPU_TAP_DUMP_ON, re-applied when the PC list changes
 };
 inline GenericTap g_gtap;
 
@@ -412,9 +414,66 @@ inline void gtap_parse_ptrs(const char *spec) {
     }
 }
 
-// Read every A2GSPU_TAP* var and open the sinks. No-op (leaves the emulator
-// stock) when neither A2GSPU_TAP nor A2GSPU_TAP_SESSION is set. Idempotent-safe
-// to call once from gs2.cpp; registers atexit(generic_tap_close).
+// ---- apply functions: the setters in a2gspu_rail_setters.cpp call these, and the
+// launch reaches them through those setters, so `rail set` cannot parse a value
+// differently from the environment. -------------------------------------------------
+inline void gtap_apply_dump_on() {
+    for (int i = 0; i < g_gtap.nwatch; i++) { g_gtap.watch[i].dumpop = false; g_gtap.watch[i].dumpop_min = 0; }
+    if (!g_gtap.dump_on[0]) return;
+    char lbl[16]; int mn = 0;
+    if (sscanf(g_gtap.dump_on, "%15[^:]:%d", lbl, &mn) >= 1)
+        for (int i = 0; i < g_gtap.nwatch; i++)
+            if (!strcmp(g_gtap.watch[i].label, lbl)) { g_gtap.watch[i].dumpop = true; g_gtap.watch[i].dumpop_min = (uint8_t)mn; }
+}
+inline void gtap_set_pcs(const char *spec) {
+    g_gtap.nwatch = 0;
+    if (spec) gtap_parse_pcs(spec);
+    gtap_apply_dump_on();
+}
+inline void gtap_set_ptrs(const char *spec) {
+    g_gtap.nptr = 0;
+    if (spec) gtap_parse_ptrs(spec);
+}
+// The call tap's record file. Closing it leaves the gate on for a title config's
+// extension hook (wiz5_config.hpp), which rides the same per-instruction visit.
+inline bool gtap_set_out(const char *path) {
+    if (g_gtap.out) { printf("A2GSPU_TAP: %llu events captured\n", (unsigned long long)g_gtap.count); fclose(g_gtap.out); g_gtap.out = nullptr; }
+    g_gtap.on = (g_gtap_ext != nullptr);
+    if (!path) return true;
+    g_gtap.out = fopen(path, "w");
+    if (!g_gtap.out) return false;
+    g_gtap.on = true; g_gtap.count = 0;
+    return true;
+}
+inline void gtap_close_session() {
+    g_tap_key_event = nullptr; g_tap_disk_write_event = nullptr;   // before the files they write close
+    for (FILE **f : { &g_gtap.zp_f, &g_gtap.pages_f, &g_gtap.keys_f, &g_gtap.disk_f })
+        if (*f) { fclose(*f); *f = nullptr; }
+    g_gtap.sess_on = false;
+    g_gtap.npost = 0;
+}
+inline bool gtap_set_session(const char *dir) {
+    gtap_close_session();
+    if (!dir) return true;
+    char p[600];
+    snprintf(p, sizeof(p), "%s/zp_stream.ndjson", dir);
+    g_gtap.zp_f = fopen(p, "w");
+    if (!g_gtap.zp_f) return false;                    // no such directory, or not writable
+    g_gtap.dir = dir; g_gtap.sess_on = true;
+    g_gtap.frame = 0;
+    g_gtap.next_dump_s = g_gtap.dump_every_s; g_gtap.next_zp_s = g_gtap.zp_every_s;
+    snprintf(p, sizeof(p), "%s/text_pages.ndjson", dir);      g_gtap.pages_f = fopen(p, "w");
+    snprintf(p, sizeof(p), "%s/keypress_events.ndjson", dir); g_gtap.keys_f  = fopen(p, "w");
+    snprintf(p, sizeof(p), "%s/disk_writes.ndjson", dir);     g_gtap.disk_f  = fopen(p, "w");
+    if (g_gtap.keys_f) g_tap_key_event = generic_tap_keypress;
+    if (g_gtap.disk_f) g_tap_disk_write_event = generic_tap_disk_write;
+    return true;
+}
+
+// The launch: every A2GSPU_TAP* rail from the environment, through its setter, in
+// the order the old block applied them (configuration before the sinks). No-op
+// (the emulator stock) when neither A2GSPU_TAP nor A2GSPU_TAP_SESSION is set.
+// Called from the spike and from run_one_frame's lazy arm; runs once.
 inline bool g_gtap_armed = false;   // idempotency: safe to call from >1 driver path
 inline void generic_tap_arm() {
     if (g_gtap_armed) return;
@@ -425,47 +484,26 @@ inline void generic_tap_arm() {
     const char *tap  = getenv("A2GSPU_TAP");         if (!tap)  tap  = getenv("WIZ5_TAP");
     const char *sess = getenv("A2GSPU_TAP_SESSION"); if (!sess) sess = getenv("WIZ5_SESSION");
     if (!tap && !sess) return;
-
-    if (const char *cpm = getenv("A2GSPU_TAP_CYC_PER_MS")) { double v = atof(cpm); if (v > 0) g_gtap.cyc_per_ms = v; }
-    g_gtap.cyc_per_sec = g_gtap.cyc_per_ms * 1000.0;
-    if (const char *cps = getenv("A2GSPU_TAP_CYC_PER_SEC")) { double v = atof(cps); if (v > 0) g_gtap.cyc_per_sec = v; }
-
+    // Each name spelled out, so railparity.ps1 sees every rail read here. A legacy
+    // alias applies only when its canonical name is unset.
+    a2gspu_rail_arm_env("A2GSPU_TAP_CYC_PER_MS");
+    a2gspu_rail_arm_env("A2GSPU_TAP_CYC_PER_SEC");
     if (tap) {
-        g_gtap.out = fopen(tap, "w");
-        if (g_gtap.out) {
-            g_gtap.on = true; g_gtap.count = 0;
-            if (const char *pcs = getenv("A2GSPU_TAP_PCS")) gtap_parse_pcs(pcs);
-            if (const char *pts = getenv("A2GSPU_TAP_PTRS")) gtap_parse_ptrs(pts);
-            if (const char *mx = getenv("A2GSPU_TAP_MAX")) { long v = atol(mx); if (v > 0) g_gtap.cap = (uint64_t)v; }
-            if (const char *don = getenv("A2GSPU_TAP_DUMP_ON")) {
-                char lbl[16]; int mn = 0;
-                if (sscanf(don, "%15[^:]:%d", lbl, &mn) >= 1)
-                    for (int i = 0; i < g_gtap.nwatch; i++)
-                        if (!strcmp(g_gtap.watch[i].label, lbl)) { g_gtap.watch[i].dumpop = true; g_gtap.watch[i].dumpop_min = (uint8_t)mn; }
-            }
-            printf("A2GSPU_TAP: armed -> %s (%d watch PCs, %d ptr fields)\n", tap, g_gtap.nwatch, g_gtap.nptr);
-            if (g_gtap.nwatch == 0)
-                printf("A2GSPU_TAP: WARNING no A2GSPU_TAP_PCS set — the tap will never fire\n");
-        } else {
-            printf("A2GSPU_TAP: could not open '%s' for write\n", tap);
-        }
+        a2gspu_rail_arm_env("A2GSPU_TAP_PCS");
+        a2gspu_rail_arm_env("A2GSPU_TAP_PTRS");
+        a2gspu_rail_arm_env("A2GSPU_TAP_MAX");
+        a2gspu_rail_arm_env("A2GSPU_TAP_DUMP_ON");
+        if (getenv("A2GSPU_TAP")) a2gspu_rail_arm_env("A2GSPU_TAP");
+        else a2gspu_rail_arm_value("A2GSPU_TAP", getenv("WIZ5_TAP"), "WIZ5_TAP");
     }
     if (sess) {
-        g_gtap.dir = sess; g_gtap.sess_on = true;
-        const char *de = getenv("A2GSPU_TAP_DUMP_EVERY"); if (!de) de = getenv("WIZ5_DUMP_EVERY");
-        const char *ze = getenv("A2GSPU_TAP_ZP_EVERY");   if (!ze) ze = getenv("WIZ5_ZP_EVERY");
-        if (de) { int v = atoi(de); if (v > 0) g_gtap.dump_every_s = v; }
-        if (ze) { int v = atoi(ze); if (v > 0) g_gtap.zp_every_s = v; }
-        g_gtap.next_dump_s = g_gtap.dump_every_s; g_gtap.next_zp_s = g_gtap.zp_every_s;
-        char p[600];
-        snprintf(p, sizeof(p), "%s/zp_stream.ndjson", sess);    g_gtap.zp_f    = fopen(p, "w");
-        snprintf(p, sizeof(p), "%s/text_pages.ndjson", sess);   g_gtap.pages_f = fopen(p, "w");
-        snprintf(p, sizeof(p), "%s/keypress_events.ndjson", sess); g_gtap.keys_f = fopen(p, "w");
-        snprintf(p, sizeof(p), "%s/disk_writes.ndjson", sess);  g_gtap.disk_f  = fopen(p, "w");
-        if (const char *kp = getenv("A2GSPU_TAP_KEY_POST_FRAMES")) { int v = atoi(kp); if (v >= 0) g_gtap.key_post_frames = v; }
-        if (g_gtap.keys_f) g_tap_key_event = generic_tap_keypress;
-        if (g_gtap.disk_f) g_tap_disk_write_event = generic_tap_disk_write;
-        printf("A2GSPU_TAP_SESSION: armed -> %s (dump=%ds zp=%ds)\n", sess, g_gtap.dump_every_s, g_gtap.zp_every_s);
+        if (getenv("A2GSPU_TAP_DUMP_EVERY")) a2gspu_rail_arm_env("A2GSPU_TAP_DUMP_EVERY");
+        else a2gspu_rail_arm_value("A2GSPU_TAP_DUMP_EVERY", getenv("WIZ5_DUMP_EVERY"), "WIZ5_DUMP_EVERY");
+        if (getenv("A2GSPU_TAP_ZP_EVERY")) a2gspu_rail_arm_env("A2GSPU_TAP_ZP_EVERY");
+        else a2gspu_rail_arm_value("A2GSPU_TAP_ZP_EVERY", getenv("WIZ5_ZP_EVERY"), "WIZ5_ZP_EVERY");
+        a2gspu_rail_arm_env("A2GSPU_TAP_KEY_POST_FRAMES");
+        if (getenv("A2GSPU_TAP_SESSION")) a2gspu_rail_arm_env("A2GSPU_TAP_SESSION");
+        else a2gspu_rail_arm_value("A2GSPU_TAP_SESSION", getenv("WIZ5_SESSION"), "WIZ5_SESSION");
     }
     atexit(generic_tap_close);
 }

@@ -164,6 +164,7 @@ inline WatchRange g_watch_ranges[8]   = {};
 inline int        g_watch_count       = 0;
 inline int        g_watch_hits        = 0;
 inline FILE      *g_watch_out         = nullptr;
+inline int        g_watch_ipc_zp      = 0;         // A2GSPU_WATCH_IPC_ZP: 0 = no interpreter pointer
 inline int        g_watch_max         = 256;
 inline bool       g_watch_change_only = false;
 inline bool       g_watch_read_on     = false;
@@ -223,10 +224,7 @@ inline void iigs_watch_emit(cpu_state *cpu, uint32_t addr, uint8_t data, const c
     //         store to the interpreter's current segment. For UCSD p-code
     //         (e.g. Wizardry) set A2GSPU_WATCH_IPC_ZP=9E; default-off so the
     //         rail carries no title-specific assumption.
-    static const int ipc_zp = [] {
-        const char *e = getenv("A2GSPU_WATCH_IPC_ZP");
-        return e ? (int)strtol(e, nullptr, 16) : 0;
-    }();
+    const int ipc_zp = g_watch_ipc_zp;
     const unsigned w_ipc = (a2record::sink(g_watch_out) && ipc_zp)
         ? (unsigned)(cpu->mmu->probe_peek(ipc_zp) |
                      (cpu->mmu->probe_peek((ipc_zp + 1) & 0xFFFF) << 8)) : 0u;
@@ -551,20 +549,37 @@ inline int  g_milestones_unhit = 0;   // milestones not yet reached; enables an 
 // All milestone output goes to stderr (not stdout): iigs_milestones_report() is
 // called immediately before the golden-hash/SHR-assert gate parses stdout, so a
 // stray stdout line would corrupt the captured golden stream.
-inline void iigs_milestones_load(const char *path) {
+// Replace the ledger with the file's. False (and why) when it cannot be read or holds
+// nothing: at launch the setter makes that fatal (exit 2), live it is a FAIL ack.
+inline bool iigs_milestones_load(const char *path, std::string &why) {
     FILE *f = fopen(path, "rb");
-    if (!f) { fprintf(stderr, "IIGS MILESTONES: FAIL cannot open '%s' -- aborting (exit 2)\n", path); exit(2); }
+    if (!f) { why = std::string("cannot open '") + path + "'"; return false; }
+    std::vector<IigsMilestone> ms;
     char line[256];
     while (fgets(line, sizeof(line), f)) {
         char nm[128]; unsigned a;
         if (sscanf(line, "%x %127s", &a, nm) == 2)
-            g_milestones.push_back({a & 0xFFFFFF, std::string(nm), -1});
+            ms.push_back({a & 0xFFFFFF, std::string(nm), -1});
     }
     fclose(f);
-    g_milestones_on = !g_milestones.empty();
+    if (ms.empty()) { why = std::string("'") + path + "' holds no \"HEXADDR name\" lines"; return false; }
+    g_milestones = std::move(ms);
+    g_milestones_on = true;
     g_milestones_unhit = (int)g_milestones.size();
-    fprintf(stderr, "IIGS MILESTONES: %zu loaded from '%s'\n", g_milestones.size(), path);
+    return true;
 }
+// `rail read A2GSPU_MILESTONES`: which are reached, at which frame, and which are not.
+inline void iigs_milestones_format(char *buf, size_t n) {
+    if (!g_milestones_on) { snprintf(buf, n, "status=FAIL milestones-not-loaded -- set A2GSPU_MILESTONES=<file> at launch or with rail set"); return; }
+    int hit = 0; for (auto &ms : g_milestones) if (ms.frame >= 0) hit++;
+    int w = snprintf(buf, n, "status=OK A2GSPU_MILESTONES reached=%d of=%zu |", hit, g_milestones.size());
+    for (auto &ms : g_milestones) {
+        if (w < 0 || (size_t)w + 48 >= n) { if (w >= 0 && (size_t)w + 4 < n) snprintf(buf + w, n - w, " ..."); return; }
+        if (ms.frame >= 0) w += snprintf(buf + w, n - w, " %s@%d", ms.name.c_str(), ms.frame);
+        else               w += snprintf(buf + w, n - w, " %s:NOT-REACHED", ms.name.c_str());
+    }
+}
+inline a2rails::Registrar g_reader_milestones{"A2GSPU_MILESTONES", iigs_milestones_format};
 inline void iigs_milestone_check(cpu_state *cpu, int frame) {
     if (g_milestones_unhit <= 0) return;   // all reached — stop the per-instruction scan
     uint32_t pc = cpu->full_pc;

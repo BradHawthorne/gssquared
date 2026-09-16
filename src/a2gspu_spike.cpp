@@ -325,9 +325,7 @@ void run_headless_spike(GS2AppState *state) {
     a2gspu_rail_arm_env("A2GSPU_CALLTRACE_N");
     a2gspu_rail_arm_env("A2GSPU_CALLTRACE_SKIP");
     a2gspu_rail_arm_env("A2GSPU_CALLTRACE");
-    if (const char *msp = SDL_getenv("A2GSPU_MILESTONES")) {
-        iigs_milestones_load(msp);
-    }
+    a2gspu_rail_arm_env("A2GSPU_MILESTONES");
     a2gspu_rail_arm_env("A2GSPU_RETGUARD");
     a2gspu_rail_arm_env("A2GSPU_ITRACE_FRAME");
     if (const char *itn = SDL_getenv("A2GSPU_ITRACE_N")) {
@@ -347,7 +345,7 @@ void run_headless_spike(GS2AppState *state) {
     a2gspu_rail_arm_env("A2GSPU_SYM_BASE");
     if (const char *sp = SDL_getenv("A2GSPU_SYMBOLS")) iigs_symbols_load(sp);
     // A2GSPU_ROM_SYMBOLS=<file> (batch-2): name ROM-resident PCs (else "<ROM>").
-    if (const char *rs = SDL_getenv("A2GSPU_ROM_SYMBOLS")) iigs_rom_symbols_load(rs);
+    a2gspu_rail_arm_env("A2GSPU_ROM_SYMBOLS");
     // A2GSPU_SNAP region-logger (batch-2): dump [LO,HI] at up to 8 trigger PCS -> OUT.
     // The window and PCs configure; OUT arms (and says why when it cannot).
     g_snap_npc = 0; g_snap_count = 0; g_snap_out = nullptr;

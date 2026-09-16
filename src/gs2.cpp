@@ -272,6 +272,7 @@ bool run_one_frame(computer_t *computer) {
         static bool s_wiz5_armed = false;
         if (!s_wiz5_armed) {
             s_wiz5_armed = true; a2record_register(computer->clock); generic_tap_arm(); wiz5_config_arm(computer); a2gspu_trap_arm();
+            a2gspu_rail_arm_env("A2GSPU_WATCH_IPC_ZP");   // every driver path, before the first watched store
             // platform from the MMU itself: only a IIgs MMU can see the Mega II image at $E1
             a2gspu_liveness_arm(computer->cpu->mmu->probe_readable(0xE12000));
             g_a2gspu_cpu_for_names = computer->cpu;

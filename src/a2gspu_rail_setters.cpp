@@ -319,6 +319,112 @@ int set_memvu_blame(const char *v, char *m, size_t n) {
     return SET_OK;
 }
 
+// ---- the generic tap (A2GSPU_TAP*) ------------------------------------------------------
+int set_tap_pcs(const char *v, char *m, size_t n) {
+    gtap_set_pcs(v);
+    snprintf(m, n, "A2GSPU_TAP_PCS: %d watch PC(s)%s", g_gtap.nwatch, (v && !g_gtap.nwatch) ? " -- nothing parsed; the tap will never fire" : "");
+    return (v && !g_gtap.nwatch) ? SET_INVALID : SET_OK;
+}
+int set_tap_ptrs(const char *v, char *m, size_t n) {
+    gtap_set_ptrs(v);
+    snprintf(m, n, "A2GSPU_TAP_PTRS: %d pointer field(s)", g_gtap.nptr);
+    return (v && !g_gtap.nptr) ? SET_INVALID : SET_OK;
+}
+int set_tap_max(const char *v, char *m, size_t n) {
+    int x = 0;
+    if (v && (!parse_int(v, x) || x < 0)) { snprintf(m, n, "A2GSPU_TAP_MAX: want an event cap >= 0 (0 = unlimited), got '%s'", v); return SET_INVALID; }
+    g_gtap.cap = (uint64_t)x;
+    snprintf(m, n, "A2GSPU_TAP_MAX: %s", x ? "capped" : "unlimited");
+    return SET_OK;
+}
+int set_tap_dump_on(const char *v, char *m, size_t n) {
+    snprintf(g_gtap.dump_on, sizeof g_gtap.dump_on, "%s", v ? v : "");
+    gtap_apply_dump_on();
+    int k = 0; for (int i = 0; i < g_gtap.nwatch; i++) if (g_gtap.watch[i].dumpop) k++;
+    snprintf(m, n, "A2GSPU_TAP_DUMP_ON: %s (%d watch PC(s) take a resident dump)", v ? v : "off", k);
+    return SET_OK;
+}
+int set_tap_cyc_ms(const char *v, char *m, size_t n) {
+    double x = v ? atof(v) : 1020.484;
+    if (v && x <= 0) { snprintf(m, n, "A2GSPU_TAP_CYC_PER_MS: want cycles per ms > 0, got '%s'", v); return SET_INVALID; }
+    g_gtap.cyc_per_ms = x; g_gtap.cyc_per_sec = x * 1000.0;
+    snprintf(m, n, "A2GSPU_TAP_CYC_PER_MS: %.3f (per second %.0f)", x, g_gtap.cyc_per_sec);
+    return SET_OK;
+}
+int set_tap_cyc_sec(const char *v, char *m, size_t n) {
+    double x = v ? atof(v) : g_gtap.cyc_per_ms * 1000.0;
+    if (v && x <= 0) { snprintf(m, n, "A2GSPU_TAP_CYC_PER_SEC: want cycles per second > 0, got '%s'", v); return SET_INVALID; }
+    g_gtap.cyc_per_sec = x;
+    snprintf(m, n, "A2GSPU_TAP_CYC_PER_SEC: %.0f", x);
+    return SET_OK;
+}
+int set_tap(const char *v, char *m, size_t n) {
+    if (!gtap_set_out(v)) { snprintf(m, n, "A2GSPU_TAP: cannot open '%s'", v); return SET_INVALID; }
+    if (!v) { snprintf(m, n, "A2GSPU_TAP: closed"); return SET_OK; }
+    static bool s_atexit = false;
+    if (!s_atexit) { s_atexit = true; atexit(generic_tap_close); }
+    snprintf(m, n, "A2GSPU_TAP: armed -> %s (%d watch PCs, %d ptr fields)%s", v, g_gtap.nwatch, g_gtap.nptr,
+             g_gtap.nwatch ? "" : " -- WARNING no A2GSPU_TAP_PCS set: the tap will never fire");
+    return SET_OK;
+}
+int set_tap_session(const char *v, char *m, size_t n) {
+    if (!gtap_set_session(v)) { snprintf(m, n, "A2GSPU_TAP_SESSION: cannot write into '%s' (does the directory exist?)", v); return SET_INVALID; }
+    if (!v) { snprintf(m, n, "A2GSPU_TAP_SESSION: closed"); return SET_OK; }
+    static bool s_atexit = false;
+    if (!s_atexit) { s_atexit = true; atexit(generic_tap_close); }
+    snprintf(m, n, "A2GSPU_TAP_SESSION: armed -> %s (dump=%ds zp=%ds key_post=%df)", v, g_gtap.dump_every_s, g_gtap.zp_every_s, g_gtap.key_post_frames);
+    return SET_OK;
+}
+int tap_seconds(int &g, int def, const char *v, const char *rail, char *m, size_t n) {
+    int x = def;
+    if (v && (!parse_int(v, x) || x <= 0)) { snprintf(m, n, "%s: want seconds > 0, got '%s'", rail, v); return SET_INVALID; }
+    g = x;
+    snprintf(m, n, "%s: %ds%s", rail, x, v ? "" : " (default)");
+    return SET_OK;
+}
+int set_tap_dump_every(const char *v, char *m, size_t n) { return tap_seconds(g_gtap.dump_every_s, 60, v, "A2GSPU_TAP_DUMP_EVERY", m, n); }
+int set_tap_zp_every(const char *v, char *m, size_t n)   { return tap_seconds(g_gtap.zp_every_s, 5, v, "A2GSPU_TAP_ZP_EVERY", m, n); }
+int set_tap_key_post(const char *v, char *m, size_t n) {
+    int x = 30;
+    if (v && (!parse_int(v, x) || x < 0)) { snprintf(m, n, "A2GSPU_TAP_KEY_POST_FRAMES: want frames >= 0, got '%s'", v); return SET_INVALID; }
+    g_gtap.key_post_frames = x;
+    snprintf(m, n, "A2GSPU_TAP_KEY_POST_FRAMES: %d%s", x, v ? "" : " (default)");
+    return SET_OK;
+}
+
+// ---- milestones, ROM symbols, the watch record's interpreter pointer ----------------------
+int set_milestones(const char *v, char *m, size_t n) {
+    if (!v) { g_milestones.clear(); g_milestones_on = false; g_milestones_unhit = 0; snprintf(m, n, "A2GSPU_MILESTONES: cleared"); return SET_OK; }
+    std::string why;
+    if (!iigs_milestones_load(v, why)) { snprintf(m, n, "A2GSPU_MILESTONES: %s", why.c_str()); return SET_INVALID; }
+    snprintf(m, n, "A2GSPU_MILESTONES: %zu loaded from '%s' (the ledger is replaced; frames count from here)", g_milestones.size(), v);
+    return SET_OK;
+}
+int set_rom_symbols(const char *v, char *m, size_t n) {
+    if (!v) { snprintf(m, n, "A2GSPU_ROM_SYMBOLS: loaded symbols stay loaded (nothing to unset)"); return SET_REFUSED; }
+    FILE *probe = fopen(v, "rb");
+    if (!probe) { snprintf(m, n, "A2GSPU_ROM_SYMBOLS: cannot open '%s'", v); return SET_INVALID; }
+    fclose(probe);
+    const size_t before = g_iigs_rom_syms.size();
+    iigs_rom_symbols_load(v);
+    snprintf(m, n, "A2GSPU_ROM_SYMBOLS: '%s' -> %zu ROM symbols active (%zu added)", v, g_iigs_rom_syms.size(), g_iigs_rom_syms.size() - before);
+    return SET_OK;
+}
+int set_watch_ipc_zp(const char *v, char *m, size_t n) {
+    uint32_t zp = 0;
+    if (v && (!parse_hex(v, zp) || zp > 0xFF)) { snprintf(m, n, "A2GSPU_WATCH_IPC_ZP: want a hex zero-page address, got '%s'", v); return SET_INVALID; }
+    g_watch_ipc_zp = v ? (int)zp : 0;
+    snprintf(m, n, "A2GSPU_WATCH_IPC_ZP: %s", v ? "watch records carry ipc from that pointer" : "off (ipc=0)");
+    return SET_OK;
+}
+int set_keyram(const char *v, char *m, size_t n) {
+    g_wiz5_keyram_on = (v != nullptr);
+    if (g_wiz5_keyram_on && g_gtap.sess_on) g_wiz5_session_dir = g_gtap.dir;
+    snprintf(m, n, "A2GSPU_KEYRAM: %s -> %s", g_wiz5_keyram_on ? "per-keystroke RAM dump ($0800-$BFFF) enabled" : "disabled",
+             g_wiz5_session_dir.empty() ? "(no session dir: set A2GSPU_TAP_SESSION)" : g_wiz5_session_dir.c_str());
+    return SET_OK;
+}
+
 int set_keydelay(const char *v, char *m, size_t n) {
     int x = 0;
     if (v && (!parse_int(v, x) || x < 0)) { snprintf(m, n, "A2GSPU_KEYSCHED_DELAY: want frames >= 0, got '%s'", v); return SET_INVALID; }
@@ -658,10 +764,39 @@ a2rails::SetterRegistrar r_mv_ireuse    {"MEMVU_IREUSE",           set_memvu_ire
 a2rails::SetterRegistrar r_mv_workset   {"MEMVU_WORKSET",          set_memvu_workset};
 a2rails::SetterRegistrar r_mv_seam      {"MEMVU_SEAM",             set_memvu_seam};
 a2rails::SetterRegistrar r_mv_blame     {"MEMVU_BLAME",            set_memvu_blame};
+a2rails::SetterRegistrar r_tap_pcs      {"A2GSPU_TAP_PCS",         set_tap_pcs};
+a2rails::SetterRegistrar r_tap_ptrs     {"A2GSPU_TAP_PTRS",        set_tap_ptrs};
+a2rails::SetterRegistrar r_tap_max      {"A2GSPU_TAP_MAX",         set_tap_max};
+a2rails::SetterRegistrar r_tap_dumpon   {"A2GSPU_TAP_DUMP_ON",     set_tap_dump_on};
+a2rails::SetterRegistrar r_tap_cycms    {"A2GSPU_TAP_CYC_PER_MS",  set_tap_cyc_ms};
+a2rails::SetterRegistrar r_tap_cycsec   {"A2GSPU_TAP_CYC_PER_SEC", set_tap_cyc_sec};
+a2rails::SetterRegistrar r_tap          {"A2GSPU_TAP",             set_tap};
+a2rails::SetterRegistrar r_tap_session  {"A2GSPU_TAP_SESSION",     set_tap_session};
+a2rails::SetterRegistrar r_tap_dumpev   {"A2GSPU_TAP_DUMP_EVERY",  set_tap_dump_every};
+a2rails::SetterRegistrar r_tap_zpev     {"A2GSPU_TAP_ZP_EVERY",    set_tap_zp_every};
+a2rails::SetterRegistrar r_tap_keypost  {"A2GSPU_TAP_KEY_POST_FRAMES", set_tap_key_post};
+a2rails::SetterRegistrar r_milestones   {"A2GSPU_MILESTONES",      set_milestones, true, true};
+a2rails::SetterRegistrar r_romsyms      {"A2GSPU_ROM_SYMBOLS",     set_rom_symbols};
+a2rails::SetterRegistrar r_watchipc     {"A2GSPU_WATCH_IPC_ZP",    set_watch_ipc_zp};
+a2rails::SetterRegistrar r_keyram       {"A2GSPU_KEYRAM",          set_keyram};
 a2rails::SetterRegistrar r_keydelay     {"A2GSPU_KEYSCHED_DELAY",  set_keydelay};
 }  // namespace
 
 // ---- the launch side ------------------------------------------------------------------
+int a2gspu_rail_arm_value(const char *rail, const char *value, const char *from) {
+    const a2rails::SetterReg *s = a2rails::setter_find(rail);
+    if (!s) {
+        fprintf(stderr, "a2gspu_rail_arm_value: no setter registered for %s\n", rail);
+        exit(2);
+    }
+    if (!value) return a2rails::SET_OK;
+    char msg[512] = "";
+    const int rc = s->fn(value, msg, sizeof msg);
+    FILE *out = (s->to_stderr || rc != a2rails::SET_OK) ? stderr : stdout;
+    if (msg[0]) fprintf(out, "%s (from %s)%s\n", msg, from, rc == a2rails::SET_INVALID ? " -- aborting (exit 2)" : "");
+    if (rc == a2rails::SET_INVALID) { fflush(stdout); exit(2); }
+    return rc;
+}
 int a2gspu_rail_arm_env(const char *rail) {
     const a2rails::SetterReg *s = a2rails::setter_find(rail);
     if (!s) {
