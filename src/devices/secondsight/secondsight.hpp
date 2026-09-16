@@ -1447,6 +1447,27 @@ class SecondSight {
             }
         }
 
+        // FORK: a guest-supplied 24-bit VRAM range, clipped to the card's 1 MB. The
+        // unclipped memset/copy wrote past the host's VRAM buffer -- a guest could
+        // corrupt emulator memory with one ClearScreen. What the card's firmware does
+        // with a range beyond its VRAM is unverified, so the clipped part is reported
+        // (once per command) rather than imitated.
+        uint32_t clip_vram_range(const char *cmd, uint32_t address, uint32_t length) {
+            const uint32_t size = (uint32_t)SECOND_SIGHT_FB_SIZE;
+            const uint32_t fit = address >= size ? 0 : (length < size - address ? length : size - address);
+            if (fit != length) {
+                static uint32_t reported = 0;
+                const uint32_t bit = cmd[0] == 'C' ? 1u : cmd[0] == 'S' ? 2u : 4u;
+                if (!(reported & bit)) {
+                    reported |= bit;
+                    fprintf(stderr, "SecondSight: %s range $%06X+$%06X runs past the card's 1 MB VRAM; "
+                            "%u byte(s) beyond it were NOT written (the card's behaviour there is unverified). "
+                            "Reported once.\n", cmd, address, length, length - fit);
+                }
+            }
+            return fit;
+        }
+
         void cmd_clear_screen() {
             if (command_step == 1) {
                 setup_dma(DMA_DIRECTION_IN, cmd_buffer+1, 7);
@@ -1455,7 +1476,8 @@ class SecondSight {
                 uint8_t color = cmd_buffer[1];
                 uint32_t address = (cmd_buffer[4] << 16) | (cmd_buffer[3] << 8) | cmd_buffer[2];
                 uint32_t length = (cmd_buffer[7] << 16) | (cmd_buffer[6] << 8) | cmd_buffer[5];
-                memset(frame_buffer+address, color, length);
+                length = clip_vram_range("ClearScreen", address, length);
+                if (length) memset(frame_buffer+address, color, length);
                 command_step = 0;
                 reg_handshake = 0x00;
                 trigger_longrun_wait(0xA5);
@@ -1511,7 +1533,12 @@ class SecondSight {
                 // ROM firmware bug: upload_chunk always adds #8 to the dest bank, so
                 // flag=0 ("code") still lands in VGA VRAM (bank $08+), not Z180 SRAM.
                 // Both flag values therefore target frame_buffer at dma_offset.
-                if (dma_offset + dma_this_chunk > (uint32_t)SECOND_SIGHT_FB_SIZE) {
+                // FORK: the WHOLE upload must fit, not just its first chunk: later chunks
+                // were never checked, so an upload that started in range ran on past the end
+                // of the host's VRAM buffer. Refused as a unit, and said.
+                if ((uint64_t)dma_offset + (uint64_t)length > (uint64_t)SECOND_SIGHT_FB_SIZE) {
+                    fprintf(stderr, "SecondSight: Upload of $%06X byte(s) at $%06X runs past the card's 1 MB VRAM; "
+                            "refused, nothing written.\n", length, dma_offset);
                     command_step = 0;
                     reg_handshake = 0x00;
                     return;
@@ -1575,16 +1602,13 @@ class SecondSight {
                 resp_buffer[0] = read_crtc_reg(ir_val, ra);
                 setup_dma(DMA_DIRECTION_OUT, resp_buffer, 1);
             } else if (command_step == 4) {
-
-                dma_length_remaining -= dma_this_chunk;
-                dma_offset += dma_this_chunk;
-                if (dma_length_remaining > 0) {
-                    trigger_handshake_hold();
-                    //command_step = 5; the hold checker will increment this..
-                } else {  // DMA complete, we're done.
-                    command_step = 0;
-                    reg_handshake = 0x00;
-                }
+                // FORK: the one response byte has been read; done. This step was the
+                // upload command's chunk loop, and it subtracted whatever chunk size the
+                // last upload left behind from whatever remainder it left: after any upload
+                // that underflowed, re-armed the handshake hold and stepped to a step 5
+                // this command does not have, so the command never finished.
+                command_step = 0;
+                reg_handshake = 0x00;
             }
         }
 
@@ -1639,15 +1663,12 @@ class SecondSight {
                 printf("SecondSight: cmd_scroll_screen: start_addr=%X, dest_addr=%X, length=%X\n", start_addr, dest_addr, length);
                 // we need to do the copy directionally; if we are moving bytes up (higher addr) in memory, we need to copy down; 
                 // if we are moving bytes down in memory, we need to copy up.
-                if (start_addr < dest_addr) {
-                    for (int32_t i = length - 1; i >= 0; i--) {
-                        frame_buffer[dest_addr + i] = frame_buffer[start_addr + i];
-                    }
-                } else {
-                    for (uint32_t i = 0; i < length; i++) {
-                        frame_buffer[dest_addr + i] = frame_buffer[start_addr + i];
-                    }
-                }
+                // FORK: both ends must lie inside VRAM (see clip_vram_range); memmove does
+                // the directional copy the loops did, for overlap either way.
+                const uint32_t from_fit = clip_vram_range("ScrollScreen", start_addr, length);
+                const uint32_t to_fit = clip_vram_range("ScrollScreen", dest_addr, length);
+                length = from_fit < to_fit ? from_fit : to_fit;
+                if (length) memmove(frame_buffer + dest_addr, frame_buffer + start_addr, length);
                 trigger_longrun_wait(0xA5);
                 command_step = 0;
             }
