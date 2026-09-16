@@ -10,7 +10,7 @@
 #include "serial_devices/host/HostSerial.hpp"
 
 constexpr bool SCDEBUG = 0;
- 
+
 /**
  * this code is LITTLE-ENDIAN SPECIFIC.
  * IF you have a big endian machine, you will need to swap the bytes. Or cry.
@@ -84,7 +84,7 @@ class Z85C30 {
     inline char ch_name(int channel) {
         return (char)('A' + channel);
     }
-    
+
     SerialDevice *serial_devices[SCC_CHANNEL_COUNT] = { nullptr, nullptr };
 
     struct scc_channel_state_t {
@@ -96,7 +96,7 @@ class Z85C30 {
             uint8_t r_reg_0;
             struct {
                 uint8_t r0_rx_char_available: 1;
-                uint8_t r0_zero_count: 1;               
+                uint8_t r0_zero_count: 1;
                 uint8_t r0_tx_buffer_empty: 1;
                 uint8_t r0_dcd: 1;
                 uint8_t r0_sync_hunt: 1;
@@ -109,7 +109,7 @@ class Z85C30 {
             uint8_t r_reg_1;
             struct {
                 uint8_t r1_all_sent: 1;
-                uint8_t r1_residue_code: 3;               
+                uint8_t r1_residue_code: 3;
                 uint8_t r1_parity_err: 1;
                 uint8_t r1_rx_overrun_err: 1;
                 uint8_t r1_crc_framing_err: 1;
@@ -151,7 +151,7 @@ class Z85C30 {
                 uint8_t r0_reg_num: 3;
                 uint8_t r0_cmd: 3;
                 uint8_t r0_reset_cmd: 2;
-                
+
                 /* Reg 1 */
                 uint8_t r1_ext_int_enable: 1;
                 uint8_t r1_tx_int_enable: 1;
@@ -171,7 +171,7 @@ class Z85C30 {
                 uint8_t r3_hunt_mode: 1;
                 uint8_t r3_auto_enables: 1;
                 uint8_t r3_rx_bits_per_char: 2;
-               
+
                 /* Reg 4 */
                 uint8_t r4_parity_enable: 1;
                 uint8_t r4_parity_even_odd: 1;
@@ -265,10 +265,22 @@ class Z85C30 {
 
         const uint16_t clock_mode_table[4] = { 1, 16, 32, 64 };
 
+        // FORK: THE INTERRUPT BLOCK, laid out as the Z8530 datasheet lays it out.
+        // One chip-level IP register in RR3A's bit order, which is also the priority
+        // order (A Rx, A Tx, A Ext, B Rx, B Tx, B Ext, highest first), and a matching
+        // IUS register. Replaces per-channel bits that lived in A's RR3 while the vector
+        // read B's copy, a Tx IP that the next status read consumed, a priority coded
+        // Rx > Ext > Tx, and an INT line computed from the accessed channel only.
+        uint8_t ip_bits = 0;
+        uint8_t ius_bits = 0;
+        bool tx_ip_latch[SCC_CHANNEL_COUNT] = { false, false };   // set when the Tx buffer empties
+        bool ext_ip_latch[SCC_CHANNEL_COUNT] = { false, false };  // set by an enabled External/Status change
+        bool rx_first_armed[SCC_CHANNEL_COUNT] = { true, true };  // Rx mode 01: first character re-armed by WR0 cmd 100
+
         inline uint8_t get_bits_per_char(scc_channel_t channel, bool is_tx) {
             // Start bit (always 1)
             uint8_t bits = 1;
-            
+
             // Data bits (5, 6, 7, or 8)
             uint8_t bits_code = is_tx ? registers[channel].r5_tx_bits_per_char : registers[channel].r3_rx_bits_per_char;
             switch (bits_code) {
@@ -277,12 +289,12 @@ class Z85C30 {
                 case 0b10: bits += 6; break;
                 case 0b11: bits += 8; break;
             }
-            
+
             // Parity bit (if enabled)
             if (registers[channel].r4_parity_enable) {
                 bits += 1;
             }
-            
+
             // Stop bits (1, 1.5, or 2)
             switch (registers[channel].r4_stop_bits) {
                 case 0b00: bits += 1; break;      // 1 stop bit
@@ -290,7 +302,7 @@ class Z85C30 {
                 case 0b10: bits += 2; break;      // 1.5 stop bits (round up to 2)
                 case 0b11: bits += 2; break;      // 2 stop bits
             }
-            
+
             return bits;
         }
 
@@ -298,11 +310,11 @@ class Z85C30 {
             if (baud_rate[channel] <= 0.0f || baud_rate[channel] > MAX_TIMED_BAUD) {
                 return 0; // No timing for invalid or very high baud rates
             }
-            
+
             uint8_t bits = get_bits_per_char(channel, is_tx);
             float chars_per_second = baud_rate[channel] / (float)bits;
             uint64_t cycles = (uint64_t)(MASTER_CLOCK / chars_per_second);
-            
+
             return cycles;
         }
 
@@ -350,72 +362,75 @@ class Z85C30 {
                 SerialMessage{MESSAGE_LINE, host_serial_pack_line(line)});
         }
 
-        inline bool update_tx_ip(scc_channel_t channel) {
-            bool ip = false;
-
-            if (registers[channel].r1_tx_int_enable && registers[channel].tx_irq_condition) {
-                registers[channel].tx_irq_condition = false; // we took account of this, so reset it
-                ip = true;
-            }
-            if (channel == SCC_CHANNEL_A) {
-                registers[SCC_CHANNEL_A].r3_a_tx_pending = ip;
-            } else {
-                registers[SCC_CHANNEL_A].r3_b_tx_pending = ip;
-            }
-            return ip;
+        static inline uint8_t ip_shift(scc_channel_t channel) { return channel == SCC_CHANNEL_A ? 3 : 0; }
+        static inline int highest_bit(uint8_t v) {
+            for (int b = 5; b >= 0; b--) if (v & (1u << b)) return b;
+            return -1;
         }
 
-        inline bool update_rx_ip(scc_channel_t channel) {
-            bool ip = false;
-
-            if ((registers[channel].r1_rx_int_mode == 0b10) && registers[channel].r0_rx_char_available) {
-                ip = true;
-            }
-            if (channel == SCC_CHANNEL_A) {
-                registers[SCC_CHANNEL_A].r3_a_rx_pending = ip;
-            } else {
-                registers[SCC_CHANNEL_A].r3_b_rx_pending = ip;
-            }
-            return ip;
+        // Special receive condition: overrun, framing, or parity when WR1 D2 makes it one.
+        inline bool rx_special(scc_channel_t channel) {
+            const auto &r = registers[channel];
+            return r.r1_rx_overrun_err || r.r1_crc_framing_err || (r.r1_parity_err && r.r1_partity_spcond);
         }
 
-        inline uint8_t calculate_modified_vector(scc_channel_t channel) {
-            uint8_t vector = registers[channel].w_regs[WR2];
-            uint8_t vectormod = 0;
-            // add A spcond
-            if (registers[SCC_CHANNEL_A].r3_a_rx_pending) vectormod = 0b110;
-            else if (registers[SCC_CHANNEL_A].r3_a_ext_pending) vectormod = 0b101;
-            else if (registers[SCC_CHANNEL_A].r3_a_tx_pending) vectormod = 0b100;
-            // add B spcond
-            else if (registers[SCC_CHANNEL_B].r3_b_rx_pending) vectormod = 0b010;
-            else if (registers[SCC_CHANNEL_B].r3_b_ext_pending) vectormod = 0b001;
-            else if (registers[SCC_CHANNEL_B].r3_b_tx_pending) vectormod = 0b000;
+        // "If the IE bit is not set ... the IP for that source is never set."
+        inline void recompute_ip() {
+            uint8_t ip = 0;
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                const scc_channel_t ch = (scc_channel_t)c;
+                const auto &r = registers[ch];
+                const uint8_t sh = ip_shift(ch);
+                const uint8_t mode = r.r1_rx_int_mode;   // 00 off, 01 first char or special, 10 all chars or special, 11 special only
+                bool rx = false;
+                if (mode != 0b00) {
+                    if (rx_special(ch)) rx = true;
+                    else if (r.r0_rx_char_available && (mode == 0b10 || (mode == 0b01 && rx_first_armed[ch]))) rx = true;
+                }
+                if (rx) ip |= (uint8_t)(0x04 << sh);
+                if (r.r1_tx_int_enable && tx_ip_latch[ch]) ip |= (uint8_t)(0x02 << sh);
+                if (r.r1_ext_int_enable && ext_ip_latch[ch]) ip |= (uint8_t)(0x01 << sh);
+            }
+            ip_bits = ip;
+            registers[SCC_CHANNEL_A].r_reg_3 = ip;
+            registers[SCC_CHANNEL_B].r_reg_3 = 0;
+        }
 
-            // VIS WR9[0] only affects vector placed on bus.
-            // NV WR9[1] only affects vector placed on bus.
-
+        // RR2B: WR2 modified by the highest-priority pending source (datasheet codes,
+        // V3-V1): B Tx 000, B Ext 001, B Rx 010, B special 011, A Tx 100, A Ext 101,
+        // A Rx 110, A special 111; nothing pending reads 011.
+        inline uint8_t calculate_modified_vector(scc_channel_t /*channel*/) {
+            uint8_t vector = registers[SCC_CHANNEL_A].w_regs[WR2];
+            uint8_t code = 0b011;
+            const int hb = highest_bit(ip_bits);
+            if (hb >= 0) {
+                const bool chan_a = hb >= 3;
+                const int src = hb - (chan_a ? 3 : 0);   // 2 Rx, 1 Tx, 0 Ext
+                const scc_channel_t ch = chan_a ? SCC_CHANNEL_A : SCC_CHANNEL_B;
+                uint8_t c = 0b01;
+                if (src == 2) c = rx_special(ch) ? 0b11 : 0b10;
+                else if (src == 1) c = 0b00;
+                code = (uint8_t)((chan_a ? 0b100 : 0) | c);
+            }
             if (registers[SCC_CHANNEL_A].r9_status_high_low) {
-                // reverse vectormod bits.
-                // then stuff into bits 6-4
-                vectormod = ((vectormod & 0b001) << 2) | (vectormod & 0b010) | ((vectormod & 0b100) >> 2);
-                vector = (vector & 0b1000'1111) | (vectormod << 4);
+                // Status High: V4-V6, bit order reversed.
+                const uint8_t rev = (uint8_t)(((code & 0b001) << 2) | (code & 0b010) | ((code & 0b100) >> 2));
+                vector = (uint8_t)((vector & 0b1000'1111) | (rev << 4));
             } else {
-                // stuff into bits 3-1
-                vector = (vector & 0b0000'1110) | (vectormod << 1);
+                // Status Low: V1-V3. (The mask kept ONLY bits 3-1 before, zeroing the rest of WR2.)
+                vector = (uint8_t)((vector & 0b1111'0001) | (code << 1));
             }
             return vector;
         }
 
-        inline void update_interrupts(scc_channel_t channel) {
-            bool interrupt_pending = false;
-            
-            if (update_tx_ip(channel)) interrupt_pending = true;
-            if (update_rx_ip(channel)) interrupt_pending = true;
-
-            // if MIE reset, no interrupt asserted.
-            if (registers[SCC_CHANNEL_A].r9_mie == 0) interrupt_pending = false;
-            
-            irq_control->set_irq(IRQ_ID_SCC, interrupt_pending);
+        // INT: MIE and a pending source of higher priority than every source under service.
+        // Computed across both channels on every change.
+        inline void update_interrupts(scc_channel_t /*channel*/ = SCC_CHANNEL_A) {
+            recompute_ip();
+            const int hp = highest_bit(ip_bits);
+            const int hs = highest_bit(ius_bits);
+            const bool assert_int = registers[SCC_CHANNEL_A].r9_mie && hp >= 0 && hp > hs;
+            irq_control->set_irq(IRQ_ID_SCC, assert_int);
         }
 
         inline void print_read_register(scc_channel_t channel, uint8_t reg_num, uint8_t retval) {
@@ -435,17 +450,24 @@ class Z85C30 {
                 registers[channel].w_regs[WR0] = data;
                 uint16_t new_register = registers[channel].r0_reg_num;
                 // TODO: need to process the various commands here. (resetting interrupts, etc.)
-                if (registers[channel].r0_cmd == 0b001) new_register += 8;
-                else if (registers[channel].r0_cmd == 0b010) { // reset ext/status interrupt 
-                    registers[channel].r3_a_ext_pending = 0;
-                } else if (registers[channel].r0_cmd == 0b101) { // reset Tx int pending
-                    if (channel == SCC_CHANNEL_A) {
-                        registers[SCC_CHANNEL_A].r3_a_tx_pending = 0;
-                    } else {
-                        registers[SCC_CHANNEL_A].r3_b_tx_pending = 0;
-                    }   
-                } else if (registers[channel].r0_cmd != 0) {
-                    if (SCDEBUG) printf("SCC: Unimplemented WRITE %c r0_cmd: Reg %d = %02X\n", ch_name(channel), new_register, registers[channel].r0_cmd);
+                switch (registers[channel].r0_cmd) {
+                    case 0b001: new_register += 8; break;                          // point high
+                    case 0b010: ext_ip_latch[channel] = false; break;              // reset Ext/Status interrupts (this channel)
+                    case 0b011: break;                                             // send abort (SDLC)
+                    case 0b100: rx_first_armed[channel] = true; break;             // enable int on next Rx character
+                    case 0b101: tx_ip_latch[channel] = false; break;               // reset Tx int pending
+                    case 0b110:                                                    // error reset
+                        registers[channel].r1_parity_err = 0;
+                        registers[channel].r1_rx_overrun_err = 0;
+                        registers[channel].r1_crc_framing_err = 0;
+                        registers[channel].r1_end_of_frame = 0;
+                        break;
+                    case 0b111: {                                                  // reset highest IUS
+                        const int hs = highest_bit(ius_bits);
+                        if (hs >= 0) ius_bits &= (uint8_t)~(1u << hs);
+                        break;
+                    }
+                    default: break;
                 }
 
                 if (registers[channel].r0_reset_cmd == 0b01) { // reset Rx CRC Checker
@@ -455,7 +477,7 @@ class Z85C30 {
                 } else if (registers[channel].r0_reset_cmd == 0b11) { // reset Tx Underrun/EOM Latch
                     registers[channel].r0_tx_underrun_eom = 0; // ??? and we never set it anywhere. that's fine.
                 }
-                
+
                 /* else {
                     printf("SCC: Unimplemented WRITE %c r0_reset_cmd command: Reg %d = %02X\n", ch_name(channel), new_register, registers[channel].r0_reset_cmd);
                 } */
@@ -468,6 +490,7 @@ class Z85C30 {
         inline void write_register_1(scc_channel_t channel, uint8_t data) {
             print_write_register(channel, WR1, data);
             registers[channel].w_regs[WR1] = data;
+            if (!registers[channel].r1_tx_int_enable) tx_ip_latch[channel] = false;   // IE clear: the IP is never set
             update_interrupts(channel); // might have changed interrupt enables
         }
 
@@ -507,7 +530,7 @@ class Z85C30 {
 
         inline void write_register_9(uint8_t data) {
             print_write_register(SCC_CHANNEL_A, WR9, data);
-            
+
             // store new value first. "bits in wr9 may be written at same time as the reset command
             // because these bits are affected only by a hardware reset. (pg 3-8)"
             registers[SCC_CHANNEL_A].w_regs[WR9] = data;
@@ -556,8 +579,8 @@ class Z85C30 {
         inline uint8_t read_register_0(scc_channel_t channel) {
             //printf("SCC: READ  register 0: Ch %d\n", channel);
             //registers[channel].r0_tx_buffer_empty = 1; // duh, don't override this.
-            registers[channel].r0_dcd = 1; // these belong in update_queues()
-            registers[channel].r0_cts = 1;
+            // FORK: a read no longer writes DCD and CTS; they are set at construction and
+            // left alone (external pins, not modelled yet -- the study's step 4).
             uint8_t retval = registers[channel].r_reg_0;
             print_read_register(channel, RR0, retval);
             return retval; // TODO: fix. for now fake CTS=1, DCD=1, Tx Buffer Empty=1
@@ -571,7 +594,7 @@ class Z85C30 {
         }
         inline uint8_t read_register_2(scc_channel_t channel) {
             // Channel A: return the interrupt vector exactly as-is.
-            // Channel B: return the "modified interrupt vector". 
+            // Channel B: return the "modified interrupt vector".
             uint8_t retval;
             if (channel == SCC_CHANNEL_B) {
                  // when vector is read from Channel B, it always includes the status regardless of the VIS bit
@@ -580,13 +603,20 @@ class Z85C30 {
             } else {
                 retval = registers[SCC_CHANNEL_A].w_regs[WR2];
             }
+            // FORK: with software INTACK enabled (WR9 D5), reading RR2 is the acknowledge:
+            // the highest pending source goes under service until Reset Highest IUS.
+            if (registers[SCC_CHANNEL_A].r9_software_intack_enable) {
+                recompute_ip();
+                const int hp = highest_bit(ip_bits);
+                if (hp >= 0 && hp > highest_bit(ius_bits)) ius_bits |= (uint8_t)(1u << hp);
+            }
             print_read_register(channel, RR2, retval);
             return retval;
         }
         inline uint8_t read_register_3(scc_channel_t channel) {
             uint8_t retval = 0x00;
             if (channel == SCC_CHANNEL_A) {
-                retval = registers[SCC_CHANNEL_A].r_reg_3; 
+                retval = registers[SCC_CHANNEL_A].r_reg_3;
             }
             print_read_register(channel, RR3, retval);
             return retval; // B is always 0
@@ -613,17 +643,19 @@ class Z85C30 {
         }
 
     public:
-        Z85C30(InterruptController *irq_control, EventTimer *event_timer = nullptr, NClockII *clock = nullptr, uint64_t base_instance_id = 0x5CC0000) 
+        Z85C30(InterruptController *irq_control, EventTimer *event_timer = nullptr, NClockII *clock = nullptr, uint64_t base_instance_id = 0x5CC0000)
             : irq_control(irq_control), event_timer(event_timer), clock(clock) {
             // Set up unique instance IDs for each channel's TX and RX timers
             tx_timer_id[SCC_CHANNEL_A] = base_instance_id + 0;
             tx_timer_id[SCC_CHANNEL_B] = base_instance_id + 1;
             rx_timer_id[SCC_CHANNEL_A] = base_instance_id + 2;
             rx_timer_id[SCC_CHANNEL_B] = base_instance_id + 3;
-            
+
             // clear the data structures on boot.
             memset(reg_select, 0, sizeof(reg_select));
             memset(registers, 0, sizeof(registers));
+            registers[SCC_CHANNEL_A].r0_dcd = 1; registers[SCC_CHANNEL_A].r0_cts = 1;
+            registers[SCC_CHANNEL_B].r0_dcd = 1; registers[SCC_CHANNEL_B].r0_cts = 1;
             reset();
         };
 
@@ -633,24 +665,27 @@ class Z85C30 {
             this->data_files[channel] = data_file;
         } */
 
-       
+
         inline void set_bits_by_mask(uint8_t &reg, uint8_t mask, uint8_t value) {
             reg = (reg & ~mask) | (value & mask);
         }
 
-        /* HW Reset according to Technical Manual 
+        /* HW Reset according to Technical Manual
            use full set_bits_by_mask even if we're setting all bits, for consistency. The optimizer will probably optimize it out.
         */
         void hw_reset_channel(scc_channel_t channel) {
+            tx_ip_latch[channel] = false;
+            ext_ip_latch[channel] = false;
+            rx_first_armed[channel] = true;
+            ius_bits &= (uint8_t)~(0x07 << ip_shift(channel));
             // Cancel any pending TX/RX events
             if (event_timer) {
                 event_timer->cancelEvents(tx_timer_id[channel]);
                 event_timer->cancelEvents(rx_timer_id[channel]);
             }
-            
+
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
-            registers[channel].tx_irq_condition = false;
             set_bits_by_mask(registers[channel].w_regs[WR0], 0b1111'1111, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR1], 0b1101'1011, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR3], 0b0000'0001, 0b0000'0000);
@@ -675,15 +710,18 @@ class Z85C30 {
         /* Channel Reset according to Technical Manual
             it's identical with 3 differences */
         void soft_reset_channel(scc_channel_t channel) {
+            tx_ip_latch[channel] = false;
+            ext_ip_latch[channel] = false;
+            rx_first_armed[channel] = true;
+            ius_bits &= (uint8_t)~(0x07 << ip_shift(channel));
             // Cancel any pending TX/RX events
             if (event_timer) {
                 event_timer->cancelEvents(tx_timer_id[channel]);
                 event_timer->cancelEvents(rx_timer_id[channel]);
             }
-            
+
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
-            registers[channel].tx_irq_condition = false;
             set_bits_by_mask(registers[channel].w_regs[WR0], 0b1111'1111, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR1], 0b1101'1011, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR3], 0b0000'0001, 0b0000'0000);
@@ -711,7 +749,7 @@ class Z85C30 {
             hw_reset_channel(SCC_CHANNEL_A);
             hw_reset_channel(SCC_CHANNEL_B);
         }
-        
+
         void writeCmd(scc_channel_t channel, uint8_t data) {
             // current reg_select for channel
             update_queues();
@@ -743,9 +781,9 @@ class Z85C30 {
              // after any other write, reset the register select
         }
 
-        /* 
+        /*
             if write is in progress and they wrote anyway, what do we do?
-            if write not in progress, 
+            if write not in progress,
                 go ahead and chuck the character.
                 schedule a timer based on the baud rate and the number of bits - char bits + start bits + stop bits.
                 set a flag to indicate that write is in progress.
@@ -762,6 +800,9 @@ class Z85C30 {
                 return;
             }
 
+            // Writing a character resets the Tx IP (datasheet).
+            tx_ip_latch[channel] = false;
+
             // Store the byte to transmit
             registers[channel].char_tx = data;
 
@@ -769,16 +810,16 @@ class Z85C30 {
             if (registers[channel].r0_tx_buffer_empty) {
                 registers[channel].r0_tx_buffer_empty = false;
                 registers[channel].tx_in_progress = true;
-                
+
                 // Calculate timing and schedule TX completion
                 uint64_t cycles_per_char = get_cycles_per_char(channel, true);
-                
+
                 if (cycles_per_char > 0 && event_timer && clock) {
                     // Schedule the TX completion event
                     uint64_t trigger_cycle = clock->get_c14m() + cycles_per_char;
                     event_timer->scheduleEvent(trigger_cycle, tx_complete_callback, tx_timer_id[channel], this);
-                    
-                    if (SCDEBUG) printf("SCC: Ch %c TX scheduled for %llu cycles (baud: %.2f)\n", 
+
+                    if (SCDEBUG) printf("SCC: Ch %c TX scheduled for %llu cycles (baud: %.2f)\n",
                         ch_name(channel), (unsigned long long)cycles_per_char, baud_rate[channel]);
                 } else {
                     // High baud rate or no timer - complete immediately
@@ -794,7 +835,7 @@ class Z85C30 {
         }
 
         uint8_t readCmd(scc_channel_t channel) {
-            
+
             update_queues();
 
             uint8_t retval = 0x00;
@@ -836,7 +877,7 @@ class Z85C30 {
             }
         }
 
-        uint8_t readData(scc_channel_t channel) { 
+        uint8_t readData(scc_channel_t channel) {
             uint8_t retval = 0x00;
 
             update_queues();
@@ -846,7 +887,8 @@ class Z85C30 {
 
                 // signal the rx buffer is empty
                 registers[channel].r0_rx_char_available = 0;
-                
+                if (registers[channel].r1_rx_int_mode == 0b01) rx_first_armed[channel] = false;
+
                 // do this instead in update_interrupts()
                 /* if (channel == SCC_CHANNEL_A) {
                     registers[SCC_CHANNEL_A].r3_a_rx_pending = 0;
@@ -854,7 +896,7 @@ class Z85C30 {
                     registers[SCC_CHANNEL_A].r3_b_rx_pending = 0;
                 } */
             }
-            
+
             if (SCDEBUG) printf("SCC: READ  %c DATA = %02X\n", ch_name(channel), retval);
 
             update_interrupts(channel);
@@ -865,7 +907,7 @@ class Z85C30 {
             serial_devices[channel] = device;
             push_line_params(channel);
         }
-        
+
         void debug_output(DebugFormatter *df) {
             df->addLine("Reg Select A: %02X  B: %02X", reg_select[SCC_CHANNEL_A], reg_select[SCC_CHANNEL_B]);
             df->addLine("Clock Mode A: %dX   B: %dX", clock_mode[SCC_CHANNEL_A], clock_mode[SCC_CHANNEL_B]);
@@ -884,21 +926,21 @@ class Z85C30 {
 
         // TX completion - called when character transmission is complete
         void tx_complete(scc_channel_t channel) {
-            if (SCDEBUG) printf("SCC: Ch %c TX complete, char=%02X, loopback=%d\n", 
+            if (SCDEBUG) printf("SCC: Ch %c TX complete, char=%02X, loopback=%d\n",
                 ch_name(channel), registers[channel].char_tx, registers[channel].r14_local_loopback);
-            
+
             registers[channel].tx_in_progress = false;
             registers[channel].r0_tx_buffer_empty = true;
-            registers[channel].tx_irq_condition = true;
-            
+            if (registers[channel].r1_tx_int_enable) tx_ip_latch[channel] = true;
+
             // Now actually send the byte to the device
             uint8_t data = registers[channel].char_tx;
-            
+
             if (registers[channel].r14_local_loopback) {
                 // Local loopback - in loopback mode, RX happens instantaneously
                 // The character doesn't actually go out on the wire, it's looped back internally
                 if (SCDEBUG) printf("SCC: Ch %c looping back %02X (instant)\n", ch_name(channel), data);
-                
+
                 // Check if RX is enabled
                 if (registers[channel].r3_rx_enable) {
                     if (registers[channel].r0_rx_char_available) {
@@ -917,17 +959,17 @@ class Z85C30 {
             } else if (serial_devices[channel] != nullptr) {
                 serial_devices[channel]->q_host.send(SerialMessage{MESSAGE_DATA, data});
             }
-            
+
             update_interrupts(channel);
         }
 
         // RX completion - called when character reception is complete
         void rx_complete(scc_channel_t channel) {
             if (SCDEBUG) printf("SCC: Ch %c RX complete: %02X\n", ch_name(channel), registers[channel].char_rx);
-            
+
             registers[channel].rx_in_progress = false;
             registers[channel].r0_rx_char_available = 1;
-            
+
             update_interrupts(channel);
         }
 
@@ -938,26 +980,26 @@ class Z85C30 {
                 if (SCDEBUG) printf("SCC: Ch %c RX disabled, dropping char %02X\n", ch_name(channel), data);
                 return;
             }
-            
+
             if (registers[channel].r0_rx_char_available) {
                 // RX buffer full - overrun error
                 registers[channel].r1_rx_overrun_err = 1;
                 if (SCDEBUG) printf("SCC: Ch %c RX overrun\n", ch_name(channel));
                 return;
             }
-            
+
             if (SCDEBUG) printf("SCC: Ch %c scheduling RX of %02X\n", ch_name(channel), data);
-            
+
             registers[channel].char_rx = data;
             registers[channel].rx_in_progress = true;
-            
+
             uint64_t cycles_per_char = get_cycles_per_char(channel, false);
-            
+
             if (cycles_per_char > 0 && event_timer && clock) {
                 uint64_t trigger_cycle = clock->get_c14m() + cycles_per_char;
                 event_timer->scheduleEvent(trigger_cycle, rx_complete_callback, rx_timer_id[channel], this);
-                
-                if (SCDEBUG) printf("SCC: Ch %c RX scheduled for %llu cycles\n", 
+
+                if (SCDEBUG) printf("SCC: Ch %c RX scheduled for %llu cycles\n",
                     ch_name(channel), (unsigned long long)cycles_per_char);
             } else {
                 // High baud rate or no timer - complete immediately
