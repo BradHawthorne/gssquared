@@ -521,7 +521,10 @@ void display_write_c023(void *context, uint32_t address, uint8_t value) {
     ds->f_VGCINT = (ds->f_VGCINT & ~VGCINT_MASK) | (value & VGCINT_MASK);
     //ds->f_VGCINT = (ds->f_VGCINT & 0b1111'1000) | (value & 0b0000'0111);
 
-    update_vgc_interrupt(ds, false);
+    // FORK: recompute the line, do not force it down. The IRQ is asserted whenever
+    // status AND enable holds for any source (HW Ref Tables 4-1, 4-2); passing false
+    // dropped it on every enable write, so a pending, still-enabled interrupt was lost.
+    update_vgc_interrupt(ds, true);
 }
 
 uint8_t display_read_c023(void *context, uint32_t address) {
@@ -534,7 +537,7 @@ void display_write_c041(void *context, uint32_t address, uint8_t value) {
     value &= 0x1F; // bits 7-5 "must be 0"
     ds->f_INTEN = value;
 
-    update_megaii_interrupt(ds, false);
+    update_megaii_interrupt(ds, true);   // FORK: recompute, as for $C023 above
 }
 
 uint8_t display_read_C041(void *context, uint32_t address) {
@@ -737,14 +740,20 @@ void scanner_iigs_handler(void *context, VideoScannerEvent event) {
             update_vgc_interrupt(ds, true);
             break;
         case VS_EVENT_VBL:
-            ds->f_vblint_asserted = true;
+            // FORK: the Mega II VBL and quarter-second flags ($C046 bits 3/4) latch only
+            // while their $C041 enables are on [emulator: MAME apple2gs, KEGS; recollection,
+            // unverified on hardware -- see Docs/fidelity]. Latching them while disabled
+            // left a stale flag that the next $C041 enable delivered at once as an IRQ for
+            // a VBL that happened with the interrupt off (GS/OS's first enable does exactly
+            // that). The VGC's own status bits ($C023 5/6) are unchanged.
+            if (ds->f_vbl_enable) ds->f_vblint_asserted = true;
             update_megaii_interrupt(ds, true);
             
             break;
         case VS_EVENT_QTR:
             // every 16 frames, also assert 0.25 sec
             if (++ds->quartersec_counter == 16) {
-                ds->f_quartersec_asserted = true; // only assert if enabled.
+                if (ds->f_quartersec_enable) ds->f_quartersec_asserted = true; // only assert if enabled.
                 ds->quartersec_counter = 0; // kinda need to reset the counter bro.
             }
             update_megaii_interrupt(ds, true);
