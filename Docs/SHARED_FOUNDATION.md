@@ -160,8 +160,10 @@ definition of the emulator API.
 |---|---|
 | **`Docs/SHARED_FOUNDATION.md`** (this file) | Multi-consumer contract — read before behavioural rail/device changes |
 | `Docs/AGENTIC_ORACLE.md` | North-star observability / control contract |
-| `Docs/CLOSED_LOOP_INTEGRATION.md` | Rosetta closed-loop mission and dual-mode rules |
-| `Docs/A2GSPU_RAILS.md` | Env rail catalog |
+| `Docs/CLOSED_LOOP_INTEGRATION.md` | Mission, operating modes, closed-loop recipe, dual-mode rules |
+| `Docs/A2GSPU_RAILS.md` | Env rail and CTRL verb catalogue, and the output lines consumers parse |
+| `tools/a2rail/gates.ps1` | Every fork-local gate in one command — run it before calling shared work done |
+| `Docs/UPSTREAM_SYNC.md` | What has been ported from upstream, and what is owed |
 | `README.md` | What this fork adds over upstream |
 | Product harnesses (e.g. a2engine `tools/gscheck.ps1`) | Consumer gates — evidence, not ownership |
 

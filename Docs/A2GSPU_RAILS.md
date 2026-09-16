@@ -45,38 +45,53 @@
 > catalogue nothing checks is a catalogue that is wrong; this one has now proved
 > it twice.
 
-This document supersedes the stale "Gaps" table in `../A2GSPU_INSTRUMENTATION.md`
-(most of those gaps are now implemented — see that file's appended note).
 
 ## What this fork is (the contract)
 
-gssquared is Rosetta's **closed-loop oracle/microscope** (see
-[`CLOSED_LOOP_INTEGRATION.md`](CLOSED_LOOP_INTEGRATION.md)). Every rail below obeys three
-hard invariants:
+gssquared-fork is an instrumented development platform for several projects, the Rosetta
+toolchain's closed loop first among them (see
+[`CLOSED_LOOP_INTEGRATION.md`](CLOSED_LOOP_INTEGRATION.md)). Every rail below obeys three hard
+invariants:
 
-1. **Additive + env-gated.** Nothing here runs unless an `A2GSPU_*` env var (or the
-   `A2GSPU_CTRL` rail) is set. **No `A2GSPU_*` env set ⇒ byte-identical stock emulator**,
-   windowed and interactive. A default run pays at most one untaken branch per rail.
-2. **Isolated / separable.** Rails live in the `a2gspu` device, the env-gated hooks in
-   `gs2.cpp` (`run_headless_spike` / `a2gspu_ctrl_loop`), and thin call-sites in
-   core CPU/MMU/video — so upstream merges stay tractable.
+1. **Additive + env-gated.** Nothing here runs unless an `A2GSPU_*`/`MEMVU_*` env var (or the
+   `A2GSPU_CTRL` rail) is set. **No instrumentation env set ⇒ stock emulator**, windowed and
+   interactive. A default run pays one untaken branch per rail at its hook — measured as about
+   twenty flag tests per instruction in total, with no master gate.
+2. **Isolated / separable.** Rails live in fork-only units — the spike (`a2gspu_spike.cpp`), the
+   CTRL and co-pilot rails (`a2gspu_ctrl.cpp`, `a2gspu_ctrl_cmds.cpp`), snapshots
+   (`a2gspu_snapshot.cpp`), the `a2gspu_*`/`iigs_*`/`memvu_*` headers, the `a2gspu` device — and
+   thin gated call sites in core CPU/MMU/video, so an upstream change to the application loop
+   and a fork change to an instrument land in different files.
 3. **Observe-don't-disturb** for the *observe/trace/break/snapshot/assert* groups: they read
-   emulated state externally (like a logic analyzer) and never change bus behavior. The
-   *manipulate* and *run* groups are the agent's **hands** (deliberate, documented state
-   changes), and the CTRL rail's input verbs co-operate with (do not lock out) live human input.
+   emulated state through the observer read (`a2obs_peek`) and never change bus behaviour — and
+   `tools/a2rail/unarmedhash.ps1` checks it, by requiring armed runs to reproduce the unarmed
+   hash and cycle count. The *manipulate* and *run* groups are the agent's **hands**
+   (deliberate, documented state changes), and the CTRL rail's input verbs co-operate with
+   (do not lock out) live human input.
 
-Groups: **run** · **observe** · **trace** · **break** (breakpoints/watchpoints/traps) ·
-**manipulate** · **snapshot** · **assert** · **CTRL-verb** · **device/determinism**.
+Groups (the registry's families, which `rail list <family>` uses and `railparity.ps1` holds the
+Group column below to): **run** · **observe** · **trace** · **break** · **manipulate** ·
+**snapshot** · **assert** · **memvu** · **tap** · **ctrl** · **meta** · **determinism** ·
+**device** · **wiz5** · **alias**.
 Every rail is env-gated (that is the whole design); the "Gated" column flags the rare
 always-on emission (the `GSDIAG:`/`SPIKE …` summary lines) so a harness knows what prints
 without any env set.
 
-Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~1899) and
-`a2gspu_ctrl_loop` (~1660); `src/iigs_diag.hpp` (`iigs_emit_status`, ~130); env parse block
-`gs2.cpp` ~1956–2470; device rails in `src/devices/a2gspu/a2gspu.cpp`,
-`src/devices/adb/ADB_Micro.hpp`, `src/devices/rtc/RTC.hpp`,
-`src/devices/pdblock3/pdblock3.cpp`, `src/cpu.cpp`, `src/cpus/base_6502.cpp`,
-`src/iigs_toolbox.hpp`, `src/iigs_video_summary.hpp`.
+Where the code lives (by function, not line number — line numbers here went stale twice):
+
+| Piece | Source |
+|-------|--------|
+| The headless spike: env arming, boot, gates, `GSDIAG:` | `src/a2gspu_spike.cpp` `run_headless_spike`; `src/iigs_diag.hpp` `iigs_emit_status` |
+| The CTRL loop and the co-pilot rail | `src/a2gspu_ctrl.cpp` `a2gspu_ctrl_loop`, `a2gspu_copilot_poll` |
+| The CTRL verb families | `src/a2gspu_ctrl_cmds.cpp` (`a2ctrl::try_*`) |
+| Snapshots, device blocks, manifest, SAVE_AT | `src/a2gspu_snapshot.cpp` |
+| CPU/MMU micro-tests | `src/a2gspu_selftests.cpp` |
+| What `help`/`manifest`/`rail` serve | `src/a2gspu_manifest.hpp` (`verbs[]`, record schemas), `src/a2gspu_rails_registry.hpp` (rails, reach, readers) |
+| Hook sites in the CPU | `src/cpus/base_6502.cpp` (`bus_read`/`bus_write` funnels, the per-instruction block) |
+| The one observer read | `src/a2gspu_observe.hpp` (`a2obs_peek`) |
+| Traps, taps, liveness, records, pins, BRAM | `src/a2gspu_trap.hpp`, `src/generic_tap.hpp`, `src/a2gspu_liveness.hpp`, `src/a2record.hpp`, `src/a2gspu_pins.hpp`, `src/a2gspu_bram_pin.hpp` |
+| Device rails | `src/devices/a2gspu/a2gspu.cpp`, `src/devices/adb/ADB_Micro.hpp`, `src/devices/rtc/RTC.hpp`, `src/devices/pdblock3/pdblock3.cpp` |
+| Toolbox tracing, symbols, video summaries | `src/iigs_toolbox.hpp`, `src/iigs_symbols.hpp`, `src/iigs_video_summary.hpp` |
 
 ---
 
@@ -339,7 +354,7 @@ the early-boot figure as the outlier it is.
 
 **The manifest, and why this file no longer quotes one.** It used to, and the
 quote was wrong on *both* platforms. The generator is
-`a2gspu_snap_manifest_text()` in `gs2.cpp`; its fields are:
+`a2gspu_snap_manifest_text()` in `a2gspu_snapshot.cpp`; its fields are:
 
 | Field | Meaning |
 |-------|---------|
@@ -491,7 +506,7 @@ protocol authority.
 | `keys <str>` | append to the keyboard paste buffer (paced by guest polls) | CTRL-verb (manipulate) |
 | `press <hex2> [hold] [mods]` | full physical keypress — latch + any-key-down, held `hold` frames (default 15), then released; IIe latch path AND IIgs KeyGloo+IRQ path. `mods` is letters `o` (Open-Apple) `c` (Closed-Apple) `s` (shift) `k` (control), carried in the key's modifier byte (what `$C025` and the Event Manager report): `press 6F 2 o` is Open-Apple-O, which is how the Finder is told to **open** a selected icon — a bare Return on one starts a rename (measured) | CTRL-verb (manipulate) |
 | `holdkey <hex-ascii>` | set the sticky IIgs hold-key WITHOUT running (`0` clears) — hold, step in chunks, watch for consume, release | CTRL-verb (manipulate) |
-| `iolog` | cumulative keyboard soft-switch read counts (`C000/C010/C024/C025/C026`); diff two calls across a `run` to see which switch a wedged menu polls | CTRL-verb (observe) |
+| `iolog` / `iolog on [n]` / `off` / `dump <file>` / `reset` | bare: cumulative keyboard soft-switch read counts (`C000/C010/C024/C025/C026`) — diff two calls across a `run` to see which switch a wedged menu polls. `on [n]` records every `$C0xx` access in a ring of `n`, `off` stops it (reporting retained and dropped counts), `dump <file>` writes the ring, `reset` clears it | CTRL-verb (observe) |
 | `cpu` | 65816 state: `PC=BB:AAAA A X Y SP=16bit P E HALT STP RDY KBD AKD kbd_src=` — distinguishes waiting-for-key vs halted vs executing. **`kbd_src=` names where the keyboard byte came from** (`module` = MODULE_KEYBOARD, `adb-latch` = the IIgs ADB micro's observation-free `read_key_latch()`, `none` = no keyboard, and then `KBD=?? AKD=?`). It exists because the field used to fall back to `probe_peek($C000)` when MODULE_KEYBOARD was absent — which is every IIgs — so every IIgs ack reported the floating bus as a keystroke (`KBD=EE AKD=-1`, unchanged across millions of cycles) while `read C000 1` in the same session correctly refused the same address as handler-backed. No probed byte reaches this field now | CTRL-verb (observe) |
 | `dis <addr> <n> <file> [m8\|m16] [x8\|x16]` | disassemble N instructions via the debugger `Disassembler` to `<file>`. The address takes the same `BB:AAAA` form as `load`/`read`/`poke`. **Reads are side-effect-free:** `$xxC000-$xxC0FF` is never touched **in any bank** (the old guard compared the full 24-bit address, so `dis E1C055 1 …` fell through to the CPU's read path and physically flipped `PAGE2` and `HIRES` — an observe verb actuating the machine), and everything else goes through `probe_readable`/`probe_peek` rather than `mmu->read`. A byte the MMU will not show is reported as `<unreadable>` instead of being decoded from the `$EE` placeholder into a fictional `INC $EEEE`, and the ack carries `unreadable=N`. **65816 immediate width:** `m`/`x` are seeded from the live CPU (override with the trailing tokens for code that has not run yet), `REP`/`SEP` are followed as the listing decodes them, and `XCE` resets to the conservative 8-bit reading; the first line of the output file and the ack's `mx=m8x16@start src=<cpu\|arg>` both name the assumption. Without this the listing desynchronised from the first 16-bit immediate: `A9 34 12` read as `LDA #$34` / `ORA ($8F)` while the CPU executed `LDA #$1234` | CTRL-verb (observe) |
 | `text <file>` | dump the text page to `<file>` | CTRL-verb (observe) |
@@ -527,11 +542,12 @@ protocol authority.
 | `rail read <NAME>` | the rail's state now: counters for `MEMVU_*`, per-spec hits/records for `A2GSPU_TRAP`, the liveness sample state, the warning count, the determinism pins and binary identity; `read-via-verb` when a CTRL verb owns the readback; `FAIL no-readback` when the rail speaks only at spike end | CTRL-verb (meta) |
 | `rail schema [NAME]` | bare: the rails that write NDJSON records and their tags; with a name: `tag=` and `fields=` (`?` marks optional fields) and a note. `FAIL no-records` for a rail that writes none. The same table is the `record_schemas` section of `manifest <file>`, so a consumer validates against the binary, not the C++ | CTRL-verb (meta) |
 | `valtrap set <hex>[:w]` / `clear` / `status` | LIVE value-provenance trap (A2GSPU_VALTRAP) | CTRL-verb (break) |
-| `itrace from <pc>` / `now` / `n` / `clear` | LIVE per-instruction trace | CTRL-verb (trace) |
-| `tbtrace on\|off\|bank` | LIVE toolbox/GSOS dispatch trace | CTRL-verb (trace) |
+| `itrace [status]` / `from <pc>` / `now` / `n <count>` / `clear` \| `off` | LIVE per-instruction trace: arm at a 24-bit PC or immediately, cap the count, clear | CTRL-verb (trace) |
+| `tbtrace [status]` / `on` / `off` / `bank <hex>` | LIVE toolbox/GS-OS dispatch trace, optionally scoped to one bank | CTRL-verb (trace) |
 | `callstream on <file>` / `off` / `status` | LIVE NDJSON toolbox/GSOS call stream | CTRL-verb (trace) |
 | `key` | inject key + wait for consume receipt | CTRL-verb (manipulate) |
 | `protocol` | CTRL v2 framing, ownership and `json <command>` reply wrapper | CTRL-verb (meta) |
+| `json <command>` | run any CTRL command and wrap its reply as an `a2ctrl-reply-v2` JSON envelope (`ok`, `command`, `text`), for a consumer that must not scrape human-oriented text | CTRL-verb (meta) |
 | `systems [file]` | platform/configuration/ROM/slot-device inventory | CTRL-verb (meta) |
 | `limitations [file]` | known unsupported or partial fidelity surfaces | CTRL-verb (meta) |
 | `shr-golden <file> [bless]` | live IIgs SHR-window golden without relaunch | CTRL-verb (calibrate) |
@@ -626,13 +642,66 @@ Every change is proven to leave the **normal windowed emulator** unchanged: laun
 `GSSquared -p 5 -d s7d1=<image>` with **no** `A2GSPU_*` env set — identical interactive
 behavior. Instrumentation OFF-by-default is a gate, not a preference.
 
+## Worked examples
+
+**Who wrote address X, who first made value V.** `WATCH` keys on the destination address,
+`VALTRAP` on the value. When a bad value reaches memory through an intermediary (a ROM
+routine stores a pointer the OS computed with a lost base), a `WATCH` on the landing site
+names only the copier; `VALTRAP` on the value names the code that first materialised it.
+`bus_write` is byte-granular, so `VALTRAP` reassembles consecutive ascending-address
+little-endian byte writes before matching: a multi-byte pointer store fires once, at the top
+byte, with that instruction's PC.
+
+```sh
+# who writes into the SCM notify-queue region:
+A2GSPU_WATCH="E1:19A0-1FFF" A2GSPU_WATCH_MAX=0 GSSquared -p 5 -d s7d1=boot.po -n
+# who first materialises the 24-bit pointer $E06014:
+A2GSPU_VALTRAP="E06014" GSSquared -p 5 -d s7d1=boot.po -n
+```
+
+**A frozen clock.** `A2GSPU_FAKETIME=<unix-epoch-seconds>` seeds the RTC's accumulator to that
+instant and bypasses `localtime`/timezone entirely (freezing `time()` alone is not enough —
+`tm_gmtoff`/`_timezone` still vary by host). The guest reads it through the ordinary
+`$C033`/`$C034` path, exactly as it would read a real clock stopped at that instant:
+`A2GSPU_FAKETIME=1000000000` makes the seconds registers read `0xB7C07A80` on every run.
+
+## For developers: the observer read
+
+An observe rail reads guest memory through `a2obs_peek(mmu, addr)` (`src/a2gspu_observe.hpp`),
+never through `mmu->read`. On a IIgs that is `MMU_IIgs::probe_peek`, which resolves banks
+`$00/$01` through the same aux and language-card mapping the CPU uses, answers `$C100-$CFFF`
+from the Mega II page table and `$E0/$E1` from the Mega II image, and returns a placeholder only
+for the `$C0xx` soft switches — `probe_readable` says so, and a rail prints `unreadable` rather
+than the placeholder. On the II family it is the MMU's read outside `$Cxxx` (where it has no
+side effect, and where the base `read_raw` probe would not resolve the language card) and the
+probe inside it. The CPU's path is not side-effect-free: it throws soft switches, selects slot
+`$C800` ROM, and on a IIgs sets the cycle type of what it reads. `tools/a2rail/unarmedhash.ps1`
+is the gate: observation rails armed must reproduce the unarmed hash and cycle count.
+
+## Output lines consumers parse
+
+These strings are an interface. Harnesses outside this repository match them, so a change to
+any of them is a contract change: say so in the commit, and update the consumer.
+
+| Line | Shape consumers rely on |
+|------|-------------------------|
+| `A2GSPU PINS:` | `seed= faketime= ramdisk= bram= platform= frames= rom=<size>/<fnv> build= exe=` |
+| `GSDIAG:` | `status= rc= gate= gsos_err=$ brk= scb= hash= warnings= cycles=` (+ liveness fields when armed) |
+| `SPIKE E1:` | `SHR-window $2000-$9FFF nonzero=N/32768 distinct=N hash=<fnv>` |
+| `IIGS ASSERT:` summary | `N checks -> ALL PASS` / `N checks -> FAILED`; `(K unparseable)` appears only when K > 0 |
+| `IIGS TOOLBOX: ret` | `ret <name> ($<call>) carry=<0\|1> err=$<code>` (the count of `carry=1` is the success signal `GSDIAG status=OK` is not) |
+| `DHGR GOLDEN:` | `MATCH` / `DIFF` / `blessed` with the profile |
+| CTRL `run` ack | prefix `status=OK ran=N cycles=N (in-command) PC $bb:aaaa->$bb:aaaa` (a suffix may follow) |
+| CTRL `assert` literals | a `peek:` comparand needs an explicit base (`$22`, `0x22`, `0d34`); a bare hex-shaped literal is refused |
+| `tools/a2rail/artifacts.py` | `read_cov(path)` is imported by harnesses; its return shape is an API |
+| `corpus/` | the file names in `corpus/README.md` are what consumer harnesses open |
+
 ## Related docs
-- [`HeadlessDiagnostics.md`](HeadlessDiagnostics.md) — the spike harness, WATCH/VALTRAP,
-  FAKETIME, ASSERT/GOLDEN, `GSDIAG:` taxonomy, `MMU::probe_peek` for developers.
-- [`CLOSED_LOOP_INTEGRATION.md`](CLOSED_LOOP_INTEGRATION.md) — why this fork exists, the
-  `GssquaredDriver` architecture, upstream-sync discipline, the proven launch recipe.
-- [`../A2GSPU_INSTRUMENTATION.md`](../A2GSPU_INSTRUMENTATION.md) — original inventory; its
-  "Gaps" table is **superseded** by this catalog (see its appended note).
+- [`CLOSED_LOOP_INTEGRATION.md`](CLOSED_LOOP_INTEGRATION.md) — the mission, the operating modes,
+  the launch recipe, upstream-sync discipline.
+- [`A2GSPU_TRAP.md`](A2GSPU_TRAP.md) — traps from configuration.
+- [`INSTRUMENTATION_SHAPE.md`](INSTRUMENTATION_SHAPE.md) — the mechanisms (M1–M12) and their status.
+- [`UPSTREAM_SYNC.md`](UPSTREAM_SYNC.md) — what has been ported from upstream, and what is owed.
 
 > Note on the `A2GSPU_CMD_*` / `A2GSPU_REG_*` / `A2GSPU_STATUS_*` / `A2GSPU_MODE_*` /
 > `A2GSPU_SHR_*` / `A2GSPU_UHR_*` / `A2GSPU_PAL_OFFSET` / `A2GSPU_SCB_OFFSET` /

@@ -24,19 +24,21 @@ unless the code is sealed behind an explicit IIe-only or IIgs-only branch.
 
 ## What to run
 
-**From this fork** (portable DualSmoke — FOUNDATION_MILESTONES M9):
+**From this fork** — the gate stack lives here (`tools/a2rail/`):
 
 ```powershell
-.\tools\a2rail\dualsmoke.ps1
-.\tools\a2rail\personalitycheck.ps1
+.\tools\a2rail\dualsmoke.ps1     # the short bar after a shared rail/MMU change
+.\tools\a2rail\gates.ps1         # everything: dualsmoke plus personality, protocol,
+                                  # co-pilot, assert parity and the unarmed-hash gate
 ```
 
-That runs offline ctest plus railcheck / execcheck / altzpcheck on **both**
-platforms. See `tools/a2rail/README.md` and `tools/a2rail/SUITES.md`.
-The personality gate is the broader cold-start/configuration bar: it exercises
-every built-in system configuration across all six implemented platform IDs.
+`dualsmoke.ps1` runs offline ctest and railparity, then railcheck / execcheck /
+altzpcheck on **both** platforms. `gates.ps1` adds the cold start of every built-in
+configuration across all six platform IDs (`personalitycheck.ps1`) and
+`unarmedhash.ps1`, which pins a IIe boot and two IIgs boots and proves armed observers change
+neither. See `tools/a2rail/README.md` and `tools/a2rail/SUITES.md`.
 
-**From a2engine** (same DualSmoke + full device net):
+**From a2engine** (a pulled copy of DualSmoke, plus its full device net):
 
 ```powershell
 .\tools\dualsmoke.ps1

@@ -300,11 +300,12 @@ inline bool a2gspu_bank0_rom_mapped(uint32_t lo) {
 
 // ---- RAM-resident tool sets, from the LIVE tool pointer table ---------------
 // The ROM table above names ROM entry points. Under GS/OS that is the minority:
-// System 6 on ROM 01 moves the system TPT into RAM ($7E/F599 on the measured
-// desktop), patches most ROM tool sets (their FPTs are in RAM, entries pointing
-// into RAM for the patched functions and back into ROM for the rest), and
-// loads the RAM-only sets (Window, Menu, Control, Dialog, ... 26 of 35 sets
-// on that desktop) wherever the Memory Manager puts them on this boot. No file
+// System 6 on ROM 01 moves the system TPT into RAM ($7E/F5ED on a pinned
+// GS/OS 6.0.1 desktop; the address depends on the boot), patches most ROM tool
+// sets (their FPTs are in RAM, entries pointing into RAM for the patched
+// functions and back into ROM for the rest), and loads the RAM-only sets
+// (Window, Menu, Control, Dialog, ...) wherever the Memory Manager puts them on
+// this boot: 24 of 35 sets have RAM function tables on that desktop. No file
 // can hold those addresses; the machine has to be asked. So the namer walks the
 // live TPT -- pointer at $E1/03C0, a count, one long per set to its FPT, a
 // count, one long per function, each the function's address minus one for

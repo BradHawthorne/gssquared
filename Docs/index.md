@@ -34,7 +34,6 @@ never silently happens again.
 
 * [PC Traps](A2GSPU_TRAP.md)
 
-* [Headless Diagnostics](HeadlessDiagnostics.md)
 
 * [Closed-Loop Integration](CLOSED_LOOP_INTEGRATION.md) — gssquared as Rosetta's oracle
 
@@ -44,4 +43,6 @@ never silently happens again.
 
 * [Instrumentation Audit](INSTRUMENTATION_AUDIT.md)
 
-* [Instrumentation Shape](INSTRUMENTATION_SHAPE.md)
+* [Instrumentation Shape](INSTRUMENTATION_SHAPE.md) — the mechanisms and their status
+
+* [Upstream Sync Ledger](UPSTREAM_SYNC.md) — what has been ported from upstream, and what is owed

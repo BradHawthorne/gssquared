@@ -31,8 +31,10 @@ emulator becomes a deterministic pass/fail oracle a build system drives unattend
 boot/render drift, plus a differential model that validates toolchain-produced binaries against real
 GS/OS behavior on the actual ROM.
 
-**Warm-boot snapshot.** Save/restore the post-boot machine state for a fast edit→run loop that skips
-the cold boot.
+**Snapshots.** Save/restore the machine — CPU, MMU, RAM and the device blocks it has (on a IIgs the
+ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device) — for a
+fast edit→run loop that skips the cold boot. Every file carries a manifest of what it holds; a restore
+that does not fit is rolled back, never half-applied.
 
 **Expanded ROM personalities.** Size-agnostic Apple IIgs ROM 01 / 03 / 04.
 
@@ -60,20 +62,28 @@ Rosetta closed-loop work, and interactive use all share the same rail and device
 sessions often drive fixes here; behaviour must stay general. See
 [`Docs/SHARED_FOUNDATION.md`](Docs/SHARED_FOUNDATION.md) (and [`AGENTS.md`](AGENTS.md) for agents).
 
-> Automation is **headless-only**: the `apps/` CPU/MMU test programs pop a GUI dialog when their
-> external test ROMs are absent, so they are never used in automation — the loop drives the main
-> emulator headless (`-n`), and CPU/MMU behavior is checked with small headless micro-tests instead.
+> Automation never opens a window that can take focus or a modal dialog. The emulator runs headless
+> (`-n`), or with `A2GSPU_BACKGROUND_WINDOW` for the one gate that needs a window. Of the `apps/`
+> programs, the ctest set (`conformtest`, `coveragetest`, `cycletest`, `cycletest816`, `w6522`) is
+> headless; `cputest` and `cpu816test` exit 77 with instructions when their third-party fixture is
+> absent instead of raising a dialog.
 
 ---
 
 ## Developed with Claude Code
 
-The loop is built to be driven by **[Claude Code](https://claude.com/claude-code)** (Anthropic's
-agentic CLI) and its **hooks**. Every change runs edit → `cmake --build` → headless boot → read the
-`A2GSPU_ASSERT` / golden verdict, fully unattended, and is gated on the SHR / boot golden so the oracle
-the rest of the work relies on can't silently drift. That is why the diagnostics are stdout-only and
-validation collapses to a single exit code — and why hooks enforce the headless-only and golden-gate
-rules, so an automated run can't wedge on a GUI prompt or land a baseline-moving change unnoticed.
+The loop is built to be driven by an agent — **[Claude Code](https://claude.com/claude-code)**
+(Anthropic's agentic CLI) in practice, though the contract is vendor-neutral files, text and exit
+codes. A change runs edit → build → headless boot → read the `A2GSPU_ASSERT` / golden verdict,
+unattended, which is why diagnostics are machine-readable lines and validation collapses to an exit
+code.
+
+What keeps it honest is the gate set, not the agent: `tools/a2rail/gates.ps1` runs every fork-local
+gate — the registry/catalogue/dispatcher parity check, the dual-platform CTRL suites, every built-in
+machine configuration, the assert-surface parity check, and `unarmedhash.ps1`, which pins stock IIe
+and IIgs boots against a recorded baseline and proves that armed observation rails change neither.
+Nothing enforces running it automatically; the windowed, no-instrumentation check is still done by
+hand.
 
 ---
 
@@ -81,8 +91,12 @@ rules, so an automated run can't wedge on a GUI prompt or land a baseline-moving
 
 Base build, prerequisites, and packaged binaries: see
 **[upstream's README](https://github.com/jawaidbazyar2/gssquared)** and the
-[User Documentation](Docs/index.md). Our additions are header-mostly and env-gated — `cmake --build build`
-produces the emulator, unchanged for ordinary interactive use.
+[User Documentation](Docs/index.md). The fork's additions are env-gated and live mostly in their own
+files (`src/a2gspu_*`, `src/iigs_*`, `src/memvu_*`) — `cmake --build build` produces the emulator,
+unchanged for ordinary interactive use. On Windows the MSYS2 UCRT64 toolchain's `bin` directory must be
+on `PATH` to run the emulator (ctest carries it itself). Test inputs — disk images and snapshots, which
+are not redistributed — go in `corpus/`; see `corpus/README.md`. What has been ported from upstream, and
+what is owed, is `Docs/UPSTREAM_SYNC.md`.
 
 The emulator core, models, and UI are **Jawaid Bazyar's** work. This fork inherits upstream's license;
 our additions are offered under the same terms. Thanks to the upstream project for a clean, hackable

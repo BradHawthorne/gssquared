@@ -31,9 +31,9 @@ touched.
 | P1.5 CTRL `watch` | **done** | `watch add\|list\|sample\|clear` and live `watch bus` |
 | P1.6 `run-bin` / IIe load recipes | **partial** | `load`/`poke`/`setreg` are live verbs; there is no `run-bin` verb — the SPIKE `A2GSPU_RUN_BIN` rail is still the only form |
 | P1.7 DHGR golden rail | **done** | `dhgr-golden` verb + `A2GSPU_DHGR_GOLDEN` SPIKE gate with a named profile |
-| P2.8 split the CTRL dispatcher out of `gs2.cpp` | **partial** | most verbs moved to `src/a2gspu_ctrl_cmds.hpp`; the loop and a tail of verbs are still in `gs2.cpp` |
+| P2.8 split the CTRL dispatcher out of `gs2.cpp` | **done** | the CTRL loop and co-pilot rail are `src/a2gspu_ctrl.cpp`, the verb families `src/a2gspu_ctrl_cmds.cpp`, the spike `src/a2gspu_spike.cpp`, snapshots `src/a2gspu_snapshot.cpp`, micro-tests `src/a2gspu_selftests.cpp`; `gs2.cpp` is the application again. `railparity.ps1` finds verbs by `A2CTRL-DISPATCH` markers, not by file name |
 | P2.9 verb registry auto-listed by `help` | **done** | `verbs[]` in `a2gspu_manifest.hpp` drives `help`, `help <file>` and `manifest <file>` identically, and `railparity.ps1` now fails a verb the dispatcher answers but the table omits |
-| P2.10 platform-matrix ctest | **partial** | `dualsmoke.ps1` runs railcheck + exec + ALTZP on IIe **and** IIgs; ctest itself is CPU/VIA-level |
+| P2.10 platform-matrix ctest | **partial** | `dualsmoke.ps1` runs railcheck + exec + ALTZP on IIe **and** IIgs, and `unarmedhash.ps1` pins a IIe and two IIgs boots; ctest itself is CPU/VIA-level. `tools/a2rail/gates.ps1` runs all of them |
 | P3.11 `A2GSPU_PROFILE` preset bundles | **open** | no such rail |
 | P3.12 batch `script` verb | **open** (and arguably a non-goal — `session.ps1`'s header argues against batching the rail) | |
 | P3.13 snapshot classes documented and expanded | **partial** | every snapshot carries a manifest and the class letter is derived from the blocks written; `adb`, `ensoniq`, `vgcint`, `iwm` and `pdblock` are saved. Scanner state is still out — see `INSTRUMENTATION_SHAPE.md` M5 |
@@ -449,7 +449,8 @@ Catalog refresh is part of P0.
 **Closed.** The refresh was applied to the verbs this appendix names in *prose*
 and not to the list beside them, so `boot`, `bp`, `cov`, `hgr`, `reset` and
 `screen` — all six printed above — stayed out of the RAILS CTRL table for
-another year, along with thirteen verbs added since. All 65 now have a row, the
+six weeks, along with thirteen verbs added since. All 65 now have a row (`json`
+got its own later), the
 `run` row no longer states a reply format the binary cannot emit, and
 `railparity.ps1` fails a verb the CTRL dispatcher answers that `verbs[]` does
 not list. `help` from the running process remains the authority for the *set*;

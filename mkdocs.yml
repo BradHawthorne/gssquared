@@ -1,6 +1,7 @@
 site_name: GSSquared Documentation
-repo_url: https://github.com/jawaidbazyar2/gssquared
-repo_name: jawaidbazyar2/gssquared
+# This site documents the a2gspu fork. Upstream is https://github.com/jawaidbazyar2/gssquared.
+repo_url: https://github.com/BradHawthorne/gssquared
+repo_name: BradHawthorne/gssquared (a2gspu)
 docs_dir: Docs
 site_dir: site
 
@@ -21,12 +22,12 @@ nav:
     - Agentic Oracle Contract: AGENTIC_ORACLE.md
     - Rails (env contract): A2GSPU_RAILS.md
     - PC Traps: A2GSPU_TRAP.md
-    - Headless Diagnostics: HeadlessDiagnostics.md
     - Closed-Loop Integration: CLOSED_LOOP_INTEGRATION.md
     - Shared Foundation: SHARED_FOUNDATION.md
     - Dual-Platform Bar (IIe + IIgs): DUAL_PLATFORM.md
     - Instrumentation Audit: INSTRUMENTATION_AUDIT.md
     - Instrumentation Shape: INSTRUMENTATION_SHAPE.md
+    - Upstream Sync Ledger: UPSTREAM_SYNC.md
 
   - User Guide:
     - Getting Started: index.md

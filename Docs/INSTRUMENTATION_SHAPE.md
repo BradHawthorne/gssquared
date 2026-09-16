@@ -7,6 +7,26 @@ memory-behaviour study, and one night of using it as an archaeology tool for a
 1986 demo. Every claim below is anchored to something that went wrong, or
 nearly did, in that week.
 
+## Status at a glance
+
+The Status paragraph under each mechanism is the detail; this table is the summary, and it
+is kept to what the code does now. Items listed as open are real work, not wording.
+
+| Mechanism | State | Still open |
+|-----------|-------|------------|
+| M1 record contract | done | coverage bitmap and snapshots stay binary artifacts with manifests (by design) |
+| M2 attribution in summaries | partial | STOREVIS names its top devices and writers; LOADVIS and SEAM still report bare totals |
+| M3 unhonourable inputs are fatal | done | a few "skipped" paths remain counted warnings by choice |
+| M4 liveness | done | no instruction count or last-visible-write field in the sample |
+| M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, iwm and pdblock are saved; the scanner (Class B) and floppy media are not |
+| M6 artifact discipline | partial | coverage (both formats) and snapshots are checked; other `spike_*.bin` artifacts and `vram-raw` have no reader |
+| M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
+| M8 reachability + readback | done | launch-only rails are declared by absence from the reach table |
+| M9 determinism asserted | done, one gap | PINS, `cycles=`, `EXPECT_HASH` and the BRAM pin exist; the combined run hash was never built |
+| M10 configuration over code | partial | `store=`/`sp=` triggers exist; read triggers, live arming and `KEYSCHED` conditions do not; WIZ5 traps stand until their readers move |
+| M11 a peek that works everywhere | done | at `$E1:C100-CFFF` the probe answers with Mega II RAM, not the slot ROM the CPU would fetch |
+| M12 record schemas in the manifest | done | — |
+
 The goal, in the owner's words: *one gssquared-fork that can be used for all
 our projects, maximally instrumented, and nothing is a black box.*
 
@@ -136,9 +156,9 @@ its own falls to; with nothing set every rail prints the stdout line it
 always did, so the dual-mode hash is untouched. `rail read A2GSPU_RECORDS`
 counts records per rail; `rail schema` carries the envelope as its first
 row. The rule is in `railparity.ps1`: a JSON literal printed outside the
-writer fails the gate, with two named exemptions (the CTRL reply envelope,
-which is protocol; the WIZ5 title streams, which convert when their readers
-do). Not done: the coverage bitmap and the snapshot stay binary artifacts
+writer fails the gate, with three named exemptions (the CTRL reply envelope,
+which is protocol; the writer itself, `a2record.hpp`; the WIZ5 title streams,
+which convert when their readers do). Not done: the coverage bitmap and the snapshot stay binary artifacts
 with a manifest, which is the right shape for them.
 
 ### M2 — Attribution in every summary  (P1) — S
@@ -253,8 +273,10 @@ loaded, so a restored GS/OS sees the volume it left rather than the file on
 disk. The image stays out; a unit's block names its image and block count and
 is applied only when the same image is mounted now and only in RAM mode (the
 host file is never written from a snapshot), and anything else is a counted
-warning. Still out: the scanner (Class B — the display pipeline is in the
-owner's working tree, so it waits), and floppy media. The test the roadmap
+warning. Still out: the scanner (Class B) and floppy media. The scanner used
+to wait on display-pipeline work that sat uncommitted in the owner's working
+tree; that work was committed on 2026-09-11 (`4bcab908`), so Class B is no
+longer blocked on anything but being built. The test the roadmap
 named passes: the Dealer Demo, saved at frame 1200 and restored for 1200
 frames with STOREVIS armed, reports 3,517,548 stores, 851,529 visible,
 469,605 device, 46,494 slow-side, 335,430 shadowed; the cold-run difference
@@ -311,8 +333,11 @@ ROM 01 — which `tools/a2rail/romfpt.py` writes as
 ROMs so it loads from any working directory (the gate's sessions had run
 unnamed from theirs), and the default namer loads for the matching ROM. `$FF/46ED` is `SoundTools.FFStartSound+$2FC`, verified against a
 dispatcher trap. RAM-resident tool sets followed, and turned out to be most of them:
-under System 6 on ROM 01 the system TPT itself is in RAM (`$7E/F599` on the
-measured desktop) and 26 of 35 sets have RAM function tables — System 6
+under System 6 on ROM 01 the system TPT itself is in RAM and 24 of 35 sets
+have RAM function tables (measured 2026-09-16 at frames 1,600 and 3,000 of a
+pinned GS/OS 6.0.1 boot — seed, faketime, ramdisk and BRAM — where the table
+sat at `$7E/F5ED`; an earlier unpinned run found it at `$7E/F599`, and this
+paragraph said 26 while the commit that measured it said 24) — System 6
 patches the ROM sets and loads the rest wherever the Memory Manager puts
 them on that boot — so no file can hold their addresses. The namer now walks
 the live TPT through `probe_peek` when a RAM address misses and the table has
@@ -350,8 +375,9 @@ names; this makes it a declaration the code has to make.
 carries a reach table (rail → live verb, readback), `rail live` checks every
 row against the rail and verb tables and fails the whole ack on one stale
 entry, `rail find` reports `live=`/`read=`, and `rail read <NAME>` returns a
-rail's state now for `MEMVU_*`, `A2GSPU_TRAP`, `A2GSPU_LIVENESS`,
-`A2GSPU_STRICT` and the pins, or names the verb that reads it, or says
+rail's state now for `MEMVU_STOREVIS`, `MEMVU_LOADVIS`, `A2GSPU_TRAP`,
+`A2GSPU_LIVENESS`, `A2GSPU_RECORDS`, `A2GSPU_STRICT`, `A2GSPU_SYMBOLS` and the
+pins (seed, faketime, ramdisk, BRAM), or names the verb that reads it, or says
 `no-readback`. The hand-written "live:" sentence in the `rail` ack is gone.
 The registration half followed: a rail that can be read back registers its
 reader with itself — `a2rails::Registrar{"A2GSPU_TRAP", a2trap::format_status}`
@@ -379,7 +405,15 @@ produced it).
 frames, the ROM's size and hash, the configure-time build string (labelled)
 and the executable's own hash; `GSDIAG:` carries `cycles=`; `A2GSPU_EXPECT_HASH`
 is the inline gate. The build string still lags the tree between configures;
-the executable hash is the field to trust.
+the executable hash is the field to trust. **Not built:** the combined run hash
+over instruction count, store count and SHR hash that the mechanism above
+describes; `GSDIAG:`'s `hash=` and `cycles=` together are the witness in use.
+**Added later, because a pin was missing:** `bram=`. The stock RTC reads and
+rewrites `./gs2-bram.bin` in the working directory, so two runs with equal
+seed, faketime and ramdisk hashed differently depending on where they ran
+(`5F78F7C15131F43F` fresh, `89FCD3DA7D947DFF` beside a rewritten BRAM file) —
+which is also why an "unarmed hash" quoted in earlier commit messages was never
+reproducible. `A2GSPU_BRAM=default|<file>` pins it and PINS reports its hash.
 
 ### M10 — Configuration over code, continued  (P6) — M
 
@@ -440,16 +474,24 @@ instead of guessing from the value. That is strictly wider as well as correct:
 it catches a handler-backed page returning *any* value, not only `$EE`, which
 is what the II family needs.
 
-**Still open, and named rather than papered over:** `iigs_instr_peek()`
-(`iigs_toolbox.hpp`) routes every read outside `$C000-$CFFF` through
-`cpu->mmu->read` — the CPU's own path — so `CALLTRACE`, `CALLSTREAM` and the
-attribution `BLAME` builds on them are a standing violation of M11's remaining
-rule. Half its justification is now stale (the IIgs `-> 00/EEEE` symptom cannot
-recur); the other half is not (`probe_peek` on the II family is `read_raw`,
-which does not resolve ROM/language-card banking, and switching it there once
-produced a `CALLTRACE` that emitted nothing at all on `-p 3`). Closing it needs
-a before/after on a real IIgs calltrace with a IIe one beside it. And the
-`base_6502.cpp` `PCTRAP` site still carries the stale justification in a comment.
+**Closed: the call tracker and every other observer read.** `iigs_instr_peek()`
+routed every read outside `$C000-$CFFF` through `cpu->mmu->read`, so
+`CALLTRACE`, `CALLSTREAM` and the attribution `BLAME` builds on them were on the
+CPU's path — and so were the `A2GSPU_TAP` session dumps, the WIZ5 traps,
+`BRKMEM`, the `PCTRAP` dumps and `A2GSPU_DUMP`. They now share one read,
+`a2obs_peek` (`src/a2gspu_observe.hpp`): the probe on a IIgs, and on the II
+family the MMU read outside `$Cxxx` (where it has no side effect, and where the
+II family's `read_raw` probe would not resolve the language card — the reason
+this was left open). The before/after the paragraph that stood here asked for:
+a 300-frame IIgs boot and a 120-frame IIe boot, each run unarmed and with
+CALLTRACE, CALLSTREAM, BLAME, DUMP, BRKMEM and a TAP session armed. Before, the
+IIgs TAP-session run ended **754 cycles short** of unarmed (10,634,635 against
+10,635,389) with the same SHR hash — a real disturbance only a cycle count
+could see. After, every armed run on both platforms reproduces the unarmed hash
+and cycle count exactly, and the CALLTRACE, CALLSTREAM, DUMP and BLAME outputs
+are byte-identical to before. The TAP session's display flags now come from the
+video scanner (what `vid` reads) rather than from reading `$C01A-$C01D`. The
+stale `PCTRAP` justification is gone with the `read()` row it justified.
 
 **A third site, found by an audit and now closed: the disassembler.**
 `Disassembler::read_mem` (`debugger/disasm.cpp`) guarded `$C000-$C0FF` with a
@@ -470,8 +512,10 @@ rather than `$EE`" rule, applied where it was still being broken. One
 imperfection is named rather than hidden: at `$E1:C100-CFFF` `probe_peek`
 answers with Mega II RAM rather than the slot ROM the CPU would fetch.
 
-What remains of M11 is the rule — an observe rail reads through the probe,
-never through the CPU's read path — plus those two sites.
+What remains of M11 is the rule — an observe rail reads through `a2obs_peek`,
+never through the CPU's read path — and one named imperfection above
+(`$E1:C100-CFFF`). `tools/a2rail/unarmedhash.ps1` makes the rule a gate: armed
+observation runs must reproduce the unarmed hash and cycle count.
 
 ### M12 — The manifest carries record schemas  (P3, P7) — S
 
@@ -517,7 +561,7 @@ longer road.
 ## 5. The week, replayed
 
 With the shape in place: the missing blit binary is a fatal error at arm
-(M3); the one-disk demo reports `stalled_since=312` (M4); the `device` line
+(M3); the one-disk demo reports `screen_unchanged_since=312` (M4); the `device` line
 names `$E1:C03D` and `SoundToolSet+…` on the first run (M2, M7); the
 `LOADVIS` line is whole because nothing else is on its channel (M1); the
 coverage figure is right the first time because the reader checks the header

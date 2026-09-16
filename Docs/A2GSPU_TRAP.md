@@ -26,7 +26,7 @@ it too.
 |------|--------|
 | `A2GSPU_TRAP="<spec>[;<spec>…]"` | one or more specs, `;`-separated |
 | `A2GSPU_TRAP_FILE=<file>` | specs one per line, `#` comments; combines with the above |
-| `A2GSPU_TRAP_OUT=<file>` | default NDJSON sink for specs without `out=`; otherwise records go to stdout as `IIGS TRAP: {…}` |
+| `A2GSPU_TRAP_OUT=<file>` | default NDJSON sink for specs without `out=`; else the global record sink `A2GSPU_RECORDS`; otherwise records go to stdout as `IIGS TRAP: {…}` |
 
 ## A spec
 
@@ -92,7 +92,7 @@ block.
 One JSON object per line:
 
 ```
-{"event":"trap.entry","frame":900,"cycles":15306622,"trap":"mli","t":"e","n":12,"pc":"00:BF00","sym":"MLI","heavy":1,
+{"event":"trap.entry","frame":900,"cycles":15306622,"trap":"mli","t":"e","n":12,"pc":"00:BF00","sym":"MLI","incall":null,"heavy":1,
  "regs":{…},"f":{"cmd":200},"mem":{"at":8448,"expr":"m16(m16(s16(1)+2)+1)","d":"0b2f5344312f42494e2f4541474c45…"}}
 ```
 
@@ -100,7 +100,9 @@ One JSON object per line:
 exit that pairs with it carries the same `n`. `frame` is the headless frame
 counter and `cycles` the clock's cycle count at the trap. `sym` names the trap
 PC — an application symbol when `A2GSPU_SYMBOLS` is loaded, else a documented
-firmware entry point (`COUT`, `RDKEY`, `MLI`, `ToolDisp`…), else `null`.
+firmware entry point (`COUT`, `RDKEY`, `MLI`, `ToolDisp`…), else `null`. `incall`
+names the toolbox call in progress when the trap fired (`WindowMgr.fn15`), or
+`null` outside any call.
 
 ## Guarantees
 
