@@ -60,6 +60,7 @@
 #include "generic_tap.hpp"   // g_gtap (on/dir) + g_gtap_ext extension hook
 #include "devices/adb/keygloo.hpp"   // the IIgs key path for schedules and PRESS
 #include "iigs_diag.hpp"             // a2gspu_warn
+#include "a2gspu_trap.hpp"   // KEYSCHED WHEN: the trap condition grammar
 
 // UCSD p-code interpreter time base (NClock cycles at ~1.0205 MHz), matching
 // the schema the wiz5_clean Python analysis stack already consumes.
@@ -233,13 +234,17 @@ inline void wiz5_config_step(cpu_state *cpu, uint64_t cycles) {
 
 // ---------------------------------------------------------------------------
 // (D) WIZ5_KEYS / WIZ5_KEY_DELAY / WIZ5_KEYRAM — scheduled keyboard injection.
-// Sequential entries; each is EITHER a frame trigger ("<frame> <keys>") or a
+// Sequential entries; each is EITHER a frame trigger ("<frame> <keys>"), a
 // text condition ("WAIT <substring>" matched against the live $0400 text page,
-// polled 4x/sec). WIZ5_KEY_DELAY>0 paces one key per N frames (redraw-heavy
+// polled 4x/sec), or a machine condition ("WHEN <cond>[,<cond>]" in the
+// A2GSPU_TRAP condition grammar -- registers and memory, e.g. WHEN z8(24)==0,
+// m8(E1C000)>7f -- checked every frame, all must hold). A condition entry, like
+// WAIT, gates the entries after it. WIZ5_KEY_DELAY>0 paces one key per N frames (redraw-heavy
 // screens). WIZ5_KEYRAM dumps $0800-$BFFF at each injected keystroke.
 // Driven per-frame from run_one_frame (the single windowed+headless funnel).
 // ---------------------------------------------------------------------------
-struct Wiz5KeyEntry { int frame; std::string wait_text; std::string keys; int press_key = -1; uint8_t press_mods = 0; };
+struct Wiz5KeyEntry { int frame; std::string wait_text; std::string keys; int press_key = -1; uint8_t press_mods = 0;
+                      std::vector<a2trap::Cond> when; std::string when_src; };
 inline int g_wiz5_press_release_frame = -1;   // frame at which a PRESS entry's key/mods are released
 inline uint8_t g_wiz5_press_mods_held = 0;
 inline std::vector<Wiz5KeyEntry> g_wiz5_keys;
@@ -337,6 +342,14 @@ inline void wiz5_keys_tick(computer_t *computer, int frame) {
     }
     while (g_wiz5_keys_next < g_wiz5_keys.size()) {
         Wiz5KeyEntry &e = g_wiz5_keys[g_wiz5_keys_next];
+        if (!e.when.empty()) {
+            // M10: a wait written as a machine condition, not a text-page substring.
+            // Read through the probe like every trap condition; never disturbs.
+            for (const a2trap::Cond &c : e.when) if (!a2trap::holds(c, computer->cpu)) return;
+            printf("A2GSPU_KEYSCHED: frame %d WHEN matched '%s'\n", frame, e.when_src.c_str());
+            g_wiz5_keys_next++;
+            continue;
+        }
         if (!e.wait_text.empty()) {
             if (frame % 15 != 0) return;               // poll the page 4x/sec
             char page[24][41];
@@ -361,6 +374,24 @@ inline void wiz5_keys_tick(computer_t *computer, int frame) {
         else wiz5_inject(computer, e.keys, frame);
         g_wiz5_keys_next++;
     }
+}
+
+// A schedule that stopped short is a statement, not a silence: at exit, say how
+// many entries ran and what the first one still waiting was waiting for. A WHEN
+// or WAIT that never matched used to leave no trace at all.
+inline void wiz5_keys_close() {
+    const size_t total = g_wiz5_keys.size(), done = g_wiz5_keys_next;
+    if (done >= total) {
+        printf("A2GSPU_KEYSCHED: all %zu entries reached\n", total);
+    } else {
+        const Wiz5KeyEntry &e = g_wiz5_keys[done];
+        char what[300];
+        if (!e.when.empty())            snprintf(what, sizeof what, "WHEN '%s' never held", e.when_src.c_str());
+        else if (!e.wait_text.empty())  snprintf(what, sizeof what, "WAIT '%s' never appeared on the text page", e.wait_text.c_str());
+        else                            snprintf(what, sizeof what, "frame %d never arrived (the run ended at frame %d)", e.frame, g_wiz5_frame);
+        printf("A2GSPU_KEYSCHED: %zu of %zu entries reached; stopped at entry %zu: %s\n", done, total, done + 1, what);
+    }
+    fflush(stdout);
 }
 
 // ---- arm / close ------------------------------------------------------------
@@ -416,6 +447,23 @@ inline void wiz5_config_arm(computer_t *computer) {
             char line[512];
             while (fgets(line, sizeof(line), f)) {
                 if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+                if (!strncmp(line, "WHEN ", 5)) {
+                    std::string src;
+                    for (char *p = line + 5; *p && *p != '\n' && *p != '\r'; p++) if (*p != ' ') src += *p;
+                    Wiz5KeyEntry we{-1, "", ""};
+                    we.when_src = src;
+                    try {
+                        for (const std::string &c : a2trap::split_top(src, ','))
+                            if (!c.empty()) we.when.push_back(a2trap::parse_cond(c, src));
+                    } catch (const a2trap::SpecError &err) {
+                        fprintf(stderr, "%s: FAIL bad WHEN condition -- %s (in '%s') -- aborting (exit 2)\n",
+                                kf_label, err.why.c_str(), src.c_str());
+                        exit(2);
+                    }
+                    if (we.when.empty()) { fprintf(stderr, "%s: FAIL WHEN with no condition -- aborting (exit 2)\n", kf_label); exit(2); }
+                    g_wiz5_keys.push_back(we);
+                    continue;
+                }
                 if (!strncmp(line, "WAIT ", 5)) {
                     std::string cond;
                     for (char *p = line + 5; *p && *p != '\n' && *p != '\r'; p++) cond += *p;
@@ -446,6 +494,7 @@ inline void wiz5_config_arm(computer_t *computer) {
             fclose(f);
             printf("%s: %d scheduled entries from %s\n",
                    kf_label, (int)g_wiz5_keys.size(), kf);
+            if (!g_wiz5_keys.empty()) atexit(wiz5_keys_close);
         }
     }
     const char *kd_env = getenv("A2GSPU_KEYSCHED_DELAY");

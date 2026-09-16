@@ -23,7 +23,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table |
 | M9 determinism asserted | done | — |
-| M10 configuration over code | partial | `store=`/`read=`/`sp=` triggers and live arming (`trap` verb) exist; `KEYSCHED` conditions do not; WIZ5 traps stand until their readers move |
+| M10 configuration over code | done, one standing exception | the WIZ5 title traps stand until their readers move (AGENTS.md rule 2) |
 | M11 a peek that works everywhere | done | — |
 | M12 record schemas in the manifest | done | — |
 
@@ -445,8 +445,10 @@ edge-triggered). Both share the condition, policy and payload machinery, so
 was three rails. **Added 2026-09-16:** `read=ADDR[-ADDR]` (a byte read as
 operand data, from the CPU's data-read funnel) and live arming — `trap add
 <spec>` / `list` / `clear` on the CTRL rail, where a malformed spec fails the
-ack instead of ending the session. `KEYSCHED` conditions are not done; the WIZ5
-traps still stand until their consumers move.
+ack instead of ending the session. `KEYSCHED` waits can be `WHEN <cond>` in the
+same condition grammar instead of a text-page substring, and a schedule that
+stops short says where and why at exit. The WIZ5 traps still stand until their
+consumers move.
 
 ### M11 — A peek that works everywhere  (P5) — M
 
