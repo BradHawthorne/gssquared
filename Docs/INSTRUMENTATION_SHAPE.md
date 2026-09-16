@@ -581,7 +581,11 @@ pointer (ROM), which `write_raw` would have done.
 
 What remains of M11 is the rule — an observe rail reads through `a2obs_peek`,
 never through the CPU's read path. `tools/a2rail/unarmedhash.ps1` makes the rule
-a gate: armed observation runs must reproduce the unarmed hash and cycle count.
+a gate: armed observation runs must reproduce the unarmed hash and cycle count,
+and every armed rail's sink must hold records, so a rail that silently failed to
+arm cannot make the comparison vacuous. The instruction trace, the region logger,
+the call tracker's stack reads and the `SysFail` decoder read through
+`a2obs_peek` too, and the gate arms the first two.
 
 ### M12 — The manifest carries record schemas  (P3, P7) — S
 

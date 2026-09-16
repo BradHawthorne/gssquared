@@ -19,10 +19,12 @@
        moves one of these numbers, and the gate says which.
 
     2. ARMED. The same boots with observation rails armed (call trace and stream, MEMVU
-       accounting and blame, coverage, liveness, a trap, a watch, a tap session, a dump) must
-       reproduce THEIR OWN unarmed hash and cycle count exactly. An observer that changes the
-       machine it watches fails here. Before a2gspu_observe.hpp, a TAP session did: 754 cycles
-       short on a 300-frame IIgs boot, with the SHR hash unchanged.
+       accounting and blame, coverage, liveness, a trap, a watch, a tap session, a dump, an
+       instruction trace, a region logger) must reproduce THEIR OWN unarmed hash, cycle count
+       and run witness exactly. An observer that changes the machine it watches fails here.
+       Before a2gspu_observe.hpp, a TAP session did: 754 cycles short on a 300-frame IIgs
+       boot, with the SHR hash unchanged. And every armed rail's sink must hold records: an
+       armed run that matched only because a rail never armed would otherwise pass.
 
     What it does NOT check: the windowed, no-environment emulator. Every run here is a spike,
     and a spike is itself an environment variable. The interactive dual-mode check is still
@@ -92,10 +94,27 @@ function Get-ArmedEnv([string]$runDir, [int]$platform) {
         A2GSPU_TAP_DUMP_EVERY = '1'
         A2GSPU_TAP_ZP_EVERY  = '1'
         A2GSPU_DUMP          = '00/0000-00FF,00/C000-C0FF,00/C600-C6FF'
+        # the per-instruction trace and the region logger read guest memory on
+        # every hit; both must be observers, not bus traffic
+        A2GSPU_ITRACE_FRAME  = '10'
+        A2GSPU_ITRACE_N      = '20000'
+        A2GSPU_ITRACE_OUT    = (Join-Path $runDir 'itrace.txt')
+        A2GSPU_SNAP_LO       = '000000'
+        A2GSPU_SNAP_HI       = '0000FF'
+        A2GSPU_SNAP_PCS      = 'FA62,FB2F,FDED,C300'
+        A2GSPU_SNAP_OUT      = (Join-Path $runDir 'snap.ndjson')
     }
     if ($platform -eq 5) { $e.A2GSPU_TBTRACE = '1'; $e.A2GSPU_DUMP += ',E1/0000-003F,FF/4100-41FF' }
     New-Item -ItemType Directory -Force -Path (Join-Path $runDir 'sess') | Out-Null
     return $e
+}
+
+# The files the armed rails write; each must be non-empty after an armed run.
+# The call stream records toolbox and GS/OS calls, which only a IIgs makes.
+function Get-ArmedSinks([int]$platform) {
+    $s = @('cov.bin', 'liveness.ndjson', 'trap.ndjson', 'watch.ndjson', 'tap.ndjson', 'itrace.txt', 'snap.ndjson')
+    if ($platform -eq 5) { $s += 'callstream.ndjson' }
+    return $s
 }
 
 function Invoke-Spike([string]$name, [int]$platform, [int]$frames, [string]$disk, [hashtable]$extra) {
@@ -171,6 +190,14 @@ foreach ($r in $rows) {
     Check ("{0}: armed == unarmed (hash)" -f $r.name) ($u.hash -and $a.hash -eq $u.hash) ("unarmed={0} armed={1}" -f $u.hash, $a.hash)
     Check ("{0}: armed == unarmed (cycles)" -f $r.name) ($u.cycles -ge 0 -and $a.cycles -eq $u.cycles) ("unarmed={0} armed={1}" -f $u.cycles, $a.cycles)
     Check ("{0}: armed == unarmed (run)" -f $r.name) ($u.run -and $a.run -eq $u.run) ("unarmed={0} armed={1}" -f $u.run, $a.run)
+    # An armed run that equals the unarmed one proves nothing if a rail never
+    # armed. Every sink must have written something.
+    $sinks = Get-ArmedSinks $r.platform
+    $quiet = @($sinks | Where-Object {
+        $f = Join-Path $a.dir $_
+        -not (Test-Path $f) -or (Get-Item $f).Length -eq 0
+    })
+    Check ("{0}: armed rails all recorded" -f $r.name) ($quiet.Count -eq 0) $(if ($quiet.Count) { "empty or missing: " + ($quiet -join ', ') } else { "$($sinks.Count) sinks" })
     if (-not $Bless) {
         $b = $baseline[$r.name]
         if (-not $b) {

@@ -849,11 +849,12 @@ inline void iigs_itrace_step(cpu_state *cpu) {
     if (!g_iigs_itrace_armed) return;
     if (g_iigs_itrace_logged >= g_iigs_itrace_n) return;
 
+    // Observer reads (rule 8): the trace must not be a bus access the machine sees.
     uint32_t pc = cpu->full_pc;
-    uint8_t  op = cpu->mmu->read(pc);
-    uint8_t  b1 = cpu->mmu->read((pc & 0xFF0000) | ((pc + 1) & 0xFFFF));
-    uint8_t  b2 = cpu->mmu->read((pc & 0xFF0000) | ((pc + 2) & 0xFFFF));
-    uint8_t  b3 = cpu->mmu->read((pc & 0xFF0000) | ((pc + 3) & 0xFFFF));
+    uint8_t  op = a2obs_peek(cpu->mmu, pc);
+    uint8_t  b1 = a2obs_peek(cpu->mmu, (pc & 0xFF0000) | ((pc + 1) & 0xFFFF));
+    uint8_t  b2 = a2obs_peek(cpu->mmu, (pc & 0xFF0000) | ((pc + 2) & 0xFFFF));
+    uint8_t  b3 = a2obs_peek(cpu->mmu, (pc & 0xFF0000) | ((pc + 3) & 0xFFFF));
 
     const disasm_entry       *de = &disasm_table[op];
     const address_mode_entry *am = &address_mode_formats[de->mode];
@@ -905,7 +906,7 @@ inline void iigs_itrace_step(cpu_state *cpu) {
     uint32_t ea = 0xFFFFFFFF; int mval = -1;
     {
         uint16_t dp = cpu->d; uint32_t dbr = (uint32_t)cpu->db << 16;
-        auto rd = [&](uint32_t a){ return cpu->mmu->read(a & 0xFFFFFF); };
+        auto rd = [&](uint32_t a){ return a2obs_peek(cpu->mmu, a & 0xFFFFFF); };
         switch (de->mode) {
             case ZP:    ea = (uint16_t)(dp + b1); break;
             case ZP_X:  ea = (uint16_t)(dp + b1 + cpu->x); break;
@@ -958,8 +959,8 @@ inline void iigs_itrace_step(cpu_state *cpu) {
 //   A2GSPU_SNAP_LO/HI=<hex24>   the window to dump (inclusive)
 //   A2GSPU_SNAP_PCS="p1,p2,..." up to 8 trigger PCs (16-bit, hex)
 //   A2GSPU_SNAP_OUT=<file>      NDJSON sink (its presence also arms the logger)
-// Off by default (g_snap_out null => one untaken branch). Reads via mmu->read(),
-// skipping the $C000-$C0FF soft-switch page (sensor-safe).
+// Off by default (g_snap_out null => one untaken branch). Reads through a2obs_peek
+// (never the CPU's path), skipping the $C000-$C0FF soft-switch page.
 // ============================================================================
 inline FILE    *g_snap_out    = nullptr;
 inline uint32_t g_snap_pcs[8] = {0};
@@ -973,7 +974,7 @@ inline void iigs_snap_step(cpu_state *cpu) {
     bool hit = false;
     for (int i = 0; i < g_snap_npc; i++) if (g_snap_pcs[i] == pc) { hit = true; break; }
     if (!hit) return;
-    auto rd = [&](uint32_t a){ return cpu->mmu->read(a & 0xFFFFFF); };
+    auto rd = [&](uint32_t a){ return a2obs_peek(cpu->mmu, a & 0xFFFFFF); };
     a2record::Record rec("snap", "hit", g_iigs_cur_frame, a2record::cycles_now());
     rec.i("seq", g_snap_count).u("pc", pc).u("a", cpu->a).u("x", cpu->x).u("y", cpu->y)
        .u("s", cpu->sp).u("d", cpu->d).u("dbr", cpu->db).u("lo", g_snap_lo);
@@ -1239,9 +1240,10 @@ inline bool iigs_tb_on_landing(cpu_state *cpu) {
     if (kind == 0xFF) return false;
 
     uint16_t sp = cpu->sp;
-    uint32_t pcl = cpu->mmu->read((sp + 1) & 0xFFFF);
-    uint32_t pch = cpu->mmu->read((sp + 2) & 0xFFFF);
-    uint32_t pbr = cpu->mmu->read((sp + 3) & 0xFFFF);
+    // The call tracker observes the stack; it never reads it through the CPU (rule 8).
+    uint32_t pcl = a2obs_peek(cpu->mmu, (sp + 1) & 0xFFFF);
+    uint32_t pch = a2obs_peek(cpu->mmu, (sp + 2) & 0xFFFF);
+    uint32_t pbr = a2obs_peek(cpu->mmu, (sp + 3) & 0xFFFF);
     uint32_t ret = (pbr << 16) | ((((pch << 8) | pcl) + 1) & 0xFFFF);
     uint8_t caller_bank = (uint8_t)pbr;
     bool bank_ok = (g_iigs_tbtrace_bank < 0) || (caller_bank == g_iigs_tbtrace_bank);
@@ -1271,7 +1273,7 @@ inline bool iigs_tb_on_landing(cpu_state *cpu) {
             // the pushed params (error code + message ptr) so a boot that dies here
             // reveals WHICH fatal condition fired (the stack words above the JSL RTA).
             if (callword == 0x1503) {
-                auto rd16 = [&](uint16_t a){ return (uint16_t)(cpu->mmu->read(a) | (cpu->mmu->read((a+1)&0xFFFF)<<8)); };
+                auto rd16 = [&](uint16_t a){ return (uint16_t)(a2obs_peek(cpu->mmu, a) | (a2obs_peek(cpu->mmu, (a+1)&0xFFFF)<<8)); };
                 printf("IIGS SYSFAIL: caller=$%06X stack +4=$%04X +6=$%04X +8=$%04X +10=$%04X A=$%04X\n",
                        ret - 1, rd16((sp+4)&0xFFFF), rd16((sp+6)&0xFFFF), rd16((sp+8)&0xFFFF),
                        rd16((sp+10)&0xFFFF), (cpu->E || (cpu->p & 0x20)) ? (uint16_t)(cpu->a & 0xFF) : cpu->a);
