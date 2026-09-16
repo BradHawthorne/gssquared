@@ -1,0 +1,34 @@
+{
+  "schema": "a2rail-unarmed-baseline-v1",
+  "pins": "A2GSPU_SEED=1 A2GSPU_FAKETIME=1780000000 A2GSPU_RAMDISK=1 A2GSPU_BRAM=default",
+  "blessed": "2026-09-16",
+  "rows": [
+    {
+      "name": "iie-rom",
+      "platform": 3,
+      "frames": 120,
+      "disk": "",
+      "rom": "553724E147B80137",
+      "hash": "92F1E19D6FE2A383",
+      "cycles": 2043602
+    },
+    {
+      "name": "iigs-gsos601",
+      "platform": 5,
+      "frames": 300,
+      "disk": "gsos601.po",
+      "rom": "4E6B6EE5B32F63CF",
+      "hash": "5F78F7C15131F43F",
+      "cycles": 10635389
+    },
+    {
+      "name": "iigs-rom",
+      "platform": 5,
+      "frames": 300,
+      "disk": "",
+      "rom": "4E6B6EE5B32F63CF",
+      "hash": "6D9886E3B3EE0383",
+      "cycles": 7892937
+    }
+  ]
+}
