@@ -165,7 +165,20 @@ class MMU {
         // dynamic_cast<MMU_II*> that a IIgs MMU cannot satisfy, so `load` acked
         // success, `read` acked the right bytes back, and the CPU executed
         // zeros. MMU_IIgs overrides this to resolve the way the handlers do.
-        virtual void probe_poke(uint32_t address, uint8_t value) { write_raw(address, value); }
+        //
+        // RETURNS WHETHER THE BYTE LANDED. A refusal (soft switches, ROM, a
+        // write-inhibited page) used to be a silent return, and the `poke` verb
+        // acked "poked N byte(s)" over it: the refusal was right and the ack was
+        // the lie. A page with no write pointer is a refusal here too -- write_raw
+        // tests only the read pointer and would store through a null one.
+        virtual bool probe_poke(uint32_t address, uint8_t value) {
+            uint16_t page = address >> page_size_bits;
+            if (page > num_pages) return false;
+            page_table_entry_t *pte = &page_table[page];
+            if (pte->read_p == nullptr || pte->write_p == nullptr) return false;
+            write_raw(address, value);
+            return true;
+        }
 
         // A2GSPU diagnostic: dump the IIgs main/aux soft-switch state + the resolved
         // read/write physical mapping of bank-$00/$01 $A600 (handler pages that

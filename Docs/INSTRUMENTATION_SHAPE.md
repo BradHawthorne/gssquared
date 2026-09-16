@@ -24,7 +24,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table |
 | M9 determinism asserted | done, one gap | PINS, `cycles=`, `EXPECT_HASH` and the BRAM pin exist; the combined run hash was never built |
 | M10 configuration over code | partial | `store=`/`sp=` triggers exist; read triggers, live arming and `KEYSCHED` conditions do not; WIZ5 traps stand until their readers move |
-| M11 a peek that works everywhere | done | at `$E1:C100-CFFF` the probe answers with Mega II RAM, not the slot ROM the CPU would fetch |
+| M11 a peek that works everywhere | done | — |
 | M12 record schemas in the manifest | done | — |
 
 The goal, in the owner's words: *one gssquared-fork that can be used for all
@@ -509,13 +509,23 @@ cannot disturb a 6522 anyway. An unreadable byte prints as `<unreadable>`
 instead of being decoded from the `$EE` placeholder into a fictional
 `INC $EEEE`, and the ack carries `unreadable=N`: M11's "print `unreadable`
 rather than `$EE`" rule, applied where it was still being broken. One
-imperfection is named rather than hidden: at `$E1:C100-CFFF` `probe_peek`
-answers with Mega II RAM rather than the slot ROM the CPU would fetch.
+imperfection was named rather than hidden: at `$E1:C100-CFFF` `probe_peek`
+answered with Mega II RAM rather than the slot ROM the CPU would fetch.
+
+**Closed 2026-09-16.** The CPU reads `$E0/$E1:C000-CFFF` through the Mega II's
+page table (`bank_e0_read`, `bank_e1_read`), and the probe now does the same:
+`read E1:C600` returns the slot firmware `read 00:C600` does, and `$E0/$E1:C0xx`
+is `unreadable`, as `$00:C0xx` always was. The write side had the matching lie
+one level up: `probe_poke` refused switches, ROM and write-inhibited memory by
+returning silently, and the `poke` verb acked `poked N byte(s)` over the refusal.
+`probe_poke` now says whether the byte landed, and a refused splice fails the ack
+(`status=FAIL poke-refused refused=N landed=M first=$BB:AAAA`). The base MMU's
+version also stopped storing through a page with a read pointer and no write
+pointer (ROM), which `write_raw` would have done.
 
 What remains of M11 is the rule — an observe rail reads through `a2obs_peek`,
-never through the CPU's read path — and one named imperfection above
-(`$E1:C100-CFFF`). `tools/a2rail/unarmedhash.ps1` makes the rule a gate: armed
-observation runs must reproduce the unarmed hash and cycle count.
+never through the CPU's read path. `tools/a2rail/unarmedhash.ps1` makes the rule
+a gate: armed observation runs must reproduce the unarmed hash and cycle count.
 
 ### M12 — The manifest carries record schemas  (P3, P7) — S
 

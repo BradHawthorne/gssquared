@@ -270,6 +270,18 @@ class MMU_IIgs : public MMU {
         uint8_t probe_peek(uint32_t addr24) override {
             uint32_t bank = (addr24 >> 16) & 0xFF;
             if ((bank | 1) == 0xE1) {
+                // $C000-$CFFF IN $E0/$E1 IS NOT RAM TO THE CPU. bank_e0_read and
+                // bank_e1_read send that range through megaii->read, i.e. the Mega
+                // II's page table: soft switches at $C0xx, and whichever of slot
+                // card and internal firmware is selected at $C100-$CFFF. The raw
+                // image below answered with the RAM underneath instead -- the same
+                // lie banks $00/$01 had, and the one imperfection M11 still named.
+                // Resolved like bank $00: ROM from the Mega II's page table, and
+                // $C0xx unreadable (probe_readable says so), never a switch read.
+                if ((addr24 & 0xF000) == 0xC000) {
+                    if ((addr24 & 0xFF00) != 0xC000 && megaii) return megaii->probe_peek(addr24 & 0xFFFF);
+                    return floating_bus_read();
+                }
                 uint8_t *mb = get_megaii_memory_base();
                 if (mb) return mb[((bank & 1) << 16) | (addr24 & 0xFFFF)];
             }
@@ -336,11 +348,15 @@ class MMU_IIgs : public MMU {
         // because a IIgs can read main and write aux for the same logical
         // address and putting bytes through the read mapping would land them
         // where the CPU will not look for them.
-        void probe_poke(uint32_t addr24, uint8_t value) override {
+        bool probe_poke(uint32_t addr24, uint8_t value) override {
             uint32_t bank = (addr24 >> 16) & 0xFF;
             if ((bank | 1) == 0xE1) {
+                // $C000-$CFFF refused for the reason probe_peek names: the CPU sees
+                // switches and firmware there, so a byte stored in the RAM beneath
+                // is a byte nothing will read.
+                if ((addr24 & 0xF000) == 0xC000) return false;
                 uint8_t *mb = get_megaii_memory_base();
-                if (mb) { mb[((bank & 1) << 16) | (addr24 & 0xFFFF)] = value; return; }
+                if (mb) { mb[((bank & 1) << 16) | (addr24 & 0xFFFF)] = value; return true; }
             }
             if (bank <= 0x01) {
                 uint32_t page = (addr24 & 0xFF00) >> 8;
@@ -349,7 +365,7 @@ class MMU_IIgs : public MMU {
                 // the RAM underneath where the CPU will never read it back. A
                 // silently-dropped write that acks success is what probe_poke
                 // was introduced to stop.
-                if (is_iolc_shadowed() && page >= 0xC0 && page <= 0xCF) return;
+                if (is_iolc_shadowed() && page >= 0xC0 && page <= 0xCF) return false;
                 uint32_t a = addr24;
                 if (is_iolc_shadowed() && page >= 0xD0) {
                     // is_lc_WRITE_enable, not read. The language card has two
@@ -357,7 +373,7 @@ class MMU_IIgs : public MMU {
                     // ROM readable while LC RAM takes writes -- reusing the read
                     // side here would silently drop every poke in that state,
                     // which is the exact failure probe_poke exists to prevent.
-                    if (!is_lc_write_enable()) return;      // writes are inhibited
+                    if (!is_lc_write_enable()) return false; // writes are inhibited
                     if (is_lc_bank1() && page <= 0xDF) a -= 0x1000;
                 }
                 a += calc_aux_write(a);
@@ -379,9 +395,9 @@ class MMU_IIgs : public MMU {
                     if (mm) mm[a & 0x1FFFF] = value;
                 }
                 uint8_t *mb = get_memory_base();
-                if (mb) { mb[a] = value; return; }
+                if (mb) { mb[a] = value; return true; }
             }
-            write_raw(addr24, value);
+            return MMU::probe_poke(addr24, value);
         }
 
         // Handler pages ARE readable now that probe_peek resolves them; saying
@@ -389,7 +405,11 @@ class MMU_IIgs : public MMU {
         // bus while returning correct data.
         bool probe_readable(uint32_t addr24) override {
             uint32_t bank = (addr24 >> 16) & 0xFF;
-            if ((bank | 1) == 0xE1) return get_megaii_memory_base() != nullptr;
+            if ((bank | 1) == 0xE1) {
+                if ((addr24 & 0xF000) == 0xC000)                    // tracks probe_peek above
+                    return (addr24 & 0xFF00) != 0xC000 && megaii != nullptr;
+                return get_megaii_memory_base() != nullptr;
+            }
             if (bank <= 0x01) {
                 // Must track probe_peek exactly. It used to claim the whole bank
                 // readable, which is how `read C7FF` came back status=OK holding

@@ -176,7 +176,7 @@ inline const Verb *verbs(int *count) {
         {"png", "observe", "png <file> [page] [scale] [auto|hgr|dhgr] — mono dots from RAM", "bits-mono"},
         {"pngc", "observe", "pngc <file> [page] [scale] [4dot|mono] — named colour PNG", "colour-4dot"},
         {"protocol", "meta", "protocol — CTRL version, framing, ownership and json-wrapper contract", "discover"},
-        {"poke", "manipulate", "poke [bank:]<addr> <hexbytes...> — write bytes (labeled splice)", "inject-ram"},
+        {"poke", "manipulate", "poke [bank:]<addr> <hexbytes...> — write bytes (labeled splice); a byte the MMU refuses (I/O, ROM, write-inhibited) fails the ack: poke-refused", "inject-ram"},
         {"shr", "observe", "shr <file> [scale] — IIgs super hi-res as PNG; 320 or 640 per-line by SCB", "shr-linear"},
         {"shr-golden", "calibrate", "shr-golden <file> [bless] — live FNV of $E1:2000-$9FFF", "shr-window"},
         {"press", "manipulate", "press <hex> [hold] [mods] — physical key edge, mods o/c/s/k = Open-Apple/Closed-Apple/shift/control (no consume proof)", "inject-key"},

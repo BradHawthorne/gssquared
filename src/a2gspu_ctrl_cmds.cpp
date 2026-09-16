@@ -519,6 +519,8 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
             }
             const char *p = line + 5 + off;
             int n = 0;
+            int refused = 0;                 // bytes probe_poke would not place
+            uint32_t first_refused = 0;
             while (*p) {
                 while (*p == ' ' || *p == ',') p++;
                 if (!*p) break;
@@ -528,8 +530,12 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
                 if (flat)
                     flat[(bank == 1 ? 0x10000u : 0u) +
                          (((addr & 0xFFFF) + n) & 0xFFFF)] = (uint8_t)(v & 0xFF);
-                else if (use_probe)
-                    rail_mmu(computer)->probe_poke(addr + n, (uint8_t)(v & 0xFF));
+                else if (use_probe) {
+                    if (!rail_mmu(computer)->probe_poke(addr + n, (uint8_t)(v & 0xFF))) {
+                        if (!refused) first_refused = addr + n;
+                        refused++;
+                    }
+                }
                 else
                     rail_mmu(computer)->write(addr + n, (uint8_t)(v & 0xFF));
                 n++;
@@ -541,7 +547,18 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
             // reason this verb reports a bank is that it once wrote one bank
             // while claiming another; naming only two of eight million is the
             // same failure with a smaller radius.
-            if (n) {
+            if (refused) {
+                // The MMU refused part of the splice: switches, ROM or
+                // write-inhibited memory, where a stored byte is one the CPU will
+                // never read. Saying OK here was the lie probe_poke exists to
+                // prevent; the bytes that did land are counted, not hidden.
+                snprintf(result, rsz,
+                         "status=FAIL poke-refused refused=%d landed=%d first=$%02X:%04X "
+                         "-- I/O, ROM or write-inhibited memory; nothing the CPU reads there changed",
+                         refused, n - refused, (unsigned)((first_refused >> 16) & 0xFF),
+                         (unsigned)(first_refused & 0xFFFF));
+            }
+            else if (n) {
                 char where[24];
                 if (!banked)              snprintf(where, sizeof where, "live-banks");
                 else if (bank == 0)       snprintf(where, sizeof where, "main");
