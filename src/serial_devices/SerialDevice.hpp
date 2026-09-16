@@ -81,18 +81,6 @@ class SerialQueue {
             }
             return false;
         }
-        // Wait up to timeout_ms for room, then send (counting a drop). For a producer
-        // with no pacing of its own: the parallel card strobes as fast as the guest
-        // loops, and a byte lost there is a character missing from the printout. The
-        // consumer drains within a few ms, so the wait is short unless it is stuck.
-        inline bool send_wait(SerialMessage msg, uint32_t timeout_ms) {
-            for (uint32_t ms = 0; ms < timeout_ms; ms++) {
-                if (try_send(msg)) return true;
-                SDL_Delay(1);
-            }
-            return send(msg);
-        }
-
         inline uint64_t get_count() const {
             return (head.load(std::memory_order_acquire) - tail.load(std::memory_order_acquire)) & queue_mask;
         }
