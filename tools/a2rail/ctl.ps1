@@ -162,6 +162,18 @@ if (Wait-Ack $ack $TimeoutMs) {
   Write-RailEvent 'ack' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); command=$Cmd; reply=$reply }
   "[$seq] $Cmd"
   "     -> " + $reply
+} elseif (-not (Test-SessionAlive)) {
+  # THE EMULATOR DIED WITH THE COMMAND PENDING. Wait-Ack gives up within ~2s when
+  # the session pid is gone, and this used to fall into the stall text below:
+  # "STALL after 180000ms. Command IS queued and will complete" -- three claims,
+  # all false, printed about a process that had crashed in the first two seconds
+  # (a heap corruption on a breakpoint hit, found exactly this way). Nothing will
+  # ever ack it; say that, and exit 2 like any other absent session.
+  Write-RailEvent 'died' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); reason='pid-gone-while-pending'; command=$Cmd }
+  "[$seq] $Cmd"
+  "     -> SESSION DIED: pid $(if($session){$session.pid}else{'?'}) exited with cmd.$seq pending; it will never ack."
+  "        See $Dir\session.log and session.err for how it ended."
+  exit 2
 } else {
   Write-RailEvent 'stalled' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); reason='ack-timeout'; command=$Cmd }
   "[$seq] $Cmd"

@@ -189,6 +189,10 @@ Say "bp off" | Out-Null
 Say "resume" | Out-Null
 
 Write-Host ""
+# End the session this suite started. Without it a standalone run left a
+# headless emulator waiting on $Dir (and holding build\GSSquared.exe open, so
+# the next link failed); dualsmoke's own cleanup had hidden it.
+if ((Get-LiveSessionPid $Dir) -ne 0) { Say "quit" | Out-Null }
 if ($fail -eq 0) { Write-Host ("ALL GREEN -- {0} exec-control checks" -f $pass) -ForegroundColor Green; exit 0 }
 Write-Host ("{0} of {1} exec-control checks FAILED" -f $fail, ($pass+$fail)) -ForegroundColor Red
 exit 1
