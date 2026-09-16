@@ -27,6 +27,18 @@ class MMU_II : public MMU {
 
         int8_t C8xx_slot;
         C8XX_handler_t C8xx_handlers[8] = {nullptr};
+        // FORK: THE $C800 FLIP-FLOP LIVES ON EACH CARD [HW Ref pp185-186]. A card with
+        // expansion ROM sets its own flip-flop on /IOSEL (a $Cn00-$CnFF access that selects
+        // it) and enables its ROM on flip-flop AND /IOSTRB; a $CFFF access clears it. Nothing
+        // on the motherboard stops two cards being set at once -- "one card active" is a
+        // firmware convention -- so a claim made while another card's flip-flop is still set
+        // is CONTENTION, counted here. The page table keeps showing the card that claimed
+        // last, as it always did, so what the CPU reads is unchanged; what is new is that
+        // the machine knows, and says, when two cards would both be driving the bus.
+        uint8_t  c8_flipflops = 0;         // bit n: slot n's flip-flop is set
+        uint64_t c8_contention = 0;        // claims made while another card's flip-flop was set
+        uint8_t  c8_contention_last = 0;   // the flip-flops at the most recent contention (with the claimer)
+        void c8_select(uint8_t slot);
         page_table_entry_t slot_rom_ptable[15]; // handle C1-CF
 
         virtual void power_on_randomize(uint8_t *ram, int ram_size);
@@ -67,6 +79,10 @@ class MMU_II : public MMU {
         virtual void set_default_C8xx_map();
         virtual void set_slot_rom(SlotType_t slot, uint8_t *rom, const char *name);
         virtual int get_C8xx_slot() { return C8xx_slot; };
+        uint8_t get_c8_flipflops() const { return c8_flipflops; }
+        uint64_t get_c8_contention() const { return c8_contention; }
+        uint8_t get_c8_contention_last() const { return c8_contention_last; }
+        void set_c8_flipflops(uint8_t v) { c8_flipflops = v; }   // snapshot restore
         virtual void reset(bool cold_start = false) override;
         virtual void dump_C0XX_handlers();
         /* Handlers for "Slot ROM" area C1 - CF */

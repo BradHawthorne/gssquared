@@ -884,7 +884,8 @@ void MMU_IIgs::debug_dump(DebugFormatter *df) {
     debug_output_page(df, 0x01);
     debug_output_page(df, 0x02);
     df->addLine("Mega II");
-    df->addLine("C8xx_slot: %d", megaii->get_C8xx_slot());
+    df->addLine("C8xx_slot: %d  flip-flops: %02X  contention: %llu (last %02X)", megaii->get_C8xx_slot(),
+                megaii->get_c8_flipflops(), (unsigned long long)megaii->get_c8_contention(), megaii->get_c8_contention_last());
     megaii->debug_output_page(df, 0x00);
     megaii->debug_output_page(df, 0x20);
     megaii->debug_output_page(df, 0x40);

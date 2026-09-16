@@ -148,6 +148,7 @@ void MMU_II::map_c1cf_page_write_h(page_t page, write_handler_t handler, const c
  */
 void MMU_II::set_default_C8xx_map() {
     C8xx_slot = -1;
+    c8_flipflops = 0;   // FORK: every card with a full $CFFF decode clears its flip-flop
     for (uint8_t page = 0; page < 8; page++) {
         //map_page_both(page + 0xC8, nullptr, "NONE");
         map_c1cf_page_both(page + 0xC8, nullptr, "NONE");
@@ -169,6 +170,21 @@ void MMU_II::set_slot_rom(SlotType_t slot, uint8_t *rom, const char *name) {
 void MMU_II::set_C8xx_handler(SlotType_t slot, void (*handler)(void *context, SlotType_t slot), void *context) {
     C8xx_handlers[slot].handler = handler;
     C8xx_handlers[slot].context = context;
+}
+
+// FORK: a selecting $Cn access. A card with no expansion ROM (no handler) has no
+// flip-flop, and whoever was mapped stays mapped, as before. A card with one sets its
+// flip-flop; claiming while another card's is set is counted as contention. The page table
+// shows the card that claimed last, as it always did.
+void MMU_II::c8_select(uint8_t slot) {
+    if (slot < 1 || slot > 7 || C8xx_handlers[slot].handler == nullptr) return;
+    const uint8_t bit = (uint8_t)(1u << slot);
+    if ((c8_flipflops & ~bit) != 0 && !(c8_flipflops & bit)) {
+        c8_contention++;
+        c8_contention_last = (uint8_t)(c8_flipflops | bit);
+    }
+    c8_flipflops |= bit;
+    if (C8xx_slot != slot) call_C8xx_handler((SlotType_t)slot);
 }
 
 void MMU_II::call_C8xx_handler(SlotType_t slot) {
@@ -248,10 +264,20 @@ uint8_t MMU_II::read(uint32_t address) {
 
         if (page < 0xC8) { // it's not C0, but it's less than C8 - Slot-card firmware.
             uint8_t slot = page & 0x7; // slot number is just the lower digit of page
-            // FORK: only an access that selects the card (its /IOSEL) claims $C800 for it.
-            if (C8xx_slot != slot && slot_card_selected(slot)) call_C8xx_handler((SlotType_t)slot);
-        } else 
-            if (eaddress == 0xCFFF) set_default_C8xx_map(); // When CFFF is read, reset the C8xx map to default, then execute the underlying read of CFFF.
+            // FORK: only an access that selects the card (its /IOSEL) sets its flip-flop.
+            if (slot_card_selected(slot)) c8_select(slot);
+        } else if (eaddress == 0xCFFF) {
+            // FORK: the $CFFF byte is served while the card's ROM is still enabled -- the
+            // flip-flop clears as the access ends -- so read it first, then release. The
+            // release used to come first and the byte came from the empty map.
+            page_table_entry_t *pte = &page_table[page];
+            uint8_t v;
+            if (pte->read_p != nullptr) v = pte->read_p[eaddress & 0xFF];
+            else if (pte->read_h.read != nullptr) v = pte->read_h.read(pte->read_h.context, eaddress);
+            else v = floating_bus_read();
+            set_default_C8xx_map();
+            return v;
+        }
     }
     page_table_entry_t *pte = &page_table[page];
     if (pte->read_p != nullptr) return pte->read_p[eaddress & 0xFF];
@@ -288,8 +314,16 @@ void MMU_II::write(uint32_t address, uint8_t value) {
         /** Handle the C800-CFFF mapping  */
         if (page < 0xC8) { // it's not C0, and less than C8 - Slot-card firmware area.
             uint8_t slot = (eaddress / 0x100) & 0x7; // TODO: use a bit shift instead
-            if (C8xx_slot != slot && slot_card_selected(slot)) call_C8xx_handler((SlotType_t)slot);   // FORK: as the read side
-        } else if (eaddress == 0xCFFF) set_default_C8xx_map();
+            if (slot_card_selected(slot)) c8_select(slot);   // FORK: as the read side
+        } else if (eaddress == 0xCFFF) {
+            // FORK: as the read side -- the write reaches the card's space, then the release.
+            page_table_entry_t *pte = &page_table[page];
+            if (pte->write_h.write != nullptr) pte->write_h.write(pte->write_h.context, eaddress, value);
+            else if (pte->write_p) pte->write_p[eaddress & 0xFF] = value;
+            if (pte->shadow_h.write != nullptr) pte->shadow_h.write(pte->shadow_h.context, eaddress, value);
+            set_default_C8xx_map();
+            return;
+        }
     }
 
     // if there is a write handler, call it instead of writing directly.
@@ -368,7 +402,9 @@ uint8_t *MMU_II::get_rom_base() {
 
 void MMU_II::reset(bool cold_start) {
     (void)cold_start;
-    set_default_C8xx_map(); // TODO: verify if RESET resets the C8xx map.
+    // FORK: /RESET reaches every card, so every flip-flop clears, whatever INTCXROM says
+    // (the IIe's own release is skipped while INTCXROM is on, a $CFFF the card never sees).
+    MMU_II::set_default_C8xx_map();
     init_map();
 }
 

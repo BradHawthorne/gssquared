@@ -74,6 +74,7 @@ class MMU_IIe : public MMU_II {
             if (fread(&b_int, 1, 1, f) != 1) return false; f_intcxrom = (b_int != 0);
             if (fread(&b_s3, 1, 1, f) != 1) return false;  f_slotc3rom = (b_s3 != 0);
             if (fread(&c8s, 1, 1, f) != 1) return false;   C8xx_slot = c8s;
+            c8_flipflops = (c8s >= 1 && c8s <= 7) ? (uint8_t)(1u << c8s) : 0;   // FORK: the owner's flip-flop
             if (fread(get_memory_base(), 1, (size_t)0x20000, f) != (size_t)0x20000) return false;
             uint8_t *bases[2] = { get_memory_base(), get_rom_base() };  // FRESH ROM ptr this run
             bool ok = A2GSPU_load_pages(f, bases, 2);                   // main page_table
