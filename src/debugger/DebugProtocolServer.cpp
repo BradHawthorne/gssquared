@@ -134,6 +134,20 @@ constexpr uint32_t kMemEnsoniq = 2;
 constexpr uint32_t kMemAdbMicro = 3;
 constexpr uint32_t kMemMainRaw = 4;
 constexpr uint32_t kMemMegaIIRaw = 5;
+// FORK: MAIN and MEGAII read side-effect-free (probe_peek). A client that means to
+// read through the bus -- soft switches toggle, the floating bus answers, watch rails
+// see it -- asks for it by name; and the READABLE domains say, byte for byte, which
+// peeked bytes are real memory (1) and which are a placeholder for I/O (0).
+constexpr uint32_t kMemMainBus        = 0x80;
+constexpr uint32_t kMemMegaIIBus      = 0x81;
+constexpr uint32_t kMemMainReadable   = 0x82;
+constexpr uint32_t kMemMegaIIReadable = 0x83;
+
+inline bool is_read_domain(uint32_t d) {
+    return d == kMemMain || d == kMemMegaII || d == kMemEnsoniq || d == kMemAdbMicro || d == kMemMainRaw ||
+           d == kMemMegaIIRaw || d == kMemMainBus || d == kMemMegaIIBus || d == kMemMainReadable ||
+           d == kMemMegaIIReadable;
+}
 
 constexpr uint32_t kEUnknownType   = 1;
 constexpr uint32_t kEBadLength     = 2;
@@ -259,7 +273,7 @@ bool read_domain_bytes(computer_t *computer, uint32_t domain, uint32_t address, 
     megaii_reject = false;
     error_text.clear();
 
-    if (domain == kMemMain) {
+    if (domain == kMemMain || domain == kMemMainBus || domain == kMemMainReadable) {
         if (!computer || !computer->cpu || !computer->cpu->mmu) {
             error = kEInternal;
             return false;
@@ -267,11 +281,14 @@ bool read_domain_bytes(computer_t *computer, uint32_t domain, uint32_t address, 
         MMU *mmu = computer->cpu->mmu;
         out.resize(length);
         for (uint32_t i = 0; i < length; ++i) {
-            out[i] = mmu->read(address + i);
+            const uint32_t a = address + i;
+            out[i] = domain == kMemMainBus ? mmu->read(a)
+                   : domain == kMemMainReadable ? (mmu->probe_readable(a) ? 1 : 0)
+                   : mmu->probe_peek(a);
         }
         return true;
     }
-    if (domain == kMemMegaII) {
+    if (domain == kMemMegaII || domain == kMemMegaIIBus || domain == kMemMegaIIReadable) {
         if (!computer || !computer->platform || !platform_is_iigs(computer->platform->id)) {
             error = kEInternal;
             megaii_reject = true;
@@ -284,7 +301,10 @@ bool read_domain_bytes(computer_t *computer, uint32_t domain, uint32_t address, 
         MMU *mmu = computer->mmu;
         out.resize(length);
         for (uint32_t i = 0; i < length; ++i) {
-            out[i] = mmu->read(address + i);
+            const uint32_t a = address + i;
+            out[i] = domain == kMemMegaIIBus ? mmu->read(a)
+                   : domain == kMemMegaIIReadable ? (mmu->probe_readable(a) ? 1 : 0)
+                   : mmu->probe_peek(a);
         }
         return true;
     }
@@ -1158,7 +1178,7 @@ void DebugProtocolServer::fill_live_trace(computer_t *computer, system_trace_ent
     out->p = cpu->p;
     out->unused = 0;
     if (cpu->mmu) {
-        out->opcode = cpu->mmu->read(cpu->full_pc);
+        out->opcode = cpu->mmu->probe_peek(cpu->full_pc);   // FORK: looking must not be a bus read
     }
 }
 
@@ -1894,8 +1914,7 @@ next_request:
             if (max_hits == 0 || max_hits > kMaxFindHits) {
                 REJECT(client_fd, hdr.seq, kEBadLength, "FINDMEM max_hits out of range");
             }
-            if (domain != kMemMain && domain != kMemMegaII && domain != kMemEnsoniq
-                && domain != kMemAdbMicro && domain != kMemMainRaw && domain != kMemMegaIIRaw) {
+            if (!is_read_domain(domain)) {
                 REJECT(client_fd, hdr.seq, kEBadLength, "FINDMEM invalid domain");
             }
             const bool has_mask = (flags & kFindMemHasMask) != 0;
@@ -1976,8 +1995,7 @@ next_request:
             if (address > std::numeric_limits<uint32_t>::max() - length) {
                 REJECT(client_fd, hdr.seq, kEBadLength, "READMEM address wrap");
             }
-            if (domain != kMemMain && domain != kMemMegaII && domain != kMemEnsoniq
-                && domain != kMemAdbMicro && domain != kMemMainRaw && domain != kMemMegaIIRaw) {
+            if (!is_read_domain(domain)) {
                 REJECT(client_fd, hdr.seq, kEBadLength, "READMEM invalid domain");
             }
 

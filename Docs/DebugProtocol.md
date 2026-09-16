@@ -443,12 +443,23 @@ Peek bytes from a memory domain.
 
 | Value | Name | Source | Status |
 |-------|------|--------|--------|
-| 0 | `MAIN` | CPU view: `computer->cpu->mmu->read(addr)` (II/IIe MMU, or IIgs FPI / banked MMU) | Implemented |
-| 1 | `MEGAII` | Mega II / IIe-view MMU: `computer->mmu->read(addr)` | Implemented (Apple IIgs only) |
+| 0 | `MAIN` | CPU view, observation-free: `computer->cpu->mmu->probe_peek(addr)` (II/IIe MMU, or IIgs FPI / banked MMU) | Implemented |
+| 1 | `MEGAII` | Mega II / IIe-view MMU, observation-free: `computer->mmu->probe_peek(addr)` | Implemented (Apple IIgs only) |
 | 2 | `ENSONIQ` | DOC RAM (`ensoniq_state_t::doc_ram`), address = DOC offset `0`–`0xFFFF` | Implemented (Apple IIgs only) |
 | 3 | `ADBMICRO` | ADB microcontroller memory | Reserved |
 | 4 | `MAIN_RAW` | Physical RAM: `cpu->mmu->get_memory_base()[addr]` | Implemented |
 | 5 | `MEGAII_RAW` | Physical Mega II RAM: `computer->mmu->get_memory_base()[addr]` | Implemented (Apple IIgs only) |
+| `0x80` | `MAIN_BUS` | CPU view through the bus: `computer->cpu->mmu->read(addr)`. Soft switches toggle, the floating bus answers, watch rails see the read | Implemented (fork) |
+| `0x81` | `MEGAII_BUS` | Mega II view through the bus: `computer->mmu->read(addr)` | Implemented (fork, Apple IIgs only) |
+| `0x82` | `MAIN_READABLE` | One byte per address: `1` if `MAIN` returns real memory there, `0` if it returns a placeholder (the `$C0xx` soft switches) | Implemented (fork) |
+| `0x83` | `MEGAII_READABLE` | The same for `MEGAII` | Implemented (fork, Apple IIgs only) |
+
+**Fork: reading is not a bus access.** `MAIN` and `MEGAII` read through `mmu->read` until 2026-09-16. A debugger
+that looked at `$C0E8` stopped the disk motor, and one that looked at `$C030` clicked the speaker; every
+read also fed the watch rails as if the guest had made it. They now peek. A client that wants the
+side effects asks for `MAIN_BUS` / `MEGAII_BUS`, and `MAIN_READABLE` / `MEGAII_READABLE` say which peeked
+bytes are placeholders. `GET_REGS`'s `opcode` field, the GUI memory view, step-over and the monitor's
+examine and dump commands peek the same way. `WRITEMEM` still writes through the bus.
 
 On IIgs, `computer->mmu` is Mega II while `cpu->mmu` is the FPI; `MAIN` / `MAIN_RAW` use the CPU MMU. Addresses for `MEGAII` are passed through as-is (typically `0x0000`–`0xFFFF`, e.g. text `$0400`).
 
@@ -469,7 +480,7 @@ On IIgs, `computer->mmu` is Mega II while `cpu->mmu` is the FPI; `MAIN` / `MAIN_
 - `MEGAII` / `MEGAII_RAW` on a non-IIgs platform → `E_INTERNAL` / `MEGAII only on Apple IIgs`.
 - No machine / no MMU for the domain → `E_INTERNAL` / `no machine`.
 
-Unmapped addresses still succeed for `MAIN` / `MEGAII`: MMU `read()` returns floating-bus data as usual.
+Unmapped addresses still succeed for `MAIN` / `MEGAII`: the peek returns a floating-bus placeholder (`MAIN_BUS` / `MEGAII_BUS` return what the bus returns).
 
 #### `WRITEMEM` — main 3, sub 2 (`0x00000302`)
 
@@ -486,7 +497,7 @@ Poke bytes into a memory domain.
 
 **Success reply** (same `type=WRITEMEM`, echoed `seq`): empty payload.
 
-**Domains:** same as READMEM. `MAIN`, `MAIN_RAW`, and `MEGAII` / `MEGAII_RAW` (IIgs only) are implemented.
+**Domains:** same as READMEM. `MAIN`, `MAIN_RAW`, and `MEGAII` / `MEGAII_RAW` (IIgs only) are implemented. The fork's `0x80`-`0x83` read domains are not writable.
 
 **Bounds:**
 

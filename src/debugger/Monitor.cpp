@@ -408,7 +408,10 @@ void Monitor::dispatch() {
 
 void Monitor::peek_byte() {
     uint32_t address = as_address(nodes_[0].val_number);
-    addFormattedOutput("%s: %02X", format_addr(address).c_str(), mmu_->read(address));
+    // FORK: examining memory is observation-free (probe_peek): no soft switch toggles,
+    // no watch hit. Soft-switch bytes read as the placeholder and are marked.
+    addFormattedOutput("%s: %02X%s", format_addr(address).c_str(), mmu_->probe_peek(address),
+                       mmu_->probe_readable(address) ? "" : " (I/O, not read)");
 }
 
 void Monitor::poke_bytes() {
@@ -434,7 +437,7 @@ void Monitor::dump_range() {
 
         for (int i = 0; i < 16; i++) {
             if (address + i <= nodes_[0].val_range.hi) {
-                line << std::setw(2) << (int)mmu_->read(address + i) << " ";
+                line << std::setw(2) << (int)mmu_->probe_peek(address + i) << " ";
             } else {
                 line << "   ";
             }
@@ -443,7 +446,7 @@ void Monitor::dump_range() {
 
         for (int i = 0; i < 16; i++) {
             if (address + i <= nodes_[0].val_range.hi) {
-                uint8_t val = mmu_->read(address + i);
+                uint8_t val = mmu_->probe_peek(address + i);
                 val &= 0x7F;
                 if (val < 32 || val > 126) {
                     line << ".";

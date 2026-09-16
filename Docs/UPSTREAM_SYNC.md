@@ -601,7 +601,7 @@ Merged against an explicit base of `29dadbbb`, straight into `a2gspu`. The next 
 **Owed after this port** (the per-component study of real-hardware behaviour, 2026-09-16, is the input):
 - **Fused Uthernet II:** done, see section 9.
 - **Snapshot blocks** for the new cards are done (sections 9-12), and so is ThunderClock time through `A2GSPU_FAKETIME` (section 10).
-- **Side-effect-free reads** for the debug protocol's `READMEM`/`FINDMEM`, which today read through the CPU's bus path.
+- **Side-effect-free reads** for the debug protocol's `READMEM`/`FINDMEM`: done (section 13).
 - **Hardware-evidence decisions still open:**
   - game switches with nothing attached (the IIe manual's pull-downs are in the hand controller, which favours upstream's floating reads);
   - `$C011-$C01F` low bits and the `$C02E`/`$C02F` scan-line clear (the fork's fixes 5 and 6 contradict MAME);
@@ -722,3 +722,25 @@ video frame is rendered. This belongs in the fidelity study.
 - It entered GPU Text 80x25 and wrote a character and half of the next word. The raster, the
   pending half word and the pen restored into a fresh machine.
 - It entered GPU mode (640x480, 8 bpp) and saved. That restore warned and left the card in `emu`.
+
+## 13. The debugger looks without touching (2026-09-16)
+
+Upstream's debug protocol read `MAIN` and `MEGAII` through `mmu->read`, the CPU's bus path. So did
+`GET_REGS`'s opcode byte, the GUI memory view, step-over and the monitor's examine and dump. A
+debugger that displayed `$C0E8` stopped the disk motor, one that displayed `$C030` clicked the
+speaker, and every displayed byte fed the watch rails as a guest read.
+
+| Part | Result |
+|---|---|
+| `READMEM` / `FINDMEM` `MAIN`, `MEGAII` | `probe_peek`: no soft-switch dispatch, no bus record, no clock. Soft-switch bytes come back as the floating-bus placeholder. |
+| New domains `0x80` `MAIN_BUS`, `0x81` `MEGAII_BUS` | The old bus read, for a client that means it. Read-only. |
+| New domains `0x82` `MAIN_READABLE`, `0x83` `MEGAII_READABLE` | One byte per address: `1` real memory, `0` placeholder. |
+| `GET_REGS` opcode, GUI memory view, step-over, monitor examine/dump | `probe_peek`. The monitor marks a soft-switch byte `(I/O, not read)`. |
+| `WRITEMEM` | Unchanged: writes still go through the bus. |
+
+`Docs/DebugProtocol.md` and the Python client's `MEM_*` constants carry the new domains.
+
+**Verified:** a scratch client over the debug socket (8 checks) on a IIe Enhanced. A `MAIN` read of
+`$C055` left `RDPAGE2` (`$C01C`) clear, and a `MAIN_BUS` read set it. `MAIN_READABLE` gave 0 for
+`$C050-$C057` and 1 for `$0400`. `$F800` ROM matched between peek and bus, and domain `0x84` was
+still rejected.

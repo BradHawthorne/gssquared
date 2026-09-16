@@ -56,6 +56,13 @@ MEM_ENSONIQ = 2
 MEM_ADBMICRO = 3
 MEM_MAIN_RAW = 4
 MEM_MEGAII_RAW = 5
+# Fork: MAIN / MEGAII peek without side effects; these read through the bus on
+# purpose, or report per byte whether a peek returned real memory (1) or an I/O
+# placeholder (0).
+MEM_MAIN_BUS = 0x80
+MEM_MEGAII_BUS = 0x81
+MEM_MAIN_READABLE = 0x82
+MEM_MEGAII_READABLE = 0x83
 
 # device_id (src/Device_ID.hpp) — values used by STATE_GET / STATE_SET
 DEVICE_ID_DISK_II = 9

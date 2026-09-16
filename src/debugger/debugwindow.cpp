@@ -1190,7 +1190,9 @@ void debug_window_t::render_pane_memory() {
                 *ptr++ = ':';
                 *ptr++ = ' ';
             }
-            uint8_t mem = mmu->read(i);
+            // FORK: a memory view is an observer. mmu->read toggled soft switches (a view
+            // over $C0E8 stopped the disk motor) and fed the watch rails every frame.
+            uint8_t mem = mmu->probe_peek(i);
             decode_hex_byte( ptr, mem);
             decode_ascii(buffer+56+index, mem);
             ptr+=2;
@@ -1389,7 +1391,7 @@ void debug_window_t::step_over() {
     if (computer->execution_mode != EXEC_STEP_INTO) return; // if not in step ignore
     stepover_bp = (cpu->pb << 16) | cpu->pc;
     // trace has not happened yet!
-    uint8_t opcode = mmu->read(stepover_bp);
+    uint8_t opcode = mmu->probe_peek(stepover_bp);   // FORK: observation, not a bus read
     if ((opcode == 0x20) || (opcode == 0xFC)) {
         stepover_bp += 3;
     } else if (opcode == 0x22) {
