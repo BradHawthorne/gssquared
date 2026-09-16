@@ -28,6 +28,20 @@ it too.
 | `A2GSPU_TRAP_FILE=<file>` | specs one per line, `#` comments; combines with the above |
 | `A2GSPU_TRAP_OUT=<file>` | default NDJSON sink for specs without `out=`; else the global record sink `A2GSPU_RECORDS`; otherwise records go to stdout as `IIGS TRAP: {…}` |
 
+## Live, from the CTRL rail
+
+The same grammar, armed mid-session, so a trap an agent discovers it needs costs a
+command instead of a relaunch that throws the session away.
+
+| Verb | Effect |
+|------|--------|
+| `trap` | status: every armed trap with `hits`, `records`, `entries`, `exits` (`traps=0` when none) |
+| `trap add <spec>` | parse and arm one spec now. A malformed spec **fails the ack** (`status=FAIL trap-spec <why> -- nothing armed`) instead of ending the session; at launch the same error is still fatal. A name already armed is refused |
+| `trap list` | every armed spec, as the arm echo describes it |
+| `trap clear [<name>]` | disarm one trap, or all; each prints its close-out summary to the session log, and `store=`/`read=` funnel costs go away with the last trap that needed them |
+
+Specs from `A2GSPU_TRAP`/`A2GSPU_TRAP_FILE` arm first; live specs join them.
+
 ## A spec
 
 Space-separated `key=value` tokens. **No spaces inside a value** — the spec is
@@ -38,6 +52,7 @@ split on spaces, which is why the set operator is `~{…}` and not `in {…}`.
 | `name=<id>` | tag carried on every record (default `trapN`) |
 | `at=<pc>[-<pc>]` | entry trigger, PC or range. `HHHH` matches that 16-bit PC in **any** bank (interpreter traps are bank-agnostic); `BB:HHHH` matches one bank |
 | `store=<addr>[-<addr>]` | trigger: a byte is **written** into the range (same bank syntax). The record's `pc`/`sym` name the storing instruction, and `store:{addr,value}` says what landed where. Real stores only, not the dummy write of a read-modify-write. The any-bank form matches that offset in **every** bank, RAM included — measured: `store=C03D` on the Dealer Demo caught 199,978 writes through `$E1` and a handful of plain-RAM writes to `$02:C03D` and friends — so name the bank for an I/O port: `store=E1:C03D` is "who feeds the sound GLU, with registers and ring" in one spec |
+| `read=<addr>[-<addr>]` | trigger: a byte is **read** from the range as operand data, through the CPU's data-read funnel (`bus_read`). Opcode and operand fetches are `at=`'s job, and vector pulls and the dummy read of a read-modify-write are not reads a program asked for, so neither fires. Same bank syntax as `store=`, and the same caution: the bank is where the CPU's **data bank register** points, so a IIgs program running with `DBR=$E1` reads `$E1:7000`, not `$00:7000` — use the any-bank form when unsure. `read:{addr,value}`; `pc`/`sym` name the reading instruction |
 | `sp=<lo>-<hi>` | trigger: the **effective** stack address (page 1 for an 8-bit or emulation-mode S, so `01F0-01FF` means the same on every machine) **enters** the range — an edge, one record per entry, not one per instruction spent inside. STACKTRAP's job with payloads; the record carries `sp` |
 | `exit=<pc>` | paired exit trigger (`at=` traps only). The exit record carries the entry's `n`. One outstanding entry at a time; a second entry before the exit replaces it |
 | `when=<cond>[,<cond>]` | all must hold at entry. `<expr>OP<expr>` with `OP` one of `== != < > <= >=`, or `<expr>~{v,v,…}` ("is one of") |
@@ -125,9 +140,7 @@ names the toolbox call in progress when the trap fired (`WindowMgr.fn15`), or
 
 ## Not yet
 
-- Read triggers (a byte read from a range), and `exit=` pairing for `store=`
-  and `sp=` traps. `A2GSPU_WATCH_READ` covers the first for now.
-- Live (CTRL) arming. Launch-time only, like the other trace rails.
+- `exit=` pairing for `store=`, `read=` and `sp=` traps.
 - `A2GSPU_PCTRAP` is untouched and still works; `once do=regs,ring` is its
   equivalent here.
 

@@ -23,7 +23,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table |
 | M9 determinism asserted | done | — |
-| M10 configuration over code | partial | `store=`/`sp=` triggers exist; read triggers, live arming and `KEYSCHED` conditions do not; WIZ5 traps stand until their readers move |
+| M10 configuration over code | partial | `store=`/`read=`/`sp=` triggers and live arming (`trap` verb) exist; `KEYSCHED` conditions do not; WIZ5 traps stand until their readers move |
 | M11 a peek that works everywhere | done | — |
 | M12 record schemas in the manifest | done | — |
 
@@ -442,8 +442,11 @@ interpreter adds zero lines of C++.
 the storing instruction and the byte) and `sp=LO-HI` (S entering a range,
 edge-triggered). Both share the condition, policy and payload machinery, so
 "who feeds `$E1:C03D`, with registers and the PC ring" is one spec where it
-was three rails. Read triggers and `KEYSCHED` conditions are not done; the
-WIZ5 traps still stand until their consumers move.
+was three rails. **Added 2026-09-16:** `read=ADDR[-ADDR]` (a byte read as
+operand data, from the CPU's data-read funnel) and live arming — `trap add
+<spec>` / `list` / `clear` on the CTRL rail, where a malformed spec fails the
+ack instead of ending the session. `KEYSCHED` conditions are not done; the WIZ5
+traps still stand until their consumers move.
 
 ### M11 — A peek that works everywhere  (P5) — M
 

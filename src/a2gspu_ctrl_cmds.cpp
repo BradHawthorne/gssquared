@@ -1119,6 +1119,44 @@ bool try_meta(const char *line, char *result, size_t rsz) {
 
 // ---- live L4: valtrap / itrace / tbtrace / callstream ----------------------
 bool try_trace_break(const char *line, char *result, size_t rsz) {
+    // trap -- A2GSPU_TRAP armed from the rail (M10): the same spec grammar as the
+    // environment, so a trap an agent discovers it needs mid-session costs a
+    // command, not a relaunch that throws the session's state away.
+    if (!strncmp(line, "trap", 4) && (line[4] == 0 || line[4] == ' ')) {
+        const char *rest = line[4] ? line + 5 : "";
+        while (*rest == ' ') rest++;
+        if (!*rest || !strcmp(rest, "status")) {
+            if (a2trap::g_traps.empty())
+                snprintf(result, rsz, "status=OK traps=0 -- none armed; `trap add <spec>` arms one "
+                         "(grammar: Docs/A2GSPU_TRAP.md; at=/store=/read=/sp= triggers)");
+            else
+                a2trap::format_status(result, rsz);
+        } else if (!strncmp(rest, "add ", 4)) {
+            std::string name;
+            const std::string why = a2trap::live_add(rest + 4, &name);
+            if (why.empty())
+                snprintf(result, rsz, "status=OK trap added %s",
+                         a2trap::describe_str(a2trap::g_traps.back()).c_str());
+            else
+                snprintf(result, rsz, "status=FAIL trap-spec %s -- nothing armed", why.c_str());
+        } else if (!strcmp(rest, "list")) {
+            std::string s = "status=OK traps=" + std::to_string(a2trap::g_traps.size());
+            for (const a2trap::Trap &t : a2trap::g_traps) s += " | " + a2trap::describe_str(t);
+            snprintf(result, rsz, "%s", s.c_str());
+        } else if (!strcmp(rest, "clear") || !strncmp(rest, "clear ", 6)) {
+            const char *nm = rest[5] ? rest + 6 : "";
+            while (*nm == ' ') nm++;
+            const int k = a2trap::live_clear(nm);
+            if (*nm && k == 0)
+                snprintf(result, rsz, "status=FAIL trap-unknown '%s' -- `trap list` names the armed traps", nm);
+            else
+                snprintf(result, rsz, "status=OK trap cleared=%d remaining=%zu (close-out summaries printed to the session log)",
+                         k, a2trap::g_traps.size());
+        } else {
+            snprintf(result, rsz, "status=FAIL trap-usage -- trap [status] | trap add <spec> | trap list | trap clear [<name>]");
+        }
+        return true;
+    }
     if (!strncmp(line, "valtrap", 7) && (line[7] == 0 || line[7] == ' ')) {
         const char *rest = line[7] ? line + 8 : "";
         while (*rest == ' ') rest++;

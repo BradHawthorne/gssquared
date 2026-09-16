@@ -131,6 +131,7 @@ inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
     if (memvu_lv_on) memvu_lv_note_load(addr & 0xFFFFFF, MEMVU_K_DATA);  // MEMVU_LOADVIS (off => 1 branch)
     if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, false);   // A2GSPU_LCTRACE (off => 1 branch)
     if (g_watch_read_on) iigs_watch_check_read(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH_READ (off => 1 branch)
+    if (g_trap_read_on) a2gspu_trap_read(cpu, addr & 0xFFFFFF, data);  // A2GSPU_TRAP read= (off => 1 branch)
     incr_cycles(cpu);
     return data;
 }

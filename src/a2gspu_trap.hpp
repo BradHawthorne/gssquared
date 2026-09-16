@@ -37,6 +37,12 @@
 //                          instruction's opcode address; "store":{addr,value}
 //                          says what landed where. Real stores only, not the
 //                          dummy write of a read-modify-write.
+//   read=<addr>[-<addr>]   trigger: a byte is READ from the range as operand data
+//                          (the CPU's data-read funnel; opcode and operand FETCHES
+//                          are at='s job, and vector pulls and the dummy read of a
+//                          read-modify-write are not reads a program asked for).
+//                          Same bank syntax as store=. "read":{addr,value}; pc is
+//                          the reading instruction.
 //   sp=<lo>-<hi>           trigger: the EFFECTIVE stack address (page 1 for an
 //                          8-bit or emulation-mode S) ENTERS the range -- an edge,
 //                          one record per entry, not one per instruction inside.
@@ -116,11 +122,18 @@
 //     at close, including records=0, so silence is never mistaken for success.
 //   * Every record carries frame and cycle stamps.
 //
+// LIVE ARMING (CTRL)
+//
+//   trap                   status: every trap with hits/records/entries/exits
+//   trap add <spec>        parse and arm one spec now, same grammar; a malformed
+//                          spec FAILS THE ACK and arms nothing (at launch the same
+//                          error is still fatal, exit 2)
+//   trap list              the armed specs, one line each, as `describe` prints them
+//   trap clear [<name>]    disarm one trap, or all; its close-out summary prints
+//
 // WHAT IT DOES NOT DO (yet)
 //
-//   * Read triggers (a byte READ from a range), and exit= pairing for store=/sp=
-//     traps. A2GSPU_WATCH_READ covers the first for now.
-//   * Live (CTRL) arming. Launch-time only, like the other trace rails.
+//   * exit= pairing for store=/read=/sp= traps.
 //   * The A2GSPU_PCTRAP one-shot is untouched and still works; `once do=regs,ring`
 //     is its equivalent here.
 // ============================================================================
@@ -142,8 +155,15 @@
 namespace a2trap {
 
 // ---------------------------------------------------------------- helpers ---
+// A malformed spec throws. At launch arm() turns that into the fatal exit it always
+// was; the CTRL `trap add` verb turns it into a FAIL ack and arms nothing, because
+// one bad spec typed into a live session must not end the session.
+struct SpecError { std::string spec, why; };
 [[noreturn]] inline void fail(const std::string &spec, const std::string &why) {
-    fprintf(stderr, "A2GSPU_TRAP: FAIL -- %s\n  in spec: %s\n", why.c_str(), spec.c_str());
+    throw SpecError{spec, why};
+}
+[[noreturn]] inline void fatal(const SpecError &e) {
+    fprintf(stderr, "A2GSPU_TRAP: FAIL -- %s\n  in spec: %s\n", e.why.c_str(), e.spec.c_str());
     fflush(stderr);
     exit(2);
 }
@@ -411,7 +431,7 @@ inline Payload parse_payload(const std::string &item, const std::string &spec) {
 // ------------------------------------------------------------------ specs ---
 struct Trap {
     std::string name, src;
-    enum Kind { PC, STORE, SP } kind = PC;
+    enum Kind { PC, STORE, READ, SP } kind = PC;
     bool any_bank = true; uint32_t lo = 0, hi = 0;          // entry trigger (PC or STORE range)
     uint32_t sp_lo = 0, sp_hi = 0; bool sp_inside = false;  // SP trigger
     bool has_exit = false, exit_any_bank = true; uint32_t exit_pc = 0;
@@ -431,6 +451,7 @@ struct Trap {
 
 inline bool g_on = false;
 inline bool g_store_on = false;              // any store= trap: the store funnel pays one branch
+inline bool g_read_on = false;               // any read= trap: the data-read funnel pays one branch
 inline uint32_t g_ipc = 0;                   // opcode address of the instruction executing now
 inline uint64_t g_ipc_cycles = 0;            // the clock at that instruction's start
 inline std::vector<Trap> g_traps;
@@ -483,8 +504,8 @@ inline void parse_spec(const std::string &raw, int index) {
                 if (t.hi < t.lo) fail(raw, "at= range end below start");
             }
         }
-        else if (key == "store") {
-            have_at = true; t.kind = Trap::STORE;
+        else if (key == "store" || key == "read") {
+            have_at = true; t.kind = (key == "store") ? Trap::STORE : Trap::READ;
             size_t d = val.find('-');
             std::string a = (d == std::string::npos) ? val : val.substr(0, d);
             bool ab; uint32_t lo; parse_pc(a, raw, ab, lo);
@@ -492,7 +513,7 @@ inline void parse_spec(const std::string &raw, int index) {
             if (d != std::string::npos) {
                 uint32_t hi = hex(val.substr(d + 1), raw, "range end") & 0xFFFF;
                 t.hi = ab ? hi : ((lo & 0xFF0000) | hi);
-                if (t.hi < t.lo) fail(raw, "store= range end below start");
+                if (t.hi < t.lo) fail(raw, key + "= range end below start");
             }
         }
         else if (key == "sp") {
@@ -525,15 +546,21 @@ inline void parse_spec(const std::string &raw, int index) {
         }
         else if (key == "out") {
             if (val.empty()) fail(raw, "out= needs a path");
-            t.out = fopen(val.c_str(), "wb");
-            if (!t.out) fail(raw, "cannot open out file '" + val + "'");
-            t.own_out = true; t.out_path = val;
+            t.out_path = val;                   // opened below, once the whole spec parsed
         }
         else fail(raw, "unknown key '" + key + "'");
     }
-    if (!have_at) fail(raw, "a spec needs a trigger: at=<pc>, store=<addr>, or sp=<lo>-<hi>");
+    if (!have_at) fail(raw, "a spec needs a trigger: at=<pc>, store=<addr>, read=<addr>, or sp=<lo>-<hi>");
     if (t.has_exit && t.kind != Trap::PC) fail(raw, "exit= pairs only with an at= trigger");
+    for (const Trap &o : g_traps)
+        if (o.name == t.name) fail(raw, "a trap named '" + t.name + "' is already armed (name= another, or trap clear it)");
+    if (!t.out_path.empty()) {
+        t.out = fopen(t.out_path.c_str(), "wb");
+        if (!t.out) fail(raw, "cannot open out file '" + t.out_path + "'");
+        t.own_out = true;
+    }
     if (t.kind == Trap::STORE) g_store_on = true;
+    if (t.kind == Trap::READ) g_read_on = true;
     if (t.pdo.empty() && t.pheavy.empty()) { Payload r; r.kind = Payload::REGS; t.pdo.push_back(r); }   // never a bare "it fired"
     if (!t.out) { t.out = g_default_out; }
     g_traps.push_back(std::move(t));
@@ -728,9 +755,18 @@ inline void store_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
     }
 }
 
+// From the CPU's data-read funnel (bus_read), gated by g_read_on: READ triggers.
+inline void read_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
+    for (Trap &t : g_traps) {
+        if (t.kind != Trap::READ || !matches(t.any_bank, t.lo, t.hi, addr)) continue;
+        char ex[64]; snprintf(ex, sizeof ex, ",\"read\":{\"addr\":%u,\"value\":%u}", (unsigned)addr, (unsigned)data);
+        fire(t, cpu, g_ipc_cycles, ex, g_ipc);
+    }
+}
+
 // ---- readback: `rail read A2GSPU_TRAP` --------------------------------------
 inline void format_status(char *buf, size_t n) {
-    if (!g_on) { snprintf(buf, n, "status=FAIL trap-not-armed -- set A2GSPU_TRAP or A2GSPU_TRAP_FILE before launch"); return; }
+    if (!g_on) { snprintf(buf, n, "status=FAIL trap-not-armed -- `trap add <spec>` arms one live, or set A2GSPU_TRAP / A2GSPU_TRAP_FILE before launch"); return; }
     size_t off = 0;
     int m = snprintf(buf, n, "status=OK traps=%zu |", g_traps.size());
     if (m > 0) off = (size_t)m;
@@ -745,20 +781,30 @@ inline void format_status(char *buf, size_t n) {
 }
 
 // ------------------------------------------------------------ arm / close ---
-inline void describe(const Trap &t) {
-    printf("A2GSPU_TRAP: armed %s ", t.name.c_str());
+// One trap's resolved configuration, as the arm echo and `trap list` both print it.
+inline std::string describe_str(const Trap &t) {
+    char b[256]; std::string s = t.name + " ";
     if (t.kind == Trap::SP) {
-        printf("sp=%04X-%04X", t.sp_lo, t.sp_hi);
+        snprintf(b, sizeof b, "sp=%04X-%04X", t.sp_lo, t.sp_hi); s += b;
     } else {
-        printf("%s=", t.kind == Trap::STORE ? "store" : "at");
-        if (t.any_bank) printf("*:%04X", t.lo & 0xFFFF); else printf("%02X:%04X", (t.lo >> 16) & 0xFF, t.lo & 0xFFFF);
-        if (t.hi != t.lo) printf("-%04X", t.hi & 0xFFFF);
+        s += (t.kind == Trap::STORE) ? "store=" : (t.kind == Trap::READ) ? "read=" : "at=";
+        if (t.any_bank) snprintf(b, sizeof b, "*:%04X", t.lo & 0xFFFF); else snprintf(b, sizeof b, "%02X:%04X", (t.lo >> 16) & 0xFF, t.lo & 0xFFFF);
+        s += b;
+        if (t.hi != t.lo) { snprintf(b, sizeof b, "-%04X", t.hi & 0xFFFF); s += b; }
     }
-    if (t.has_exit) { if (t.exit_any_bank) printf(" exit=*:%04X", t.exit_pc); else printf(" exit=%02X:%04X", (t.exit_pc >> 16) & 0xFF, t.exit_pc & 0xFFFF); }
-    printf(" when=%zu policy=%s", t.when.size(), t.policy == Trap::ONCE ? "once" : t.policy == Trap::EVERY ? "every" : "first");
-    if (t.policy == Trap::FIRST) printf("(%u%s)", (unsigned)t.first_n, t.has_key ? "/key" : "");
-    printf(" cap=%u do=%zu heavy=%zu xdo=%zu xheavy=%zu out=%s\n", (unsigned)t.cap, t.pdo.size(), t.pheavy.size(),
-           t.pxdo.size(), t.pxheavy.size(), t.out ? (t.own_out ? t.out_path.c_str() : "A2GSPU_TRAP_OUT") : (a2record::g_global ? "A2GSPU_RECORDS" : "stdout"));
+    if (t.has_exit) {
+        if (t.exit_any_bank) snprintf(b, sizeof b, " exit=*:%04X", t.exit_pc); else snprintf(b, sizeof b, " exit=%02X:%04X", (t.exit_pc >> 16) & 0xFF, t.exit_pc & 0xFFFF);
+        s += b;
+    }
+    snprintf(b, sizeof b, " when=%zu policy=%s", t.when.size(), t.policy == Trap::ONCE ? "once" : t.policy == Trap::EVERY ? "every" : "first"); s += b;
+    if (t.policy == Trap::FIRST) { snprintf(b, sizeof b, "(%u%s)", (unsigned)t.first_n, t.has_key ? "/key" : ""); s += b; }
+    snprintf(b, sizeof b, " cap=%u do=%zu heavy=%zu xdo=%zu xheavy=%zu out=%s", (unsigned)t.cap, t.pdo.size(), t.pheavy.size(),
+             t.pxdo.size(), t.pxheavy.size(), t.out ? (t.own_out ? t.out_path.c_str() : "A2GSPU_TRAP_OUT") : (a2record::g_global ? "A2GSPU_RECORDS" : "stdout"));
+    s += b;
+    return s;
+}
+inline void describe(const Trap &t) {
+    printf("A2GSPU_TRAP: armed %s\n", describe_str(t).c_str());
 }
 
 inline void close_all() {
@@ -783,26 +829,80 @@ inline void arm() {
         g_default_out = fopen(outp, "wb");
         if (!g_default_out) fail(outp, "cannot open A2GSPU_TRAP_OUT");
     }
-    int index = 0;
-    if (env) for (auto &spec : split_top(env, ';')) { std::string s = spec; while (!s.empty() && s.front() == ' ') s.erase(0, 1); if (!s.empty()) parse_spec(s, index++); }
-    if (file) {
-        FILE *f = fopen(file, "rb");
-        if (!f) fail(file, "cannot open A2GSPU_TRAP_FILE");
-        char line[2048];
-        while (fgets(line, sizeof line, f)) {
-            std::string s = line;
-            while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ')) s.pop_back();
-            while (!s.empty() && s.front() == ' ') s.erase(0, 1);
-            if (s.empty() || s[0] == '#') continue;
-            parse_spec(s, index++);
+    try {
+        int index = 0;
+        if (env) for (auto &spec : split_top(env, ';')) { std::string s = spec; while (!s.empty() && s.front() == ' ') s.erase(0, 1); if (!s.empty()) parse_spec(s, index++); }
+        if (file) {
+            FILE *f = fopen(file, "rb");
+            if (!f) fail(file, "cannot open A2GSPU_TRAP_FILE");
+            char line[2048];
+            while (fgets(line, sizeof line, f)) {
+                std::string s = line;
+                while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ')) s.pop_back();
+                while (!s.empty() && s.front() == ' ') s.erase(0, 1);
+                if (s.empty() || s[0] == '#') continue;
+                parse_spec(s, index++);
+            }
+            fclose(f);
         }
-        fclose(f);
+        if (g_traps.empty()) fail(env ? env : file, "no trap specs found");
+    } catch (const SpecError &e) {
+        fatal(e);                         // at launch a bad spec still ends the run (exit 2)
     }
-    if (g_traps.empty()) fail(env ? env : file, "no trap specs found");
     for (const Trap &t : g_traps) describe(t);
     g_on = true;
     iigs_callctx_arm();   // records carry the toolbox call in progress (incall)
-    atexit(close_all);
+    static bool s_atexit = false;
+    if (!s_atexit) { s_atexit = true; atexit(close_all); }
+}
+
+// ---- live (CTRL) arming --------------------------------------------------------------
+inline void recompute_flags() {
+    g_store_on = g_read_on = g_ring_on = false;
+    for (const Trap &t : g_traps) {
+        if (t.kind == Trap::STORE) g_store_on = true;
+        if (t.kind == Trap::READ) g_read_on = true;
+        for (const std::vector<Payload> *ps : { &t.pdo, &t.pheavy, &t.pxdo, &t.pxheavy })
+            for (const Payload &p : *ps) if (p.kind == Payload::RING) g_ring_on = true;
+    }
+    g_on = !g_traps.empty();
+}
+
+// `trap add <spec>`: arms it and returns "" with *name set, or returns the reason.
+inline std::string live_add(const std::string &spec, std::string *name) {
+    g_armed = true;                      // a later launch-time arm() must not re-read env over live specs
+    int index = (int)g_traps.size();
+    try {
+        parse_spec(spec, index);
+    } catch (const SpecError &e) {
+        return e.why;
+    }
+    const Trap &t = g_traps.back();
+    if (name) *name = t.name;
+    describe(t);
+    g_on = true;
+    iigs_callctx_arm();
+    static bool s_atexit = false;
+    if (!s_atexit) { s_atexit = true; atexit(close_all); }
+    return "";
+}
+
+// `trap clear [name]`: disarms (printing each close-out) and returns how many went.
+inline int live_clear(const std::string &name) {
+    int removed = 0;
+    for (size_t i = 0; i < g_traps.size();) {
+        Trap &t = g_traps[i];
+        if (!name.empty() && t.name != name) { i++; continue; }
+        printf("A2GSPU_TRAP: %s hits=%u records=%u entries=%u exits=%u%s%s (cleared)\n", t.name.c_str(),
+               (unsigned)t.hits, (unsigned)t.n, (unsigned)t.entries, (unsigned)t.exits,
+               t.capped ? " CAPPED" : "", t.hits == 0 ? " (never reached)" : "");
+        if (t.own_out && t.out) { fclose(t.out); t.out = nullptr; }
+        g_traps.erase(g_traps.begin() + (long)i);
+        removed++;
+    }
+    recompute_flags();
+    fflush(stdout);
+    return removed;
 }
 
 }  // namespace a2trap
@@ -811,9 +911,11 @@ inline void arm() {
 // like its neighbours: `if (g_trap_on) a2gspu_trap_check(cpu, cycles);`
 inline bool &g_trap_on = a2trap::g_on;
 inline bool &g_trap_store_on = a2trap::g_store_on;
+inline bool &g_trap_read_on = a2trap::g_read_on;
 inline void a2gspu_trap_arm() { a2trap::arm(); }
 inline void a2gspu_trap_check(cpu_state *cpu, uint64_t cycles) { a2trap::check(cpu, cycles); }
 inline void a2gspu_trap_store(cpu_state *cpu, uint32_t addr, uint8_t data) { a2trap::store_check(cpu, addr, data); }
+inline void a2gspu_trap_read(cpu_state *cpu, uint32_t addr, uint8_t data) { a2trap::read_check(cpu, addr, data); }
 
 // The trap's readback, supplied with the rail (M8): `rail read A2GSPU_TRAP`.
 inline a2rails::Registrar g_reader_trap     {"A2GSPU_TRAP",      a2trap::format_status};
