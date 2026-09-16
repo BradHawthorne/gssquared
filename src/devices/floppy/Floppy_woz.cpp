@@ -63,6 +63,7 @@ bool Floppy_woz::mount(uint64_t key, media_descriptor *media_in) {
     is_mounted    = true;
     media_d       = media_in;
     modified      = false;
+    media_identity_capture(media_in);   // FORK: the image as mounted, for snapshots
 
     play_sound(SE_SHUGART_CLOSE);
 

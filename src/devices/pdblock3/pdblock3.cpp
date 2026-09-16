@@ -31,6 +31,7 @@
 #include "debug.hpp"
 #include "devices/pdblock3/pdblock3.hpp"
 #include "util/media.hpp"
+#include "util/media_identity.hpp"
 #include "util/ResourceFile.hpp"
 #include "util/mount.hpp"
 
@@ -587,6 +588,7 @@ public:
         }
         drives[key.drive].file = fp;
         drives[key.drive].media = media;
+        media_identity_capture(media);   // FORK: the image as mounted, for snapshots
         disk_switched[key.drive] = true;
         return true;
     }
@@ -696,6 +698,7 @@ public:
             }
             drives[unused_unit].file = fp;
             drives[unused_unit].media = media;
+            media_identity_capture(media);   // FORK: the image as mounted, for snapshots
             drives[unused_unit].key = key;  // mark this as being mounted on this key
             disk_switched[unused_unit] = true;
             assigned.push_back(unused_unit);
@@ -882,7 +885,7 @@ public:
             fwrite(hdr, 1, 3, f);
             if (!present) continue;
             const std::string name = d.media->filename;
-            uint32_t n = (uint32_t)name.size(); fwrite(&n, 4, 1, f); if (n) fwrite(name.data(), 1, n, f);
+            media_identity_write(f, d.media);
             uint32_t bc = d.media->block_count; uint16_t bs = (uint16_t)d.media->block_size;
             fwrite(&bc, 4, 1, f); fwrite(&bs, 2, 1, f);
             int32_t lba = (int32_t)d.last_block_accessed; fwrite(&lba, 4, 1, f);
@@ -912,14 +915,13 @@ public:
         for (uint32_t u = 0; u < units; u++) {
             uint8_t hdr[3]; if (fread(hdr, 1, 3, f) != 3) return false;
             if (!hdr[0]) continue;
-            uint32_t n = 0; if (fread(&n, 4, 1, f) != 1 || n > 4096) return false;
-            std::string name(n, '\0'); if (n && fread(&name[0], 1, n, f) != n) return false;
+            media_identity_t id; if (!media_identity_read(f, id)) return false;
             uint32_t bc = 0; uint16_t bs = 0; int32_t lba = 0; uint64_t lat = 0; uint32_t ndirty = 0;
             if (fread(&bc, 4, 1, f) != 1 || fread(&bs, 2, 1, f) != 1 || fread(&lba, 4, 1, f) != 1 ||
                 fread(&lat, 8, 1, f) != 1 || fread(&ndirty, 4, 1, f) != 1) return false;
             if (bs == 0 || bs > 512 || ndirty > bc) return false;
             media_t &d = drives[u];
-            const bool same = d.file && d.media && d.media->filename == name && d.media->block_count == bc &&
+            const bool same = d.file && d.media && media_identity_matches(id, d.media) && d.media->block_count == bc &&
                               d.media->block_size == bs;
             const bool apply = same && !d.ram.empty();
             if (!apply) { if (mismatch) (*mismatch)++; }

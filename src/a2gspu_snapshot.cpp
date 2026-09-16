@@ -16,6 +16,7 @@
  */
 // Snapshot file I/O -- moved out of gs2.cpp; see gs2_app.hpp.
 #include "gs2_app.hpp"
+#include "util/media_identity.hpp"   // g_a2gspu_media_id_version
 #include "devices/diskii/diskii_controller.hpp"   // g_a2gspu_diskii: the Disk II controllers, by slot
 
 
@@ -185,7 +186,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         names += names.empty() ? "scanner" : ",scanner";
     }
     if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
-        long at = a2gspu_snap_dev_begin(f, "iwm", 2); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);
+        long at = a2gspu_snap_dev_begin(f, "iwm", 3); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);   // 3: media identity with a content hash
         names += names.empty() ? "iwm" : ",iwm";
     }
     // Every Disk II controller, by slot; each entry length-prefixed, so a machine
@@ -193,7 +194,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
     int ndiskii = 0;
     for (int s = 1; s < 8; s++) if (g_a2gspu_diskii[s]) ndiskii++;
     if (ndiskii) {
-        long at = a2gspu_snap_dev_begin(f, "diskii", 1);
+        long at = a2gspu_snap_dev_begin(f, "diskii", 2);   // 2: media identity with a content hash
         uint8_t cnt = (uint8_t)ndiskii; fwrite(&cnt, 1, 1, f);
         for (int s = 1; s < 8; s++) if (g_a2gspu_diskii[s]) {
             uint8_t sl = (uint8_t)s; fwrite(&sl, 1, 1, f);
@@ -205,7 +206,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
     // The disks behind the heads: every track of a disk written since it was
     // mounted, for the IWM's drives and each Disk II's, length-prefixed likewise.
     if ((g_a2gspu_iwm && g_a2gspu_iwm->iwm) || ndiskii) {
-        long at = a2gspu_snap_dev_begin(f, "media", 1);
+        long at = a2gspu_snap_dev_begin(f, "media", 2);   // 2: media identity with a content hash
         uint8_t has_iwm = (g_a2gspu_iwm && g_a2gspu_iwm->iwm) ? 1 : 0; fwrite(&has_iwm, 1, 1, f);
         if (has_iwm) { long la = a2gspu_snap_len_begin(f); iwm_A2GSPU_media_snapshot(g_a2gspu_iwm, f); a2gspu_snap_len_end(f, la); }
         uint8_t cnt = (uint8_t)ndiskii; fwrite(&cnt, 1, 1, f);
@@ -217,7 +218,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         names += names.empty() ? "media" : ",media";
     }
     if (pdblock3_A2GSPU_present()) {
-        long at = a2gspu_snap_dev_begin(f, "pdblock", 1); pdblock3_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        long at = a2gspu_snap_dev_begin(f, "pdblock", 2); pdblock3_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);   // 2: media identity with a content hash
         names += names.empty() ? "pdblock" : ",pdblock";
     }
     // Every Uthernet II: the W5100's registers, buffers and socket states. The host
@@ -288,7 +289,8 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 r = (display_A2GSPU_new_video_restore(ds, f) && ds->video_scanner->A2GSPU_restore(f)) ? RESTORED : FAILED;
                 if (r == RESTORED && ftell(f) != payload + (long)len) r = FAILED;   // not this scanner's layout
             }
-        } else if (!strcmp(nm, "iwm") && ver == 2) {
+        } else if (!strcmp(nm, "iwm") && (ver == 2 || ver == 3)) {
+            g_a2gspu_media_id_version = ver >= 3 ? 2 : 1;   // a drive's image: name and hash, or the name alone
             if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
                 int mismatch = 0;
                 r = iwm_A2GSPU_restore(g_a2gspu_iwm, f, &mismatch) ? RESTORED : FAILED;
@@ -296,7 +298,8 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                     a2gspu_warn("A2GSPU SNAP", "iwm: a drive holds a different image than the snapshot's; its head state was left alone "
                                 "(mount what the manifest's run mounted)");
             }
-        } else if (!strcmp(nm, "diskii") && ver == 1) {
+        } else if (!strcmp(nm, "diskii") && (ver == 1 || ver == 2)) {
+            g_a2gspu_media_id_version = ver >= 2 ? 2 : 1;
             // Each saved controller applies to this machine's controller in the same
             // slot; one this machine lacks is stepped over and said.
             int mismatch = 0, absent = 0;
@@ -317,7 +320,8 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                             "(mount what the manifest's run mounted)");
             if (r == RESTORED && absent)
                 a2gspu_warn("A2GSPU SNAP", "diskii: a saved controller's slot has no Disk II in this machine; that controller was not applied");
-        } else if (!strcmp(nm, "media") && ver == 1) {
+        } else if (!strcmp(nm, "media") && (ver == 1 || ver == 2)) {
+            g_a2gspu_media_id_version = ver >= 2 ? 2 : 1;
             int mismatch = 0, applied = 0, absent = 0;
             uint8_t has_iwm = 0; uint32_t l = 0;
             bool ok = fread(&has_iwm, 1, 1, f) == 1;
@@ -346,7 +350,8 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                             "image, or the same name with a different track layout; that disk reads what its file holds");
             if (r == RESTORED && absent)
                 a2gspu_warn("A2GSPU SNAP", "media: a saved controller's disks have no controller to go to in this machine");
-        } else if (!strcmp(nm, "pdblock") && ver == 1) {
+        } else if (!strcmp(nm, "pdblock") && (ver == 1 || ver == 2)) {
+            g_a2gspu_media_id_version = ver >= 2 ? 2 : 1;
             if (pdblock3_A2GSPU_present()) {
                 int mismatch = 0;
                 r = pdblock3_A2GSPU_restore(f, &mismatch) ? RESTORED : FAILED;

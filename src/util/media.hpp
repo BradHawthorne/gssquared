@@ -127,6 +127,10 @@ typedef struct media_descriptor {
     bool write_protected = false;
     uint16_t dos33_volume = 254;
     uint8_t smartport_device_type = SP_DEVICE_HARDDISK;
+    // FORK: the image's identity for snapshots -- a house-FNV of the host file as it was
+    // at mount (util/media_identity.hpp).
+    uint64_t content_fnv = 0;
+    bool content_fnv_valid = false;
 } media_descriptor;
 
 int identify_media(media_descriptor& md);

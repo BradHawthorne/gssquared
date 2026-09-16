@@ -26,6 +26,7 @@
 #include "util/SoundEffect.hpp"
 #include "NClock.hpp"
 #include "util/media.hpp"
+#include "util/media_identity.hpp"
 #include "util/mount.hpp"
 
 
@@ -206,26 +207,24 @@ public:
     }
 
     // ---- A2GSPU snapshot (M5): the head, not the media. The block names the
-    // mounted image; a restore applies it only when the same image is mounted
-    // now, and counts a mismatch for the caller to warn about. A subclass
-    // writes its own fields after these and applies them under the same rule.
+    // mounted image (its name and content hash, util/media_identity.hpp); a restore
+    // applies it only when the same image is mounted now, and counts a mismatch for
+    // the caller to warn about. A subclass writes its own fields after these and
+    // applies them under the same rule.
 public:
     bool a2gspu_is_mounted() const { return is_mounted; }   // an observer's question (A2GSPU_TAP_SESSION disk_writes)
     virtual void A2GSPU_snapshot(FILE *f) {
-        const std::string name = (is_mounted && media_d) ? media_d->filename : std::string();
-        uint32_t n = (uint32_t)name.size(); fwrite(&n, 4, 1, f); if (n) fwrite(name.data(), 1, n, f);
+        media_identity_write(f, (is_mounted && media_d) ? media_d : nullptr);
         uint64_t u[4] = { read_position, head_position, advance_per_cycle, random_bits }; fwrite(u, 8, 4, f);
         fwrite(&windowBits, 4, 1, f);
         uint8_t b[4] = { (uint8_t)enable, write_protect, (uint8_t)is_mounted, (uint8_t)modified }; fwrite(b, 1, 4, f);
     }
     virtual bool A2GSPU_restore(FILE *f, int *media_mismatch) {
-        uint32_t n = 0; if (fread(&n, 4, 1, f) != 1 || n > 4096) return false;
-        std::string name(n, '\0'); if (n && fread(&name[0], 1, n, f) != n) return false;
+        media_identity_t id; if (!media_identity_read(f, id)) return false;
         uint64_t u[4]; if (fread(u, 8, 4, f) != 4) return false;
         uint32_t wb = 0; if (fread(&wb, 4, 1, f) != 1) return false;
         uint8_t b[4]; if (fread(b, 1, 4, f) != 4) return false;
-        const std::string now = (is_mounted && media_d) ? media_d->filename : std::string();
-        a2gspu_restore_apply = (now == name);
+        a2gspu_restore_apply = media_identity_matches(id, (is_mounted && media_d) ? media_d : nullptr);
         if (!a2gspu_restore_apply) { if (media_mismatch) (*media_mismatch)++; return true; }
         read_position = u[0]; head_position = u[1]; advance_per_cycle = u[2]; random_bits = u[3]; windowBits = wb;
         enable = b[0] != 0; write_protect = b[1]; modified = b[3] != 0;   // is_mounted is this machine's fact, not the file's
@@ -241,8 +240,7 @@ public:
     // one wrote. The host file is never written from a snapshot.
 public:
     void A2GSPU_media_snapshot(FILE *f) {
-        const std::string name = (is_mounted && media_d) ? media_d->filename : std::string();
-        uint32_t n = (uint32_t)name.size(); fwrite(&n, 4, 1, f); if (n) fwrite(name.data(), 1, n, f);
+        media_identity_write(f, (is_mounted && media_d) ? media_d : nullptr);
         const uint8_t has = (is_mounted && modified) ? 1 : 0; fwrite(&has, 1, 1, f);
         if (!has) return;
         const woz_image_t &img = woz.image();
@@ -254,8 +252,7 @@ public:
         }
     }
     bool A2GSPU_media_restore(FILE *f, int *mismatch, int *applied) {
-        uint32_t n = 0; if (fread(&n, 4, 1, f) != 1 || n > 4096) return false;
-        std::string name(n, '\0'); if (n && fread(&name[0], 1, n, f) != n) return false;
+        media_identity_t id; if (!media_identity_read(f, id)) return false;
         uint8_t has = 0; if (fread(&has, 1, 1, f) != 1) return false;
         if (!has) return true;
         uint8_t tmap[160]; if (fread(tmap, 1, 160, f) != 160) return false;
@@ -267,8 +264,7 @@ public:
             if (hdr[1] && fread(t.bits.data(), 1, hdr[1], f) != hdr[1]) return false;
         }
         woz_image_t &img = woz.image();
-        const std::string now = (is_mounted && media_d) ? media_d->filename : std::string();
-        if (now != name || nt != img.tracks.size() || memcmp(tmap, img.tmap, 160) != 0) {
+        if (!media_identity_matches(id, (is_mounted && media_d) ? media_d : nullptr) || nt != img.tracks.size() || memcmp(tmap, img.tmap, 160) != 0) {
             if (mismatch) (*mismatch)++;
             return true;
         }
