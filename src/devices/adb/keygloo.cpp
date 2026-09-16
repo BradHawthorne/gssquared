@@ -232,39 +232,19 @@ void init_slot_keygloo(computer_t *computer, SlotType_t slot) {
         }
         kb_state->kg->frame_handler();
 
-        // ── Event Manager coordinate injection + pointer clamping (SHR only) ──
-        // GS/OS apps read absolute cursor pos from Toolbox memory, not ADB deltas.
-        // Only active in SHR (the $E1:03C8 dispatch table is garbage pre-GS/OS).
-        if (mouse && mmu_gs && (mmu_gs->new_video_register() & 0x80)) {
-            uint8_t *slow = mmu_gs->get_megaii_memory_base();
-            if (slow) {
-                // GS/OS SetMouse/ClampMouse bounds at $E1:02B8-02BF.
-                int clamp_x0 = slow[0x102B8] | (slow[0x102BA] << 8);
-                int clamp_y0 = slow[0x102B9] | (slow[0x102BB] << 8);
-                int clamp_x1 = slow[0x102BC] | (slow[0x102BE] << 8);
-                int clamp_y1 = slow[0x102BD] | (slow[0x102BF] << 8);
-                if (clamp_x1 > clamp_x0 && clamp_y1 > clamp_y0) {
-                    mouse->clamp_position(clamp_x0, clamp_y0, clamp_x1, clamp_y1);
-                }
-                // Tool Dispatch Table ptr at $E1:03C8 (24-bit into IIgs full RAM).
-                uint32_t tool_start = slow[0x103C8] | (slow[0x103C9] << 8) | ((uint32_t)slow[0x103CA] << 16);
-                uint8_t *gs_ram = mmu_gs->get_memory_base();  // full IIgs RAM, NOT MegaII
-                if (tool_start >= 0x20000 && tool_start < 0x800000 && gs_ram) {
-                    uint16_t em_active = gs_ram[tool_start + 24] | (gs_ram[tool_start + 25] << 8);
-                    if (em_active) {
-                        int ax = mouse->get_abs_x();
-                        int ay = mouse->get_abs_y();
-                        slow[0x10190] = ax & 0xFF; slow[0x10192] = (ax >> 8) & 0xFF;  // $E1:0190/0192 X
-                        slow[0x10191] = ay & 0xFF; slow[0x10193] = (ay >> 8) & 0xFF;  // $E1:0191/0193 Y
-                        uint8_t *m2 = kb_state->computer->mmu->get_memory_base();
-                        if (m2) {  // mirror to bank $00 Toolbox cursor locations
-                            m2[0x047C] = ax & 0xFF; m2[0x057C] = (ax >> 8) & 0xFF;
-                            m2[0x04FC] = ay & 0xFF; m2[0x05FC] = (ay >> 8) & 0xFF;
-                        }
-                    }
-                }
-            }
-        }
+        // No Event Manager coordinate writes. This block used to write the host
+        // pointer's absolute position into $E1:0190-0193 and the bank-$00 cursor
+        // holes every frame, with no environment gate, whenever it judged the Event
+        // Manager active -- the emulator writing guest memory, which a real IIgs
+        // never does. Measured before removing it: at the GS/OS 6.0.1 desktop (SHR
+        // on) its activity test never passed, so it wrote nothing, and the cursor
+        // is driven entirely by the ROM-faithful ADB path -- six injected
+        // (+30,+20) mouse moves moved the firmware's cursor copy by exactly
+        // (+180,+120). Where the test did pass it would have overwritten what
+        // GS/OS computed from those same deltas. Absolute host-pointer alignment
+        // done faithfully (inject ADB deltas toward the target, reading the
+        // guest's position back) is upstream's closed-loop mouse sync, recorded
+        // in Docs/UPSTREAM_SYNC.md for the upstream port.
 
         return true;
     });
