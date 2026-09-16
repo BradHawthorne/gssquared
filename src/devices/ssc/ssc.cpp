@@ -83,7 +83,8 @@ uint8_t ssc_read_c0xx(void *context, uint32_t address) {
             return st->dipsw1;
         case SSC_DIPSW2: {
             uint8_t v = st->dipsw2 & 0xFE;
-            if (!st->cts_ready) {
+            // FORK: bit 0 is the CTS line, as the attached device reports it.
+            if (!(st->acia ? st->acia->cts_asserted() : st->cts_ready)) {
                 v |= 0x01;
             }
             return v;
@@ -251,7 +252,7 @@ void ssc_A2GSPU_snapshot(FILE *f) {
     }
 }
 
-bool ssc_A2GSPU_restore(FILE *f, int *absent) {
+bool ssc_A2GSPU_restore(FILE *f, int *absent, int version) {
     *absent = 0;
     uint8_t cnt = 0;
     if (fread(&cnt, 1, 1, f) != 1) return false;
@@ -261,8 +262,9 @@ bool ssc_A2GSPU_restore(FILE *f, int *absent) {
         ssc_state_t *st = b[0] < 16 ? g_ssc_cards[b[0]] : nullptr;
         if (!st || !st->acia) {
             // Same layout either way: read into a scratch chip-less record and drop it.
-            uint8_t skip[10 + 16];
-            if (fread(skip, 1, sizeof skip, f) != sizeof skip) return false;
+            uint8_t skip[MOS6551::A2GSPU_RECORD_V2];
+            const size_t n = version >= 2 ? MOS6551::A2GSPU_RECORD_V2 : MOS6551::A2GSPU_RECORD_V1;
+            if (fread(skip, 1, n, f) != n) return false;
             (*absent)++;
             continue;
         }
@@ -271,7 +273,7 @@ bool ssc_A2GSPU_restore(FILE *f, int *absent) {
         st->cts_ready = b[3] != 0;
         st->dip_irq_enabled = b[4] != 0;
         st->acia->set_dip_irq_enabled(st->dip_irq_enabled);
-        if (!st->acia->A2GSPU_restore(f)) return false;
+        if (!st->acia->A2GSPU_restore(f, version)) return false;
     }
     return true;
 }

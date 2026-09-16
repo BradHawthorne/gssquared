@@ -255,7 +255,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         names += names.empty() ? "scc" : ",scc";
     }
     if (ssc_A2GSPU_present()) {
-        long at = a2gspu_snap_dev_begin(f, "ssc", 1); ssc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        long at = a2gspu_snap_dev_begin(f, "ssc", 2); ssc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);   // 2: IRQ latch and modem inputs
         names += names.empty() ? "ssc" : ",ssc";
     }
     // SecondSight: registers, command/DMA state, modes, palettes, text state, VRAM and SRAM.
@@ -399,10 +399,10 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
             if (voc_A2GSPU_present()) r = voc_A2GSPU_restore(f) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "scc") && ver == 1) {
             if (scc_A2GSPU_present()) r = scc_A2GSPU_restore(f) ? RESTORED : FAILED;
-        } else if (!strcmp(nm, "ssc") && ver == 1) {
+        } else if (!strcmp(nm, "ssc") && (ver == 1 || ver == 2)) {
             if (ssc_A2GSPU_present()) {
                 int absent = 0;
-                r = ssc_A2GSPU_restore(f, &absent) ? RESTORED : FAILED;
+                r = ssc_A2GSPU_restore(f, &absent, (int)ver) ? RESTORED : FAILED;
                 if (r == RESTORED && absent)
                     a2gspu_warn("A2GSPU SNAP", "ssc: a saved Super Serial Card's slot has none in this machine; that card was not applied");
             }

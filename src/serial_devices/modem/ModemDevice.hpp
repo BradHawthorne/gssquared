@@ -241,7 +241,7 @@ class ModemDevice : public SerialDevice {
 
         // FORK: THE MODEM LINES (fidelity study, serial step 4). Carrier (DCD) is reported to
         // the port whenever it changes -- asserted while a connection is up, in data mode or
-        // escaped to command mode -- with CTS always asserted. A DTR drop while connected hangs
+        // escaped to command mode -- with CTS and DSR always asserted. A DTR drop while connected hangs
         // up and answers NO CARRIER, the usual &D2 behaviour ProTERM and GS/OS drivers rely on.
         int last_dcd = -1;
         bool last_dtr = false;
@@ -250,7 +250,7 @@ class ModemDevice : public SerialDevice {
         void report_lines() {
             const int dcd = socket ? 1 : 0;
             if (dcd == last_dcd) return;
-            if (q_dev.try_send(SerialMessage{MESSAGE_MODEM_STATUS, (uint64_t)(dcd | 2)})) last_dcd = dcd;
+            if (q_dev.try_send(SerialMessage{MESSAGE_MODEM_STATUS, (uint64_t)(dcd | 2 | 8)})) last_dcd = dcd;   // CTS and DSR always
         }
 
         bool dial_aborted() {

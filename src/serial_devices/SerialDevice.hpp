@@ -14,7 +14,8 @@ enum serial_message_type_t {
     MESSAGE_SHUTDOWN,
     MESSAGE_LINE,
     // FORK: modem lines. MODEM_STATUS travels device -> host (data bit 0 DCD, bit 1 CTS,
-    // bit 2 RI; 1 = asserted); MODEM_CTL travels host -> device (bit 0 DTR, bit 1 RTS).
+    // bit 2 RI, bit 3 DSR; 1 = asserted); MODEM_CTL travels host -> device (bit 0 DTR,
+    // bit 1 RTS).
     // BREAK_ON/BREAK_OFF go either way. A device that ignores them changes nothing.
     MESSAGE_MODEM_STATUS,
     MESSAGE_MODEM_CTL,
