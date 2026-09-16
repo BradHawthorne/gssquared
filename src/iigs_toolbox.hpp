@@ -18,6 +18,7 @@
 #include <map>
 #include <utility>
 #include "cpu.hpp"
+#include "a2gspu_observe.hpp"   // a2obs_peek (M11)
 #include "iigs_symbols.hpp"
 #include "debugger/trace_opcodes.hpp"
 
@@ -723,27 +724,20 @@ inline FILE *g_callstream_out = nullptr;
 inline bool  g_callstream_on  = false;
 inline int   g_callstream_seq = 0;
 
-// Banking-correct, mostly-non-disturbing opcode read for the instrumentation
-// rails.  See the note at the fetch site in iigs_calltrace_step().
+// The call tracker's opcode read: a2obs_peek (a2gspu_observe.hpp), so CALLTRACE,
+// CALLSTREAM and the attribution BLAME builds on them read through the probe.
 //
-// STANDING VIOLATION OF M11'S RULE, LEFT IN PLACE DELIBERATELY. The rule
-// (Docs/INSTRUMENTATION_SHAPE.md M11) is that an observe rail reads through the
-// probe and never through the CPU's read path; this reads through cpu->mmu->read
-// for everything outside $C000-$CFFF, so CALLTRACE and CALLSTREAM -- and the
-// attribution BLAME builds on them -- are on the CPU's path with its side
-// effects. Half the original justification is now stale: probe_peek no longer
-// returns floating bus for IIgs banks $00/$01 (mmu_iigs.hpp), so the "-> 00/EEEE"
-// symptom below cannot recur there. The OTHER half still stands and is why this
-// was not simply switched: on the II family probe_peek is read_raw, which does
-// not resolve ROM/language-card banking, and switching it there produced a
-// CALLTRACE that emitted NOTHING on -p 3 with thousands of JSRs executing.
-// Closing this needs a before/after on a real IIgs calltrace and a IIe one
-// beside it, not an edit -- so it is recorded here as open rather than papered
-// over with a comment that makes the wrong rule look justified.
+// This was the standing violation of M11's rule (Docs/INSTRUMENTATION_SHAPE.md):
+// everything outside $C000-$CFFF went through cpu->mmu->read, the CPU's own path.
+// It was left in place because the II family's probe (read_raw) does not resolve
+// the language card, and switching CALLTRACE to it once emitted nothing on -p 3.
+// a2obs_peek keeps the MMU read for the II family outside $Cxxx, where it has no
+// side effect, and uses the probe on the IIgs, where the CPU path sets the cycle
+// type of what it reads. Checked before and after on both platforms: armed
+// CALLTRACE/CALLSTREAM/BLAME runs keep the unarmed SHR hash and cycle count, and
+// their outputs are unchanged.
 static inline uint8_t iigs_instr_peek(cpu_state *cpu, uint32_t a) {
-    uint16_t off = (uint16_t)(a & 0xFFFF);
-    if (off >= 0xC000 && off <= 0xCFFF) return cpu->mmu->probe_peek(a);
-    return cpu->mmu->read(a);
+    return a2obs_peek(cpu->mmu, a);
 }
 
 inline void iigs_calltrace_step(cpu_state *cpu) {

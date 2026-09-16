@@ -11,6 +11,7 @@
 // gs2.cpp-only (not the CPU core). The CPU-register dump itself lives in
 // iigs_toolbox.hpp (iigs_cpu_state_dump_regs), shared with the BRK path.
 // ============================================================================
+#include "a2gspu_observe.hpp"   // a2obs_peek (M11)
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -56,8 +57,8 @@ inline void iigs_mem_range_dump(cpu_state *cpu, const uint8_t *megaii_base,
                 uint8_t b;
                 if ((bank | 1) == 0xE1 && megaii_base)
                     b = megaii_base[((bank & 1) << 16) | ((a + i) & 0xFFFF)];
-                else
-                    b = cpu->mmu->read((bank << 16) | ((a + i) & 0xFFFF));
+                else   // observer read, never the CPU path: DUMP is an observe rail (M11)
+                    b = a2obs_peek(cpu->mmu, (bank << 16) | ((a + i) & 0xFFFF));
                 printf(" %02X", b);
             }
             printf("\n");
@@ -292,8 +293,17 @@ inline int iigs_eval_asserts(const char *spec, cpu_state *cpu, const uint8_t *e1
                "(an assert that evaluates nothing is not a pass)\n", spec, ndrop);
         return 1;
     }
-    printf("IIGS ASSERT: %d checks (%d unparseable) -> %s\n",
-           nchk, ndrop, allpass ? "ALL PASS" : "FAILED");
+    /* The summary keeps the exact "N checks -> ALL PASS" spelling consumers match
+     * whenever nothing was dropped. An unparseable clause fails the gate (it is
+     * counted in allpass above), so "(0 unparseable)" on a pass carried no
+     * information -- and adding it broke a harness that matched the line
+     * verbatim. The count is printed exactly when it is non-zero, which is
+     * exactly when it matters. */
+    if (ndrop)
+        printf("IIGS ASSERT: %d checks (%d unparseable) -> %s\n",
+               nchk, ndrop, allpass ? "ALL PASS" : "FAILED");
+    else
+        printf("IIGS ASSERT: %d checks -> %s\n", nchk, allpass ? "ALL PASS" : "FAILED");
     return allpass ? 0 : 1;
 }
 

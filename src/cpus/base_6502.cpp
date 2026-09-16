@@ -191,7 +191,7 @@ inline void phantom_write_ign(cpu_state *cpu, uint32_t address, uint8_t value) {
 
 /*** Data Memory Accessors */
 
-// read_byte, read_word, write_byte, write_word - are "absolute" mode memory accessors.
+// read_byte, read_word, write_byte - are "absolute" mode memory accessors.
 /**
  * byte accessor. 
  * word accessor: in emul mode (or just plain 6502), the address will wrap from FFFF -> 0.
@@ -241,16 +241,6 @@ inline word_t read_word(cpu_state *cpu, uint16_t address) {
     word_t value = word(vl, vh);
     TRACE(cpu->trace_entry.eaddr = eaddr; cpu->trace_entry.data = value;)
     return value;
-}
-
-/* Used to write a word to a 16-bit address plus data bank */
-inline void write_word(cpu_state *cpu, uint16_t address, word_t value) {
-    uint32_t eaddr = make_address_long(cpu, address);
-    cpu->mmu->write(eaddr, word_lo(value));
-    incr_cycles(cpu);
-    cpu->mmu->write(eaddr + 1, word_hi(value));
-    incr_cycles(cpu);
-    TRACE(cpu->trace_entry.eaddr = eaddr; cpu->trace_entry.data = value;)
 }
 
 /*** Program Counter Memory Accessors ***/
@@ -2410,10 +2400,6 @@ int execute_next(cpu_state *cpu) override {
             // Bank $E0/$E1 is the IIgs Mega-II image; it does not exist on a
             // II-family machine, so keep this one dump 65816-only.
             if constexpr (CPUTraits::has_65816_ops) {
-                printf("IIGS PCTRAP mem $E1/0000 read():");
-                for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
-                    printf(" %02X", cpu->mmu->read(a));
-                printf("\n");
                 printf("IIGS PCTRAP mem $E1/0000 probe_peek(megaII):");
                 for (uint32_t a = 0xE10000; a <= 0xE10010; a++)
                     printf(" %02X", cpu->mmu->probe_peek(a));
@@ -2425,13 +2411,17 @@ int execute_next(cpu_state *cpu) override {
                 for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
                     printf(" %02X", cpu->mmu->probe_peek(a));
                 printf("\n");
-                // read() path too: banks $00/$01 are handler pages -> probe_peek returns
-                // floating-bus $EE for them; read() invokes bank_shadow_read = TRUE content.
-                printf("IIGS PCTRAP dump $%02X/%04X read()    :",
-                       (g_trap_dump_base >> 16) & 0xFF, g_trap_dump_base & 0xFFFF);
-                for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
-                    printf(" %02X", cpu->mmu->read(a));
-                printf("\n");
+                // One row, through the probe. A second read() row used to follow, justified
+                // by "banks $00/$01 are handler pages, so probe_peek returns floating-bus $EE";
+                // that stopped being true when MMU_IIgs::probe_peek learned to resolve them the
+                // way the CPU does, and the read() row was then an observe rail taking the CPU
+                // path for nothing. Bytes the probe cannot show are marked, not guessed.
+                {
+                    int unreadable = 0;
+                    for (uint32_t a = g_trap_dump_base; a < g_trap_dump_base + g_trap_dump_len; a++)
+                        if (!a2obs_readable(cpu->mmu, a)) unreadable++;
+                    if (unreadable) printf("IIGS PCTRAP dump: %d byte(s) in the range are $C0xx soft switches the probe cannot read; shown as the placeholder\n", unreadable);
+                }
             }
             cpu->mmu->a2gspu_state_dump();   // soft-switch state + $00/$01 $A600 main/aux resolution
         }
@@ -3978,7 +3968,7 @@ int execute_next(cpu_state *cpu) override {
                     // BRKMEM: dump bytes around the crash PC (and the stacked return
                     // bank/addr) so a corrupted/misplaced code byte can be read off
                     // the live image at the fault. Env-gated, observation only.
-                    if (getenv("A2GSPU_BRKMEM")) {
+                    if (g_brkmem_on) {
                         printf("IIGS BRKHIST (last PCs bank/addr, oldest->newest):\n ");
                         int hstart = (g_pchist_i > 220) ? g_pchist_i - 220 : 0;
                         for (int k = hstart; k < g_pchist_i; k++)
@@ -3994,7 +3984,7 @@ int execute_next(cpu_state *cpu) override {
                         for (uint32_t a = start; a <= (lo + 0x10) && a <= 0xFFFF; a += 16) {
                             printf("  %02X/%04X:", bank, a);
                             for (uint32_t i = 0; i < 16 && (a + i) <= 0xFFFF; i++)
-                                printf(" %02X", cpu->mmu->read(((uint32_t)bank << 16) | ((a + i) & 0xFFFF)));
+                                printf(" %02X", a2obs_peek(cpu->mmu, ((uint32_t)bank << 16) | ((a + i) & 0xFFFF)));
                             printf("\n");
                         }
                         // Stack dump: the return chain that led here (bank 0).
@@ -4003,7 +3993,7 @@ int execute_next(cpu_state *cpu) override {
                         for (uint32_t s = sp + 1; s <= sp + 0x18 && s <= 0xFFFF; s += 8) {
                             printf("  00/%04X:", s);
                             for (uint32_t i = 0; i < 8 && (s + i) <= 0xFFFF; i++)
-                                printf(" %02X", cpu->mmu->read((s + i) & 0xFFFF));
+                                printf(" %02X", a2obs_peek(cpu->mmu, (s + i) & 0xFFFF));
                             printf("\n");
                         }
                     }

@@ -307,6 +307,19 @@ void run_cpus_init(computer_t *computer) {
     computer->cached_display_state = computer->get_module_state(MODULE_DISPLAY);
 }
 
+// The machine the observer helpers read display state from (a2gspu_observe.hpp).
+// Refreshed every frame rather than at the once-per-process arm: a windowed
+// session can power off one machine and start another, and a pointer captured
+// at the first frame would outlive the computer it points into.
+static computer_t *s_a2obs_computer = nullptr;
+static int a2obs_video_flags_from_scanner() {
+    if (!s_a2obs_computer) return -1;
+    display_state_t *d = (display_state_t *)s_a2obs_computer->cached_display_state;
+    VideoScannerII *vs = d ? d->video_scanner : nullptr;
+    if (!vs) return -1;
+    return (vs->is_text() ? 1 : 0) | (vs->is_mixed() ? 2 : 0) | (vs->is_page_2() ? 4 : 0) | (vs->is_hires() ? 8 : 0);
+}
+
 /*
 Execute one frame of emulation. Returns true if emulation should continue,
 false if the user requested a halt.
@@ -322,6 +335,9 @@ bool run_one_frame(computer_t *computer) {
     // paths. Both arm helpers self-guard for idempotency (the spike also arms
     // the generic tap earlier); no-op with no A2GSPU_TAP*/WIZ5_* env set, so the
     // stock emulator is unchanged (dual-mode invariant).
+    s_a2obs_computer = computer;                 // this frame's machine (see above)
+    g_a2obs_video_flags = a2obs_video_flags_from_scanner;
+    g_a2gspu_cpu_for_names = computer->cpu;      // likewise: the namer probes the live CPU's MMU
     {
         static bool s_wiz5_armed = false;
         if (!s_wiz5_armed) {
@@ -329,7 +345,13 @@ bool run_one_frame(computer_t *computer) {
             // platform from the MMU itself: only a IIgs MMU can see the Mega II image at $E1
             a2gspu_liveness_arm(computer->cpu->mmu->probe_readable(0xE12000));
             g_a2gspu_cpu_for_names = computer->cpu;
-            iigs_names_ready();
+            // Names are loaded when a rail that prints them is armed, and otherwise
+            // on the first lookup (a2gspu_name_pc seeds on demand). Loading them
+            // unconditionally hashed the ROM, read two tables and printed
+            // "IIGS SYMS:" on every stock windowed launch -- a IIe included --
+            // which is instrumentation work with no A2GSPU_* set.
+            if (g_trap_on) iigs_names_ready();
+            if (getenv("A2GSPU_BRKMEM")) g_brkmem_on = true;   // BRK reads the flag, not the env, per BRK
         }
     }
 
@@ -998,6 +1020,7 @@ static const uint32_t A2GSPU_SNAP_MANIFEST = 0x4D505347;  // 'GSPM'
 // never what a class letter would imply.
 static std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     const char *seed = getenv("A2GSPU_SEED"), *ft = getenv("A2GSPU_FAKETIME");
+    char bram[40]; a2gspu_bram_field(bram, sizeof bram);
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
@@ -1035,13 +1058,13 @@ static std::string a2gspu_snap_manifest_text(int frame, const std::string &devic
     const char *cls = (holds("adb") && holds("ensoniq") && holds("iwm")) ? "C"
                     : (holds("vgcint") || holds("scanner"))              ? "B"
                                                                          : "A";
-    char buf[640];
+    char buf[768];
     snprintf(buf, sizeof buf,
              "class=%s devices=%s included=%s excluded=%s "
-             "frame=%d seed=%s faketime=%s ramdisk=%d build=%s exe=%s",
+             "frame=%d seed=%s faketime=%s ramdisk=%d bram=%s build=%s exe=%s",
              cls, devices.empty() ? "-" : devices.c_str(), included.c_str(), excluded.c_str(),
              frame, seed ? seed : "unset", ft ? ft : "unset", getenv("A2GSPU_RAMDISK") ? 1 : 0,
-             BUILD_VERSION, exe);
+             bram, BUILD_VERSION, exe);
     return buf;
 }
 
@@ -1183,6 +1206,16 @@ static bool a2gspu_snap_check_sentinel(FILE *f) {
     if (fread(&end, 4, 1, f) != 1) return false;
     return end == A2GSPU_SNAP_END;
 }
+
+// CTRL save/restore of a whole snapshot file. Shared by `save`, `restore` and the
+// restore's rollback checkpoint, so the rollback is written by exactly the code
+// that writes every other snapshot. The spike's SNAP_SAVE/SNAP_LOAD keep their
+// own sequence: a failed SNAP_LOAD exits the process, so it cannot leave a
+// half-restored session behind.
+struct GS2AppState;
+static bool a2gspu_ctrl_snap_save(const char *path, computer_t *computer, GS2AppState *state);
+static bool a2gspu_ctrl_snap_restore(const char *path, computer_t *computer, GS2AppState *state,
+                                     std::string &manifest, const char **stage);
 
 // A2GSPU_SAVE_AT host callback (registered into g_save_at_fn) — writes the SAME
 // snapshot the SNAP_SAVE path writes, but at the EXACT break instruction (invoked
@@ -1988,6 +2021,45 @@ static void a2gspu_ctrl_ack(const char *dir, int seq, const char *result) {
 // Instruction-granular step helpers: a2ctrl::arm_cpu / step_one / format_cpu_line
 // (a2gspu_ctrl_cmds.hpp). run/step/run-until/keys/press/key: try_exec / try_input.
 
+static bool a2gspu_ctrl_snap_save(const char *path, computer_t *computer, GS2AppState *state) {
+    FILE *sf = fopen(path, "wb");
+    if (!sf) return false;
+    bool ok = false;
+    a2gspu_cpu_save(sf, computer->cpu);
+    if (state->mmu_iigs) { state->mmu_iigs->A2GSPU_snapshot(sf); ok = true; }
+    else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(rail_mmu(computer))) { m->A2GSPU_snapshot(sf); ok = true; }
+    if (ok) {
+        const std::string devs = a2gspu_snap_write_devices(sf, computer);
+        a2gspu_snap_write_sentinel(sf);
+        a2gspu_snap_write_manifest(sf, a2gspu_snap_manifest_text(g_iigs_cur_frame, devs));
+    }
+    fclose(sf);
+    if (!ok) remove(path);
+    return ok;
+}
+
+// Restores into the live machine, in order, and reports the first step that
+// refused as *stage (cpu | mmu | devices | sentinel). On false the machine may be
+// partly overwritten -- the caller owns the rollback.
+static bool a2gspu_ctrl_snap_restore(const char *path, computer_t *computer, GS2AppState *state,
+                                     std::string &manifest, const char **stage) {
+    FILE *sf = fopen(path, "rb");
+    if (!sf) { *stage = "open"; return false; }
+    bool ok = a2gspu_cpu_load(sf, computer->cpu);
+    if (!ok) *stage = "cpu";
+    if (ok) {
+        if (state->mmu_iigs) ok = state->mmu_iigs->A2GSPU_restore(sf);
+        else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(rail_mmu(computer))) ok = m->A2GSPU_restore(sf);
+        else ok = false;
+        if (!ok) *stage = "mmu";
+    }
+    if (ok) { ok = a2gspu_snap_read_devices(sf, computer); if (!ok) *stage = "devices"; }
+    if (ok) { ok = a2gspu_snap_check_sentinel(sf); if (!ok) *stage = "sentinel"; }
+    if (ok) manifest = a2gspu_snap_read_manifest(sf);
+    fclose(sf);
+    return ok;
+}
+
 // Soft-switch read-status helper for `vid`.  A free function rather than a
 // lambda inside a2gspu_ctrl_loop(): that function is already very large, and at
 // -O3 the extra inlining candidate was enough to make g++ fall over silently
@@ -2266,7 +2338,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
             video_system_t *vs = computer->video_system;
             vs->update_display(true);
             vs->save_screenshot(line + 5);
-            snprintf(result, sizeof result, "status=OK shot %s", line + 5);
+            snprintf(result, sizeof result, "status=OK shot profile=sdl-human %s", line + 5);
         } else if (!strncmp(line, "mount ", 6)) {
             // mount sXdY <path> — swap media at runtime (the 1981 flippy dance,
             // agent edition: multi-disk originals prompt for disk swaps mid-run).
@@ -2352,7 +2424,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 if (hf) {
                     for (int cy = 0; cy < 24; cy++) fprintf(hf, "%s\n", map[cy]);
                     fclose(hf);
-                    snprintf(result, sizeof result, "status=OK hgr page%d -> %s", page, fbuf);
+                    snprintf(result, sizeof result, "status=OK hgr profile=hgr-ascii-coarse page%d -> %s", page, fbuf);
                 } else {
                     snprintf(result, sizeof result, "status=FAIL hgr-write-fail");
                 }
@@ -2361,7 +2433,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 // "what is on screen right now" needs no second round trip.
                 printf("HGR PAGE %d ($%04X) 40x24 density map:\n", page, base);
                 for (int cy = 0; cy < 24; cy++) printf("  |%s|\n", map[cy]);
-                snprintf(result, sizeof result, "status=OK hgr page%d dumped to stdout", page);
+                snprintf(result, sizeof result, "status=OK hgr profile=hgr-ascii-coarse page%d dumped to stdout", page);
             }
         } else if (!strncmp(line, "screen", 6)) {
             // screen [<file>] -- ONE mode-aware "what is on the display" verb.
@@ -2641,46 +2713,48 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                 }
             }
         } else if (!strncmp(line, "save ", 5)) {
-            // save <file> — CPU regs + full MMU snapshot (128K + page tables +
-            // softswitch state) + sentinel. Quiescent-point checkpoints (take at
-            // a prompt, not mid disk-IO — device state is intentionally excluded
-            // and self-heals over the next frames, same policy as SNAP_SAVE).
-            FILE *sf = fopen(line + 5, "wb");
-            bool ok = false;
-            if (sf) {
-                a2gspu_cpu_save(sf, computer->cpu);
-                if (state->mmu_iigs) { state->mmu_iigs->A2GSPU_snapshot(sf); ok = true; }
-                else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(rail_mmu(computer))) { m->A2GSPU_snapshot(sf); ok = true; }
-                if (ok) {
-                    const std::string devs = a2gspu_snap_write_devices(sf, computer);
-                    a2gspu_snap_write_sentinel(sf);
-                    a2gspu_snap_write_manifest(sf, a2gspu_snap_manifest_text(g_iigs_cur_frame, devs));
-                }
-                fclose(sf);
-                if (!ok) remove(line + 5);
-            }
-            if (ok) snprintf(result, sizeof result, "status=OK save %s", line + 5);
+            // save <file> -- CPU regs + full MMU snapshot (RAM + page tables +
+            // softswitch state) + the device blocks this machine has (the ADB
+            // micro, the Ensoniq, the interrupt registers, the IWM and drive
+            // heads, the block device and its RAM-disk overlay) + sentinel +
+            // manifest. The scanner and the media are not saved; the manifest's
+            // excluded= says so. Take it at a quiescent point.
+            if (a2gspu_ctrl_snap_save(line + 5, computer, state))
+                snprintf(result, sizeof result, "status=OK save %s", line + 5);
             else snprintf(result, sizeof result, "status=FAIL save-fail");
         } else if (!strncmp(line, "restore ", 8)) {
-            FILE *sf = fopen(line + 8, "rb");
-            bool ok = false;
+            /* RESTORE IS TRANSACTIONAL.
+             *
+             * It used to load the CPU registers, then the MMU, then the device
+             * blocks, straight into the live machine, and answer FAIL at whichever
+             * step refused -- after the earlier steps had already overwritten the
+             * machine. A snapshot of the wrong geometry (a IIe file into a IIgs
+             * session) replaced every register, failed the MMU's geometry check,
+             * and left a machine that was neither the old one nor the file's while
+             * the ack said only "restore-fail". A FAIL that has changed the
+             * machine is a lie of the kind AGENTS.md rule 3 forbids.
+             *
+             * So the current machine is saved first, by the same code as `save`,
+             * and any failed step restores it. The ack names the step that failed
+             * and whether the rollback held. */
             std::string manifest;
-            if (sf) {
-                ok = a2gspu_cpu_load(sf, computer->cpu);
-                if (ok) {
-                    if (state->mmu_iigs) ok = state->mmu_iigs->A2GSPU_restore(sf);
-                    else if (MMU_IIe *m = dynamic_cast<MMU_IIe *>(rail_mmu(computer))) ok = m->A2GSPU_restore(sf);
-                    else ok = false;
-                }
-                if (ok) ok = a2gspu_snap_read_devices(sf, computer);
-                if (ok) ok = a2gspu_snap_check_sentinel(sf);
-                if (ok) manifest = a2gspu_snap_read_manifest(sf);
-                fclose(sf);
-            }
-            if (ok) {
-                computer->cpu->halt = 0;   // force-run after restore
-                a2gspu_snap_print_manifest(manifest);
-                a2gspu_snap_print_devices();
+            const char *stage = nullptr;
+            FILE *probe = fopen(line + 8, "rb");
+            if (!probe) {
+                snprintf(result, sizeof result, "status=FAIL restore-fail stage=open rolled-back=n/a -- cannot open '%s'; the machine was not touched", line + 8);
+            } else {
+                fclose(probe);
+                std::error_code ec;
+                std::filesystem::path rb = std::filesystem::temp_directory_path(ec) /
+                    ("a2gspu-restore-rollback-" + std::to_string((long long)getpid()) + ".snap");
+                const std::string rbs = rb.string();
+                bool have_rb = !ec && a2gspu_ctrl_snap_save(rbs.c_str(), computer, state);
+                if (!have_rb) {
+                    snprintf(result, sizeof result, "status=FAIL restore-fail stage=rollback-save rolled-back=n/a -- could not checkpoint the current machine first, so nothing was restored");
+                } else if (a2gspu_ctrl_snap_restore(line + 8, computer, state, manifest, &stage)) {
+                    computer->cpu->halt = 0;   // force-run after restore
+                    a2gspu_snap_print_manifest(manifest);
+                    a2gspu_snap_print_devices();
                 /* THE ACK CARRIES THE MANIFEST ITSELF, not a present/absent flag.
                  *
                  * It used to say only manifest=present, and the doc sent the
@@ -2696,12 +2770,23 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
                  * rail at all. Appended at the end of the line so every existing
                  * prefix match on status=/manifest=/devices=/skipped= still
                  * works. */
-                snprintf(result, sizeof result, "status=OK restore %s manifest=%s devices=%s skipped=%s%s%s", line + 8,
-                         manifest.empty() ? "absent" : "present",
-                         g_snap_dev_restored.empty() ? "-" : g_snap_dev_restored.c_str(),
-                         g_snap_dev_skipped.empty() ? "-" : g_snap_dev_skipped.c_str(),
-                         manifest.empty() ? "" : " | ", manifest.c_str());
-            } else snprintf(result, sizeof result, "status=FAIL restore-fail");
+                    snprintf(result, sizeof result, "status=OK restore %s manifest=%s devices=%s skipped=%s%s%s", line + 8,
+                             manifest.empty() ? "absent" : "present",
+                             g_snap_dev_restored.empty() ? "-" : g_snap_dev_restored.c_str(),
+                             g_snap_dev_skipped.empty() ? "-" : g_snap_dev_skipped.c_str(),
+                             manifest.empty() ? "" : " | ", manifest.c_str());
+                } else {
+                    std::string rb_manifest; const char *rb_stage = nullptr;
+                    bool rolled = a2gspu_ctrl_snap_restore(rbs.c_str(), computer, state, rb_manifest, &rb_stage);
+                    if (rolled)
+                        snprintf(result, sizeof result, "status=FAIL restore-fail stage=%s rolled-back=yes -- '%s' did not restore; the machine is as it was before this command",
+                                 stage ? stage : "?", line + 8);
+                    else
+                        snprintf(result, sizeof result, "status=FAIL restore-fail stage=%s rolled-back=FAILED(%s) -- the machine state is undefined: reset, or restore a snapshot known to fit",
+                                 stage ? stage : "?", rb_stage ? rb_stage : "?");
+                }
+                if (have_rb) std::filesystem::remove(rb, ec);
+            }
         } else if (!strncmp(line, "vid", 3)) {
             // vid -- the live video mode, read from the VIDEO SCANNER's own state.
             //
@@ -2799,7 +2884,7 @@ static void a2gspu_ctrl_loop(GS2AppState *state) {
 // intentionally act as the user for agentic DUAL-03 closed-loop proofs.
 // Instrumentation env (SPIKE/COVERAGE/CTRL takeover) stays independent and off.
 static void a2gspu_copilot_poll(computer_t *computer) {
-    const char *dir = SDL_getenv("A2GSPU_COPILOT");
+    static const char *dir = SDL_getenv("A2GSPU_COPILOT");   // once: this runs every frame
     if (!dir || !*dir || !computer) return;
     static int seq = 1;
     char path[1024]; snprintf(path,sizeof path,"%s/cmd.%d",dir,seq);
@@ -4442,7 +4527,10 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 return SDL_APP_SUCCESS;
             }
         }
-        a2gspu_copilot_poll(computer);
+        // state->computer, not the local: transition_to_shutdown() above deletes
+        // the computer and nulls the state's pointer, and the poll must see that.
+        if (!state->computer) s_a2obs_computer = nullptr;   // shut down: nothing to observe
+        a2gspu_copilot_poll(state->computer);
         return SDL_APP_CONTINUE;
     }
 

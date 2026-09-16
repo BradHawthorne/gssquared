@@ -62,6 +62,7 @@
 #include <ctime>
 #include <string>
 #include "cpu.hpp"
+#include "a2gspu_observe.hpp"   // a2obs_peek: observer reads never take the CPU path (M11)
 
 // ---- watch table ------------------------------------------------------------
 struct GenericTapWatch {
@@ -115,7 +116,7 @@ inline void gtap_read_text_page(cpu_state *cpu, char out[24][41]) {
     for (int r = 0; r < 24; r++) {
         uint16_t base = 0x400 + (r % 8) * 0x80 + (r / 8) * 0x28;
         for (int c = 0; c < 40; c++) {
-            uint8_t b = cpu->mmu->read(base + c);
+            uint8_t b = a2obs_peek(cpu->mmu, base + c);
             char ch;
             if (b < 0x20)                    ch = (char)('@' + b);
             else if (b <= 0x7E)              ch = (char)b;
@@ -145,7 +146,7 @@ inline void gtap_write_full_ram(cpu_state *cpu, const char *tag) {
     snprintf(p, sizeof(p), "%s/ram_full_%s.bin", g_gtap.dir.c_str(), tag);
     if (FILE *f = fopen(p, "wb")) {
         for (uint32_t a = 0x0000; a < 0xC000; a++) {
-            uint8_t v = (a >= 0xC000 && a <= 0xC0FF) ? 0 : cpu->mmu->read((uint16_t)a);
+            uint8_t v = a2obs_peek(cpu->mmu, (uint16_t)a);
             fputc(v, f);
         }
         fclose(f);
@@ -173,17 +174,17 @@ inline void generic_tap_check(cpu_state *cpu, uint64_t cycles) {
     // extra named ZP-pointer fields (mp / mp2 / ipc / np ...)
     for (int i = 0; i < g_gtap.nptr; i++) {
         uint8_t z = g_gtap.ptrs[i].zp;
-        uint16_t v = (uint16_t)(cpu->mmu->read(z) | (cpu->mmu->read((uint8_t)(z + 1)) << 8));
+        uint16_t v = (uint16_t)(a2obs_peek(cpu->mmu, z) | (a2obs_peek(cpu->mmu, (uint8_t)(z + 1)) << 8));
         rec.u(g_gtap.ptrs[i].name, v);
     }
     // operand bytes following the p-code IPC pointer
     uint8_t op0 = 0;
     if (w->nops > 0) {
-        uint16_t ipc = (uint16_t)(cpu->mmu->read(w->zp) |
-                                  (cpu->mmu->read((uint8_t)(w->zp + 1)) << 8));
+        uint16_t ipc = (uint16_t)(a2obs_peek(cpu->mmu, w->zp) |
+                                  (a2obs_peek(cpu->mmu, (uint8_t)(w->zp + 1)) << 8));
         std::string ops = "[";
         for (int k = 1; k <= w->nops; k++) {
-            uint8_t b = cpu->mmu->read((uint16_t)(ipc + k));
+            uint8_t b = a2obs_peek(cpu->mmu, (uint16_t)(ipc + k));
             if (k == 1) op0 = b;
             char d[8]; snprintf(d, sizeof d, "%s%u", k > 1 ? "," : "", (unsigned)b); ops += d;
         }
@@ -220,7 +221,7 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
     if (g_gtap.zp_f && sec >= g_gtap.next_zp_s) {
         g_gtap.next_zp_s = sec + g_gtap.zp_every_s;
         char hex[513];
-        for (int i = 0; i < 256; i++) snprintf(hex + i * 2, 3, "%02x", cpu->mmu->read((uint16_t)i));
+        for (int i = 0; i < 256; i++) snprintf(hex + i * 2, 3, "%02x", a2obs_peek(cpu->mmu, (uint16_t)i));
         a2record::Record("tap", "zp", a2record::frame_now(), (unsigned long long)cycles)
             .f0("ts_ms", gtap_ts_ms(cycles)).str("zp", hex).write(g_gtap.zp_f, true);
     }
@@ -230,22 +231,26 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
         char p[600];
         snprintf(p, sizeof(p), "%s/ram_dump_periodic_t%03d.bin", g_gtap.dir.c_str(), sec);
         if (FILE *f = fopen(p, "wb")) {
-            for (uint32_t a = 0x0400; a <= 0xBFFF; a++) fputc(cpu->mmu->read(a), f);
+            for (uint32_t a = 0x0400; a <= 0xBFFF; a++) fputc(a2obs_peek(cpu->mmu, a), f);
             fclose(f);
         }
         snprintf(p, sizeof(p), "%s/hgr_dump_periodic_t%03d.bin", g_gtap.dir.c_str(), sec);
         if (FILE *f = fopen(p, "wb")) {
-            for (uint32_t a = 0x2000; a <= 0x5FFF; a++) fputc(cpu->mmu->read(a), f);
+            for (uint32_t a = 0x2000; a <= 0x5FFF; a++) fputc(a2obs_peek(cpu->mmu, a), f);
             fclose(f);
         }
         snprintf(p, sizeof(p), "%s/hgr_dump_periodic_t%03d.bin.meta", g_gtap.dir.c_str(), sec);
         if (FILE *f = fopen(p, "wb")) {
             a2record::Record("tap", "dumpmeta", a2record::frame_now(), (unsigned long long)cycles)
                 .i("emu_t", sec)
-                .u("page2_active", (cpu->mmu->read(0xC01C) & 0x80) ? 1 : 0)
-                .u("hires_on",     (cpu->mmu->read(0xC01D) & 0x80) ? 1 : 0)
-                .u("text_on",      (cpu->mmu->read(0xC01A) & 0x80) ? 1 : 0)
-                .u("mixed_on",     (cpu->mmu->read(0xC01B) & 0x80) ? 1 : 0)
+                // Display switches from the video scanner (what `vid` reads), not by
+                // reading $C01A-$C01D through the CPU path -- a soft-switch READ is a
+                // bus access with handlers behind it. -1 = no scanner: say so.
+                .u("page2_active", (g_a2obs_video_flags && g_a2obs_video_flags() >= 0) ? ((g_a2obs_video_flags() & 4) ? 1 : 0) : 0)
+                .u("hires_on",     (g_a2obs_video_flags && g_a2obs_video_flags() >= 0) ? ((g_a2obs_video_flags() & 8) ? 1 : 0) : 0)
+                .u("text_on",      (g_a2obs_video_flags && g_a2obs_video_flags() >= 0) ? ((g_a2obs_video_flags() & 1) ? 1 : 0) : 0)
+                .u("mixed_on",     (g_a2obs_video_flags && g_a2obs_video_flags() >= 0) ? ((g_a2obs_video_flags() & 2) ? 1 : 0) : 0)
+                .str("video_src",  (g_a2obs_video_flags && g_a2obs_video_flags() >= 0) ? "scanner" : "unavailable")
                 .write(f, false);
             fclose(f);
         }

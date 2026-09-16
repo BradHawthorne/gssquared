@@ -862,7 +862,7 @@ inline bool try_visual(const char *line, char *result, size_t rsz, computer_t *c
         }
         // Same path handling as png/pngc in this file: the filename as given.
         if (a2png::write_rgb(fbuf, rgb.data(), W, H))
-            snprintf(result, rsz, "status=OK shr %s %dx%d scale%d nonzero=%d/%d -> %s",
+            snprintf(result, rsz, "status=OK shr profile=shr-linear %s %dx%d scale%d nonzero=%d/%d -> %s",
                      any640 ? "640" : "320", W, H, scale, lit, total, fbuf);
         else
             snprintf(result, rsz, "status=FAIL shr-write-fail");
@@ -2470,16 +2470,26 @@ inline bool try_regs(const char *line, char *result, size_t rsz,
         // Cross-ack delta of two `cycles` replies is unreliable (see AGENTIC_ORACLE).
         uint64_t cyc = computer->clock ? computer->clock->get_cycles() : 0;
         static uint64_t s_cyc_mark = 0;
+        /* delta_from_mark is a CROSS-COMMAND quantity by construction: every
+         * cycle any command ran since `cycles reset`. The counter is monotonic
+         * (the 6,000,000-cycle jumps across acks were fixed and re-measured: a
+         * mark, one run-until and a read gave delta=40040, the run-until's own
+         * cyc=), so the number is true -- but it is the cost of a routine only
+         * when nothing else ran between the mark and the read. The ack says
+         * that, instead of warning that the value is "unreliable", which it is
+         * not, and leaving a caller to guess what it does mean. */
         if (strstr(line, "reset")) {
             s_cyc_mark = cyc;
             snprintf(result, rsz,
                      "status=OK cycles=%llu mark=reset "
-                     "WARN=prefer-in-command-deltas (run/step/run-until)",
+                     "NOTE=a-later-delta_from_mark-counts-every-command-in-between; "
+                     "a-routine's-cost-is-run/step/run-until-cycles=",
                      (unsigned long long)cyc);
         } else {
             snprintf(result, rsz,
                      "status=OK cycles=%llu delta_from_mark=%llu "
-                     "WARN=cross-ack-deltas-unreliable use-run-until-cycles",
+                     "model=cross-command(every-command-since-mark) "
+                     "NOTE=equals-a-routine's-cost-only-if-nothing-else-ran",
                      (unsigned long long)cyc,
                      (unsigned long long)(cyc - s_cyc_mark));
         }

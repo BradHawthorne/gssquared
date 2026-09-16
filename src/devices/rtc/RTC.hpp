@@ -8,6 +8,7 @@
 
 #include "util/DebugFormatter.hpp"
 #include "debug.hpp"
+#include "a2gspu_bram_pin.hpp"   // A2GSPU_BRAM: which BRAM a run starts from, reported in PINS
 
 #define RTC_START_TRANS 0b100
 #define RTC_READ_WRITE 0b010
@@ -90,13 +91,30 @@ public:
         for (int i = 0; i < 256; i++) {
             bram[i] = i;
         }
-        load_bram_from_file(bram_filename);
+        // A2GSPU_BRAM pins the starting BRAM; unset keeps the stock cwd file.
+        const char *pin = a2gspu_bram_pin();
+        if (!pin) {
+            a2gspu_bram_note(load_bram_from_file(bram_filename) ? "cwd" : "cwd-absent", bram);
+        } else if (!strcmp(pin, "default")) {
+            a2gspu_bram_note("default", bram);
+        } else {
+            FILE *pf = fopen(pin, "rb");
+            size_t got = pf ? fread(bram, 1, 256, pf) : 0;
+            if (pf) fclose(pf);
+            if (got != 256) {
+                fprintf(stderr, "A2GSPU BRAM: FATAL '%s' %s -- a pinned BRAM that cannot be read is not a pin\n",
+                        pin, pf ? "is shorter than 256 bytes" : "cannot be opened");
+                exit(2);
+            }
+            a2gspu_bram_note("file", bram);
+        }
         last_seconds = 0; // initialize. First time through update_seconds, will set last_seconds and time to current time, same value
         seconds = 0;
         update_seconds();
     };
     ~RTC() {
-        save_bram_to_file(bram_filename);
+        // A pinned BRAM (default or a file) is an input: never written back.
+        if (!a2gspu_bram_pin()) save_bram_to_file(bram_filename);
     };
 
     inline uint8_t get_bram_value(uint8_t address) {
@@ -313,7 +331,7 @@ public:
                 if (DEBUG(DEBUG_RTC)) printf("read bram(16)[%02X]\n", bram_address);
                 data_reg = bram[bram_address];
             } else {
-                printf("write bram(16)[%02X]: %02X\n", bram_address, data_reg);
+                if (DEBUG(DEBUG_RTC)) printf("write bram(16)[%02X]: %02X\n", bram_address, data_reg);
                 bram[bram_address] = data_reg;
             }
         } else if ((cmd & 0b0'1111'000) == 0b0'0111'000) { // two byte command - it's a 256-bit bram access
@@ -359,13 +377,15 @@ public:
         }
     }
 
-    void load_bram_from_file(const char *filename) {
+    bool load_bram_from_file(const char *filename) {
         FILE *file = fopen(filename, "rb");
         if (file) {
             fread(bram, 1, 256, file);
             fclose(file);
+            return true;
         } else {
             printf("Error: could not open %s for reading\n", filename);
+            return false;
         }
     }
 

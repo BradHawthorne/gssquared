@@ -333,7 +333,9 @@ public:
     // A2GSPU_SP_NDEV overrides the count (diagnostic A/B; e.g. =32 reproduces
     // the pre-fix behavior). This makes the emulator MORE faithful to real HW.
     uint8_t sp_num_devices() {
-        const char *ov = getenv("A2GSPU_SP_NDEV");
+        // Read once: this runs on every SmartPort STATUS call, and a getenv per
+        // call is work the stock emulator should not do.
+        static const char *ov = getenv("A2GSPU_SP_NDEV");
         if (ov) return (uint8_t)atoi(ov);
         uint8_t n = 0;
         for (int j = 0; j < PDB3_MAX_UNITS; j++) {

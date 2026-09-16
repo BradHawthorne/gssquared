@@ -46,6 +46,7 @@
 // ============================================================================
 #include <cstdio>
 #include <cstdint>
+#include "a2gspu_observe.hpp"   // a2obs_peek: observer reads never take the CPU path (M11)
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -81,7 +82,7 @@ inline unsigned char g_wiz5_ec19_subseen[256] = {0};
 inline void wiz5_ec19_check(cpu_state *cpu) {
     if (!g_wiz5_ec19_out) return;
     const uint16_t pc = (uint16_t)(cpu->full_pc & 0xFFFF);
-    auto rd = [&](uint16_t a) { return (unsigned)(cpu->mmu->read(a) & 0xFF); };
+    auto rd = [&](uint16_t a) { return (unsigned)(a2obs_peek(cpu->mmu, a) & 0xFF); };
     if (pc == 0xEC19 && g_wiz5_ec19_lines < g_wiz5_ec19_maxlines) {
         const unsigned sub = rd(0x32);
         const uint16_t src = (uint16_t)(rd(0x30) | (rd(0x31) << 8));
@@ -136,7 +137,7 @@ inline bool     g_wiz5_diskrd_seen[2048] = {false};
 inline void wiz5_diskwr_check(cpu_state *cpu, double ts_ms) {
     if (!g_wiz5_diskwr_out) return;
     const uint16_t pc = (uint16_t)(cpu->full_pc & 0xFFFF);
-    auto rd = [&](uint16_t a) { return (unsigned)(cpu->mmu->read(a) & 0xFF); };
+    auto rd = [&](uint16_t a) { return (unsigned)(a2obs_peek(cpu->mmu, a) & 0xFF); };
     if (pc == 0xDF09) {
         unsigned unit = rd(0x2D);
         if (!(unit == 4 || unit == 5 || (unit >= 9 && unit <= 12))) return;  // disk units
@@ -190,26 +191,26 @@ inline void wiz5_csp6_check(cpu_state *cpu, double ts_ms) {
     if (!g_wiz5_csp6_out) return;
     if ((cpu->full_pc & 0xFFFF) != 0xD681) return;
     if (g_wiz5_csp6_n >= g_wiz5_csp6_max) return;
-    const uint16_t ipc = (uint16_t)(cpu->mmu->read(0x9E) | (cpu->mmu->read(0x9F) << 8));
-    const uint8_t sub = cpu->mmu->read((uint16_t)(ipc + 1));
+    const uint16_t ipc = (uint16_t)(a2obs_peek(cpu->mmu, 0x9E) | (a2obs_peek(cpu->mmu, 0x9F) << 8));
+    const uint8_t sub = a2obs_peek(cpu->mmu, (uint16_t)(ipc + 1));
     if (sub != 6) return;                                    // CSP-6 only
     const uint16_t sp1 = (uint16_t)(0x0100 | (cpu->sp & 0xFF));
     fprintf(g_wiz5_csp6_out, "{\"ipc\":%u,\"ts_ms\":%.0f,\"sp\":%u,\"page1\":\"", ipc, ts_ms, sp1);
     for (int k = 1; k <= 40; k++)
-        fprintf(g_wiz5_csp6_out, "%02x", cpu->mmu->read((uint16_t)(0x0100 | ((cpu->sp + k) & 0xFF))));
+        fprintf(g_wiz5_csp6_out, "%02x", a2obs_peek(cpu->mmu, (uint16_t)(0x0100 | ((cpu->sp + k) & 0xFF))));
     fprintf(g_wiz5_csp6_out, "\",\"zp\":\"");
-    for (int k = 0; k < 0x60; k++) fprintf(g_wiz5_csp6_out, "%02x", cpu->mmu->read((uint16_t)k));
+    for (int k = 0; k < 0x60; k++) fprintf(g_wiz5_csp6_out, "%02x", a2obs_peek(cpu->mmu, (uint16_t)k));
     fprintf(g_wiz5_csp6_out, "\",\"bufs\":[");
     int nb = 0;
     for (int src = 0; src < 2; src++) {
         int lo = src ? 0 : 1, hi = src ? 0x5E : 40;
         for (int k = lo; k <= hi; k++) {
             uint16_t base = src ? (uint16_t)k : (uint16_t)(0x0100 | ((cpu->sp + k) & 0xFF));
-            uint16_t ptr = (uint16_t)(cpu->mmu->read(base) | (cpu->mmu->read((uint16_t)(base + 1)) << 8));
+            uint16_t ptr = (uint16_t)(a2obs_peek(cpu->mmu, base) | (a2obs_peek(cpu->mmu, (uint16_t)(base + 1)) << 8));
             if (ptr >= 0x0800 && ptr < 0xC000 && nb < 24) {
                 fprintf(g_wiz5_csp6_out, "%s{\"at\":\"%s%d\",\"ptr\":%u,\"d\":\"",
                         nb ? "," : "", src ? "zp" : "s", k, ptr);
-                for (int j = 0; j < 40; j++) fprintf(g_wiz5_csp6_out, "%02x", cpu->mmu->read((uint16_t)(ptr + j)));
+                for (int j = 0; j < 40; j++) fprintf(g_wiz5_csp6_out, "%02x", a2obs_peek(cpu->mmu, (uint16_t)(ptr + j)));
                 fprintf(g_wiz5_csp6_out, "\"}"); nb++;
             }
         }
@@ -256,7 +257,7 @@ inline void wiz5_cfg_read_text_page(cpu_state *cpu, char out[24][41]) {
     for (int r = 0; r < 24; r++) {
         uint16_t base = 0x400 + (r % 8) * 0x80 + (r / 8) * 0x28;
         for (int c = 0; c < 40; c++) {
-            uint8_t b = cpu->mmu->read(base + c);
+            uint8_t b = a2obs_peek(cpu->mmu, base + c);
             char ch;
             if (b < 0x20)                    ch = (char)('@' + b);
             else if (b <= 0x7E)              ch = (char)b;
@@ -276,7 +277,7 @@ inline void wiz5_keyram_dump(computer_t *computer) {
     snprintf(rp, sizeof(rp), "%s/keypress_%04d_ram.bin",
              g_wiz5_session_dir.c_str(), ++g_wiz5_keyram_seq);
     if (FILE *rf = fopen(rp, "wb")) {
-        for (uint32_t a = 0x0800; a < 0xC000; a++) fputc(cpu->mmu->read((uint16_t)a) & 0xFF, rf);
+        for (uint32_t a = 0x0800; a < 0xC000; a++) fputc(a2obs_peek(cpu->mmu, (uint16_t)a) & 0xFF, rf);
         fclose(rf);
     }
 }

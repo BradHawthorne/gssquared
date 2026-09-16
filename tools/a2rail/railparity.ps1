@@ -12,7 +12,7 @@
     The 32 missing ones were not obscure. They included MEMVU_LOADVIS and
     MEMVU_BLAME, the whole A2GSPU_TAP_* family (8 rails), A2GSPU_COVERAGE --
     which feeds the deasmiigs code/data split -- and every WIZ5_* rail. An agent
-    discovering this fork cold could enumerate all 124 verbs from the running
+    discovering this fork cold could enumerate every verb from the running
     process and had no way to learn those 32 existed short of reading C++.
 
     That is the black box the oracle exists to remove, sitting inside the
@@ -36,8 +36,14 @@
       142-rail mark that file had no mention of 24 of them, including every
       WIZ5_* rail and A2GSPU_COVERAGE itself -- the rail the header above names
       as the reason this script exists. So: every declared rail's name must
-      appear in the doc. Name-presence only, deliberately; demanding a table row
-      per rail would be noisy and would not have caught anything this does not.
+      appear in the doc. That first version was name-presence only, and it let
+      MEMVU_LOADVIS pass with no row of its own and 32 rails sit under a Group
+      the registry's family contradicted. So the check is now: a table row whose
+      first cell names the rail, whose Group cell leads with the registry
+      family, and a registry synopsis that is not a fragment. The doc check is
+      one direction (registry -> doc): a rail named in the doc but absent from
+      the registry is caught by the code<->registry check above only if some
+      code reads it.
 
     * The VERB DISPATCHER. The header above says verb discoverability "was true
       and enforced by their being in a table the process itself prints". It was
@@ -108,13 +114,19 @@ Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp, *.h, *.cc |
     }
 
 # --- what the registry declares ------------------------------------------
-$regRails = [System.Collections.Generic.HashSet[string]]::new()
-$inTable  = $false
+$regRails  = [System.Collections.Generic.HashSet[string]]::new()
+$regFamily = @{}          # rail -> family, as `rail list <family>` groups it
+$regSynop  = @{}          # rail -> the one-line synopsis `rail find` serves
+$inTable   = $false
 foreach ($line in [IO.File]::ReadAllLines($registry)) {
     if ($line -match 'static const Rail r\[\]') { $inTable = $true; continue }
     if ($inTable -and $line -match '^\s*\};') { break }
     if ($inTable -and $line -match '^\s*\{"([A-Z0-9_]+)"') {
         [void]$regRails.Add($matches[1])
+        if ($line -match '^\s*\{"([A-Z0-9_]+)",\s*"([^"]*)",\s*"((?:[^"\\]|\\.)*)"') {
+            $regFamily[$matches[1]] = $matches[2]
+            $regSynop[$matches[1]]  = $matches[3]
+        }
     }
 }
 
@@ -299,6 +311,66 @@ if ($undocInDoc.Count) {
     exit 1
 }
 
+# --- a ROW of its own, filed under the registry's family ---------------------
+# Name presence was the first test and it was not enough twice over. MEMVU_LOADVIS
+# passed it with no row at all -- named in two prose sentences, so a reader
+# scanning the tables for what to set never met it. And the registry's family
+# (what `rail list <family>` groups by) and the catalogue's Group column had
+# drifted apart on 32 rails: `rail list trace` did not return CALLTRACE, which
+# the catalogue filed under trace. Two surfaces answering one question
+# differently is the drift this script exists to stop, so now: every declared
+# rail must be named in the FIRST cell of a table row, and that row's Group cell
+# must name the registry family (a combined group such as `break/snapshot`
+# must lead with it).
+$rowGroup = @{}
+foreach ($dl in [IO.File]::ReadAllLines($docFile)) {
+    if (-not $dl.StartsWith('|')) { continue }
+    $cells = [regex]::Split($dl, '(?<!\\)\|')
+    if ($cells.Count -lt 5) { continue }             # '' + >=3 cells + ''
+    $first = $cells[1]
+    $group = $cells[3].Trim()
+    foreach ($m in [regex]::Matches($first, '`((?:A2GSPU|MEMVU|WIZ5)_[A-Z0-9_]+)')) {
+        if (-not $rowGroup.ContainsKey($m.Groups[1].Value)) { $rowGroup[$m.Groups[1].Value] = $group }
+    }
+}
+$noRow = @(); $wrongGroup = @()
+foreach ($r in ($regRails | Sort-Object)) {
+    if ($docExempt.ContainsKey($r)) { continue }
+    if (-not $rowGroup.ContainsKey($r)) { $noRow += $r; continue }
+    $lead = ($rowGroup[$r] -split '[/ ]')[0]
+    if ($regFamily.ContainsKey($r) -and $lead -ne $regFamily[$r]) {
+        $wrongGroup += ("{0,-30} registry={1,-12} catalogue={2}" -f $r, $regFamily[$r], $rowGroup[$r])
+    }
+}
+# A synopsis is what `rail find` and `manifest` print -- the surface this fork
+# tells agents to trust over markdown. Five of them were fragments cut at a `|`
+# when copied from a table ("2`", "strict`"), and nothing noticed.
+$badSynop = @()
+foreach ($r in ($regRails | Sort-Object)) {
+    $syn = $regSynop[$r]
+    if ($null -eq $syn) { continue }
+    $ticks = ([regex]::Matches($syn, '`')).Count
+    if ($syn.Length -lt 20 -or ($ticks % 2) -ne 0) { $badSynop += ("{0,-30} '{1}'" -f $r, $syn) }
+}
+if ($noRow.Count -or $wrongGroup.Count -or $badSynop.Count) {
+    Write-Host ''
+    if ($noRow.Count) {
+        Write-Host 'ROWLESS - named in Docs/A2GSPU_RAILS.md, but in no table row of its own:' -ForegroundColor Red
+        $noRow | ForEach-Object { Write-Host "  $_" }
+    }
+    if ($wrongGroup.Count) {
+        Write-Host 'MISFILED - the catalogue Group and the registry family disagree:' -ForegroundColor Red
+        $wrongGroup | ForEach-Object { Write-Host "  $_" }
+    }
+    if ($badSynop.Count) {
+        Write-Host 'GARBLED - a registry synopsis that is a fragment (under 20 chars or unbalanced backticks):' -ForegroundColor Red
+        $badSynop | ForEach-Object { Write-Host "  $_" }
+    }
+    Write-Host ''
+    Write-Host ("railparity: FAIL - {0} rowless, {1} misfiled, {2} garbled" -f $noRow.Count, $wrongGroup.Count, $badSynop.Count) -ForegroundColor Red
+    exit 1
+}
+
 # --- the CTRL dispatcher vs the verb registry (AGENTS.md rule 6) -----------
 # verbs[] in a2gspu_manifest.hpp is what `help`, `help <file>` and
 # `manifest <file>` all print -- all three of the discovery surfaces rule 6
@@ -375,7 +447,8 @@ if ($docExempt.Count) {
 }
 Write-Host ''
 Write-Host ("railparity: PASS - every rail the code reads is discoverable, every declared rail")
-Write-Host ("                   exists and is described in Docs/A2GSPU_RAILS.md, no non-exempt file")
+Write-Host ("                   exists and has a row of its own under its registry family in")
+Write-Host ("                   Docs/A2GSPU_RAILS.md with a whole synopsis, no non-exempt file")
 Write-Host ("                   prints a JSON record or writes to any of the {0} rail sinks itself," -f $railSinks.Count)
 Write-Host ("                   all {0} declared readers are registered by their rails, and all {1}" -f $fnRows.Count, $verbTable.Count)
 Write-Host ("                   CTRL verbs are both dispatched and listed.")

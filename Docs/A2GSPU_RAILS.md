@@ -127,7 +127,8 @@ Source anchors (verified against code): `src/gs2.cpp` `run_headless_spike` (~189
 nonzero/distinct/FNV hash + SCB row), `SPIKE TRACE/SLOT/MMU/OBS/BRACKET:` lines, writes
 `spike_e1.bin` / `spike_trace.bin` / `spike_frame.bmp`, and the `GSDIAG:` status line (below).
 It also prints, first, an `A2GSPU PINS:` line — the identity of the run: `seed= faketime= ramdisk=`
-as the rails read them (`unset` when unset), `platform= frames=`, the loaded ROM's size and
+as the rails read them (`unset` when unset), `bram=` — the battery RAM the machine started from, kind and hash
+(see `A2GSPU_BRAM`), `platform= frames=`, the loaded ROM's size and
 house-FNV, the configure-time build version (labelled, because it lags the tree), and the house-FNV
 of the running executable, which cannot lag. With `GSDIAG:`'s `cycles=` and `hash=` this is what
 makes a number traceable to the binary and inputs that produced it, and what a harness checks before
@@ -173,8 +174,9 @@ memory behaviour have". Same three invariants (env-gated, isolated, observe-don'
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `MEMVU_STOREVIS=1` | **store-visibility accounting.** Classifies every CPU store as DEVICE (`$Cxxx` in banks `$00/$01/$E0/$E1`), SLOWSIDE (direct Mega II `$E0/$E1`), SHADOWED (the machine mirrored it per its own `$C035` configuration) or PRIVATE, and prints one summary line at spike end, followed by `device top:` — the five most-written I/O registers, named from `iigs_ioregs.hpp` — and `writers top:` — the five code granules that generated the most visible stores, symbolized when a symbol table is loaded, `(unnamed)` otherwise. A total never travels without its causes | observe | env |
-| `MEMVU_STOREVIS_BANKS=1` | add the per-bank `stores`/`visible` breakdown (one line per bank that saw traffic) | observe | env |
+| `MEMVU_STOREVIS=1` | **store-visibility accounting.** Classifies every CPU store as DEVICE (`$Cxxx` in banks `$00/$01/$E0/$E1`), SLOWSIDE (direct Mega II `$E0/$E1`), SHADOWED (the machine mirrored it per its own `$C035` configuration) or PRIVATE, and prints one summary line at spike end, followed by `device top:` — the five most-written I/O registers, named from `iigs_ioregs.hpp` — and `writers top:` — the five code granules that generated the most visible stores, symbolized when a symbol table is loaded, `(unnamed)` otherwise. A total never travels without its causes | memvu | env |
+| `MEMVU_STOREVIS_BANKS=1` | add the per-bank `stores`/`visible` breakdown (one line per bank that saw traffic) | memvu | env |
+| `MEMVU_LOADVIS=1` | **load-visibility accounting**, the read-side twin of STOREVIS: classifies every CPU read (instruction fetch, data, vector, phantom) as must-serve (the machine has to answer it), cacheable-slow or private, and prints `MEMVU LOADVIS: model=iigs-read-v1 loads= mustserve= cacheable_slow= private=` plus a `LOADVIS KIND:` line split by read kind. Live counterpart: `memvu load` | memvu | env |
 
 ```
 MEMVU STOREVIS: model=iigs-shadow-v1 stores=1091936 visible=295658 (27.08%) \
@@ -194,16 +196,17 @@ bus-mastering card can read any RAM, and nothing here models that.
 **Coverage.** Taps every CPU store funnel in `base_6502.cpp` — `bus_write` (ordinary stores
 and stack pushes) and `phantom_write` / `phantom_write_ign` (RMW dummy writes, counted in the
 total because they are real bus cycles on silicon, and reported separately so they can be
-subtracted). `write_word` is dead code and is deliberately untapped; **if it is ever revived it
-must be tapped, or this rail silently undercounts 16-bit stores.**
+subtracted). There is no other store path: the untapped `write_word` helper that wrote through
+`mmu->write` directly was dead code and has been deleted, so a new 16-bit store has to go
+through `bus_write` and is counted.
 
 ### Instruction-stream shape
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `MEMVU_OPMIX=1` | executed-opcode histogram, split by CPU mode context `(E, M-width, X-width)`, plus hand-derived group totals (branch / RMW / stack / call-return / block-move / mode-switch) and the raw per-opcode counts | observe | env |
-| `MEMVU_IREUSE=<lines>,<linesize>` | instruction-line reuse against a direct-mapped model, reporting hit / miss / **modemiss**, plus the workload's instruction footprint. Both parameters must be powers of two; a bad geometry is REFUSED, not rounded. `=1` takes the 512×64 default | observe | env |
-| `MEMVU_WORKSET=1` | direct-page access count (exact, at the two direct-page data funnels), how many distinct direct pages are live, the D-change count, and the stack pointer's observed range and page histogram | observe | env |
+| `MEMVU_OPMIX=1` | executed-opcode histogram, split by CPU mode context `(E, M-width, X-width)`, plus hand-derived group totals (branch / RMW / stack / call-return / block-move / mode-switch) and the raw per-opcode counts | memvu | env |
+| `MEMVU_IREUSE=<lines>,<linesize>` | instruction-line reuse against a direct-mapped model, reporting hit / miss / **modemiss**, plus the workload's instruction footprint. Both parameters must be powers of two; a bad geometry is REFUSED, not rounded. `=1` takes the 512×64 default | memvu | env |
+| `MEMVU_WORKSET=1` | direct-page access count (exact, at the two direct-page data funnels), how many distinct direct pages are live, the D-change count, and the stack pointer's observed range and page histogram | memvu | env |
 
 `modemiss` is the one that does not exist in a conventional instruction cache: on this
 ISA an instruction's *length* depends on M and X, so a resident line decoded under one
@@ -235,8 +238,8 @@ emitted beside it, so any aggregate can be recomputed from primary data.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `MEMVU_BLAME[=<topN>]` | attributes every externally-visible store and machine-served read to the **opcode address** of the instruction responsible, and reports the worst code granules, each named, with the toolbox call in progress when its stores had one (`; in SoundTools.FFStartSound 98%`) — a shared helper is named by the call that used it, not by the entry point that precedes it | observe | env |
-| `MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads>` | **a MODEL, not a counter** — cost of routing part of a workload's memory traffic to the machine. Parameters are mandatory; an incomplete set is REFUSED. Output is an upper bound | observe | env |
+| `MEMVU_BLAME[=<topN>]` | attributes every externally-visible store and machine-served read to the **opcode address** of the instruction responsible, and reports the worst code granules, each named, with the toolbox call in progress when its stores had one (`; in SoundTools.FFStartSound 98%`) — a shared helper is named by the call that used it, not by the entry point that precedes it | memvu | env |
+| `MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads>` | **a MODEL, not a counter** — cost of routing part of a workload's memory traffic to the machine. Parameters are mandatory; an incomplete set is REFUSED. Output is an upper bound | memvu | env |
 
 `MEMVU_BLAME` turns the visibility rails around. They say how much a workload costs;
 this says where the cost comes from. Pointed at a system whose source you have, the
@@ -300,7 +303,7 @@ the early-boot figure as the outlier it is.
 | `A2GSPU_TRAP_FILE=<file>` | specs one per line, `#` comments; combines with `A2GSPU_TRAP` | break | env |
 | `A2GSPU_TRAP_OUT=<file>` | default sink for specs without `out=`; else `A2GSPU_RECORDS`; otherwise records go to stdout as `IIGS TRAP: {…}` | break | env |
 | `A2GSPU_CONDTRAP="BANK:PC@f=v"` | conditional flag-provenance trap: at PC, when flag `f`(c/z/i/d/x/m/v/n)==v, report the PC that last changed that flag | break | env |
-| `A2GSPU_CONDTRAP_MAX=N` | CONDTRAP hit cap | break | env |
+| `A2GSPU_CONDTRAP_MAX=N` | cap on CONDTRAP hits reported (default 8) | break | env |
 | `A2GSPU_STACKTRAP="LO-HI"` | one-shot dump when S first enters the range | break | env |
 | `A2GSPU_STACKWATCH=1\|"LO-HI"` | continuous stack-pointer tripwire for garbage-S crashes (`1`=imbalance only; `LO-HI`=over/underflow window) | break | env |
 | `A2GSPU_STACKWATCH_JUMP=<hex>` | imbalance threshold (single-step S delta that trips STACKWATCH) | break | env |
@@ -313,9 +316,9 @@ the early-boot figure as the outlier it is.
 |------|--------|-------|-------|
 | `A2GSPU_POKE="<hexPC>:<act>[;…]"` | one-shot deliberate splice at a PC. Actions: `A/X/Y/S/D/P/DBR/PB=<hex>` (reg/flag), `PC=<hex>` (force-branch), `M<hex24>=<hexbyte>` (poke mem), `RTS`/`RTL` (force-return), `SKIP=<n>` (skip bytes) | manipulate | env |
 | `A2GSPU_POKE_NTH=<n>` | fire the POKE on the Nth hit of the PC (default 1) | manipulate | env |
-| `A2GSPU_TAP="PC[,PC…]"` | generic title-agnostic call tap (`src/generic_tap.hpp`, from the harvested wiz5 taps): NDJSON record on each hit of the watched PC(s) | trace | env |
-| `A2GSPU_TAP_SESSION=<dir>` | periodic capture session: ZP stream + `$0400-BFFF` RAM / `$2000-5FFF` HGR + soft-switch `.meta` + text-page snapshots to `<dir>` | trace | env |
-| `A2GSPU_TAP_PTRS`, `A2GSPU_TAP_PCS`, `A2GSPU_TAP_MAX`, `A2GSPU_TAP_DUMP_ON`, `A2GSPU_TAP_DUMP_EVERY`, `A2GSPU_TAP_ZP_EVERY`, `A2GSPU_TAP_CYC_PER_MS`, `A2GSPU_TAP_CYC_PER_SEC` | tap tuning: extra ZP-pointer register fields, which PCs, hit cap, dump-on-op / dump cadence, ZP-stream cadence, cycle-rate calibration. (Spelled in full. They were written here under short names, which is invisible to a reader — and to a checker — grepping for the name they must actually set) | trace | env |
+| `A2GSPU_TAP="PC[,PC…]"` | generic title-agnostic call tap (`src/generic_tap.hpp`, from the harvested wiz5 taps): NDJSON record on each hit of the watched PC(s) | tap | env |
+| `A2GSPU_TAP_SESSION=<dir>` | periodic capture session: ZP stream + `$0400-BFFF` RAM / `$2000-5FFF` HGR + soft-switch `.meta` + text-page snapshots to `<dir>` | tap | env |
+| `A2GSPU_TAP_PTRS`, `A2GSPU_TAP_PCS`, `A2GSPU_TAP_MAX`, `A2GSPU_TAP_DUMP_ON`, `A2GSPU_TAP_DUMP_EVERY`, `A2GSPU_TAP_ZP_EVERY`, `A2GSPU_TAP_CYC_PER_MS`, `A2GSPU_TAP_CYC_PER_SEC` | tap tuning: extra ZP-pointer register fields, which PCs, hit cap, dump-on-op / dump cadence, ZP-stream cadence, cycle-rate calibration. (Spelled in full. They were written here under short names, which is invisible to a reader — and to a checker — grepping for the name they must actually set) | tap | env |
 | `A2GSPU_FORCE_KEY=<hex-ascii>` | force the ADB `$C000` keyboard latch to return this key (drives a `$C000`-polling guest headlessly) | manipulate | env |
 | `A2GSPU_KEYSCHED=<file>` | a **schedule** of keystrokes read from a file, injected entry by entry. Distinct from `SPIKE_KEYS`, which is one literal string injected at one frame. A missing file is fatal at arm (exit 2), not a warning. Canonical name for `WIZ5_KEYS` | manipulate | env |
 | `A2GSPU_KEYSCHED_DELAY=N` | frames between scheduled keystrokes. Canonical name for `WIZ5_KEY_DELAY` | manipulate | env |
@@ -343,7 +346,7 @@ quote was wrong on *both* platforms. The generator is
 | `class=` | `A` cpu+mmu+softswitches+RAM · `B` adds video/scanner state · `C` adds the ADB micro, the Ensoniq and the IWM (`INSTRUMENTATION_SHAPE.md` M5's roadmap). **Derived from the blocks actually written**, and claimed only when the definition is met — a save holding a device the roadmap never named (a IIe holding only `pdblock`) stays `class=A` and lets `devices=` carry it, because inventing a `B` for it would be a second false claim |
 | `devices=` | the device blocks in the file, comma-separated, or `-` |
 | `included=` / `excluded=` | the full state vocabulary split in two. **This pair is the contract**; the letter is a summary of it |
-| `frame= seed= faketime= ramdisk= build= exe=` | the pins and the binary identity, so a restored run is traceable to what produced the file |
+| `frame= seed= faketime= ramdisk= bram= build= exe=` | the pins and the binary identity, so a restored run is traceable to what produced the file |
 
 Read it from the running process, not from here: the `restore` ack carries the
 manifest text verbatim after its `skipped=` field, and
@@ -457,6 +460,7 @@ none) and are the named exemption in `railparity.ps1`.
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
 | `A2GSPU_SEED=<n>` | seed the cold-boot SP entropy (`srand`) so a from-scratch spike is byte-reproducible (warm restores overwrite SP anyway) | determinism | env |
+| `A2GSPU_BRAM=default\|<file>` | pin the **battery RAM** a run starts from. Stock (unset) reads `./gs2-bram.bin` from the working directory when present and **writes it back at exit**, so a run's starting BRAM depends on where it ran and on every run before it there — measured: one pinned 300-frame IIgs boot hashed `5F78F7C15131F43F` from a fresh directory and `89FCD3DA7D947DFF` beside a rewritten BRAM file. `default` starts from the built-in contents and touches no file; `<file>` loads 256 bytes (missing or short is fatal, exit 2) and never writes back. `A2GSPU PINS:` and the snapshot manifest carry `bram=<cwd\|cwd-absent\|default\|file>/<house-FNV>` (or `none` on a machine with no RTC) | determinism | env |
 | `A2GSPU_FAKETIME=<epoch-s>` | freeze the RTC at that instant (bypasses `localtime`/timezone) so RTC-derived OS state is run-to-run stable | determinism | env |
 | `A2GSPU_RAMDISK=1` | serve a mounted image from a copy-on-write RAM buffer; writes never touch the host file | device | env |
 | `A2GSPU_SP_NDEV=<n>` | override the SmartPort device count (A/B faithfulness; `32` reproduces pre-fix enumeration) | device | env |
@@ -474,9 +478,9 @@ protocol authority.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `A2GSPU_CTRL=<dir>` | enable the interactive stepping rail: 20 Hz poll of `<dir>/cmd.N`, atomic `<dir>/ack.N` reply; replaces the fixed-frame spike. Also forces headless when set | CTRL | env |
-| `A2GSPU_CTRL_TIMEOUT=<s>` | idle timeout in seconds before an orphaned session quits (default 300) | CTRL | env |
-| `A2GSPU_COPILOT=<dir>` | windowed, read-only telemetry rail; human input stays active | co-pilot | env |
+| `A2GSPU_CTRL=<dir>` | enable the interactive stepping rail: 20 Hz poll of `<dir>/cmd.N`, atomic `<dir>/ack.N` reply; replaces the fixed-frame spike. Also forces headless when set | ctrl | env |
+| `A2GSPU_CTRL_TIMEOUT=<s>` | idle timeout in seconds before an orphaned session quits (default 300) | ctrl | env |
+| `A2GSPU_COPILOT=<dir>` | windowed agent rail: human input stays live. Observe verbs, plus `pause`, `resume`, `key`, `press`, `reset`, `mount` and `quit`; it **refuses** memory and register splices (`poke`, `load`, `setreg`) rather than racing the human. The `copilot` verb states the contract | ctrl | env |
 
 **Verbs** (one per `cmd.N`; reply text lands in `ack.N`), verified in `a2gspu_ctrl_loop`:
 
@@ -490,11 +494,11 @@ protocol authority.
 | `cpu` | 65816 state: `PC=BB:AAAA A X Y SP=16bit P E HALT STP RDY KBD AKD kbd_src=` — distinguishes waiting-for-key vs halted vs executing. **`kbd_src=` names where the keyboard byte came from** (`module` = MODULE_KEYBOARD, `adb-latch` = the IIgs ADB micro's observation-free `read_key_latch()`, `none` = no keyboard, and then `KBD=?? AKD=?`). It exists because the field used to fall back to `probe_peek($C000)` when MODULE_KEYBOARD was absent — which is every IIgs — so every IIgs ack reported the floating bus as a keystroke (`KBD=EE AKD=-1`, unchanged across millions of cycles) while `read C000 1` in the same session correctly refused the same address as handler-backed. No probed byte reaches this field now | CTRL-verb (observe) |
 | `dis <addr> <n> <file> [m8\|m16] [x8\|x16]` | disassemble N instructions via the debugger `Disassembler` to `<file>`. The address takes the same `BB:AAAA` form as `load`/`read`/`poke`. **Reads are side-effect-free:** `$xxC000-$xxC0FF` is never touched **in any bank** (the old guard compared the full 24-bit address, so `dis E1C055 1 …` fell through to the CPU's read path and physically flipped `PAGE2` and `HIRES` — an observe verb actuating the machine), and everything else goes through `probe_readable`/`probe_peek` rather than `mmu->read`. A byte the MMU will not show is reported as `<unreadable>` instead of being decoded from the `$EE` placeholder into a fictional `INC $EEEE`, and the ack carries `unreadable=N`. **65816 immediate width:** `m`/`x` are seeded from the live CPU (override with the trailing tokens for code that has not run yet), `REP`/`SEP` are followed as the listing decodes them, and `XCE` resets to the conservative 8-bit reading; the first line of the output file and the ack's `mx=m8x16@start src=<cpu\|arg>` both name the assumption. Without this the listing desynchronised from the first 16-bit immediate: `A9 34 12` read as `LDA #$34` / `ORA ($8F)` while the CPU executed `LDA #$1234` | CTRL-verb (observe) |
 | `text <file>` | dump the text page to `<file>` | CTRL-verb (observe) |
-| `shot <file>` | update the display and save a screenshot to `<file>` | CTRL-verb (observe) |
+| `shot <file>` | update the display and save the SDL backbuffer to `<file>`; ack `status=OK shot profile=sdl-human <file>` — for a human to look at, never an oracle (use `pngc`/`shr`) | CTRL-verb (observe) |
 | `read <hexaddr> <len> <file>` | dump `len` bytes from `<addr>` via `probe_peek` (side-effect-free, bank-correct on `-p 5`) to `<file>` | CTRL-verb (observe) |
 | `mount sXdY <path>` | runtime media swap (save-and-unmount the drive first so writes persist) | CTRL-verb (manipulate) |
-| `save <file>` | CPU regs + full MMU snapshot + sentinel + manifest (take at a quiescent point) | CTRL-verb (snapshot) |
-| `restore <file>` | restore a `save`d snapshot and force-run. The ack is `status=OK restore <file> manifest=present\|absent devices=<restored> skipped=<skipped> \| <the manifest text>` — there is no `class=` field of its own; the letter is inside the manifest text, which the ack now carries verbatim instead of leaving it only in the session log | CTRL-verb (snapshot) |
+| `save <file>` | CPU regs + full MMU snapshot + the device blocks this machine has (IIgs: `adb`, `ensoniq`, `vgcint`, `iwm`, `pdblock`) + sentinel + manifest. Take it at a quiescent point; the manifest says what it holds | CTRL-verb (snapshot) |
+| `restore <file>` | restore a `save`d snapshot and force-run. The ack is `status=OK restore <file> manifest=present\|absent devices=<restored> skipped=<skipped> \| <the manifest text>` — there is no `class=` field of its own; the letter is inside the manifest text, which the ack now carries verbatim instead of leaving it only in the session log. **Transactional:** the current machine is checkpointed first, and a file that does not restore is rolled back — the ack is then `status=FAIL restore-fail stage=<open|cpu|mmu|devices|sentinel|rollback-save> rolled-back=<yes|n/a|FAILED(stage)>`, and `rolled-back=yes` means the machine is exactly as it was before the command. (It used to overwrite the registers, fail the MMU geometry check, and answer a bare `restore-fail` over a half-restored machine) | CTRL-verb (snapshot) |
 | `quit` | ack and end the session | CTRL-verb (run) |
 | `oracle` | north-star contracts (cycles/colour/snapshot/dual-mode) | CTRL-verb (meta) |
 | `help` / `help <file>` | list CTRL verbs; optional full catalog to file | CTRL-verb (meta) |
@@ -503,15 +507,15 @@ protocol authority.
 | `run-until <addr> [max]` | stop at PC; `cycles=` **in-command** | CTRL-verb (run) |
 | `vid` | softswitch decode TEXT…DHIRES | CTRL-verb (observe) |
 | `stack [n]` | stack contents above SP | CTRL-verb (observe) |
-| `png` / `pngc` | mono / named-colour DHGR from RAM | CTRL-verb (observe) |
+| `png` / `pngc` | mono (`profile=bits-mono`) / named-colour (`profile=4dot`, `profile=mono`) DHGR from RAM | CTRL-verb (observe) |
 | `vram` | 8K aux + 8K main raw | CTRL-verb (observe) |
 | `load` / `poke` / `setreg` | deliberate RAM/reg splice | CTRL-verb (manipulate) |
-| `cycles` | absolute counter; **WARN** cross-ack deltas unreliable | CTRL-verb (observe) |
+| `cycles` / `cycles reset` | the absolute guest cycle counter. `cycles reset` sets a mark; a later `cycles` adds `delta_from_mark=N model=cross-command(every-command-since-mark)` — true, but it counts every command run since the mark, so it is a routine's cost only when nothing else ran. A routine's cost is the `cycles=` on `run`/`step`/`run-until` | CTRL-verb (observe) |
 | `dhgr-calibrate` / `dhgr-export` | 4-dot self-test + profile files for a2tile | CTRL-verb (calibrate) |
 | `dhgr-golden <file> [page] [vram-raw\|4dot] [bless]` | FNV page golden; `vram-raw`=16K AUX‖MAIN; `4dot`=discrete RGB 560×192 | CTRL-verb (calibrate) |
-| `A2GSPU_DHGR_GOLDEN=<file>` | SPIKE-end IIe DHGR gate (bless if missing; MATCH/DIFF exit). A bless compared nothing, so it reports `gate=BLESSED` rather than `gate=PASS` and raises a `WARNING` that `A2GSPU_STRICT=1` turns into exit 3 | env (run) |
-| `A2GSPU_DHGR_PAGE=1\|2` | which page for DHGR SPIKE golden (default 1) | env (run) |
-| `A2GSPU_DHGR_GOLDEN_PROFILE=` | `vram-raw` (default) or `4dot` — must match how the golden file was blessed | env (run) |
+| `A2GSPU_DHGR_GOLDEN=<file>` | SPIKE-end IIe DHGR gate (bless if missing; MATCH/DIFF exit). A bless compared nothing, so it reports `gate=BLESSED` rather than `gate=PASS` and raises a `WARNING` that `A2GSPU_STRICT=1` turns into exit 3 | assert |
+| `A2GSPU_DHGR_PAGE=1\|2` | which page for DHGR SPIKE golden (default 1) | assert |
+| `A2GSPU_DHGR_GOLDEN_PROFILE=` | `vram-raw` (default) or `4dot` — must match how the golden file was blessed | assert |
 | `assert peek:…==…[;…]` | live probe_peek checks; `status=PASS\|FAIL` | CTRL-verb (observe) |
 | `watch add\|list\|sample\|clear` | soft watch: sample peeks across run/step | CTRL-verb (observe) |
 | `watch bus add bank:lo-hi` | **LIVE** bus write-watch (same as A2GSPU_WATCH, mid-session) | CTRL-verb (break) |
@@ -536,7 +540,7 @@ protocol authority.
 | `copilot` | the windowed agent rail's contract (`A2GSPU_COPILOT`): observe + pause/key/mount/quit with human input still live | CTRL-verb (meta) |
 | `cov [status]\|on <LO-HI>\|map <A2MAP1>\|off\|reset\|write <file>` | execution coverage: raw `A2COV1`, or source-bound `A2COV2` once a plan is mapped. The write ack carries `format=` and `hash=`; read either with `tools/a2rail/artifacts.py cov`. Mismatched executed bytes refuse the write rather than blessing stale evidence | CTRL-verb (observe) |
 | `devstate [name\|all <file>]` | per-device state the emulator already computes (ADB regs, disk head, mouse clamp, DOC, memory map); bare lists handlers. Read before assuming a slot is populated | CTRL-verb (observe) |
-| `hgr` | coarse ASCII view of an HGR page — "is anything drawn". Not pixel-exact; use `pngc` for colour truth | CTRL-verb (observe) |
+| `hgr [page] [file]` | coarse ASCII view of an HGR page — "is anything drawn"; ack carries `profile=hgr-ascii-coarse`. Not pixel-exact; use `pngc` for colour truth | CTRL-verb (observe) |
 | `joymode [status]\|gamepad\|mouse\|atari` | controller shape at `$C061-$C063`, and whether the Joyport post-reset suspend window is still open. The only way to reach Atari/mouse modes headlessly | CTRL-verb (manipulate) |
 | `memvu [status]\|store\|load\|reset` | live `MEMVU_STOREVIS`/`LOADVIS` counters, readable and zeroable mid-session so a measurement can be a bounded window. **Refuses** rather than reporting zeros when the rail is unarmed | CTRL-verb (observe) |
 | `paddle <0-3> <0-255>` / `paddle off` | analogue paddle; seeds the 558 decay so `PREAD` counts the value back | CTRL-verb (manipulate) |
@@ -547,7 +551,7 @@ protocol authority.
 | `resume` | clear a user halt (breakpoint / `save-at`) and unpause, so the CPU advances again. **Refuses** to paper over a jammed CPU: a halting instruction needs `reset` | CTRL-verb (manipulate) |
 | `screen` | text-page helper | CTRL-verb (observe) |
 | `session [status]\|reset` | what probe state is armed, and one command to disarm all of it. Names what it cannot reach rather than reporting a confident zero. Run it before trusting a measurement, and before handing the machine on | CTRL-verb (meta) |
-| `shr <file> [scale]` | IIgs super hi-res as PNG, 320 or 640 per line by SCB | CTRL-verb (observe) |
+| `shr <file> [scale]` | IIgs super hi-res as PNG, 320 or 640 per line by SCB; ack carries `profile=shr-linear` | CTRL-verb (observe) |
 | `speaker` | `$C030` toggle count and the c14m stamp of the last one — sound is WHEN, not whether | CTRL-verb (observe) |
 | `tbuf [status]\|on\|off\|clear\|dump <file> [n]` | the CPU trace ring: per-instruction registers, effective address, data, read vs write. Lighter than `itrace`; use it for a few instructions, `itrace` for a whole path | CTRL-verb (trace) |
 | `verify <addr\|BANK:addr> <len> <file>` | compare guest memory to a host file **inside** the emulator and answer with the verdict: identical, or the first differing offset and both bytes | CTRL-verb (observe) |
@@ -561,8 +565,8 @@ protocol authority.
 > "not a verb. `help` lists all of them" — a false statement the process made
 > about itself.
 
-**Cycle contract:** only `cycles=` on `run` / `step` / `run-until` acks are valid timing.
-Never subtract two standalone `cycles` acks across other commands. See AGENTIC_ORACLE.md.
+**Cycle contract:** only `cycles=` on `run` / `step` / `run-until` acks are the cost of what that command ran.
+A `delta_from_mark` or the difference of two `cycles` acks includes every command in between. See AGENTIC_ORACLE.md.
 
 ---
 

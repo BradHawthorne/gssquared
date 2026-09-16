@@ -14,11 +14,13 @@
 //
 // So every spike prints one line first:
 //
-//   A2GSPU PINS: seed=1 faketime=1780000000 ramdisk=1 platform=5 frames=300
+//   A2GSPU PINS: seed=1 faketime=1780000000 ramdisk=1 bram=default/<fnv> platform=5 frames=300
 //                rom=131072/<fnv> build=0.8.1726+883dc68(configure-time) exe=<fnv>
 //
 // seed / faketime / ramdisk are the determinism pins as the rails read them
-// (unset is printed as unset, not defaulted). rom= is the size and house-FNV
+// (unset is printed as unset, not defaulted). bram= is the battery RAM the
+// machine actually started from, kind and hash (a2gspu_bram_pin.hpp) -- an
+// input the stock RTC reads from, and rewrites in, the working directory. rom= is the size and house-FNV
 // of the ROM image actually loaded. build= is the version header's string,
 // which CMake fills in at CONFIGURE time and which therefore lags the tree --
 // it is labelled so. exe= is the house-FNV of the running executable, which
@@ -35,6 +37,7 @@
 #include <cstdlib>
 #include <cstring>
 #include "house_fnv.hpp"
+#include "a2gspu_bram_pin.hpp"
 
 inline const char    *g_a2gspu_argv0    = nullptr;
 inline const uint8_t *g_a2gspu_rom_data = nullptr;
@@ -69,7 +72,8 @@ inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames,
     const char *seed = getenv("A2GSPU_SEED");
     const char *ft   = getenv("A2GSPU_FAKETIME");
     const bool  ram  = getenv("A2GSPU_RAMDISK") != nullptr;
-    char rom[48], exe[40], pf[48];
+    char rom[48], exe[40], pf[48], bram[40];
+    a2gspu_bram_field(bram, sizeof bram);
     if (g_a2gspu_rom_data && g_a2gspu_rom_size)
         snprintf(rom, sizeof rom, "%zu/%016llX", g_a2gspu_rom_size,
                  (unsigned long long)a2gspu_fnv_bytes(g_a2gspu_rom_data, g_a2gspu_rom_size));
@@ -80,13 +84,13 @@ inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames,
     else snprintf(exe, sizeof exe, "unreadable");
     if (platform_id >= 0 && frames >= 0) snprintf(pf, sizeof pf, " platform=%d frames=%d", platform_id, frames);
     else pf[0] = 0;
-    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d%s rom=%s build=%s(configure-time) exe=%s",
-             seed ? seed : "unset", ft ? ft : "unset", ram ? 1 : 0, pf, rom,
+    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s%s rom=%s build=%s(configure-time) exe=%s",
+             seed ? seed : "unset", ft ? ft : "unset", ram ? 1 : 0, bram, pf, rom,
              build_version ? build_version : "unknown", exe);
 }
 
 inline void a2gspu_pins_print(int platform_id, int frames, const char *build_version) {
-    char line[320];
+    char line[400];
     a2gspu_pins_format(line, sizeof line, platform_id, frames, build_version);
     printf("A2GSPU PINS: %s\n", line);
     fflush(stdout);
@@ -95,9 +99,10 @@ inline void a2gspu_pins_print(int platform_id, int frames, const char *build_ver
 // The pins' readback, supplied with the rails (M8): `rail read A2GSPU_SEED` (and
 // FAKETIME, RAMDISK) answers with the whole PINS line, since they are one fact.
 inline void a2gspu_pins_read(char *buf, size_t n) {
-    char pins[320]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version);
+    char pins[400]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version);
     snprintf(buf, n, "status=OK %s", pins);
 }
 inline a2rails::Registrar g_reader_seed    {"A2GSPU_SEED",     a2gspu_pins_read};
 inline a2rails::Registrar g_reader_faketime{"A2GSPU_FAKETIME", a2gspu_pins_read};
 inline a2rails::Registrar g_reader_ramdisk {"A2GSPU_RAMDISK",  a2gspu_pins_read};
+inline a2rails::Registrar g_reader_bram    {"A2GSPU_BRAM",     a2gspu_pins_read};

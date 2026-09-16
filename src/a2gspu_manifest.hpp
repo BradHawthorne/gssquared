@@ -90,14 +90,14 @@ inline const char *verb_when(const char *name) {
         {"rail",       "what can be OBSERVED here at all. Verbs are the live surface; rails are the launch-time one, and asking the binary beats reading a catalogue that has drifted before (128 rails read, 96 described, when this was added)"},
         {"read",       "dump guest memory to a host file, including aux as bank 01"},
         {"reset",      "recover a wedged machine; cold with the argument"},
-        {"restore",    "reload a snapshot: CPU+MMU+softswitches+RAM, and the ADB micro and Ensoniq when the file holds them (the ack says which). IWM, media and scanner self-heal -- not full time travel"},
+        {"restore",    "reload a snapshot: CPU+MMU+softswitches+RAM plus whichever device blocks the file holds (the ack carries its manifest). Media and scanner self-heal -- not full time travel. A file that does not fit is rolled back, never half-applied"},
         {"resume",     "continue past a breakpoint hit without losing the breakpoint"},
         {"run",        "advance N video frames. Use run-until when you can name a destination instead"},
         {"run-until",  "run to a named PC with an instruction budget. THE timing primitive: its cycles= is an in-command delta, the only form the oracle certifies. Arriving proves this run executed that address -- a value in RAM cannot imitate a program counter"},
         {"dhgr-calibrate", "derive the DHGR colour profile from the running machine rather than assuming one"},
         {"dhgr-export",    "write the calibrated DHGR profile out for the art pipeline to compile against"},
         {"dhgr-golden",    "capture or check a DHGR reference frame -- the art oracle for colour work"},
-        {"save",       "take a snapshot before an experiment you expect to be destructive: CPU+MMU+softswitches+RAM, plus the ADB micro and the Ensoniq on a IIgs; the manifest names what it holds"},
+        {"save",       "take a snapshot before an experiment you expect to be destructive: CPU+MMU+softswitches+RAM plus the device blocks this machine has; the manifest names what it holds"},
         {"screen",     "text-page helper"},
         {"session",    "starting or ending a suite. Ask what is armed before trusting a measurement; reset before handing the machine on, or the next run inherits your probes"},
         {"systems",    "enumerate every platform, built-in configuration, ROM personality and numeric slot-device map from the running binary"},
@@ -140,9 +140,9 @@ inline const Verb *verbs(int *count) {
         {"dhgr-export", "calibrate", "dhgr-export <dir> — write GSDHGR4D+GSNTSC01 for a2tile", "profile-export"},
         {"dhgr-golden", "calibrate",
          "dhgr-golden <file> [page] [vram-raw|4dot] [bless] — FNV page golden", "vram-raw|4dot"},
-        {"dis", "observe", "dis <addr> <n> <file> — disassemble via MMU", "memory-disasm"},
+        {"dis", "observe", "dis <addr> <n> <file> [m8|m16] [x8|x16] — side-effect-free disassembly (probe_peek); ack names the M/X assumption and unreadable=N", "memory-disasm"},
         {"help", "meta", "help [file] — list CTRL verbs (optional write full catalog)", "discover"},
-        {"hgr", "observe", "hgr — HGR-related dump helper", "bits-mono"},
+        {"hgr", "observe", "hgr [page] [file] — coarse ASCII 'is anything drawn' view of an HGR page (not pixel-exact)", "hgr-ascii-coarse"},
         {"holdkey", "manipulate", "holdkey <hex> — sticky IIgs hold key", "inject-key"},
         {"iolog", "observe", "iolog [on [cap]|off|dump <f>|reset] — $C0xx R/W ring", "io-trace"},
         {"itrace", "trace", "itrace from <pc>|now|n <c>|clear|status — LIVE per-instr trace", "execute"},
@@ -179,16 +179,16 @@ inline const Verb *verbs(int *count) {
         {"poke", "manipulate", "poke [bank:]<addr> <hexbytes...> — write bytes (labeled splice)", "inject-ram"},
         {"shr", "observe", "shr <file> [scale] — IIgs super hi-res as PNG; 320 or 640 per-line by SCB", "shr-linear"},
         {"shr-golden", "calibrate", "shr-golden <file> [bless] — live FNV of $E1:2000-$9FFF", "shr-window"},
-        {"press", "manipulate", "press <hex> [hold] — physical key edge (no consume proof)", "inject-key"},
+        {"press", "manipulate", "press <hex> [hold] [mods] — physical key edge, mods o/c/s/k = Open-Apple/Closed-Apple/shift/control (no consume proof)", "inject-key"},
         {"quit", "run", "quit — end CTRL session", "-"},
         {"rail", "meta", "rail [list [family|PREFIX]] | find <NAME> | env-only <file> | live | read <NAME> | schema [NAME] — enumerate every env rail this binary reads, from the binary; live= which a CTRL verb reaches, read= how its state comes back, schema= the shape of the records it writes", "discover"},
         {"read", "observe", "read <addr> <len> <file> — probe_peek dump (side-effect-free)", "memory-peek"},
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
-        {"restore", "snapshot", "restore <file> — snapshot load; ack names the devices restored", "time-travel-A"},
+        {"restore", "snapshot", "restore <file> — transactional snapshot load; ack carries the manifest, or FAIL stage= rolled-back=", "time-travel"},
         {"resume", "manipulate", "resume — clear a user halt (breakpoint/save-at) so the CPU advances again; refuses to paper over a jammed CPU", "force-control"},
         {"run", "run", "run <frames> — advance N frames; ack includes cycles= IN-COMMAND", "cycles-in-cmd"},
         {"run-until", "run", "run-until <addr> [max_instr] — stop at PC; cycles= IN-COMMAND", "cycles-in-cmd"},
-        {"save", "snapshot", "save <file> — CPU+MMU+RAM snapshot, plus adb and ensoniq on a IIgs", "time-travel-A"},
+        {"save", "snapshot", "save <file> — CPU+MMU+RAM snapshot plus the machine's device blocks; class= is derived from what was written", "time-travel"},
         {"screen", "observe", "screen — screen/text helper", "text-page"},
         {"setreg", "manipulate", "setreg <reg> <hex> — force CPU register", "force-control"},
         {"shot", "observe", "shot <file> — SDL backbuffer BMP (HUMAN eyeball; not art oracle)", "sdl-human"},
@@ -379,18 +379,20 @@ inline void write_manifest(FILE *f) {
         }
         fprintf(f, "env_rail_total: %d\n", nr);
     }
+    /* Generated from the reach table. This section used to be ten hand-written
+     * lines, and its first one -- "env-only-today: GOLDEN ... DHGR_GOLDEN ...
+     * ASSERT(env)" -- contradicted the reach table printed beside it, which
+     * gives shr-golden, dhgr-golden and assert as live verbs for exactly those
+     * rails. One table, printed two ways, cannot disagree with itself. */
     fprintf(f, "\n## env_only_rationale\n");
-    fprintf(f, "# High-volume traces arm at launch; CTRL parity is the roadmap (AGENTIC_ORACLE L4).\n");
-    fprintf(f, "env-only-today: GOLDEN(SPIKE SHR/HGR) DHGR_GOLDEN(SPIKE) SPIKE_* ASSERT(env)\n");
-    fprintf(f, "ctrl-callstream: LIVE NDJSON call stream mid-session\n");
-    fprintf(f, "ctrl-assert: peek clauses (live)\n");
-    fprintf(f, "ctrl-watch-bus: LIVE arm g_watch ranges mid-session (path=bus_write)\n");
-    fprintf(f, "ctrl-watch-soft: probe_peek sample across run/step\n");
-    fprintf(f, "ctrl-valtrap: LIVE value trap mid-session\n");
-    fprintf(f, "ctrl-itrace: LIVE per-instruction trace mid-session\n");
-    fprintf(f, "ctrl-tbtrace: LIVE toolbox/GSOS trace mid-session\n");
-    fprintf(f, "ctrl-dhgr-golden: vram-raw|4dot FNV (live; same as A2GSPU_DHGR_GOLDEN)\n");
-    fprintf(f, "spike-dhgr-golden: A2GSPU_DHGR_GOLDEN + PAGE + GOLDEN_PROFILE (IIe batch gate)\n");
+    fprintf(f, "# live: a CTRL verb reaches the rail mid-session (from the reach table).\n");
+    fprintf(f, "# every other rail is launch-only: it arms from the environment at start.\n");
+    {
+        int nreach = 0;
+        const a2rails::Reach *rt = a2rails::reach(nreach);
+        for (int i = 0; i < nreach; i++)
+            if (rt[i].verb && *rt[i].verb) fprintf(f, "live: %s via %s\n", rt[i].rail, rt[i].verb);
+    }
     fprintf(f, "\n## record_schemas\n");
     fprintf(f, "# rail\ttag\tfields ('?' = optional)\tnote\n");
     {
