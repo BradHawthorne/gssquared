@@ -31,35 +31,35 @@
 #include <windows.h>
 #endif
 
-// ── "~BUS" raw-cycle emitter (Option B: feed PB's proven INGRESS_SOURCE=0) ──
+// ── "~BUS" raw-cycle emitter (the card's raw bus-cycle input) ──
 // When A2GSPU_BUS_DUMP=<path> is set, at shutdown we emit g_slot_bus (the faithful
 // per-Mega-II-cycle slot-bus stream — the all-writes superset that carries the
-// $C0xx mode/border + text context PB needs to render, not just the SHR window)
+// $C0xx mode/border + text context the card needs to render, not just the SHR window)
 // as a "~BUS" frame (SYNC + u32 count + 5-byte {addr_lo,addr_hi,data,ctl,seq}).
-// slot_bus_cycle_t.ctl is ALREADY the pb_cycle_t SLOT_CTL_* byte -> copy verbatim.
+// slot_bus_cycle_t.ctl is ALREADY the card's per-cycle control byte (SLOT_CTL_*) -> copy verbatim.
 // (The SHR-write subset of g_slot_bus byte-matches the #44 oracle 731974F652A05619;
 //  the a2gspu write-observer is a render/dirty hook, NOT a complete write log.)
 static const char *g_bus_path = nullptr;   // dump target (null = disabled)
 
-// --- live "~BUS" CDC streaming (A2GSPU_BUS_STREAM=1): feed PB's INGRESS_SOURCE=0 live ---
-// One-time "~BUS" SYNC + open-ended count (PB resets once, then streams continuously);
+// --- live "~BUS" CDC streaming (A2GSPU_BUS_STREAM=1): feed the card's raw-cycle input live ---
+// One-time "~BUS" SYNC + open-ended count (the card resets once, then streams continuously);
 // each frame we ship the slot-bus writes accumulated since the last frame and clear them
-// (PB_FORWARD sub-frame ships render at ~FWD_USB_FRAME_CYCLES granularity).
+// (the card forwards render work in sub-frame batches).
 static bool g_bus_stream = false;          // stream g_slot_bus over CDC each frame
 static bool g_bus_synced = false;          // sent the one-time "~BUS" SYNC + open count
 
 // RENDER-WHITELIST DISTILL (the lossless compression for the CDC choke). The raw slot_bus
 // is ~78% non-render traffic: ADB/clock/speed/paddle $C0xx polling (e.g. $C03D/$C0EE/$C036)
-// + zp/stack/non-video RAM writes that pb_render_cycle never consumes. We forward ONLY what
-// PB's render path acts on: (1) the $C0xx low bytes pb_mmu_observe() reacts to (pb_scope/
-// pb_mmu.h), and (2) WRITES to video memory ($0400-$0BFF text, $2000-$9FFF SHR/HGR). PROVEN
+// + zp/stack/non-video RAM writes the card's renderer never consumes. We forward ONLY what
+// the card's render path acts on: (1) the $C0xx low bytes its memory-mapping model reacts
+// to, and (2) WRITES to video memory ($0400-$0BFF text, $2000-$9FFF SHR/HGR). PROVEN
 // lossless on the bus-trace dump: fb8_fnv 4DF99D8021729BFE + shr_writes 112916 unchanged
-// (test_pb_forward), at a 3.36x reduction (5.87 MB -> 1.75 MB/boot -> well under CDC).
+// (the card-side forwarding test), at a 3.36x reduction (5.87 MB -> 1.75 MB/boot -> well under CDC).
 static inline bool bus_render_relevant(uint16_t a, uint8_t ctl) {
-    if ((a & 0xFF00u) == 0xC000u) {                 // soft-switch / slot I/O: keep only what PB decodes
+    if ((a & 0xFF00u) == 0xC000u) {                 // soft-switch / slot I/O: keep only what the card decodes
         uint8_t lo = (uint8_t)a;
-        // ADR-0008: the slot-3 $C0nF command-register WRITE -> forward so PB's pbf_cmd_capture
-        // assembles the host->card command frame ($C0BF for slot 3).
+        // The slot's $C0nF command-register WRITE -> forward so the card can
+        // assemble the host->card command frame ($C0BF for slot 3).
         if (lo == (uint8_t)(0x80u + SLOT_BUS_SLOT * 0x10u + 0x0Fu) && !(ctl & SLOT_CTL_READ)) return true;
         return lo == 0x68 || lo == 0x35 || lo == 0x29 || lo == 0x21 || lo == 0x22 || lo == 0x34
             || (lo >= 0x02 && lo <= 0x09)            // RAMRD/RAMWRT/INTCXROM/ALTZP
@@ -69,7 +69,7 @@ static inline bool bus_render_relevant(uint16_t a, uint8_t ctl) {
             || lo == 0x5E || lo == 0x5F              // DGR/AN3
             || (lo >= 0x80 && lo <= 0x8F);           // language card
     }
-    if (ctl & SLOT_CTL_READ) return false;           // PB shadows writes only
+    if (ctl & SLOT_CTL_READ) return false;           // the card shadows writes only
     return (a >= 0x0400u && a <= 0x0BFFu) || (a >= 0x2000u && a <= 0x9FFFu);  // video memory
 }
 
@@ -127,8 +127,8 @@ static void *serial_open(const char *port) {
 
 // Async serial write using Windows overlapped I/O.
 // Lossless BLOCKING write — waits for every byte to drain before returning.
-// The raw-cycle "~BUS" stream needs EVERY record (a dropped cycle desyncs PB's
-// decode -> gappy IPL -> PV loses lock = the stutter). serial_write_async's
+// The raw-cycle "~BUS" stream needs EVERY record (a dropped cycle desyncs the card's
+// decode -> gaps in its render input -> the display loses sync = the stutter). serial_write_async's
 // skip-on-busy is correct for the idempotent "~A2G" snapshot but LOSES data for
 // "~BUS". Blocking stalls the emulation thread under CDC saturation — acceptable
 // for a dev loop (slower boot, correct render); the caller clears its buffer only
@@ -143,8 +143,8 @@ static bool serial_write_blocking(void *handle, const uint8_t *data, uint32_t le
         DWORD wrote = 0; ResetEvent(ov.hEvent);
         if (!WriteFile(h, data + off, len - off, &wrote, &ov)) {
             if (GetLastError() != ERROR_IO_PENDING) { ok = false; break; }
-            // 250ms cap: if PB isn't draining the CDC, never stall the emulation thread
-            // for seconds. A draining PB clears 16 KB in ~16 ms, far under this.
+            // 250ms cap: if the card isn't draining the CDC, never stall the emulation thread
+            // for seconds. A draining card clears 16 KB in ~16 ms, far under this.
             if (WaitForSingleObject(ov.hEvent, 250) != WAIT_OBJECT_0) { CancelIoEx(h, &ov); ok = false; break; }
             if (!GetOverlappedResult(h, &ov, &wrote, FALSE)) { ok = false; break; }
         }
@@ -502,7 +502,7 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
         static bool ever_connected = false;
         if (++reconnect_counter >= reconnect_interval) {
             reconnect_counter = 0;
-            // A2GSPU_SERIAL_PORT overrides the probe; default tries PB=COM10 first
+            // A2GSPU_SERIAL_PORT overrides the probe; default tries COM10 first
             // (the card's bus-processor CDC port), then the legacy fallback list.
             const char *env_port = getenv("A2GSPU_SERIAL_PORT");
             const char *ports[] = {
@@ -539,7 +539,7 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
         if (!ad->serial_handle) return;
     }
 
-    // --- LIVE "~BUS" streaming: forward the slot-bus writes to PB's INGRESS_SOURCE=0 ---
+    // --- LIVE "~BUS" streaming: forward the slot-bus writes to the card's raw-cycle input ---
     if (g_bus_stream) {
         static uint8_t live_seq = 0;
         static int sdbg = -1; if (sdbg < 0) sdbg = getenv("A2GSPU_SERIAL_DEBUG") ? 1 : 0;
@@ -566,11 +566,11 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
                 txq.push_back((uint8_t)(c.addr & 0xFF));
                 txq.push_back((uint8_t)((c.addr >> 8) & 0xFF));
                 txq.push_back(c.data);
-                txq.push_back(c.ctl);                                // pb_cycle_t SLOT_CTL_* verbatim
+                txq.push_back(c.ctl);                                // SLOT_CTL_* control byte verbatim
                 txq.push_back(live_seq++);
             }
             g_slot_bus.clear();
-            // runaway guard: if PB ever stops draining, don't grow the queue without bound.
+            // runaway guard: if the card ever stops draining, don't grow the queue without bound.
             if (txq.size() - txoff > (16u << 20)) { txq.clear(); txoff = 0; }
             static uint64_t sok = 0, sfail = 0;
             size_t avail = txq.size() - txoff;
@@ -583,7 +583,7 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
                     if (txoff >= txq.size())        { txq.clear(); txoff = 0; }                 // fully drained
                     else if (txoff > (1u << 20))    { txq.erase(txq.begin(), txq.begin() + txoff); txoff = 0; }  // compact consumed prefix
                 } else {
-                    sfail++;   // PB not draining CDC -> chunk timed out
+                    sfail++;   // the card is not draining CDC -> chunk timed out
                 }
             }
             if (sdbg) { static uint64_t f = 0; if ((++f % 60) == 0) {
@@ -591,7 +591,7 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
                        (unsigned long long)f, txq.size(), txoff,
                        (unsigned long long)sok, (unsigned long long)sfail); fflush(stdout); } }
         }
-        return;  // skip the "~A2G" snapshot pack (PB consumes "~BUS")
+        return;  // skip the "~A2G" snapshot pack (the card consumes "~BUS")
     }
 
     // Send every frame (60fps). Dirty tracking keeps most frames small.
@@ -1015,7 +1015,7 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
     if (getenv("A2GSPU_BUS_STREAM")) {
         g_bus_stream = true;
         g_slot_bus_enabled = true;   // capture the slot-bus stream for live CDC forwarding
-        printf("A2GSPU: live ~BUS CDC streaming enabled (slot_bus -> PB INGRESS_SOURCE=0)\n");
+        printf("A2GSPU: live ~BUS CDC streaming enabled (slot_bus -> card raw-cycle input)\n");
     }
 
     // Cache pointers for frame callback (avoids dynamic_cast per frame)
@@ -1100,7 +1100,7 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
                         (uint8_t)(c.addr & 0xFF),         // addr_lo (A0-A7)
                         (uint8_t)((c.addr >> 8) & 0xFF),  // addr_hi (A8-A15)
                         c.data,                           // data
-                        c.ctl,                            // ctl = pb_cycle_t SLOT_CTL_* verbatim
+                        c.ctl,                            // ctl = SLOT_CTL_* control byte verbatim
                         seq++ };                          // seq
                     fwrite(rec, 1, 5, f);
                 }

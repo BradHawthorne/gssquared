@@ -135,7 +135,7 @@ Where the code lives (by function, not line number — line numbers here went st
 | `A2GSPU_SYM_BASE=<hex>` | pin the symbol-relocation base (disables auto-inference) | observe | env |
 | `A2GSPU_SYM_SUSPECT=1` | append `[SUSPECT reused]` to any symbol whose name resolves at >1 address (advisory only) | observe | env |
 | `A2GSPU_BUS_DUMP=<path>` | `~BUS` cycle dump (source = slot_bus) for the gssquared→card host gate | observe | env |
-| `A2GSPU_BUS_STREAM=1` | live `~BUS` slot-bus CDC streaming (→ PB `INGRESS_SOURCE=0`) | observe | env |
+| `A2GSPU_BUS_STREAM=1` | live `~BUS` slot-bus CDC streaming to the card's raw-cycle input | observe | env |
 | `A2GSPU_COVERAGE="LO-HI"\|"BANK:LO-HI"` | **per-byte execution bitmap** over that range, one bit per byte, set when the byte was part of an executed instruction — this is what turns deasmiigs's code/data split from a heuristic into a measurement (`--coverage`). A lower bound, never an upper one: a byte that did not execute in this run is *not proven code*, not *proven data*; union several runs to widen it. Live equivalent: the `cov` verb, which also binds a source plan (`A2COV2`) | observe | env |
 | `A2GSPU_COVERAGE_OUT=<file>` | file the bitmap is flushed to. Written **before** the gate block, which exits on any gate and would otherwise throw the run's coverage away | observe | env |
 | `A2GSPU_HGR_PAGE=1\|2` | which HGR page the II-family dump/golden gate reads — for a workload that gates on the page it just drew | observe | env |
