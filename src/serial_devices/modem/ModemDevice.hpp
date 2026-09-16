@@ -394,13 +394,7 @@ class ModemDevice : public SerialDevice {
 
         ~ModemDevice() {
             // Ensure thread stops before our members are destroyed
-            if (thread) {
-                SDL_Log("SerialDevice: %s shutting down", this->name);
-                SerialMessage msg = {MESSAGE_SHUTDOWN, 0};
-                q_host.send(msg);
-                SDL_WaitThread(thread, NULL);
-                thread = nullptr;
-            }
+            stop();   // FORK: SerialDevice::stop retries SHUTDOWN and joins
             
             if (socket) {
                 NET_DestroyStreamSocket(socket);

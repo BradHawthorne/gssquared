@@ -114,13 +114,7 @@ class FileDevice : public SerialDevice {
                 frame_handler_id_ = static_cast<size_t>(-1);
             }
             // Ensure thread stops before our members are destroyed
-            if (thread) {
-                SDL_Log("SerialDevice: %s shutting down", this->name);
-                SerialMessage msg = {MESSAGE_SHUTDOWN, 0};
-                q_host.send(msg);
-                SDL_WaitThread(thread, NULL);
-                thread = nullptr;
-            }
+            stop();   // FORK: SerialDevice::stop retries SHUTDOWN and joins
             close_file(false); // no toast on teardown; console log still useful if a file was open
             event_queue_ = nullptr;
         }
@@ -135,7 +129,9 @@ class FileDevice : public SerialDevice {
                 if (strncmp(port_id, "PARL", 4) == 0) snprintf(filename, sizeof(filename), "parallel.out");
                 else snprintf(filename, sizeof(filename), "GS2.%s.out", port_id);
                 printf("A2GSPU FILEDEV: port=%s file=%s (automated run: stable name, appended)\n", port_id, filename);
-                file = fopen(filename, "a");
+                // Binary: a printer receives bytes. Text mode on Windows wrote every $0A
+                // as $0D $0A, corrupting graphics and escape sequences.
+                file = fopen(filename, "ab");
                 if (file == NULL) {
                     printf("Failed to open file %s\n", filename);
                     filename[0] = '\0';
@@ -153,7 +149,7 @@ class FileDevice : public SerialDevice {
             snprintf(filename, sizeof(filename), "GS2.%s.%s", port_id, timestamp);
             printf("FileDevice: opening file %s\n", filename);
 
-            file = fopen(filename, "w");
+            file = fopen(filename, "wb");   // FORK: binary, as above
             if (file == NULL) {
                 printf("Failed to open file %s\n", filename);
                 filename[0] = '\0';
@@ -179,8 +175,11 @@ class FileDevice : public SerialDevice {
         }
 
         void device_loop() override {
+            bool busy = false;
             while (true) {
-                SDL_Delay(10);
+                // FORK: 1 ms while data is flowing (a producer may be waiting for room),
+                // 10 ms when idle.
+                SDL_Delay(busy ? 1 : 10);
 
                 // FORK: no idle close on an automated run -- when a job "ends" would be
                 // decided by host time, and the capture stays one appended file.
@@ -216,6 +215,7 @@ class FileDevice : public SerialDevice {
                 // with the machine for that long. A printer's byte is gone the
                 // moment it is strobed; anything watching the file should see it.
                 if (wrote && file) fflush(file);
+                busy = wrote;
             }
         }
 };

@@ -13,14 +13,17 @@ void parallel_write_C0x0(void *context, uint32_t addr, uint8_t data) {
     }
 
     if (parallel_d->serial_device != nullptr) {
-        parallel_d->serial_device->q_host.send(SerialMessage{MESSAGE_DATA, data});
+        // FORK: wait for room rather than drop. The card has no busy/ACK model to hold
+        // the guest off, so a print loop outran the file device's drain (1657 of 10240
+        // bytes reached parallel.out) and every lost byte vanished silently.
+        parallel_d->serial_device->q_host.send_wait(SerialMessage{MESSAGE_DATA, data}, 1000);
     }
 }
 
 void parallel_reset(parallel_data *parallel_d) {
     if ((parallel_d != nullptr) && (parallel_d->id == DEVICE_ID_PARALLEL)) {
         if (parallel_d->serial_device != nullptr) {
-            parallel_d->serial_device->q_host.send(SerialMessage{MESSAGE_CLOSE, 0});
+            parallel_d->serial_device->q_host.send_wait(SerialMessage{MESSAGE_CLOSE, 0}, 1000);
         }
     }
 }

@@ -38,8 +38,17 @@ Connections::~Connections() {
     clear();
 }
 
+// FORK: construct, then start the device thread once the object is complete
+// (SerialDevice's constructor used to start it before the derived part existed).
 SerialDevice *Connections::create_device(connection_device_type_t type, const std::string &port_id,
                                          const std::string &path) {
+    SerialDevice *dev = construct_device(type, port_id, path);
+    if (dev) dev->start();
+    return dev;
+}
+
+SerialDevice *Connections::construct_device(connection_device_type_t type, const std::string &port_id,
+                                            const std::string &path) {
     switch (type) {
         case connection_device_type_t::NONE:
             return nullptr;

@@ -183,6 +183,8 @@ class Connections {
 
     SerialDevice *create_device(connection_device_type_t type, const std::string &port_id,
                                 const std::string &path);
+    SerialDevice *construct_device(connection_device_type_t type, const std::string &port_id,
+                                   const std::string &path);
 
 public:
     Connections(EventQueue *event_queue, DeviceFrameDispatcher *device_frame_dispatcher);
