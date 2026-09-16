@@ -445,6 +445,8 @@ inline void iigs_names_ready() {
     g_iigs_default_seeded = true;
 }
 
+#include "iigs_gsos_names.hpp"   // GSOS.<segment>+off, verified against the live page
+
 inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     buf[0] = 0;
     if (g_iigs_syms_loaded && iigs_sym_resolve(full_pc, buf, n)[0]) return buf;
@@ -454,6 +456,9 @@ inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     if ((full_pc & 0xFFFFFF) < 0xFE0000) {
         if (iigs_live_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
         if (iigs_live_toolsets_refresh() && iigs_live_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
+        // Then GS/OS's own kernel (the System Loader's entry points already named
+        // above, as tool set 17, win over its segment name).
+        if (iigs_gsos_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
     }
     // Same search as iigs_rom_sym_resolve, without the loaded-flag gate, and with
     // a tighter window: an entry point names the routine it begins, not the

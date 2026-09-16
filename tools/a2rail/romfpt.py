@@ -38,9 +38,12 @@ USAGE
             load wherever the Memory Manager puts them on each boot
 
 Names are given for the sets whose call lists are transcribed here (Tool
-Locator, Memory Manager, Misc Tools, Event Manager, Sound); every other
-function is Tool<NN>.fn<MM>, which is still a true statement about where a
-toolbox function begins.
+Locator, Memory Manager, Misc Tools, Event Manager, Sound, System Loader);
+every other function is Tool<NN>.fn<MM>, which is still a true statement about
+where a toolbox function begins. The System Loader's calls are the published
+interface GS/OS programs use to load code (InitialLoad2 is how every driver
+and file system translator arrives), so naming them names the moments the
+machine's code changes.
 """
 import struct, sys, os
 
@@ -83,19 +86,28 @@ NAMES = {
         14: 'FFStartSound', 15: 'FFStopSound', 16: 'FFSoundStatus', 17: 'FFGeneratorStatus', 18: 'SetSoundMIRQV',
         19: 'SetUserSoundIRQV', 20: 'FFSoundDoneStatus', 21: 'FFSetUpSound', 22: 'FFStartPlaying', 23: 'SetDOCReg',
         24: 'ReadDOCReg'},
+    # System Loader: its housekeeping calls keep their published names (LoaderInitialization,
+    # not a generated LoaderBootInit), so they are listed here and take precedence in fname().
+    17: {1: 'LoaderInitialization', 2: 'LoaderStartUp', 3: 'LoaderShutDown', 4: 'LoaderVersion',
+         5: 'LoaderReset', 6: 'LoaderStatus', 9: 'InitialLoad', 10: 'Restart', 11: 'LoadSegNum',
+         12: 'UnloadSegNum', 13: 'LoadSegName', 14: 'UnloadSeg', 15: 'GetLoadSegInfo', 16: 'GetUserID',
+         17: 'LGetPathname', 18: 'UserShutDown', 19: 'RenamePathname', 32: 'InitialLoad2',
+         33: 'GetUserID2', 34: 'LGetPathname2'},
 }
 PREFIX = {1: 'TL', 2: 'MM', 3: 'MT', 4: 'QD', 5: 'Desk', 6: 'EM', 7: 'Sch', 8: 'Sound', 9: 'ADB', 10: 'SANE',
           11: 'IM', 12: 'TT', 13: 'RD'}
 
 
 def fname(tool, f):
+    if f in NAMES.get(tool, {}):
+        return NAMES[tool][f]
     if f in HOUSEKEEPING:
         return PREFIX.get(tool, 'T%d' % tool) + HOUSEKEEPING[f]
-    return NAMES.get(tool, {}).get(f, 'fn%02X' % f)
+    return 'fn%02X' % f
 
 
 def write_names(out):
-    with open(out, 'w', encoding='ascii') as fh:
+    with open(out, 'w', encoding='ascii', newline='\n') as fh:
         fh.write('# Apple IIgs toolbox names: "T F name" (T tool set, F function; F=0 names the set), written by\n')
         fh.write('# tools/a2rail/romfpt.py --names. Read by the emulator to name RAM-resident tool sets from the\n')
         fh.write('# live tool pointer table. A function not listed is named fnXX; a set not listed, ToolNN.\n')
@@ -103,10 +115,8 @@ def write_names(out):
         for t in sorted(TOOLS):
             fh.write('%d 0 %s\n' % (t, TOOLS[t])); n += 1
         for t in sorted(set(list(NAMES) + list(PREFIX))):
-            for f in sorted(HOUSEKEEPING):
+            for f in sorted(set(HOUSEKEEPING) | set(NAMES.get(t, {}))):
                 fh.write('%d %d %s\n' % (t, f, fname(t, f))); n += 1
-            for f in sorted(NAMES.get(t, {})):
-                fh.write('%d %d %s\n' % (t, f, NAMES[t][f])); n += 1
     print('wrote %d names to %s' % (n, out))
 
 
@@ -147,7 +157,7 @@ def main(argv):
     syms = sorted(set(syms))
     if '--sym' in argv:
         out = argv[argv.index('--sym') + 1]
-        with open(out, 'w', encoding='ascii') as fh:
+        with open(out, 'w', encoding='ascii', newline='\n') as fh:
             fh.write('# Apple IIgs ROM toolbox function entry points, read from the ROM image by tools/a2rail/romfpt.py\n')
             fh.write('# source TPT $%06X, %d tool sets, %d entries. A PC between two entries is named after the\n' % (tpt, count, len(syms)))
             fh.write('# preceding entry: right for a function body, wrong for a shared helper (use a dispatcher trap).\n')

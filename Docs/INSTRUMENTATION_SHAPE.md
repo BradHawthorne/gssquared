@@ -20,7 +20,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M4 liveness | done | — |
 | M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, scanner (Class B), iwm and pdblock are saved; floppy media and the clock are not |
 | M6 artifact discipline | done | — |
-| M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
+| M7 names by default | partial | ROM and RAM tool sets and the GS/OS kernel's segments are named; drivers and FSTs loaded at boot are not |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table; 42 are also armable live (`rail set`) |
 | M9 determinism asserted | done | — |
 | M10 configuration over code | done, one standing exception | the WIZ5 title traps stand until their readers move (AGENTS.md rule 2) |
@@ -394,6 +394,30 @@ dispatch at `$E1/0000` named null — caught by the record contract's smoke
 test, not by the gate, which has no naming check. `iigs_names_ready()` now
 seeds, loads and sorts before anything searches, whichever side arrives
 first.
+
+The kernel followed (2026-09-16), without the source: Apple's GS/OS source is
+not published, so no label comes from it. What is published is the file
+format, and the boot volume's own `SYSTEM/GS.OS` names its parts — a chain of
+segments behind `$30`-byte headers carrying the load address, length, flags
+and an identifier (`System Loader,Pt 2 v04.00`). `tools/a2rail/gsosmap.py`
+reads the file out of the volume (`prodosfs.py`, a read-only ProDOS reader)
+and writes `assets/symbols/apple2gs/gsos.segs`: 14 segments for 6.0.1, each
+with a house-FNV of every 256-byte page and no kernel code. The namer calls a
+PC `GSOS.<Segment>+$off` only while the live bytes of its page hash-match the
+file, checked through `probe_peek` and cached per frame, because an address
+alone proves nothing here: the Init Manager parts load over other segments
+during boot, the language card banks some out, and a ProDOS 8 program
+replaces the kernel. A page that does not match stays unnamed rather than
+misnamed. The System Dispatch Table at `$01/FC00` could never hash-match —
+GS/OS writes its jump targets at run time — so a segment that is mostly
+4-byte `JML` slots is stored as the opcode of each slot and verified by shape.
+The System Loader's calls are tool set 17 (`LoaderInitialization` …
+`InitialLoad2`), named from the published call list and taking precedence
+over the segment name. `unarmedhash.ps1` now traps one landing in the Loader,
+the dispatch table and the Dispatcher during the pinned GS/OS boot and fails
+unless their records carry those names; removing `gsos.segs` turns it red.
+Still open: the drivers and file system translators the Loader places at
+boot, which have no fixed address and need a load record.
 
 ### M8 — Reachability and readback as a registration  (P7) — M
 

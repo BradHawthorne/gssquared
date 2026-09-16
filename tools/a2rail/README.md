@@ -37,11 +37,22 @@ machine-readable event for every command, acknowledgement, refusal and stall.
 | `protocolcheck.ps1` | gates | 5 | protocol v2, `systems` discovery, JSON replies, ownership refusal, live SHR golden |
 | `copilotcheck.ps1` | gates | 3 | the windowed co-pilot rail observes, controls, and refuses `poke` (its window cannot take focus) |
 | `gs816/assertparity.ps1` | gates | 5 | the env and CTRL assert surfaces give the same verdicts |
-| `unarmedhash.ps1` | gates | 3 and 5 | pinned stock boots reproduce `unarmed.baseline.json`; observation rails armed change nothing |
+| `unarmedhash.ps1` | gates | 3 and 5 | pinned stock boots reproduce `unarmed.baseline.json`; observation rails armed change nothing, every armed rail records, and trap records carry ROM, System Loader and GS/OS kernel names |
 
 `personalitycheck.ps1` writes a JSON ledger to `$TEMP\a2rail-personalities\personality-results.json`
 and derives the expected configuration count from `src/systemconfig.cpp`, so adding a
 configuration turns it red until the list is extended.
+
+## Data tools
+
+These write the name tables the emulator ships in `assets/symbols/`; none of them ships code
+of the ROM or the operating system.
+
+| Tool | Writes | From |
+|---|---|---|
+| `romfpt.py <rom> --sym <file>` | `apple2gs/<ROM house-FNV>.sym`, the ROM's toolbox entry points | the ROM's own tool pointer table |
+| `romfpt.py --names <file>` | `apple2gs/toolbox.names`, tool set and function names for RAM-resident sets | the published call lists transcribed in the script |
+| `gsosmap.py <volume.po>` | `apple2gs/gsos.segs`, GS/OS kernel segments and per-page hashes | the volume's `SYSTEM/GS.OS` (read with `prodosfs.py`) |
 
 ## Ownership
 

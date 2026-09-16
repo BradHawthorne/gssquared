@@ -26,6 +26,10 @@
        boot, with the SHR hash unchanged. And every armed rail's sink must hold records: an
        armed run that matched only because a rail never armed would otherwise pass.
 
+    3. NAMES. The armed boots' trap records must carry names: RESET on both ROMs, and on
+       the GS/OS boot a System Loader call, the System Dispatch Table and the Dispatcher.
+       A symbol table that stopped loading leaves every sym null and nothing else notices.
+
     What it does NOT check: the windowed, no-environment emulator. Every run here is a spike,
     and a spike is itself an environment variable. The interactive dual-mode check is still
     done by hand (AGENTS.md rule 5), and this header says so rather than implying otherwise.
@@ -104,9 +108,24 @@ function Get-ArmedEnv([string]$runDir, [int]$platform) {
         A2GSPU_SNAP_PCS      = 'FA62,FB2F,FDED,C300'
         A2GSPU_SNAP_OUT      = (Join-Path $runDir 'snap.ndjson')
     }
-    if ($platform -eq 5) { $e.A2GSPU_TBTRACE = '1'; $e.A2GSPU_DUMP += ',E1/0000-003F,FF/4100-41FF' }
+    if ($platform -eq 5) {
+        $e.A2GSPU_TBTRACE = '1'; $e.A2GSPU_DUMP += ',E1/0000-003F,FF/4100-41FF'
+        # One landing in each GS/OS kernel region, for the names check below.
+        $e.A2GSPU_TRAP += ';name=ldr at=01:A600-FBFF first=1 cap=1 do=regs' +
+                          ';name=sdt at=01:FC00-FCFF first=1 cap=1 do=regs' +
+                          ';name=disp at=E0:E000-FF38 first=1 cap=1 do=regs'
+    }
     New-Item -ItemType Directory -Force -Path (Join-Path $runDir 'sess') | Out-Null
     return $e
+}
+
+# Names by default (SHAPE M7): the trap records' sym fields a row must contain. A
+# ROM symbol table, the toolbox names or the GS/OS segment map that stopped
+# loading would leave every one of these null and nothing else would notice.
+$expectNames = @{
+    'iie-rom'      = @('"sym":"RESET"')
+    'iigs-rom'     = @('"sym":"RESET"')
+    'iigs-gsos601' = @('"sym":"RESET"', '"sym":"SystemLoader.', '"sym":"GSOS.SystemDispatchTable+', '"sym":"GSOS.Dispatcher+')
 }
 
 # The files the armed rails write; each must be non-empty after an armed run.
@@ -198,6 +217,12 @@ foreach ($r in $rows) {
         -not (Test-Path $f) -or (Get-Item $f).Length -eq 0
     })
     Check ("{0}: armed rails all recorded" -f $r.name) ($quiet.Count -eq 0) $(if ($quiet.Count) { "empty or missing: " + ($quiet -join ', ') } else { "$($sinks.Count) sinks" })
+    if ($expectNames.ContainsKey($r.name)) {
+        $tf = Join-Path $a.dir 'trap.ndjson'
+        $tt = if (Test-Path $tf) { [IO.File]::ReadAllText($tf) } else { '' }
+        $missing = @($expectNames[$r.name] | Where-Object { -not $tt.Contains($_) })
+        Check ("{0}: trap records carry names" -f $r.name) ($missing.Count -eq 0) $(if ($missing.Count) { "no record with " + ($missing -join ', ') } else { ($expectNames[$r.name] | ForEach-Object { $_.Substring(7).TrimEnd('"') }) -join ' ' })
+    }
     if (-not $Bless) {
         $b = $baseline[$r.name]
         if (-not $b) {
