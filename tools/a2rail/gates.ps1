@@ -18,6 +18,9 @@
                 copilotcheck         the windowed agent rail (starts a window that cannot take focus)
                 assertparity         the env and CTRL assert surfaces give the same verdicts
                 unarmedhash          stock emulation unchanged; armed observers change nothing
+                hwtruth              the emulator's answers to the hardware questions in
+                                     Docs/fidelity/README.md are the ones last recorded
+                                     (tools/hwtruth: the same program runs on a real IIgs)
 
     Suites run one at a time -- they share nothing, but two emulator suites overlapping on
     one box have collided before (a shared temp directory, a command-file lock). About
@@ -63,6 +66,7 @@ $suites = [ordered]@{
     'copilot'      = @{ offline = $false; run = { & (Join-Path $here 'copilotcheck.ps1') } }
     'assertparity' = @{ offline = $false; run = { & (Join-Path $here 'gs816\assertparity.ps1') } }
     'unarmedhash'  = @{ offline = $false; run = { if ($SkipCorpus) { & (Join-Path $here 'unarmedhash.ps1') -SkipCorpus } else { & (Join-Path $here 'unarmedhash.ps1') } } }
+'hwtruth'      = @{ offline = $false; run = { & (Join-Path $root 'tools\hwtruth\gate.ps1') } }
 }
 
 $matrix = @()

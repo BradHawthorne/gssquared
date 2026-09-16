@@ -57,19 +57,26 @@ below records what has been done since.
 These can't be settled from documents or emulators. Each needs a test program run on a real
 machine (or card) before either tree's behaviour is kept.
 
-- Game switches with nothing attached (the IIe manual puts the pull-downs in the hand controller, which favours upstream's floating reads).
-- The low bits of `$C011-$C01F`, and whether reading `$C02E`/`$C02F` clears the scan-line interrupt. The fork's fixes 5 and 6 contradict MAME.
-- MVN/MVP stepping with x=1 (the documentation favours upstream's 8-bit stepping, with the fork's explicit banks).
-- VBL and scan-line interrupt alignment; `$C035`/`$C036` reset values; ROM 3 `$FF` float and ghosting.
+**The test program exists:** `tools/hwtruth` (README there) builds a bootable 800K disk that
+measures the questions marked **[hwtruth]**, writes the raw bytes back to the disk, and prints
+them. `report.py` turns a real machine's run and the emulator's into answers side by side, and
+the `hwtruth` gate holds the emulator to its recorded answers until a hardware run changes one.
+Its answers today are in `tools/hwtruth/emulator_verdicts.json`.
+
+- **[hwtruth]** Game switches with nothing attached (the IIe manual puts the pull-downs in the hand controller, which favours upstream's floating reads).
+- **[hwtruth]** The low bits of `$C011-$C01F`, and whether reading `$C02E`/`$C02F` clears the scan-line interrupt. The fork's fixes 5 and 6 contradict MAME.
+- **[hwtruth]** MVN/MVP stepping with x=1 (the documentation favours upstream's 8-bit stepping, with the fork's explicit banks).
+- VBL and scan-line interrupt alignment; `$C035`/`$C036` reset values; **[hwtruth]** ROM 3 `$FF` float (unpopulated bank reads) and ghosting.
 - The 3.5 drive's status polarities (disk-switched, drive-installed, head select).
 - W5100 `MR` bit 0 (IND) after reset on the Uthernet II.
 - SecondSight `SetPaletteEntry` length (fixed to 4 data bytes; confirm against the card's library).
 
-**Also from the study's hardware list:** whether the Mega II VBL and quarter-second flags latch
-while disabled. The fork now follows MAME and KEGS (they do not), from recollection of those
-sources. A hardware test belongs with the other decisions above.
+**Also from the study's hardware list:** **[hwtruth]** whether the Mega II VBL and quarter-second
+flags latch while disabled. The fork now follows MAME and KEGS (they do not), from recollection of
+those sources. a2engine's `intcheck` assumed they did until `e462595`.
 
 **Added by the second pass (§16):**
-- Whether `$C02D` bit 6 set to "Your Card" deselects the IWM at `$C0E0-$C0EF` (which would also take the slot 5 3.5 drives away), and whether bit 5 does anything to it. `$C0nX` gating (slot bus step 2) waits on this, because a Disk II card in slot 6 (config 9) and the ROM's slot scan both depend on the answer.
-- Whether bank `$E0` honours RAMRD, RAMWRT, ALTZP and 80STORE. The fork's CPU path sends `$E0` through the Mega II page table, so it does; the probe now mirrors that. The Hardware Reference is recalled as saying the auxiliary switches affect only banks `$00`/`$01`.
+- **[hwtruth]** Whether `$C02D` bit 6 set to "Your Card" deselects the IWM at `$C0E0-$C0EF`. **Evidence found since, and acted on:** before calling the built-in slot 5 firmware, ROM 01 saves `$C02D`, clears bits 5 and 6 and restores it afterwards (`$FE7026`; `$FE6F63`/`$FE6F87`), which only makes sense if bit 6 takes the IWM away. The gating is in (`575e1703`). Config 9 has no Disk II card; it uses the built-in port. The hardware run confirms or reverses it.
+- **[hwtruth]** Whether bank `$E0` follows RAMRD and RAMWRT. **Reasoning since:** TN68 says the Mega II learns the bank only from M2B0, which does not reflect the auxiliary switches and is high for every `$E1` access. The Mega II holds those switches itself, so a `$00` access and an `$E0` access look the same to it: `$E0` should follow them and `$E1` should not, which is what the emulator does. (An earlier line here recalled the Hardware Reference saying otherwise; that recollection is probably wrong.)
+- **[hwtruth]** The IWM's data register with the motor off. The IWM spec says all ones; the emulator reads a stale latch (`$D4` after a boot, `$00` before one).
 - The parallel card's ACK and FF2 timing, and the PROM's "Printer-Not-Available" alteration.

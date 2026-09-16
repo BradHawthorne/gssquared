@@ -1,0 +1,66 @@
+[
+  {
+    "question": "$C02D bit 6 deselects the IWM",
+    "answer": "YES: bit 6 set takes $C0E0-$C0EF away from the IWM"
+  },
+  {
+    "question": "IWM data register reads all ones with the motor off",
+    "answer": "NO"
+  },
+  {
+    "question": "bank $E0 follows RAMWRT",
+    "answer": "YES"
+  },
+  {
+    "question": "bank $E0 follows RAMRD",
+    "answer": "YES"
+  },
+  {
+    "question": "Mega II VBL flag latches while disabled",
+    "answer": "NO"
+  },
+  {
+    "question": "Mega II quarter-second flag latches while disabled",
+    "answer": "NO"
+  },
+  {
+    "question": "sanity: flags set when enabled",
+    "answer": "yes"
+  },
+  {
+    "question": "reading $C02E/$C02F clears a pending scan-line interrupt",
+    "answer": "NO"
+  },
+  {
+    "question": "sanity: $C032 clears it",
+    "answer": "yes"
+  },
+  {
+    "question": "$C011-$C01F as read (bit 7 is the switch; bits 0-6 are the question)",
+    "answer": "recorded"
+  },
+  {
+    "question": "buttons 0-2 ($C061-$C063)",
+    "answer": "up up up"
+  },
+  {
+    "question": "paddles 0-3 timers",
+    "answer": "counted counted zero zero"
+  },
+  {
+    "question": "MVN with x=1 across $00FF",
+    "answer": "16-bit stepping (read $0100/$0101)"
+  },
+  {
+    "question": "MVP with x=1 across $0000",
+    "answer": "16-bit stepping (read $FFFF/$FFFE)"
+  },
+  {
+    "question": "unpopulated bank reads ($D0:1234, $D0:5678, $80:1234)",
+    "answer": "bank number"
+  },
+  {
+    "question": "machine",
+    "answer": "IDRoutine carry clear (IIgs), ROM version Y=$01; $C036=$84"
+  }
+]
