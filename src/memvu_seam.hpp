@@ -84,6 +84,29 @@ inline uint64_t memvu_seam_bufhigh    = 0;   // high-water mark of the write buf
 inline uint64_t memvu_seam_pending    = 0;
 inline uint64_t memvu_seam_drain_at   = 0;
 
+// ---- stall attribution (M2) -----------------------------------------------------
+// "stall_read=N (x%)" said how much the model stalled and not on what. Each stall is
+// charged, as it happens, to the 256-byte address page being accessed and to the
+// 256-byte code granule of the instruction accessing it, so the report can name the
+// pages and the code that cost the time. The taps set the two below before calling
+// read/write; the tables exist only while the model is armed.
+static constexpr uint32_t MEMVU_SEAM_ATTR_N = 1u << 16;   // 24-bit space in 256-byte pages
+inline uint32_t  memvu_seam_cur_addr  = 0;
+inline uint32_t  memvu_seam_cur_code  = 0;
+inline uint64_t *memvu_seam_stall_page = nullptr;
+inline uint64_t *memvu_seam_stall_code = nullptr;
+
+inline bool memvu_seam_attr_init() {
+    if (!memvu_seam_stall_page) memvu_seam_stall_page = (uint64_t *)calloc(MEMVU_SEAM_ATTR_N, sizeof(uint64_t));
+    if (!memvu_seam_stall_code) memvu_seam_stall_code = (uint64_t *)calloc(MEMVU_SEAM_ATTR_N, sizeof(uint64_t));
+    return memvu_seam_stall_page && memvu_seam_stall_code;
+}
+inline void memvu_seam_charge(uint64_t cycles) {
+    if (!cycles) return;
+    if (memvu_seam_stall_page) memvu_seam_stall_page[(memvu_seam_cur_addr & 0xFFFFFF) >> 8] += cycles;
+    if (memvu_seam_stall_code) memvu_seam_stall_code[(memvu_seam_cur_code & 0xFFFFFF) >> 8] += cycles;
+}
+
 inline bool memvu_seam_init(const char *spec) {
     unsigned r = 0, sm = 0, bd = 0, sr = 2;
     if (!spec || sscanf(spec, "%u,%u,%u,%u", &r, &sm, &bd, &sr) != 4) return false;
@@ -98,6 +121,8 @@ inline void memvu_seam_reset() {
     memvu_seam_local = memvu_seam_host_r = memvu_seam_host_w = 0;
     memvu_seam_vcycles = memvu_seam_bufhigh = 0;
     memvu_seam_pending = memvu_seam_drain_at = 0;
+    if (memvu_seam_stall_page) for (uint32_t i = 0; i < MEMVU_SEAM_ATTR_N; i++) memvu_seam_stall_page[i] = 0;
+    if (memvu_seam_stall_code) for (uint32_t i = 0; i < MEMVU_SEAM_ATTR_N; i++) memvu_seam_stall_code[i] = 0;
 }
 
 // Drain whatever the passage of time has allowed.
@@ -114,6 +139,7 @@ inline void memvu_seam_read(bool slow_tier) {
     memvu_seam_drain(period);
     memvu_seam_time += period;
     memvu_seam_stall_read += period;
+    memvu_seam_charge(period);
     memvu_seam_host_r++;
 }
 
@@ -126,6 +152,7 @@ inline void memvu_seam_write(bool slow_tier) {
         const uint64_t until = memvu_seam_pending ? memvu_seam_drain_at : memvu_seam_time + period;
         if (until > memvu_seam_time) {
             memvu_seam_stall_buf += until - memvu_seam_time;
+            memvu_seam_charge(until - memvu_seam_time);
             memvu_seam_time = until;
         }
         memvu_seam_drain(period);
@@ -169,4 +196,30 @@ inline void memvu_seam_report(FILE *f) {
     fprintf(f, "MEMVU SEAM: refcycles=%llu  ** UPPER-BOUND speedup=%.2fx **  "
                "(no pipeline, no local misses, no coherence, no interrupts, no pacing)\n",
             (unsigned long long)memvu_seam_vcycles, sp);
+    // M2: the stall total names its causes -- the pages accessed and the code that
+    // accessed them, by modeled stall cycles, with each one's share of all stalls.
+    const uint64_t stall = memvu_seam_stall_read + memvu_seam_stall_buf;
+    for (int which = 0; which < 2 && stall; which++) {
+        const uint64_t *t = which ? memvu_seam_stall_code : memvu_seam_stall_page;
+        if (!t) continue;
+        uint32_t idx[5] = {}; uint64_t val[5] = {}; int found = 0;
+        for (int rank = 0; rank < 5; rank++) {
+            uint32_t bi = 0; uint64_t bc = 0;
+            for (uint32_t i = 0; i < MEMVU_SEAM_ATTR_N; i++) {
+                if (t[i] <= bc) continue;
+                bool taken = false;
+                for (int k = 0; k < found; k++) if (idx[k] == i) { taken = true; break; }
+                if (!taken) { bc = t[i]; bi = i; }
+            }
+            if (!bc) break;
+            idx[found] = bi; val[found] = bc; found++;
+        }
+        fprintf(f, which ? "MEMVU SEAM stall code top:" : "MEMVU SEAM stall pages top:");
+        for (int r = 0; r < found; r++) {
+            const uint32_t base = idx[r] << 8;
+            fprintf(f, " $%02X/%04X=%llu (%.1f%%)", (base >> 16) & 0xFF, base & 0xFFFF,
+                    (unsigned long long)val[r], 100.0 * (double)val[r] / (double)stall);
+        }
+        fprintf(f, "\n");
+    }
 }

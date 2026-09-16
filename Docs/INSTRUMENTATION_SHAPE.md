@@ -15,7 +15,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | Mechanism | State | Still open |
 |-----------|-------|------------|
 | M1 record contract | done | coverage bitmap and snapshots stay binary artifacts with manifests (by design) |
-| M2 attribution in summaries | partial | STOREVIS names its top devices and writers; LOADVIS and SEAM still report bare totals |
+| M2 attribution in summaries | done | — |
 | M3 unhonourable inputs are fatal | done | a few "skipped" paths remain counted warnings by choice |
 | M4 liveness | done | — |
 | M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, iwm and pdblock are saved; the scanner (Class B) and floppy media are not |
@@ -175,7 +175,14 @@ over addresses reports its top contributors in the same line group.
 **Status:** done for stores (commit after this note): `MEMVU STOREVIS device
 top:` names the five most-written I/O registers from `src/iigs_ioregs.hpp`, and
 `writers top:` names the five heaviest code granules, `(unnamed)` when no
-symbol resolves. Loads and the seam model still report bare totals.
+symbol resolves. **Loads and the seam model followed (2026-09-16):**
+`MEMVU LOADVIS device top:` / `readers top:` name the registers the machine must
+serve and the code reading the Mega II side, and the seam model charges every
+stall, as it happens, to the page accessed and the code accessing it
+(`MEMVU SEAM stall pages top:` / `stall code top:`, with shares). On the pinned
+GS/OS boot the stalls are 47% `$E1:C0xx` and 37% one Sound Tool Set granule --
+the same `$FF/4100` STOREVIS names as the top writer, now visible as the model's
+dominant cost rather than inferred.
 
 ### M3 — Inputs that cannot be honoured are fatal  (P2) — S
 

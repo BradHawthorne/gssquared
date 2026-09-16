@@ -249,7 +249,8 @@ void run_headless_spike(GS2AppState *state) {
         // STOREVIS names its top writers in its own summary, which needs the
         // per-granule write table BLAME keeps. Arm it; BLAME's full report still
         // prints only when MEMVU_BLAME is set.
-        if (memvu_sv_on && memvu_blame_init()) { memvu_blame_reset(); memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word; }
+        // LOADVIS names its top readers the same way (M2), from the read side of that table.
+        if ((memvu_sv_on || memvu_lv_on) && memvu_blame_init()) { memvu_blame_reset(); memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word; }
         printf("MEMVU: armed (%s%s%s, model=%s)\n",
                memvu_sv_on ? "STOREVIS" : "",
                (memvu_sv_on && memvu_lv_on) ? "+" : "",
@@ -293,6 +294,11 @@ void run_headless_spike(GS2AppState *state) {
         if (!memvu_seam_init(sm)) {
             fprintf(stderr, "MEMVU_SEAM: ** REFUSED ** '%s' -- want <ratio>,<slowmul>,<bufdepth>,<shadowreads 0|1> (e.g. 36,3,8,1)\n", sm);
         } else {
+            // Stall attribution (M2) needs the per-instruction code address, which the
+            // blame tracker keeps; arm both before the model starts charging.
+            if (!memvu_seam_attr_init())
+                fprintf(stderr, "MEMVU_SEAM: stall attribution tables could not be allocated -- totals only\n");
+            if (memvu_blame_init()) { if (!memvu_blame_on) memvu_blame_reset(); memvu_blame_on = true; }
             memvu_seam_reset();
             memvu_seam_on = true;
             memvu_sv_on = true;   // the model rides the store/load taps

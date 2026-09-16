@@ -233,12 +233,35 @@ inline const char *memvu_kind_name[MEMVU_K__N] = { "fetch", "data", "vector", "p
 inline uint64_t memvu_lv_kind_total[MEMVU_K__N]    = {};
 inline uint64_t memvu_lv_kind_device[MEMVU_K__N]   = {};
 inline uint64_t memvu_lv_kind_slowside[MEMVU_K__N] = {};
+// Per-register device loads, the read-side twin of memvu_sv_dev: "mustserve=N"
+// without the registers behind N was the bare total M2 exists to end.
+inline uint32_t memvu_lv_dev[4][4096] = {};
+
+// Top five entries of a table WITHOUT consuming it (the STOREVIS lines zero what
+// they print, which is fine once at spike end and wrong for a live readback or a
+// second report). Returns how many were found; idx/val are filled rank order.
+inline int memvu_top5(const uint32_t *t, uint32_t n, uint32_t idx[5], uint32_t val[5]) {
+    int found = 0;
+    for (int rank = 0; rank < 5; rank++) {
+        uint32_t bi = 0, bc = 0;
+        for (uint32_t i = 0; i < n; i++) {
+            if (t[i] <= bc) continue;
+            bool taken = false;
+            for (int k = 0; k < found; k++) if (idx[k] == i) { taken = true; break; }
+            if (!taken) { bc = t[i]; bi = i; }
+        }
+        if (!bc) break;
+        idx[found] = bi; val[found] = bc; found++;
+    }
+    return found;
+}
 
 inline void memvu_reset() {
     memvu_sv_total = memvu_sv_phantom = 0;
     memvu_sv_device = memvu_sv_slowside = memvu_sv_shadowed = 0;
     for (int i = 0; i < 256; i++) { memvu_sv_bank_total[i] = 0; memvu_sv_bank_visible[i] = 0; }
     memset(memvu_sv_dev, 0, sizeof memvu_sv_dev);
+    memset(memvu_lv_dev, 0, sizeof memvu_lv_dev);
     for (int k = 0; k < MEMVU_K__N; k++) {
         memvu_lv_kind_total[k] = memvu_lv_kind_device[k] = memvu_lv_kind_slowside[k] = 0;
     }
@@ -354,6 +377,7 @@ inline void memvu_sv_note_store(uint32_t addr, bool phantom) {
 // The seam model consumes the same classification rather than re-deriving it, so
 // the model and the counters can never disagree about what an address is.
 inline void memvu_seam_store(uint32_t addr) {
+    memvu_seam_cur_addr = addr; memvu_seam_cur_code = memvu_blame_pc;   // stall attribution (M2)
     switch (memvu_classify(addr)) {
         case MEMVU_DEVICE:   memvu_seam_write(true);  break;   // I/O: slow tier
         case MEMVU_SLOWSIDE: memvu_seam_write(true);  break;   // Mega II: slow tier
@@ -361,6 +385,7 @@ inline void memvu_seam_store(uint32_t addr) {
     }
 }
 inline void memvu_seam_load(uint32_t addr) {
+    memvu_seam_cur_addr = addr; memvu_seam_cur_code = memvu_blame_pc;   // stall attribution (M2)
     switch (memvu_classify(addr)) {
         case MEMVU_DEVICE:   memvu_seam_read(true); break;     // must be served
         case MEMVU_SLOWSIDE:
@@ -388,6 +413,7 @@ inline void memvu_lv_note_load(uint32_t addr, memvu_kind_t kind) {
     switch (memvu_classify(addr)) {
         case MEMVU_DEVICE:
             memvu_lv_kind_device[kind]++;
+            memvu_lv_dev[memvu_io_bank_index((addr >> 16) & 0xFF)][addr & 0xFFF]++;
             if (memvu_blame_on) memvu_blame_note(false);
             break;
         case MEMVU_SLOWSIDE:
@@ -553,6 +579,35 @@ inline void memvu_lv_report(FILE *f) {
                 (unsigned long long)memvu_lv_kind_slowside[k]);
     }
     fprintf(f, "   (total/mustserve/cacheable_slow)\n");
+
+    // M2: the total names its causes. The registers the machine must serve, named,
+    // and the code that reads the Mega II side (device and slow-side reads), from
+    // the blame table LOADVIS arms for this.
+    if (dev) {
+        uint32_t flat[4 * 4096];
+        for (int b = 0; b < 4; b++) for (int a = 0; a < 4096; a++) flat[b * 4096 + a] = memvu_lv_dev[b][a];
+        uint32_t idx[5], val[5];
+        const int nfound = memvu_top5(flat, 4 * 4096, idx, val);
+        fprintf(f, "MEMVU LOADVIS device top:");
+        for (int r = 0; r < nfound; r++) {
+            const uint16_t a16 = (uint16_t)(0xC000 | (idx[r] % 4096));
+            fprintf(f, " $%02X:%04X=%u (%s)", memvu_io_bank_of[idx[r] / 4096], a16, val[r], iigs_io_reg_name_or(a16));
+        }
+        fprintf(f, "\n");
+    }
+    if (memvu_blame_r && (dev || slow)) {
+        uint32_t idx[5], val[5];
+        const int nfound = memvu_top5(memvu_blame_r, MEMVU_BLAME_N, idx, val);
+        fprintf(f, "MEMVU LOADVIS readers top:");
+        for (int r = 0; r < nfound; r++) {
+            const uint32_t base = idx[r] << MEMVU_BLAME_GRAN;
+            char sym[96]; sym[0] = 0;
+            const char *name = a2gspu_name_pc(base, sym, sizeof sym);
+            fprintf(f, " $%02X/%04X=%u (%s)", (base >> 16) & 0xFF, base & 0xFFFF, val[r],
+                    (name && name[0]) ? name : "unnamed");
+        }
+        fprintf(f, "\n");
+    }
 }
 
 // The accounting's readback, supplied with the rails (M8): `rail read MEMVU_STOREVIS`.

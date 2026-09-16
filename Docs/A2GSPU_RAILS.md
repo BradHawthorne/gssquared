@@ -194,7 +194,7 @@ memory behaviour have". Same three invariants (env-gated, isolated, observe-don'
 |------|--------|-------|-------|
 | `MEMVU_STOREVIS=1` | **store-visibility accounting.** Classifies every CPU store as DEVICE (`$Cxxx` in banks `$00/$01/$E0/$E1`), SLOWSIDE (direct Mega II `$E0/$E1`), SHADOWED (the machine mirrored it per its own `$C035` configuration) or PRIVATE, and prints one summary line at spike end, followed by `device top:` — the five most-written I/O registers, named from `iigs_ioregs.hpp` — and `writers top:` — the five code granules that generated the most visible stores, symbolized when a symbol table is loaded, `(unnamed)` otherwise. A total never travels without its causes | memvu | env |
 | `MEMVU_STOREVIS_BANKS=1` | add the per-bank `stores`/`visible` breakdown (one line per bank that saw traffic) | memvu | env |
-| `MEMVU_LOADVIS=1` | **load-visibility accounting**, the read-side twin of STOREVIS: classifies every CPU read (instruction fetch, data, vector, phantom) as must-serve (the machine has to answer it), cacheable-slow or private, and prints `MEMVU LOADVIS: model=iigs-read-v1 loads= mustserve= cacheable_slow= private=` plus a `LOADVIS KIND:` line split by read kind. Live counterpart: `memvu load` | memvu | env |
+| `MEMVU_LOADVIS=1` | **load-visibility accounting**, the read-side twin of STOREVIS: classifies every CPU read (instruction fetch, data, vector, phantom) as must-serve (the machine has to answer it), cacheable-slow or private, and prints `MEMVU LOADVIS: model=iigs-read-v1 loads= mustserve= cacheable_slow= private=` plus a `LOADVIS KIND:` line split by read kind, and — so the total names its causes — `MEMVU LOADVIS device top:` (the five most-read I/O registers, named) and `MEMVU LOADVIS readers top:` (the five code granules doing the most device and slow-side reads, named or `unnamed`). Live counterpart: `memvu load` | memvu | env |
 
 ```
 MEMVU STOREVIS: model=iigs-shadow-v1 stores=1091936 visible=295658 (27.08%) \
@@ -257,7 +257,7 @@ emitted beside it, so any aggregate can be recomputed from primary data.
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
 | `MEMVU_BLAME[=<topN>]` | attributes every externally-visible store and machine-served read to the **opcode address** of the instruction responsible, and reports the worst code granules, each named, with the toolbox call in progress when its stores had one (`; in SoundTools.FFStartSound 98%`) — a shared helper is named by the call that used it, not by the entry point that precedes it | memvu | env |
-| `MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads>` | **a MODEL, not a counter** — cost of routing part of a workload's memory traffic to the machine. Parameters are mandatory; an incomplete set is REFUSED. Output is an upper bound | memvu | env |
+| `MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads>` | **a MODEL, not a counter** — cost of routing part of a workload's memory traffic to the machine. Parameters are mandatory; an incomplete set is REFUSED. Output is an upper bound. Each modeled stall is charged as it happens to the 256-byte address page accessed and to the code granule accessing it, and the report names both: `MEMVU SEAM stall pages top:` and `MEMVU SEAM stall code top:`, each with modeled stall cycles and its share of all stalls | memvu | env |
 
 `MEMVU_BLAME` turns the visibility rails around. They say how much a workload costs;
 this says where the cost comes from. Pointed at a system whose source you have, the
