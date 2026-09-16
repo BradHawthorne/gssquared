@@ -310,6 +310,7 @@ inline const Reach *reach(int &n) {
     {"A2GSPU_ERRHOOK",             "rail",          ""},
     {"A2GSPU_EXPECT_HASH",         "shr-golden",    ""},
     {"A2GSPU_FAKETIME",            "",              "fn"},
+    {"A2GSPU_FAKETIME_TICK",       "",              "fn"},
     {"A2GSPU_FORCE_KEY",           "holdkey",       ""},
     {"A2GSPU_GOLDEN",              "shr-golden",    ""},
     {"A2GSPU_HANG_THRESHOLD",      "rail",          ""},

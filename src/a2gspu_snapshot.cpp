@@ -91,8 +91,9 @@ bool a2gspu_cpu_load(FILE *f, cpu_state *cpu) {
 // wrote (a2gspu_snap_write_devices); the manifest says what is in the file,
 // never what a class letter would imply.
 std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
-    const char *seed = getenv("A2GSPU_SEED"), *ft = getenv("A2GSPU_FAKETIME");
+    const char *seed = getenv("A2GSPU_SEED");
     char bram[40]; a2gspu_bram_field(bram, sizeof bram);
+    char ft[40]; a2gspu_faketime_field(ft, sizeof ft);   // <value>/tick when the pinned clock ticks
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
@@ -135,7 +136,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
              "class=%s devices=%s included=%s excluded=%s "
              "frame=%d seed=%s faketime=%s ramdisk=%d bram=%s build=%s exe=%s",
              cls, devices.empty() ? "-" : devices.c_str(), included.c_str(), excluded.c_str(),
-             frame, seed ? seed : "unset", ft ? ft : "unset", getenv("A2GSPU_RAMDISK") ? 1 : 0,
+             frame, seed ? seed : "unset", ft, getenv("A2GSPU_RAMDISK") ? 1 : 0,
              bram, BUILD_VERSION, exe);
     return buf;
 }

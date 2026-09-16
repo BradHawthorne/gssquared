@@ -15,7 +15,7 @@
 //
 // So every spike prints one line first:
 //
-//   A2GSPU PINS: seed=1 faketime=1780000000 ramdisk=1 bram=default/<fnv> platform=5 frames=300
+//   A2GSPU PINS: seed=1 faketime=1780000000[/tick] ramdisk=1 bram=default/<fnv> platform=5 frames=300
 //                rom=131072/<fnv> build=0.8.1726+883dc68(configure-time) exe=<fnv>
 //
 // seed / faketime / ramdisk are the determinism pins as the rails read them
@@ -39,6 +39,7 @@
 #include <cstring>
 #include "house_fnv.hpp"
 #include "a2gspu_bram_pin.hpp"
+#include "a2gspu_faketime.hpp"   // faketime=<value>[/tick]
 
 inline const char    *g_a2gspu_argv0    = nullptr;
 inline const uint8_t *g_a2gspu_rom_data = nullptr;
@@ -71,9 +72,9 @@ inline bool a2gspu_fnv_file(const char *path, uint64_t &out) {
 // CTRL readback (`rail read A2GSPU_SEED`). platform/frames < 0 omit those two.
 inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames, const char *build_version) {
     const char *seed = getenv("A2GSPU_SEED");
-    const char *ft   = getenv("A2GSPU_FAKETIME");
     const bool  ram  = getenv("A2GSPU_RAMDISK") != nullptr;
-    char rom[48], exe[40], pf[48], bram[40];
+    char rom[48], exe[40], pf[48], bram[40], ft[40];
+    a2gspu_faketime_field(ft, sizeof ft);
     a2gspu_bram_field(bram, sizeof bram);
     if (g_a2gspu_rom_data && g_a2gspu_rom_size)
         snprintf(rom, sizeof rom, "%zu/%016llX", g_a2gspu_rom_size,
@@ -86,7 +87,7 @@ inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames,
     if (platform_id >= 0 && frames >= 0) snprintf(pf, sizeof pf, " platform=%d frames=%d", platform_id, frames);
     else pf[0] = 0;
     snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s pace=%s%s rom=%s build=%s(configure-time) exe=%s",
-             seed ? seed : "unset", ft ? ft : "unset", ram ? 1 : 0, bram, g_a2gspu_pace_name, pf, rom,
+             seed ? seed : "unset", ft, ram ? 1 : 0, bram, g_a2gspu_pace_name, pf, rom,
              build_version ? build_version : "unknown", exe);
 }
 
@@ -98,12 +99,13 @@ inline void a2gspu_pins_print(int platform_id, int frames, const char *build_ver
 }
 
 // The pins' readback, supplied with the rails (M8): `rail read A2GSPU_SEED` (and
-// FAKETIME, RAMDISK) answers with the whole PINS line, since they are one fact.
+// FAKETIME, FAKETIME_TICK, RAMDISK) answers with the whole PINS line, since they are one fact.
 inline void a2gspu_pins_read(char *buf, size_t n) {
     char pins[400]; a2gspu_pins_format(pins, sizeof pins, -1, -1, g_a2gspu_build_version);
     snprintf(buf, n, "status=OK %s", pins);
 }
 inline a2rails::Registrar g_reader_seed    {"A2GSPU_SEED",     a2gspu_pins_read};
 inline a2rails::Registrar g_reader_faketime{"A2GSPU_FAKETIME", a2gspu_pins_read};
+inline a2rails::Registrar g_reader_faketime_tick{"A2GSPU_FAKETIME_TICK", a2gspu_pins_read};
 inline a2rails::Registrar g_reader_ramdisk {"A2GSPU_RAMDISK",  a2gspu_pins_read};
 inline a2rails::Registrar g_reader_bram    {"A2GSPU_BRAM",     a2gspu_pins_read};

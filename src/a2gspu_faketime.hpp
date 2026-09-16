@@ -13,6 +13,7 @@
  * It is a HARNESS knob: software under development must not depend on it.
  */
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -65,6 +66,15 @@ inline bool a2gspu_pinned_now_unix(long long *out) {
     if (!a2gspu_faketime_unix(out)) return false;
     if (a2gspu_faketime_ticking()) *out += a2gspu_emulated_seconds();
     return true;
+}
+
+// The pin as a run's identity prints it: the value, "<value>/tick" when it ticks, or
+// "unset". FORK: without the suffix a frozen and a ticking run printed identical PINS
+// lines and manifests while their clocks differed.
+inline void a2gspu_faketime_field(char *buf, size_t n) {
+    const char *e = std::getenv("A2GSPU_FAKETIME");
+    if (!e || !*e) { snprintf(buf, n, "unset"); return; }
+    snprintf(buf, n, "%s%s", e, a2gspu_faketime_ticking() ? "/tick" : "");
 }
 
 // The calendar fields a clock card shows now: the pinned clock's fields under
