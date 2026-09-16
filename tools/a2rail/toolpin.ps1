@@ -1,6 +1,6 @@
 <#
     toolpin.ps1 -- report which foundation binary a build or session is using,
-    and resolve portable foundation roots (FOUNDATION_MILESTONES M1 + M2).
+    and resolve portable foundation roots (for a2engine, Rosetta and the fork's own gates).
 
     Product-side only -- no hashes baked into the tools.
 

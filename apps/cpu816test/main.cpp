@@ -30,6 +30,7 @@
 #include "cpus/cpu_implementations.cpp"
 #include "mmus/mmu.hpp"
 #include "mmus/mmu_iigs.hpp"
+#include <cstdio>
 #include "util/ResourceFile.hpp"
 #include "NClock.hpp"
 
@@ -145,7 +146,23 @@ int main(int argc, char **argv) {
        32K of I/O type stuff, then, 32K of ROM. 
        So the 256K file is 8 ROM segments, each 32K, each mapped into $8000 of the bank. */
     if (testsuite == 0) {
-        rom = new ResourceFile("../snes-tests/cputest/cputest-full.sfc", READ_ONLY);
+        // The SNES cputest ROM is a third-party fixture, not vendored here. Without
+        // this probe ResourceFile reported the missing file through system_failure(),
+        // which pops a MODAL dialog in an app -- a process that waits forever for a
+        // click, which is why apps/ programs were barred from automation at all.
+        // Skip loudly instead, exactly as apps/cputest does: exit 77, the
+        // conventional "skipped", which is neither a pass nor a crash.
+        const char *want = "../snes-tests/cputest/cputest-full.sfc";
+        if (FILE *probe = fopen(want, "rb")) {
+            fclose(probe);
+        } else {
+            printf("=== CPU816TEST SKIPPED: fixture '%s' not found ===\n", want);
+            printf("    This is the third-party SNES cputest ROM and is not vendored here.\n");
+            printf("    Obtain snes-tests/cputest/cputest-full.sfc and run from beside it.\n");
+            printf("    NOTE: until this runs, the 65816 core is UNVALIDATED against that suite.\n");
+            return 77;
+        }
+        rom = new ResourceFile(want, READ_ONLY);
     } else {
         printf("Invalid CPU type\n");
         return 1;

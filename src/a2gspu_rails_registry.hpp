@@ -66,6 +66,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_DUMP",                "observe",     "hexdump memory ranges (hex). $E0/$E1 read the Mega II image directly (side-effect-free); other banks via the MMU"},
     {"A2GSPU_ERRHOOK",             "trace",       "surface carry-set GS/OS dispatch errors (<-- SYSTEM/LOADER ERROR)"},
     {"A2GSPU_EXPECT_HASH",         "assert",      "hex hash the SHR window (IIgs) or HGR page (II-family) must equal at spike end; MATCH/MISMATCH printed, mismatch is a gate failure (exit 1). The inline form of GOLDEN, for harnesses that pin a value per row"},
+    {"A2GSPU_BACKGROUND_WINDOW",   "ctrl",        "keep the window out of the user's way: not focusable, not activated when shown, pushed to the back -- what A2GSPU_CTRL does implicitly, for an automated windowed run without the CTRL rail (the co-pilot gate)"},
     {"A2GSPU_BRAM",                "determinism", "pin the battery RAM a run starts from: default (built-in contents, no file read or written) or a 256-byte file (fatal if unreadable, never written back); unset reads and rewrites ./gs2-bram.bin"},
     {"A2GSPU_FAKETIME",            "determinism", "freeze the RTC at that instant (bypasses localtime/timezone) so RTC-derived OS state is run-to-run stable"},
     {"A2GSPU_FORCE_KEY",           "manipulate",  "force the ADB $C000 keyboard latch to return this key (drives a $C000-polling guest headlessly)"},

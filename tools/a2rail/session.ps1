@@ -33,7 +33,7 @@ param(
     # behaviour exactly.
     [int]   $Config   = -1,
     [string]$Owner    = ([guid]::NewGuid().ToString('N')),
-    # FOUNDATION_MILESTONES M1: fail if gssquared sources look newer than the exe.
+    # Reproducible pin: fail if gssquared sources look newer than the exe.
     [switch]$StrictTools
 )
 

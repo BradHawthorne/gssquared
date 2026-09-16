@@ -618,6 +618,16 @@ if(GS2_USE_IMGUI)
     )
     target_include_directories(gs2_imgui PUBLIC src/imgui)
     target_link_libraries(gs2_imgui PRIVATE SDL3::SDL3-shared)
+    # imgui is vendored source that happens to live under src/, so it is created
+    # after the link_libraries() line that applies the first-party warning policy,
+    # and inherited it -- which the comment on that line says nothing vendored does.
+    # Take it back out, so a -Werror=format finding in vendored code cannot fail
+    # the build and the stated boundary is the real one.
+    get_target_property(_gs2_imgui_links gs2_imgui LINK_LIBRARIES)
+    if(_gs2_imgui_links)
+        list(REMOVE_ITEM _gs2_imgui_links gs2_warnings)
+        set_target_properties(gs2_imgui PROPERTIES LINK_LIBRARIES "${_gs2_imgui_links}")
+    endif()
 endif()
 
 ################################################################################
@@ -907,6 +917,14 @@ if((UNIX) AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
             DESTINATION "${GS2_INSTALL_DATADIR}"
             COMPONENT Runtime
         )
+        # ROM and toolbox symbol tables (assets/symbols, copied into resources/ by
+        # the build): the Windows and macOS packages install all of resources/, and
+        # this per-directory list had left them out, so a Linux install named no
+        # toolbox entry point.
+        install(DIRECTORY "${CMAKE_BINARY_DIR}/resources/symbols"
+            DESTINATION "${GS2_INSTALL_DATADIR}"
+            COMPONENT Runtime
+        )
         install(FILES "${CMAKE_BINARY_DIR}/resources/img/atlas.png"
             DESTINATION "${GS2_INSTALL_DATADIR}/img"
             COMPONENT Runtime
@@ -1100,3 +1118,16 @@ foreach(_via_scenario 6 7 8 9)
     set_tests_properties(via_6522_t${_via_scenario} PROPERTIES
         PASS_REGULAR_EXPRESSION "PASS: [1-9][0-9]* read expectations matched")
 endforeach()
+
+# The test executables need the compiler's runtime DLLs on Windows. Run from a
+# shell without them on PATH, ctest did not fail -- it hung at "Start 1:" with no
+# output, indefinitely, because the loader's missing-DLL error has nowhere to go.
+# So every test carries the runtime directory itself: ctest works from any shell.
+if(WIN32)
+    get_filename_component(_gs2_runtime_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    get_property(_gs2_tests DIRECTORY PROPERTY TESTS)
+    if(_gs2_tests)
+        set_tests_properties(${_gs2_tests} PROPERTIES
+            ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_gs2_runtime_dir}")
+    endif()
+endif()

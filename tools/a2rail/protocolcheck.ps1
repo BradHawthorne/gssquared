@@ -51,22 +51,12 @@ if ($LASTEXITCODE -ne 0) { throw ("session.ps1 did not bring the rail up (exit=$
 
 function Q([string]$c){$global:LASTEXITCODE=0;$o=& (Join-Path $h 'ctl.ps1') -Dir $Dir -Owner $owner -Cmd $c; if($LASTEXITCODE){throw "$c failed: $o"};return($o-join"`n")}
 
-# Count the entries of a C array in the source rather than transcribing the
-# total. The scrape REFUSES to guess: if the array cannot be found, never
-# closes, or yields zero entries, that is the array's shape having changed out
-# from under the pattern -- and a check that has quietly stopped matching
-# anything is worse than one that is merely out of date, because it goes green.
-function Get-CArrayCount([string]$file,[string]$open,[string]$entry,[string]$what){
-    if(-not (Test-Path -LiteralPath $file)){throw "${what}: $file is gone; this check can no longer be made"}
-    $L=Get-Content -LiteralPath $file
-    $s=-1;for($i=0;$i -lt $L.Count;$i++){if($L[$i] -match $open){$s=$i;break}}
-    if($s -lt 0){throw "${what}: no array opening matching '$open' in $file -- the scrape has stopped scraping"}
-    $e=-1;for($i=$s+1;$i -lt $L.Count;$i++){if($L[$i] -match '^\};'){$e=$i;break}}
-    if($e -lt 0){throw "${what}: the array opened at $file line $($s+1) never closes with '};' -- the scrape has stopped scraping"}
-    $n=0;for($i=$s+1;$i -lt $e;$i++){if($L[$i] -match $entry){$n++}}
-    if($n -lt 1){throw "${what}: counted 0 entries between $file lines $($s+2) and $e -- '$entry' no longer matches the array's shape, so this check has stopped checking"}
-    return $n
-}
+# Get-CArrayCount comes from runtime.ps1 (dot-sourced below): count the entries of a
+# C array in the source rather than transcribing the total, and refuse -- throw --
+# when the scrape stops scraping. This file used to carry its own copy of it,
+# identical to the shared one; two copies of a guard drift, and a drifted guard
+# goes green.
+. (Join-Path $h 'runtime.ps1')
 
 $p=Q 'protocol';if($p-notmatch 'version=2'){throw $p}
 

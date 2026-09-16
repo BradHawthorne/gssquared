@@ -1,7 +1,7 @@
 <#
     dualsmoke.ps1 -- short dual-platform gate for shared rail/instrument work.
 
-    FOUNDATION_MILESTONES M6: IIe-green is not ship-green for shared gssquared
+    Docs/DUAL_PLATFORM.md: IIe-green is not ship-green for shared gssquared
     code. This is the command agents and humans run after a rail/MMU/device
     change that is not sealed to one platform.
 
@@ -15,11 +15,9 @@
     running this gate cannot take out another agent's or a human's emulator --
     and a stray is REPORTED rather than quietly swept away.
 
-    Portable copy (no a2engine required) lives in gssquared-fork:
-
-        <gssquared>\tools\a2rail\dualsmoke.ps1
-
-    Refresh that copy after editing this stack: .\tools\sync-a2rail.ps1
+    This stack is owned by gssquared-fork (tools/a2rail/). a2engine keeps a pulled copy:
+    edit here, then in a2engine run .\tools\sync-a2rail.ps1 to refresh it. The broader
+    fork-local gate set is tools\a2rail\gates.ps1, which runs this plus the rest.
 
     Suites (intentionally small -- full gscheck remains the deep net):
 
@@ -159,7 +157,7 @@ function Run-One([string]$name, [scriptblock]$body, [string]$suiteDir = "") {
 
 Write-Host ""
 Write-Host "=== DUALSMOKE (IIe + IIgs instrument gate) ".PadRight(64, '=') -ForegroundColor Cyan
-Write-Host "  FOUNDATION_MILESTONES M6 -- shared rail changes need both platforms" -ForegroundColor DarkGray
+Write-Host "  Docs/DUAL_PLATFORM.md -- shared rail changes need both platforms" -ForegroundColor DarkGray
 
 . (Join-Path $here "toolpin.ps1")
 . (Join-Path $here "runtime.ps1")
@@ -179,7 +177,9 @@ if (-not $SkipOffline) {
     }
     # Rails must be discoverable (AGENTS.md rule 6). Nothing checked that, and
     # the catalogue drifted to 96 of 128 -- so the gate is here, not in habit.
-    Run-One "rail parity (offline)" { & (Join-Path $here "railparity.ps1") }
+    # Through the fork root, not $here: a2engine runs a pulled copy of this script, and
+    # railparity checks the FORK's source wherever it is called from.
+    Run-One "rail parity (offline)" { & (Join-Path (Get-GssquaredRoot) "tools\a2rail\railparity.ps1") }
 }
 
 # ONE PROTOCOL DIRECTORY PER SUITE. All six used to share $Dir, so two dualsmoke

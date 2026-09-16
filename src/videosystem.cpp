@@ -43,8 +43,15 @@ video_system_t::video_system_t(computer_t *computer) {
      * than by a person, so: create the window NOT_FOCUSABLE, and ask SDL not to
      * activate it when it is shown or raised. Interactive runs -- no rail -- are
      * completely unaffected and still behave normally.
+     *
+     * A2GSPU_BACKGROUND_WINDOW=1 asks for the same treatment without the CTRL
+     * rail. The co-pilot gate starts a real windowed session (A2GSPU_COPILOT,
+     * no CTRL) and that window took focus in the middle of a suite run -- the
+     * exact interruption the paragraph above exists to prevent. A person using
+     * the co-pilot rail interactively does not set it.
      */
-    const bool rail_driven = (SDL_getenv("A2GSPU_CTRL") != nullptr);
+    const bool rail_driven = (SDL_getenv("A2GSPU_CTRL") != nullptr) ||
+                             (SDL_getenv("A2GSPU_BACKGROUND_WINDOW") != nullptr);
     SDL_WindowFlags win_flags = SDL_WINDOW_RESIZABLE;
     if (rail_driven) {
         SDL_SetHint(SDL_HINT_WINDOW_ACTIVATE_WHEN_SHOWN,  "0");

@@ -92,18 +92,28 @@ if (-not (Test-Path $exe)) { Write-Host "assertparity: GSSquared not found: $exe
 function Spike-Verdict([string]$expr) {
     # A2GSPU_CTRL must be OFF or the process takes the CTRL rail instead of the
     # spike and this measures nothing while looking fine.
-    $old = $env:A2GSPU_CTRL
+    #
+    # Every variable this sets is saved first and restored after, including the
+    # two pins: FAKETIME and SEED used to be set and never cleared, so every gate
+    # run after this one in the same shell inherited them (gates.ps1 caught it).
+    $names = 'A2GSPU_CTRL', 'A2GSPU_ASSERT', 'A2GSPU_SPIKE_FRAMES', 'A2GSPU_FAKETIME', 'A2GSPU_SEED', 'A2GSPU_BRAM'
+    $saved = @{}
+    foreach ($n in $names) { $saved[$n] = [Environment]::GetEnvironmentVariable($n) }
     $env:A2GSPU_CTRL = $null
     $env:A2GSPU_ASSERT = $expr
     $env:A2GSPU_SPIKE_FRAMES = "$Frames"
     $env:A2GSPU_FAKETIME = "1000000000"
     $env:A2GSPU_SEED = "1"
+    $env:A2GSPU_BRAM = "default"
     try {
         $out = (& $exe -p $Platform -n 2>&1 | Out-String)
     } finally {
-        $env:A2GSPU_ASSERT = $null
-        $env:A2GSPU_SPIKE_FRAMES = $null
-        $env:A2GSPU_CTRL = $old
+        foreach ($n in $names) {
+            # Remove-Item, not SetEnvironmentVariable($n, $null): PowerShell coerces the
+            # $null argument to "" and leaves an EMPTY variable behind instead of none.
+            if ($null -eq $saved[$n]) { Remove-Item ("Env:" + $n) -ErrorAction SilentlyContinue }
+            else { Set-Item ("Env:" + $n) $saved[$n] }
+        }
     }
     $lines = @($out -split "`r?`n" | Where-Object { $_ -match 'IIGS ASSERT:' })
     $v = 'UNEVAL'
