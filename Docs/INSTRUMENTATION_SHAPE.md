@@ -17,7 +17,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M1 record contract | done | coverage bitmap and snapshots stay binary artifacts with manifests (by design) |
 | M2 attribution in summaries | partial | STOREVIS names its top devices and writers; LOADVIS and SEAM still report bare totals |
 | M3 unhonourable inputs are fatal | done | a few "skipped" paths remain counted warnings by choice |
-| M4 liveness | done | no instruction count or last-visible-write field in the sample |
+| M4 liveness | done | — |
 | M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, iwm and pdblock are saved; the scanner (Class B) and floppy media are not |
 | M6 artifact discipline | partial | coverage (both formats) and snapshots are checked; other `spike_*.bin` artifacts and `vram-raw` have no reader |
 | M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
@@ -220,8 +220,16 @@ hashes every N frames, `changed=` per sample, `screen_unchanged_since=` and
 `text_unchanged_since=` in the close-out and on `GSDIAG:` while armed — two
 fields, because the first run showed the halted demo's text page cycling under
 a static SHR window, and one field would have hidden it. Named for what it measures rather than
-`stalled_since`, because an idle desktop is static too; `last_visible_write`
-and an instruction count are not in the sample yet.
+`stalled_since`, because an idle desktop is static too. **Completed
+2026-09-16:** the sample carries `insns` and the cycle of the last store onto
+each hashed range (`screen_store`, `text_store`, counted where the machine
+placed the byte, so a IIgs store the MMU shadowed counts and one it did not
+mirror does not) and of the last keyboard read (`kbd_poll`, on both families,
+so `kbd=` is a count on the II family too). The close-out and `GSDIAG:` gain
+`cpu_stopped_since=`. The three separate what two hashes could not: a program
+redrawing identical bytes, one that stopped drawing, and a CPU that stopped.
+The taps (`src/a2gspu_liveness_taps.hpp`) are one untaken branch each unarmed,
+and the armed IIe and IIgs boots reproduce the unarmed hash and cycle count.
 
 ### M5 — Snapshot manifests, then snapshot classes  (P5) — S then L
 

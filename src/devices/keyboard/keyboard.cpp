@@ -22,6 +22,7 @@
 #include "computer.hpp"
 #include "debug.hpp"
 #include "keyboard.hpp"
+#include "a2gspu_liveness_taps.hpp"   // A2GSPU_LIVENESS: last keyboard poll (off => 1 branch)
 #include "util/applekeys.hpp"
 #include "mbus/KeyboardMessage.hpp"
 #include "util/ResetController.hpp"
@@ -53,6 +54,7 @@ inline void kb_clear_strobe(keyboard_state_t *kb_state) {
 uint8_t kb_read_C00X(void *context, uint32_t address) {
     //fprintf(stderr, "kb_memory_read %04X\n", address);
     keyboard_state_t *kb_state = (keyboard_state_t *)context;
+    if (g_liveness_taps) a2gspu_liveness_note_kbd();
 
     if ((kb_state->kb_key_strobe & 0x80) == 0) { // if keyboard does not already have a buffered character.. 
         if (kb_state->paste_buffer.length() > 0) { // if there is a paste buffer, use it.
@@ -71,6 +73,7 @@ uint8_t kb_read_C00X(void *context, uint32_t address) {
 
 uint8_t kb_read_C01X(void *context, uint32_t address) {
     keyboard_state_t *kb_state = (keyboard_state_t *)context;
+    if (g_liveness_taps) a2gspu_liveness_note_kbd();
 
     // Clear the keyboard latch
     kb_clear_strobe(kb_state);
@@ -80,6 +83,7 @@ uint8_t kb_read_C01X(void *context, uint32_t address) {
 // iie only
 uint8_t kb_read_C010(void *context, uint32_t address) {
     keyboard_state_t *kb_state = (keyboard_state_t *)context;
+    if (g_liveness_taps) a2gspu_liveness_note_kbd();
 
     // Clear the keyboard latch
     kb_clear_strobe(kb_state);

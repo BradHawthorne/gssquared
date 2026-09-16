@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 
 #include "computer.hpp"
+#include "a2gspu_liveness_taps.hpp"   // A2GSPU_LIVENESS: last keyboard poll (off => 1 branch)
 #include "obs_signal.hpp"   // Observatory: obs_add_memwindow for the ADB uC RAM window
 #include "videosystem.hpp"
 #include "mmus/mmu_iigs.hpp"
@@ -51,6 +52,7 @@ void a2gspu_keygloo_read_counts(uint64_t out[5]) { for (int i = 0; i < 5; i++) o
 
 uint8_t keygloo_read_C000(void *context, uint32_t address) {
     g_kg_reads[0]++;
+    if (g_liveness_taps) a2gspu_liveness_note_kbd();
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
     return kg->read_key_latch();
@@ -58,6 +60,7 @@ uint8_t keygloo_read_C000(void *context, uint32_t address) {
 
 uint8_t keygloo_read_C010(void *context, uint32_t address) {
     g_kg_reads[1]++;
+    if (g_liveness_taps) a2gspu_liveness_note_kbd();
     keygloo_state_t *kb_state = (keygloo_state_t *)context;
     KeyGloo *kg = kb_state->kg;
     return kg->read_key_strobe();

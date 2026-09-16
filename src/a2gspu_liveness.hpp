@@ -27,15 +27,24 @@
 //                             line per sample, prefixed "A2GSPU LIVENESS:"
 //
 // Sample: frame (since arm), cycles, screen hash, text hash, keyboard reads
-// since the previous sample (IIgs KeyGloo counters; 0 on a II-family machine,
-// and the record says kbd=n/a there), and what changed.
+// since the previous sample (IIgs: KeyGloo $C000/$C010 reads; II family: the
+// keyboard device's $C000/$C010 reads), what changed, and -- from the taps in
+// a2gspu_liveness_taps.hpp -- why a hash that did not change did not:
+//   insns         instructions executed since arm
+//   screen_store  cycle of the last store onto the screen range (null: none yet)
+//   text_store    cycle of the last store onto the text page (null: none yet)
+//   kbd_poll      cycle of the last keyboard read (null: none yet)
+// A static screen with a recent screen_store is a program redrawing the same
+// bytes; with an old one it stopped drawing; with insns not advancing the CPU
+// itself stopped.
 //   screen  IIgs: the SHR window $E1:2000-9FFF, read from the Mega II image
 //           II-family: HGR page 1, $2000-3FFF
 //   text    the 40-column text page, $0400-07FF ($E0 on the IIgs)
 // Both are read side-effect-free (probe_peek). House FNV-1a-64.
 //
 // Close-out (always, when armed): samples, the frame of each surface's last
-// change, and screen_unchanged_since= / text_unchanged_since=<frame>|none. The
+// change, screen_unchanged_since= / text_unchanged_since=<frame>|none, and
+// cpu_stopped_since=<frame>|none (insns did not advance for STALL samples). The
 // two surfaces are tracked separately because a halted SHR workload keeps
 // redrawing its text page from the wait loop (measured on the one-disk Dealer
 // Demo: four cycling text hashes over a static SHR window). The same two
@@ -53,6 +62,7 @@
 #include "house_fnv.hpp"
 #include "iigs_diag.hpp"               // g_gsdiag_extra
 #include "devices/adb/keygloo.hpp"     // a2gspu_keygloo_read_counts
+#include "a2gspu_liveness_taps.hpp"    // insns, last screen/text store, last keyboard poll
 
 inline int      g_liveness_every = 0;              // 0 = off (the CPU/frame loop gate)
 inline int      g_liveness_stall = 3;
@@ -69,8 +79,12 @@ inline uint64_t g_liveness_prev_screen = 0, g_liveness_prev_text = 0, g_liveness
 inline int      g_liveness_screen_last = 0, g_liveness_text_last = 0;   // frame of the last change
 inline int      g_liveness_screen_run = 0,  g_liveness_text_run = 0;    // consecutive unchanged samples
 inline int      g_liveness_screen_since = -1, g_liveness_text_since = -1;   // static since, or -1
+// The CPU as a third surface: "changed" is insns advancing. A stopped CPU and a
+// static screen look identical to the two hashes; this is what tells them apart.
+inline uint64_t g_liveness_prev_insns = 0;
+inline int      g_liveness_cpu_last = 0, g_liveness_cpu_run = 0, g_liveness_cpu_since = -1;
 inline bool     g_liveness_armed = false;
-inline char     g_liveness_gsdiag[96];
+inline char     g_liveness_gsdiag[128];
 
 inline void a2gspu_liveness_track(bool first, bool changed, int &last, int &run, int &since) {
     if (first || changed) { last = g_liveness_frame; run = 0; since = -1; }
@@ -87,21 +101,34 @@ inline void a2gspu_liveness_since_str(int since, char *buf, size_t n) {
     if (since >= 0) snprintf(buf, n, "%d", since); else snprintf(buf, n, "none");
 }
 
+// A tap's cycle stamp as text: the cycle, or `none` before the first event.
+inline void a2gspu_liveness_cycle_str(bool seen, uint64_t cycle, char *buf, size_t n) {
+    if (seen) snprintf(buf, n, "%llu", (unsigned long long)cycle); else snprintf(buf, n, "none");
+}
+
 inline const char *a2gspu_liveness_gsdiag_extra() {
     char a[16], b[16];
     a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
     a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
-    snprintf(g_liveness_gsdiag, sizeof g_liveness_gsdiag, " screen_unchanged_since=%s text_unchanged_since=%s", a, b);
+    char c[16];
+    a2gspu_liveness_since_str(g_liveness_cpu_since, c, sizeof c);
+    snprintf(g_liveness_gsdiag, sizeof g_liveness_gsdiag, " screen_unchanged_since=%s text_unchanged_since=%s cpu_stopped_since=%s", a, b, c);
     return g_liveness_gsdiag;
 }
 
 inline void a2gspu_liveness_close() {
     if (!g_liveness_armed) return;
-    char a[16], b[16];
+    char a[16], b[16], c[16], ss[24], ts[24], kp[24];
     a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
     a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
-    printf("A2GSPU LIVENESS: samples=%d frames=%d screen_last_changed=%d screen_unchanged_since=%s text_last_changed=%d text_unchanged_since=%s\n",
-           g_liveness_samples, g_liveness_frame, g_liveness_screen_last, a, g_liveness_text_last, b);
+    a2gspu_liveness_since_str(g_liveness_cpu_since, c, sizeof c);
+    a2gspu_liveness_cycle_str(g_liveness_screen_seen, g_liveness_screen_store, ss, sizeof ss);
+    a2gspu_liveness_cycle_str(g_liveness_text_seen, g_liveness_text_store, ts, sizeof ts);
+    a2gspu_liveness_cycle_str(g_liveness_kbd_seen, g_liveness_kbd_poll, kp, sizeof kp);
+    printf("A2GSPU LIVENESS: samples=%d frames=%d screen_last_changed=%d screen_unchanged_since=%s text_last_changed=%d text_unchanged_since=%s"
+           " insns=%llu cpu_stopped_since=%s screen_store=%s text_store=%s kbd_poll=%s\n",
+           g_liveness_samples, g_liveness_frame, g_liveness_screen_last, a, g_liveness_text_last, b,
+           (unsigned long long)g_liveness_insns, c, ss, ts, kp);
     if (g_liveness_out) { fclose(g_liveness_out); g_liveness_out = nullptr; }
     fflush(stdout);
 }
@@ -109,12 +136,18 @@ inline void a2gspu_liveness_close() {
 // ---- readback: `rail read A2GSPU_LIVENESS` ----------------------------------
 inline void a2gspu_liveness_format(char *buf, size_t n) {
     if (!g_liveness_armed) { snprintf(buf, n, "status=FAIL liveness-not-armed -- set A2GSPU_LIVENESS=N before launch"); return; }
-    char a[16], b[16];
+    char a[16], b[16], c[16], ss[24], ts[24], kp[24];
     a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
     a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
-    snprintf(buf, n, "status=OK every=%d stall=%d samples=%d frames=%d screen_last_changed=%d screen_unchanged_since=%s text_last_changed=%d text_unchanged_since=%s",
+    a2gspu_liveness_since_str(g_liveness_cpu_since, c, sizeof c);
+    a2gspu_liveness_cycle_str(g_liveness_screen_seen, g_liveness_screen_store, ss, sizeof ss);
+    a2gspu_liveness_cycle_str(g_liveness_text_seen, g_liveness_text_store, ts, sizeof ts);
+    a2gspu_liveness_cycle_str(g_liveness_kbd_seen, g_liveness_kbd_poll, kp, sizeof kp);
+    snprintf(buf, n, "status=OK every=%d stall=%d samples=%d frames=%d screen_last_changed=%d screen_unchanged_since=%s text_last_changed=%d text_unchanged_since=%s"
+             " insns=%llu cpu_stopped_since=%s screen_store=%s text_store=%s kbd_poll=%s",
              g_liveness_every, g_liveness_stall, g_liveness_samples, g_liveness_frame,
-             g_liveness_screen_last, a, g_liveness_text_last, b);
+             g_liveness_screen_last, a, g_liveness_text_last, b,
+             (unsigned long long)g_liveness_insns, c, ss, ts, kp);
 }
 
 // Called once, with the platform known. Idempotent.
@@ -134,10 +167,15 @@ inline void a2gspu_liveness_arm(bool is_iigs) {
     }
     g_gsdiag_extra = a2gspu_liveness_gsdiag_extra;
     atexit(a2gspu_liveness_close);
-    printf("A2GSPU LIVENESS: armed every=%d stall=%d screen=%s text=%s kbd=%s out=%s\n",
+    // The taps: clock from the record contract, which both arm sites register
+    // first (a2record_register), so a stamp and a record's cycles= agree.
+    g_liveness_taps_iigs = is_iigs;
+    g_liveness_now = [] { return (uint64_t)a2record::cycles_now(); };
+    g_liveness_taps = true;
+    printf("A2GSPU LIVENESS: armed every=%d stall=%d screen=%s text=%s kbd=%s out=%s taps=insns,screen_store,text_store,kbd_poll\n",
            g_liveness_every, g_liveness_stall,
            is_iigs ? "$E1:2000-9FFF" : "$2000-3FFF", is_iigs ? "$E0:0400-07FF" : "$0400-07FF",
-           is_iigs ? "KeyGloo C000+C010 reads" : "n/a",
+           is_iigs ? "KeyGloo C000+C010 reads" : "keyboard C000+C010 reads",
            g_liveness_out ? "ndjson" : "stdout");
 }
 
@@ -150,7 +188,7 @@ inline void a2gspu_liveness_tick(computer_t *computer) {
                                                : a2gspu_liveness_hash(mmu, 0x002000, 0x003FFF);
     const uint64_t text   = g_liveness_is_iigs ? a2gspu_liveness_hash(mmu, 0xE00400, 0xE007FF)
                                                : a2gspu_liveness_hash(mmu, 0x000400, 0x0007FF);
-    uint64_t kbd_total = 0;
+    uint64_t kbd_total = g_liveness_kbd_reads;   // II family: the keyboard device's reads
     if (g_liveness_is_iigs) { uint64_t c[5]; a2gspu_keygloo_read_counts(c); kbd_total = c[0] + c[1]; }
     const uint64_t kbd = kbd_total - g_liveness_prev_kbd;
     g_liveness_prev_kbd = kbd_total;
@@ -162,23 +200,29 @@ inline void a2gspu_liveness_tick(computer_t *computer) {
     const char *changed = first ? "first" : (sch && tch) ? "both" : sch ? "screen" : tch ? "text" : "none";
     a2gspu_liveness_track(first, sch, g_liveness_screen_last, g_liveness_screen_run, g_liveness_screen_since);
     a2gspu_liveness_track(first, tch, g_liveness_text_last, g_liveness_text_run, g_liveness_text_since);
+    const bool ran = !first && g_liveness_insns != g_liveness_prev_insns;
+    a2gspu_liveness_track(first, ran, g_liveness_cpu_last, g_liveness_cpu_run, g_liveness_cpu_since);
+    g_liveness_prev_insns = g_liveness_insns;
     g_liveness_prev_screen = screen; g_liveness_prev_text = text; g_liveness_samples++;
+    char ss[24], ts[24], kp[24];
+    a2gspu_liveness_cycle_str(g_liveness_screen_seen, g_liveness_screen_store, ss, sizeof ss);
+    a2gspu_liveness_cycle_str(g_liveness_text_seen, g_liveness_text_store, ts, sizeof ts);
+    a2gspu_liveness_cycle_str(g_liveness_kbd_seen, g_liveness_kbd_poll, kp, sizeof kp);
 
     if (FILE *sink = a2record::sink(g_liveness_out)) {
         a2record::Record rec("liveness", "sample", g_liveness_frame, (unsigned long long)cycles);
         rec.hex16("screen", (unsigned long long)screen).hex16("text", (unsigned long long)text);
-        if (g_liveness_is_iigs) rec.u("kbd", (unsigned long long)kbd);
-        else rec.null("kbd").str("kbd_note", "n/a on II-family").u("kbd_zero", (unsigned long long)kbd);
+        rec.u("kbd", (unsigned long long)kbd);
         rec.str("changed", changed);
+        rec.u("insns", (unsigned long long)g_liveness_insns);
+        if (g_liveness_screen_seen) rec.u("screen_store", (unsigned long long)g_liveness_screen_store); else rec.null("screen_store");
+        if (g_liveness_text_seen)   rec.u("text_store", (unsigned long long)g_liveness_text_store);     else rec.null("text_store");
+        if (g_liveness_kbd_seen)    rec.u("kbd_poll", (unsigned long long)g_liveness_kbd_poll);         else rec.null("kbd_poll");
         rec.write(sink, true);
     } else {
-        if (g_liveness_is_iigs)
-            printf("A2GSPU LIVENESS: frame=%d cycles=%llu screen=%016llX text=%016llX kbd=%llu changed=%s\n",
-                   g_liveness_frame, (unsigned long long)cycles, (unsigned long long)screen, (unsigned long long)text,
-                   (unsigned long long)kbd, changed);
-        else
-            printf("A2GSPU LIVENESS: frame=%d cycles=%llu screen=%016llX text=%016llX kbd=n/a changed=%s\n",
-                   g_liveness_frame, (unsigned long long)cycles, (unsigned long long)screen, (unsigned long long)text, changed);
+        printf("A2GSPU LIVENESS: frame=%d cycles=%llu screen=%016llX text=%016llX kbd=%llu changed=%s insns=%llu screen_store=%s text_store=%s kbd_poll=%s\n",
+               g_liveness_frame, (unsigned long long)cycles, (unsigned long long)screen, (unsigned long long)text,
+               (unsigned long long)kbd, changed, (unsigned long long)g_liveness_insns, ss, ts, kp);
     }
 }
 

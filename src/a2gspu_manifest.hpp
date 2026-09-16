@@ -241,7 +241,7 @@ inline const RecordSchema *record_schemas(int &n) {
      "frame cycles trap t(e|x) n pc sym|null incall|null store{addr,value}? sp? heavy regs{a,x,y,s,d,dbr,pbr,p,e}? ring[]? zp? stack? mem{at,expr,d}? f{...}? text? scan[{at,ptr,d}]?",
      "one line per trigger; pc is the storing instruction for store= traps; sink: per-spec out=, else A2GSPU_TRAP_OUT, else A2GSPU_RECORDS, else stdout prefixed 'IIGS TRAP:'"},
     {"A2GSPU_LIVENESS",   "event=liveness.sample",
-     "frame cycles screen text kbd|null changed(first|screen|text|both|none) kbd_note? kbd_zero?",
+     "frame cycles screen text kbd changed(first|screen|text|both|none) insns screen_store|null text_store|null kbd_poll|null",
      "sink: A2GSPU_LIVENESS_OUT, else A2GSPU_RECORDS, else one stdout line per sample prefixed 'A2GSPU LIVENESS:'"},
     {"A2GSPU_WATCH_OUT",  "event=watch.write|watch.read|watch.suppressed",
      "frame cycles kind(write|read) pc addr data s d dbr ipc ts",
