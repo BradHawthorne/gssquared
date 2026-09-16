@@ -31,7 +31,7 @@ accessor; the machinery lives in fork-owned files.
 | File | Fork lines | Commits |
 |------|-----------|---------|
 | `src/cpus/base_6502.cpp` | progress taps in `bus_write`/`execute_next` (M4, M9); the breakpoint park (`if (iigs_tb_on_landing(cpu)) return 0;`); the trap read trigger in `bus_read` | `f3d00823`, `31482937`, `bf77f99e`, `6ece2987` |
-| `src/gs2.cpp` | CPU loops stop on `cpu->halt`; `frame_video_update` only for a completed frame; `A2GSPU_PACE`; the windowed frame clock | `3be31a3a`, `bf77f99e`, `a1b68c4d`, `90a5791f` |
+| `src/gs2.cpp` | CPU loops stop on `cpu->halt`; `frame_video_update` only for a completed frame; `A2GSPU_PACE`; the windowed frame clock; `run_one_frame`'s one-time arm also applies `A2GSPU_WATCH_IPC_ZP` and `A2GSPU_CARD_CMDLOG` | `3be31a3a`, `bf77f99e`, `a1b68c4d`, `90a5791f`, `414c5603`, `83b2547a` |
 | `src/mmus/mmu.hpp`, `src/mmus/mmu_iigs.hpp` | `probe_peek`/`probe_readable` for `$E0/$E1:C000-CFFF`; `probe_poke` returns whether it landed | `114bbd59` |
 | `src/mmus/mmu_iigs.cpp`, `src/devices/adb/keygloo.cpp` | progress taps (shadowed screen store, keyboard reads) | `f3d00823`, `31482937` |
 | `src/devices/keyboard/keyboard.cpp` | progress taps; `g_tap_key_event` in `kb_key_pressed` | `f3d00823`, `31482937`, `858c1cdb` |
