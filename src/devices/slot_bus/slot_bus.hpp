@@ -19,6 +19,8 @@
 #include <cstdint>
 #include "../../house_fnv.hpp"
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 // One slot-visible bus cycle, as a slot-3 card's pins latch it.
 struct slot_bus_cycle_t {
@@ -44,6 +46,41 @@ enum {
 static constexpr int SLOT_BUS_SLOT = 3;
 
 inline bool                          g_slot_bus_enabled = false;
+
+// FORK: STREAM FORMAT 2 (opt-in: A2GSPU_SLOT_BUS_FORMAT=2). Format 1 is this stream as
+// it has always been, byte for byte, because card firmware already decodes it; format 2
+// is the one the fidelity study's slot-bus section (Docs/fidelity/slot_bus.md 2.3)
+// describes, and changes only when the owner moves the default:
+//   - /DEVSEL and /IOSEL decode for the card's actual slot (g_slot_bus_slot), not slot 3;
+//   - $C0xx is slot-visible only in banks $00/$01 with IOLC shadowing on, or $E0/$E1 --
+//     format 1 emitted $C0xx in ANY bank, fast-RAM banks included;
+//   - $C100-$C7FF is emitted when that page belongs to a card (INTCXROM off and the
+//     $C02D bit, or SLOTC3ROM for $C3), with /IOSEL; $C800-$CFFF when a card owns the
+//     expansion ROM, with /IOSTRB;
+//   - M2B0 is the CPU's bank LSB for a shadowed write, and high for every $E1 access
+//     (TN68), not the aux-resolved bank;
+//   - $E0 writes and $E0/$E1 RAM reads are emitted (a card sees them with /M2SEL);
+//   - bit 6 (/INH) is never set: /INH is driven BY a card, and IOLC state is not it;
+//   - frames carry the magic "~BS2" instead of "~BUS".
+inline int  g_slot_bus_format = 0;   // 0 = not probed yet
+inline int  g_slot_bus_slot   = SLOT_BUS_SLOT;
+inline int slot_bus_format() {
+    if (g_slot_bus_format == 0) {
+        const char *e = getenv("A2GSPU_SLOT_BUS_FORMAT");
+        g_slot_bus_format = (e && e[0] == '2' && e[1] == 0) ? 2 : 1;
+        if (e && *e && g_slot_bus_format != 2 && strcmp(e, "1") != 0) {
+            fprintf(stderr, "A2GSPU SLOT BUS: FATAL A2GSPU_SLOT_BUS_FORMAT='%s' -- want 1 or 2\n", e);
+            exit(2);
+        }
+    }
+    return g_slot_bus_format;
+}
+// The frame magic for the stream's format: "~BUS" or "~BS2".
+inline const uint8_t *slot_bus_magic() {
+    static const uint8_t v1[4] = { 0x7E, 0x42, 0x55, 0x53 };
+    static const uint8_t v2[4] = { 0x7E, 0x42, 0x53, 0x32 };
+    return slot_bus_format() == 2 ? v2 : v1;
+}
 inline std::vector<slot_bus_cycle_t> g_slot_bus;
 
 // Tap: call once per Mega-II-side (slot-visible) bus cycle. The caller decides

@@ -48,6 +48,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_BRKMEM",              "break",       "on BRK, dump the recent-PC history + bytes around the crash PC and stacked return"},
     {"A2GSPU_BUS_DUMP",            "observe",     "~BUS cycle dump (source = slot_bus) for the gssquared->card host gate"},
     {"A2GSPU_BUS_STREAM",          "observe",     "live ~BUS slot-bus CDC streaming to the card's raw-cycle input"},
+    {"A2GSPU_SLOT_BUS_FORMAT",     "observe",     "1 (default: the ~BUS stream card firmware decodes today) or 2 (~BS2: decode for the card's real slot, $C0xx only in I/O banks, $C1xx-$CFxx card ROM with /IOSEL and /IOSTRB, M2B0 from the CPU bank and high for $E1, $E0 writes and Mega II reads, no /INH); anything else is fatal"},
     {"A2GSPU_CALLSTREAM",          "trace",       "symbol-free NDJSON of the toolbox/GS-OS call sequence (for tools/gdiff/calldiff.py first-divergence diffing)"},
     {"A2GSPU_CALLTRACE",           "trace",     "JSR/JSL call trace, armed from frame 0 (1) or when the PC first reaches a hex address (<hexPC>)"},
     {"A2GSPU_CALLTRACE_N",         "trace",       "cap CALLTRACE entries"},

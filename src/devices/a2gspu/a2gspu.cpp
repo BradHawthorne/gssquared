@@ -641,7 +641,8 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
             printf("A2GSPU: cb f=%llu synced=%d slotbus=%zu handle=%d\n", (unsigned long long)cf,
                    g_bus_synced ? 1 : 0, g_slot_bus.size(), ad->serial_handle ? 1 : 0); fflush(stdout); } }
         if (!g_bus_synced) {                                  // one-time SYNC + open count
-            uint8_t open[8] = { 0x7E, 0x42, 0x55, 0x53, 0xFF, 0xFF, 0xFF, 0x7F }; // "~BUS", 0x7FFFFFFF
+            const uint8_t *mg = slot_bus_magic();                            // "~BUS", or "~BS2" for stream format 2
+            uint8_t open[8] = { mg[0], mg[1], mg[2], mg[3], 0xFF, 0xFF, 0xFF, 0x7F }; // magic, 0x7FFFFFFF
             bool os = serial_write_blocking(ad->serial_handle, open, 8);
             if (os) g_bus_synced = true;
             if (sdbg) { printf("A2GSPU: SYNC open send ok=%d -> synced=%d\n", os?1:0, g_bus_synced?1:0); fflush(stdout); }
@@ -1134,6 +1135,7 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
     ad->cmdreg.reg_lo = g_card_reg_lo;
 
     // "~BUS" cycle-dump for the gssquared->card host gate (A2GSPU_BUS_DUMP=path).
+    g_slot_bus_slot = (int)slot;   // FORK: slot stream format 2 decodes /DEVSEL and /IOSEL for the card's real slot
     g_bus_path = getenv("A2GSPU_BUS_DUMP");
     if (g_bus_path) {
         // ARMING THE CAPTURE IS PART OF ENABLING THE DUMP. Previously only
@@ -1234,7 +1236,8 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
             FILE *f = fopen(g_bus_path, "wb");
             if (f) {
                 uint32_t count = (uint32_t)g_slot_bus.size();
-                uint8_t hdr[8] = { 0x7E, 0x42, 0x55, 0x53,
+                const uint8_t *mg = slot_bus_magic();
+                uint8_t hdr[8] = { mg[0], mg[1], mg[2], mg[3],
                     (uint8_t)count, (uint8_t)(count >> 8),
                     (uint8_t)(count >> 16), (uint8_t)(count >> 24) };
                 fwrite(hdr, 1, 8, f);

@@ -47,7 +47,7 @@ class MMU_IIgs : public MMU {
         uint8_t g_hires;
         bool g_text;
         bool g_mixed;
-            
+
         union {
             uint8_t reg_new_video=0;
             struct {
@@ -55,7 +55,7 @@ class MMU_IIgs : public MMU {
                 uint8_t g_reserved1 : 4;
                 uint8_t g_dhr_mono : 1;
                 uint8_t g_aux_linear : 1;
-                uint8_t g_shr_enabled : 1;                
+                uint8_t g_shr_enabled : 1;
             };
         };
         /* bool f_intcxrom = false;
@@ -64,11 +64,11 @@ class MMU_IIgs : public MMU {
         // "current memory map state" flags.
         // does not imply we need to track text s/s
         bool m_zp = false; // this is both read and write.
-        bool m_text1_r = false; // 
-        bool m_text1_w = false; // 
-        bool m_hires1_r = false; // 
-        bool m_hires1_w = false; // 
-        bool m_all_r = false; // 
+        bool m_text1_r = false; //
+        bool m_text1_w = false; //
+        bool m_hires1_r = false; //
+        bool m_hires1_w = false; //
+        bool m_all_r = false; //
         bool m_all_w = false; //
 
         bool map_initialized = false;
@@ -106,8 +106,10 @@ class MMU_IIgs : public MMU {
             // $C0xx I/O is slot-visible; soft-switches toggle on READS too (per the IIe IOU 74LS259
             // decode), so the slot must see read accesses. Video-memory writes are tapped at the
             // resolved $E1 points, NOT here (no double-count).
-            if (g_slot_bus_enabled && (address & 0xFF00) == 0xC000)
-                slot_emit(address & 0xFFFF, value, true, (address >> 16) & 1);
+            if (g_slot_bus_enabled) {
+                if (slot_bus_format() == 2) slot_emit_cxxx_v2(address, value, true);
+                else if ((address & 0xFF00) == 0xC000) slot_emit(address & 0xFFFF, value, true, (address >> 16) & 1);
+            }
             return value;
         }
 
@@ -115,15 +117,17 @@ class MMU_IIgs : public MMU {
             if (address >= ROM_SPACE_BASE) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
 
             MMU::write(address, value);
-            if (g_slot_bus_enabled && (address & 0xFF00) == 0xC000)
-                slot_emit(address & 0xFFFF, value, false, (address >> 16) & 1);
+            if (g_slot_bus_enabled) {
+                if (slot_bus_format() == 2) slot_emit_cxxx_v2(address, value, false);
+                else if ((address & 0xFF00) == 0xC000) slot_emit(address & 0xFFFF, value, false, (address >> 16) & 1);
+            }
         }
 
         inline bool shadow_is_enabled(uint32_t address) {
             uint32_t address_16 = address & 0xFFFF;
             uint32_t address_17 = address & 0x1FFFF;
             const bool odd_bank = (address & 0x10000) != 0;
-            
+
             if ((address_16 >= 0x0400 && address_16 <= 0x07FF) && !(reg_shadow & SHADOW_INH_TEXT1)) {
                 return true;
             }
@@ -146,8 +150,8 @@ class MMU_IIgs : public MMU {
             if ((address_17 >= 0x12000 && address_17 <= 0x15FFF) && !(reg_shadow & SHADOW_INH_AUXHGR)) {
                 return true;
             }
-            
-            
+
+
             return false;
         }
 
@@ -159,7 +163,9 @@ class MMU_IIgs : public MMU {
             else return megaii->read(address & 0xFFFF);
         } */
 
-        inline void megaiiWrite(uint32_t address, uint8_t value) {
+        // cpu_bank_lsb: the bank bit of the address the CPU wrote, before RAMWRT/80STORE
+        // resolution (-1 = unknown, use the resolved address) -- slot stream format 2's M2B0.
+        inline void megaiiWrite(uint32_t address, uint8_t value, int cpu_bank_lsb = -1) {
             if ((address & 0x1'0000) && g_bank_latch) {
                 uint32_t idx = address & 0x1'FFFF;
                 if (is_aux_linear()) {
@@ -174,10 +180,12 @@ class MMU_IIgs : public MMU {
                 // construction, not just when zero shadowed writes happen to occur.
                 obs_note(_cyc, obs_sigid(OBS_SUB_BUS, 0, 0), OBS_K_BUS_TXN, address & 0x1'FFFF, value,
                          ((uint32_t)g_obs_c14m_cost << 8) | g_obs_cycle_type, OBS_F_PROVENANCE_SH);
-                slot_emit(address & 0xFFFF, value, false, true);             // Mega-II write to $E1/aux (M2B0=1)
+                slot_emit(address & 0xFFFF, value, false,
+                          (slot_bus_format() == 2 && cpu_bank_lsb >= 0) ? cpu_bank_lsb != 0 : true);   // M2B0 (format 2: the CPU's bank bit, TN68)
             } else {
                 megaii->write(address & 0xFFFF, value);
-                slot_emit(address & 0xFFFF, value, false, (address & 0x1'0000) != 0);
+                slot_emit(address & 0xFFFF, value, false,
+                          (slot_bus_format() == 2 && cpu_bank_lsb >= 0) ? cpu_bank_lsb != 0 : (address & 0x1'0000) != 0);
             }
             set_next_cycle_type(CYCLE_TYPE_SYNC);
         }
@@ -240,16 +248,46 @@ class MMU_IIgs : public MMU {
 
         // Faithful slot-3 signal decode for a Mega-II-side (slot-visible) cycle (the virtual slot).
         inline uint8_t slot_ctl(uint16_t a, bool is_read, bool m2b0) {
+            const bool v2 = slot_bus_format() == 2;
+            const int slot = v2 ? g_slot_bus_slot : SLOT_BUS_SLOT;
             uint8_t ctl = SLOT_CTL_M2SEL;                       // a valid Mega-II cycle
             if (is_read) ctl |= SLOT_CTL_READ;
             if (m2b0)    ctl |= SLOT_CTL_M2B0;
-            if (!is_iolc_shadowed()) ctl |= SLOT_CTL_INH;
+            if (!v2 && !is_iolc_shadowed()) ctl |= SLOT_CTL_INH;   // format 2: /INH is a card output
             if (a >= 0xC000 && a <= 0xCFFF) {                   // slot I/O strobes (this card's slot)
-                if ((a & 0xFFF0) == (uint16_t)(0xC080 + SLOT_BUS_SLOT * 0x10)) ctl |= SLOT_CTL_DEVSEL;
-                if ((a >> 8)     == (uint16_t)(0xC0   + SLOT_BUS_SLOT))        ctl |= SLOT_CTL_IOSEL;
-                if (a >= 0xC800)                                              ctl |= SLOT_CTL_IOSTRB;
+                if ((a & 0xFFF0) == (uint16_t)(0xC080 + slot * 0x10)) ctl |= SLOT_CTL_DEVSEL;
+                if ((a >> 8)     == (uint16_t)(0xC0   + slot))        ctl |= SLOT_CTL_IOSEL;
+                if (a >= 0xC800)                                     ctl |= SLOT_CTL_IOSTRB;
             }
             return ctl;
+        }
+
+        // FORMAT 2: whether a $C100-$CFFF access reaches a card's pins. $Cn00 pages go to
+        // the card when INTCXROM is off and its $C02D bit (SLOTC3ROM for $C3) selects the
+        // slot; $C800-$CFFF when a card owns the expansion ROM (C8xx_slot 1-7).
+        inline bool cxxx_card_visible(uint16_t a) {
+            if (!megaii || megaii->f_intcxrom) return false;
+            const uint8_t page = (uint8_t)(a >> 8);
+            if (page >= 0xC1 && page <= 0xC7) {
+                const int n = page & 0x0F;
+                return n == 3 ? megaii->f_slotc3rom : ((megaii->get_slot_register() >> n) & 1) != 0;
+            }
+            if (page >= 0xC8) {
+                const int owner = megaii->get_C8xx_slot();
+                return owner >= 1 && owner <= 7;
+            }
+            return false;
+        }
+        // FORMAT 2: a CPU access to $xx:Cxxx. Slot-visible only in banks $00/$01 with the
+        // IOLC area shadowed, or $E0/$E1 (in fast-RAM banks $C0xx is RAM).
+        inline void slot_emit_cxxx_v2(uint32_t address, uint8_t value, bool is_read) {
+            const uint8_t bank = (uint8_t)(address >> 16);
+            const uint16_t a = (uint16_t)address;
+            if (a < 0xC000 || a > 0xCFFF) return;
+            const bool io_bank = ((bank == 0x00 || bank == 0x01) && is_iolc_shadowed()) || bank == 0xE0 || bank == 0xE1;
+            if (!io_bank) return;
+            if (a >= 0xC100 && !cxxx_card_visible(a)) return;   // internal ROM: no /M2SEL, no strobe
+            slot_emit(a, value, is_read, (bank & 1) != 0);
         }
         inline void slot_emit(uint16_t a, uint8_t data, bool is_read, bool m2b0) {
             if (!g_slot_bus_enabled) return;
@@ -265,16 +303,16 @@ class MMU_IIgs : public MMU {
         }
 
         inline void set_shadow_register(uint8_t value) { if (DEBUG(DEBUG_MMUGS)) printf("setting shadow register: %02X\n", value); reg_shadow = value; }
-        inline void set_speed_register(uint8_t value) { 
-            if (DEBUG(DEBUG_MMUGS)) printf("setting speed register: %02X\n", value); 
+        inline void set_speed_register(uint8_t value) {
+            if (DEBUG(DEBUG_MMUGS)) printf("setting speed register: %02X\n", value);
             reg_speed = value;
             if (clock) ((NClockIIgs *)clock)->set_slow_mode(value & 0x80 ? false : true);
         }
-        inline void set_state_register(uint8_t value) { 
-            if (DEBUG(DEBUG_MMUGS)) printf("setting state register: %02X\n", value); 
-            reg_state = value; 
-            ll.FF_READ_ENABLE = !g_rdrom; // sync LC state with state reg 
-            ll.FF_BANK_1 = !g_lcbnk2; // this was missing.. 
+        inline void set_state_register(uint8_t value) {
+            if (DEBUG(DEBUG_MMUGS)) printf("setting state register: %02X\n", value);
+            reg_state = value;
+            ll.FF_READ_ENABLE = !g_rdrom; // sync LC state with state reg
+            ll.FF_BANK_1 = !g_lcbnk2; // this was missing..
         }
         inline uint8_t shadow_register() { return reg_shadow; }
         inline uint8_t speed_register() { return reg_speed; }
@@ -301,11 +339,11 @@ class MMU_IIgs : public MMU {
         inline void set_mixed(bool value) { g_mixed = value; }
         inline bool is_altzp() { return g_altzp; }
         inline void set_altzp(bool value) { g_altzp = value; }
-        
+
         inline bool is_80store() { return g_80store ? true : false; }
         inline bool is_slotc3rom() { return megaii->f_slotc3rom ? true : false; }
         inline void set_intcxrom(bool value);
-        
+
         inline void set_slot_register(uint8_t value);
         inline uint8_t get_slot_register() { return reg_slot; }
 
@@ -320,7 +358,7 @@ class MMU_IIgs : public MMU {
         void init_c0xx_handlers();
         void write_c0xx(uint16_t address, uint8_t value);
         uint8_t read_c0xx(uint16_t address);
-        
+
         virtual uint8_t *get_rom_base() { return main_rom; };
 
         // Byte offset within main_rom of the start of virtual bank $FF (the
