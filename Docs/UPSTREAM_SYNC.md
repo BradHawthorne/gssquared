@@ -800,6 +800,15 @@ gates were green on the build it was committed from. The Rosetta pinned Finder b
 | `ef506b39` | **Ticking time pin**, opt-in (`A2GSPU_FAKETIME_TICK=1`); guest-set time sticks | the pin overwrote the RTC on every command, so WriteTime could not verify; no ticking origin | frozen reads the pin before and after 600 frames and keeps a WriteTimeHex; ticking advances +6 s after 400 frames and +10 s after 600 more, the one-second edge is a whole 14M second, a set time sticks and keeps ticking, and two runs agree (9/9) |
 | `aa30b820` | **Snapshot media identity by content hash** (`util/media_identity.hpp`; blocks `iwm` 3, `diskii` 2, `media` 2, `pdblock` 2) | the file name alone: the same image under another path would not restore, and a different image at the same path took another disk's head and tracks | the same bytes under another name restore; changed bytes at the same path are refused with the mismatch warning (3/3); a snapshot with version-1 blocks still reads and realigns |
 
+**Correction to section 15:** the VGC/Mega II row (commit `e9b4daf4`) said a2engine `intcheck`
+passed 11/11. It did not with that change: `intcheck`'s VBL program polled `$C046` without enabling
+`$C041`, and with the flags latching only while enabled it counted 0. a2engine's full `gscheck`
+after this pass showed it, together with the scan-line checks' `$C029=$80` (bank latch off, so the
+rail's `E1:` SCB pokes now land in `$E0`). a2engine `e462595` enables the VBL interrupt with IRQs
+masked and writes `$81`; `intcheck` is 11/11 against `cd0bbe96`. The full `gscheck` is otherwise
+46 of 47 green, the remaining failure being the publish-track disclosure suite, which needs a
+terms file that does not exist on this machine.
+
 **Found on the way:** the rail's `setreg` has no `pb` register (`setreg pc` takes 24 bits), so
 the `setreg pb` lines in scratch tests did nothing.
 
