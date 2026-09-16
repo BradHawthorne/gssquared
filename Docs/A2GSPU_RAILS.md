@@ -157,7 +157,7 @@ it differences two runs.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
-| `A2GSPU_TBTRACE=1` | trace Tool Locator (`$E10000`) + GS/OS class-0/1 dispatch (`$E100A8`/`$E100B0`): call name on entry, carry+A on return | trace | env |
+| `A2GSPU_TBTRACE=1` | trace Tool Locator (`$E10000`) + GS/OS class-0/1 dispatch (`$E100A8`/`$E100B0`): call name on entry, carry+A on return. **A harness that counts `IIGS TOOLBOX: ret` lines sees more of them since `e68c82e5`:** returns buried under an unmatched GS/OS inline call used to print nothing. The pinned 600-frame Finder boot went from 1236 returns (62 `carry=1`) to 1269 (84); an A/B build of the old tracker reproduces the old numbers, and the 22 new failures are 18 `NewHandle` `err=$0201` and 4 tool `$2111` `err=$1101`. Rosetta v3's `max_tool_errors` budget was re-measured to match | trace | env |
 | `A2GSPU_TBTRACE_BANK=<hex>` | scope `TBTRACE` to a single bank | trace | env |
 | `A2GSPU_TRACE_FROM=<hex24>` | arm tracing only once `full_pc` first hits this 24-bit PC | trace | env |
 | `A2GSPU_ERRHOOK=1` | surface carry-set GS/OS dispatch errors (`<-- SYSTEM/LOADER ERROR` for the stack-based entry), and print every inline-entry return as `IIGS GSOS: ret inline $NNNN carry= err=` (see `A2GSPU_CALLSTREAM`) | trace | env |

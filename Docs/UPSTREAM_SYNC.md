@@ -34,7 +34,7 @@ accessor; the machinery lives in fork-owned files.
 | `src/gs2.cpp` | CPU loops stop on `cpu->halt`; `frame_video_update` only for a completed frame; `A2GSPU_PACE`; the windowed frame clock | `3be31a3a`, `bf77f99e`, `a1b68c4d`, `90a5791f` |
 | `src/mmus/mmu.hpp`, `src/mmus/mmu_iigs.hpp` | `probe_peek`/`probe_readable` for `$E0/$E1:C000-CFFF`; `probe_poke` returns whether it landed | `114bbd59` |
 | `src/mmus/mmu_iigs.cpp`, `src/devices/adb/keygloo.cpp` | progress taps (shadowed screen store, keyboard reads) | `f3d00823`, `31482937` |
-| `src/devices/keyboard/keyboard.cpp` | progress taps; `g_tap_key_event` in `kb_key_pressed` | `f3d00823`, `858c1cdb` |
+| `src/devices/keyboard/keyboard.cpp` | progress taps; `g_tap_key_event` in `kb_key_pressed` | `f3d00823`, `31482937`, `858c1cdb` |
 | `src/devices/adb/ADB_Micro.hpp` | `g_tap_key_event` at both key-latch sites (`load_key_from_buffer`, the unbuffered path of `store_key_to_buffer`) | `858c1cdb` |
 | `src/devices/diskii/diskii_controller.hpp` | `g_tap_disk_write_event` after `write_pulse` | `858c1cdb` |
 | `src/devices/floppy/Floppy_woz.hpp` | `a2gspu_is_mounted()` accessor | `858c1cdb` |
