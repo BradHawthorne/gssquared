@@ -189,7 +189,7 @@ class ModemDevice : public SerialDevice {
             }
 
             // Wait for resolution to complete (10 second timeout)
-            NET_Status resolve_status = NET_WaitUntilResolved(addr, 10000);
+            NET_Status resolve_status = dial_wait([addr](int ms) { return NET_WaitUntilResolved(addr, ms); }, 10000);
             if (resolve_status != NET_SUCCESS) {
                 printf("ModemDevice: Failed to resolve hostname: %s\n", SDL_GetError());
                 NET_UnrefAddress(addr);
@@ -208,7 +208,8 @@ class ModemDevice : public SerialDevice {
             }
 
             // Wait for connection to complete (30 second timeout)
-            NET_Status connect_status = NET_WaitUntilConnected(socket, 30000);
+            NET_StreamSocket *dialing = socket;
+            NET_Status connect_status = dial_wait([dialing](int ms) { return NET_WaitUntilConnected(dialing, ms); }, 30000);
             if (connect_status != NET_SUCCESS) {
                 printf("ModemDevice: Failed to connect: %s\n", SDL_GetError());
                 NET_DestroyStreamSocket(socket);
@@ -228,6 +229,36 @@ class ModemDevice : public SerialDevice {
             
             send_response("CONNECT 9600\r\n");
             printf("ModemDevice: Connected!\n");
+        }
+
+        // FORK: THE DIAL WAITS IN 50 ms SLICES. It blocked this worker for up to 40 s
+        // (resolve, then connect), and the thread is joined by detach and by the destructor,
+        // so a port change during a dial froze the caller for that long (fidelity study H4).
+        // Between slices the host queue is read: SHUTDOWN ends the dial and the thread, and
+        // a character from the guest aborts it as a keypress aborts a Hayes modem's dial
+        // (the caller then answers NO CARRIER). Other messages are not needed mid-dial.
+        bool shutdown_pending = false;
+
+        bool dial_aborted() {
+            while (!q_host.is_empty()) {
+                SerialMessage msg = q_host.get();
+                if (msg.type == MESSAGE_SHUTDOWN) { shutdown_pending = true; return true; }
+                if (msg.type == MESSAGE_DATA) return true;
+            }
+            return false;
+        }
+
+        template <class Wait>
+        NET_Status dial_wait(Wait wait, int timeout_ms) {
+            for (int waited = 0; waited < timeout_ms; waited += 50) {
+                NET_Status st = wait(50);
+                if (st != NET_WAITING) return st;
+                if (dial_aborted()) {
+                    printf("ModemDevice: dial aborted (%s)\n", shutdown_pending ? "shutdown" : "guest character");
+                    return NET_FAILURE;
+                }
+            }
+            return NET_WAITING;   // timed out
         }
 
         void hangup() {
@@ -503,6 +534,12 @@ class ModemDevice : public SerialDevice {
                         
                         default:
                             break;
+                    }
+                    // FORK: a SHUTDOWN consumed while a dial waited ends the thread here.
+                    if (shutdown_pending) {
+                        printf("ModemDevice: shutting down\n");
+                        hangup();
+                        return;
                     }
                 }
                 
