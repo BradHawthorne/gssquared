@@ -2,9 +2,10 @@
  *   A2GSPU - Apple IIgs Graphics and Sound Processing Unit
  *   Emulator device plugin for GSSquared
  *
- *   Unified write observer feeds both backends:
- *   - HW: streams bus writes to physical RP2350 card over USB serial
- *   - EMU: shadows SHR memory for local UHR rendering via SDL3
+ *   The card model (default): the host's command register at $C0nF, the
+ *   slot-bus cycle stream to a physical card, and its telemetry port captured.
+ *   The legacy model (A2GSPU_CARD_MODEL=legacy): the earlier register protocol,
+ *   its local UHR/TERM renderer and its video-state serial payload.
  *
  *   Copyright (c) 2026 Brad Hawthorne
  *   Licensed under GPL-3.0 (matching GSSquared)
@@ -26,6 +27,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include "devices/slot_bus/slot_bus.hpp"  // faithful all-writes slot-bus stream (g_slot_bus)
+#include "a2gspu_cmdreg.hpp"                // the card model's command register
 
 #ifdef _WIN32
 #include <windows.h>
@@ -47,6 +49,7 @@ static const char *g_bus_path = nullptr;   // dump target (null = disabled)
 // (the card forwards render work in sub-frame batches).
 static bool g_bus_stream = false;          // stream g_slot_bus over CDC each frame
 static bool g_bus_synced = false;          // sent the one-time "~BUS" SYNC + open count
+static uint8_t g_card_reg_lo = (uint8_t)(0x80u + SLOT_BUS_SLOT * 0x10u + 0x0Fu);   // $C0nF low byte for the card's slot
 
 // RENDER-WHITELIST DISTILL (the lossless compression for the CDC choke). The raw slot_bus
 // is ~78% non-render traffic: ADB/clock/speed/paddle $C0xx polling (e.g. $C03D/$C0EE/$C036)
@@ -60,7 +63,7 @@ static inline bool bus_render_relevant(uint16_t a, uint8_t ctl) {
         uint8_t lo = (uint8_t)a;
         // The slot's $C0nF command-register WRITE -> forward so the card can
         // assemble the host->card command frame ($C0BF for slot 3).
-        if (lo == (uint8_t)(0x80u + SLOT_BUS_SLOT * 0x10u + 0x0Fu) && !(ctl & SLOT_CTL_READ)) return true;
+        if (lo == g_card_reg_lo && !(ctl & SLOT_CTL_READ)) return true;
         return lo == 0x68 || lo == 0x35 || lo == 0x29 || lo == 0x21 || lo == 0x22 || lo == 0x34
             || (lo >= 0x02 && lo <= 0x09)            // RAMRD/RAMWRT/INTCXROM/ALTZP
             || lo == 0x00 || lo == 0x01              // 80STORE
@@ -100,10 +103,9 @@ static void *serial_open(const char *port) {
     dcb.ByteSize = 8;
     dcb.Parity = NOPARITY;
     dcb.StopBits = ONESTOPBIT;
-    // DTR_CONTROL_ENABLE / RTS_CONTROL_ENABLE: some CDC-ACM firmware (including
-    // TinyUSB defaults) gates the data path on these modem control signals.
-    // Asserting both ensures the RP2350 CDC driver considers the port open and
-    // ready to receive before the first frame is sent.
+    // DTR_CONTROL_ENABLE / RTS_CONTROL_ENABLE: common CDC-ACM device stacks gate
+    // the data path on these modem control signals. Asserting both makes the
+    // device treat the port as open and ready before the first frame is sent.
     dcb.fDtrControl = DTR_CONTROL_ENABLE;
     dcb.fRtsControl = RTS_CONTROL_ENABLE;
     SetCommState(h, &dcb);
@@ -229,6 +231,76 @@ static void serial_close(void *handle) {
 #ifdef _WIN32
     CloseHandle((HANDLE)handle);
 #endif
+}
+
+// The card's telemetry port is output-only: open it for reading, and read
+// without waiting (a zero-timeout ReadFile returns whatever has arrived).
+static void *telemetry_open(const char *port) {
+#ifdef _WIN32
+    char path[64];
+    snprintf(path, sizeof(path), "\\\\.\\%s", port);
+    HANDLE h = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) return nullptr;
+    COMMTIMEOUTS t = {};
+    t.ReadIntervalTimeout = MAXDWORD;          // return immediately with what is buffered
+    t.ReadTotalTimeoutMultiplier = 0;
+    t.ReadTotalTimeoutConstant = 0;
+    SetCommTimeouts(h, &t);
+    return (void *)h;
+#else
+    (void)port;
+    return nullptr;
+#endif
+}
+// Bytes read, 0 when nothing arrived, -1 when the port failed.
+static int telemetry_read(void *handle, uint8_t *buf, uint32_t cap) {
+#ifdef _WIN32
+    DWORD got = 0;
+    if (!ReadFile((HANDLE)handle, buf, cap, &got, NULL)) return -1;
+    return (int)got;
+#else
+    (void)handle; (void)buf; (void)cap;
+    return -1;
+#endif
+}
+
+// Poll the telemetry port once a frame and append what arrived, raw. The
+// emulator does not parse it: the bytes are kept for tooling that knows them.
+static void telemetry_poll(a2gspu_data *ad) {
+    const char *port = getenv("A2GSPU_SERIAL_TELEMETRY");
+    if (!port) return;
+    if (!ad->telemetry_handle) {
+        if (ad->telemetry_retry-- > 0) return;
+        ad->telemetry_retry = 60;                   // ~1 s between attempts
+        ad->telemetry_handle = telemetry_open(port);
+        if (!ad->telemetry_handle) return;
+        if (!ad->telemetry_file) {
+            if (const char *o = getenv("A2GSPU_SERIAL_TELEMETRY_OUT")) ad->telemetry_path = o;
+            else {
+                const char *dir = getenv("A2GSPU_OUT_DIR");
+                ad->telemetry_path = dir ? (std::string(dir) + "/card_telemetry.bin") : std::string("card_telemetry.bin");
+            }
+            ad->telemetry_file = fopen(ad->telemetry_path.c_str(), "ab");
+        }
+        printf("A2GSPU: telemetry port %s open -> %s%s\n", port, ad->telemetry_path.c_str(),
+               ad->telemetry_file ? "" : " (the capture file could not be opened; bytes are counted only)");
+        fflush(stdout);
+    }
+    uint8_t buf[4096];
+    for (int k = 0; k < 16; k++) {                  // bounded: never stall the frame
+        const int n = telemetry_read(ad->telemetry_handle, buf, sizeof buf);
+        if (n < 0) {
+            serial_close(ad->telemetry_handle);
+            ad->telemetry_handle = nullptr;
+            printf("A2GSPU: telemetry port %s lost after %llu bytes; retrying\n", port, (unsigned long long)ad->telemetry_bytes);
+            return;
+        }
+        if (n == 0) break;
+        if (ad->telemetry_file) fwrite(buf, 1, (size_t)n, ad->telemetry_file);
+        ad->telemetry_bytes += (uint64_t)n;
+        if (n < (int)sizeof buf) break;
+    }
+    if (ad->telemetry_file) fflush(ad->telemetry_file);
 }
 
 // Build mode_flags byte from display_state_t — the authoritative source.
@@ -475,6 +547,13 @@ static void a2gspu_write_observer(void *context, uint32_t address, uint8_t value
     }
 }
 
+// ── Card model: the host's command register ───────────────────────
+static void a2gspu_card_cmd_write(void *context, uint32_t address, uint8_t value) {
+    (void)address;
+    a2gspu_data *ad = (a2gspu_data *)context;
+    a2gspu_cmdreg_write(ad->cmdreg, value);
+}
+
 // ── HW backend: frame callback (drains serial buffer) ──────────────
 
 static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
@@ -484,6 +563,18 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
     // Poll for injected keyboard and mouse input (file-based, independent of user's devices)
     inject_keys(ad);
     inject_mouse(ad);
+
+    // The card model's forwarding budget restarts each video frame, and the
+    // telemetry port, when one is named, is read whatever the stream is doing.
+    if (!ad->legacy) a2gspu_cmdreg_frame(ad->cmdreg);
+    telemetry_poll(ad);
+
+    // Serial hardware is opt-in. Any run of a configuration with this card used
+    // to open the card's port exclusively and write into it -- gates included --
+    // which also locked out a separate live session. Now a port is opened only
+    // when A2GSPU_SERIAL_PORT names one or A2GSPU_BUS_STREAM asks for the stream.
+    const char *want_port = getenv("A2GSPU_SERIAL_PORT");
+    if (!want_port && !g_bus_stream) return;
 
     // Terminal keyboard is handled by SDL event handlers registered at init,
     // not here. The IIgs CPU runs thousands of cycles between VSYNC and the
@@ -504,11 +595,12 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
             reconnect_counter = 0;
             // A2GSPU_SERIAL_PORT overrides the probe; default tries COM10 first
             // (the card's bus-processor CDC port), then the legacy fallback list.
-            const char *env_port = getenv("A2GSPU_SERIAL_PORT");
-            const char *ports[] = {
-                env_port ? env_port : "COM10",
-                "COM10", "COM9", "COM7", "COM6", "COM8", "COM5", nullptr
-            };
+            // A named port is the only one tried; the stream without a name tries
+            // the development defaults.
+            const char *env_port = want_port;
+            const char *named[] = { env_port, nullptr };
+            const char *defaults[] = { "COM10", "COM9", "COM7", "COM6", "COM8", "COM5", nullptr };
+            const char **ports = env_port ? named : defaults;
             if (getenv("A2GSPU_SERIAL_DEBUG")) {
                 printf("A2GSPU: reconnect attempt (env=%s)\n", env_port ? env_port : "(null)"); fflush(stdout);
             }
@@ -518,6 +610,7 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
                     ad->prev_valid = false;  // force full resend
                     ever_connected = true;
                     reconnect_interval = 60;  // reset to fast reconnect
+                    ad->serial_name = ports[i];
                     printf("A2GSPU: Connected via %s\n", ports[i]); fflush(stdout);
                     break;
                 }
@@ -593,6 +686,10 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
         }
         return;  // skip the "~A2G" snapshot pack (the card consumes "~BUS")
     }
+
+    // The video-state payload below is the legacy model's; the card model sends
+    // the cycle stream or nothing.
+    if (!ad->legacy) return;
 
     // Send every frame (60fps). Dirty tracking keeps most frames small.
     // Previous 30fps (skip every other) added up to 33ms latency on cursor/menus.
@@ -983,6 +1080,29 @@ static const char *mode_name(a2gspu_video_mode_t mode) {
 
 static DebugFormatter *a2gspu_debug_display(a2gspu_data *ad) {
     DebugFormatter *df = new DebugFormatter();
+    if (!ad->legacy) {
+        const A2gspuCmdReg &r = ad->cmdreg;
+        df->addLine("Model: card (command register $C0%02X, write-only; reads float)", r.reg_lo);
+        df->addLine("Command register: %s writes=%llu frames=%llu presync_skipped=%llu oversize=%llu",
+            a2gspu_cmdreg_state_name(r), (unsigned long long)r.writes, (unsigned long long)r.frames,
+            (unsigned long long)r.presync, (unsigned long long)r.oversize);
+        df->addLine("Sequence: gaps=%llu duplicates=%llu overflow=%llu (payload cap %d, %d per frame)",
+            (unsigned long long)r.gaps, (unsigned long long)r.dups, (unsigned long long)r.overflow,
+            r.payload_cap, r.max_per_frame);
+        if (r.last_valid)
+            df->addLine("Ops: nop=%llu hello=%llu other=%llu last=op $%02X len %u seq %u",
+                (unsigned long long)r.nops, (unsigned long long)r.hellos, (unsigned long long)r.other_ops,
+                r.last_op, r.last_len, r.last_frame_seq);
+        else
+            df->addLine("Ops: nop=0 hello=0 other=0 last=none");
+        if (r.hello_seen) df->addLine("HELLO: version %u", r.hello_version);
+        else              df->addLine("HELLO: not seen");
+        df->addLine("Serial: stream %s, telemetry %s bytes=%llu",
+            ad->serial_handle ? ad->serial_name.c_str() : "off",
+            ad->telemetry_handle ? "open" : "off", (unsigned long long)ad->telemetry_bytes);
+        return df;
+    }
+    df->addLine("Model: legacy");
     df->addLine("Mode: %s", mode_name(ad->emu.mode));
     df->addLine("HW: Serial %s", ad->serial_handle ? "connected" : "disconnected");
     df->addLine("EMU: %s", ad->emu.initialized ? "ready" : "not initialized");
@@ -998,6 +1118,17 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
     ad->computer = computer;
     ad->cpu = computer->cpu;
     ad->_slot = slot;
+
+    // Which card. The card model is the default; the legacy register protocol is
+    // kept for software written against it. An unknown value is fatal (M3).
+    const char *model = getenv("A2GSPU_CARD_MODEL");
+    if (model && strcmp(model, "card") != 0 && strcmp(model, "legacy") != 0) {
+        fprintf(stderr, "A2GSPU_CARD_MODEL: FAIL want card or legacy, got '%s' -- aborting (exit 2)\n", model);
+        exit(2);
+    }
+    ad->legacy = (model && strcmp(model, "legacy") == 0);
+    g_card_reg_lo = (uint8_t)(0x80u + (unsigned)slot * 0x10u + 0x0Fu);
+    ad->cmdreg.reg_lo = g_card_reg_lo;
 
     // "~BUS" cycle-dump for the gssquared->card host gate (A2GSPU_BUS_DUMP=path).
     g_bus_path = getenv("A2GSPU_BUS_DUMP");
@@ -1033,16 +1164,26 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
     // the 128KB MegaII address space (banks $00/$01); it would miss all $E1
     // bank writes entirely, so SHR pixel data would never reach the observer.
     if (ad->mmu_gs) {
-        ad->mmu_gs->set_write_observer(a2gspu_write_observer, ad);
-
-        // Register Mosaic slot I/O protocol on megaii (where IOLC dispatches)
         uint16_t slot_base = 0xC080 + (slot * 0x10);
-        a2gspu_proto_register(ad, ad->mmu_gs->megaii, slot_base);
+        if (ad->legacy) {
+            ad->mmu_gs->set_write_observer(a2gspu_write_observer, ad);
+            // Register the legacy slot register protocol on megaii (where IOLC dispatches)
+            a2gspu_proto_register(ad, ad->mmu_gs->megaii, slot_base);
+        } else {
+            // The card model: one write-only register. No read handler anywhere in
+            // the slot's I/O block, so every read floats, as on a card that never
+            // drives the data lines.
+            MMU_II *megaii = (MMU_II *)ad->mmu_gs->megaii;
+            megaii->set_C0XX_write_handler(slot_base + 0x0F, { a2gspu_card_cmd_write, ad });
+            g_a2gspu_cmdreg = &ad->cmdreg;
+        }
     }
 
-    // Initialize EMU backend (creates SDL3 texture, registers frame processor)
-    a2gspu_emu_init(&ad->emu, computer);
-    ad->emu.owner = ad;  // back-pointer for HW forwarding from telnet bridge
+    // Initialize the legacy renderer (creates an SDL3 texture, registers a frame processor)
+    if (ad->legacy) {
+        a2gspu_emu_init(&ad->emu, computer);
+        ad->emu.owner = ad;  // back-pointer for HW forwarding from telnet bridge
+    }
 
     // Register HW backend frame callback (drains serial buffer)
     if (computer->device_frame_dispatcher) {
@@ -1066,7 +1207,7 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
     // sequence, which runs the shutdown handlers before destroying device
     // modules. The lambda is therefore guaranteed to be unregistered (along
     // with KeyGloo) before ad is freed — it cannot fire after ad is deleted.
-    if (ad->keygloo) {
+    if (ad->legacy && ad->keygloo) {
         ad->keygloo->key_intercept = [ad](uint8_t keycode, uint8_t keymods) -> bool {
             if (ad->emu.mode != A2GSPU_MODE_TERM) return false;
             return term_handle_key(ad, keycode);
@@ -1113,19 +1254,22 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
             serial_close(ad->serial_handle);
             ad->serial_handle = nullptr;
         }
+        if (ad->telemetry_handle) { serial_close(ad->telemetry_handle); ad->telemetry_handle = nullptr; }
+        if (ad->telemetry_file) {
+            fclose(ad->telemetry_file); ad->telemetry_file = nullptr;
+            printf("A2GSPU: telemetry capture %llu bytes -> %s\n", (unsigned long long)ad->telemetry_bytes, ad->telemetry_path.c_str());
+        }
+        if (g_a2gspu_cmdreg == &ad->cmdreg) g_a2gspu_cmdreg = nullptr;
         delete ad;
         return true;
     });
 
-    // Auto-open serial port for HW backend (try COM7, common for RP2350 CDC)
-    const char *serial_ports[] = { "COM7", "COM6", "COM8", "COM5", nullptr };
-    for (int i = 0; serial_ports[i]; i++) {
-        ad->serial_handle = serial_open(serial_ports[i]);
-        if (ad->serial_handle) break;
-    }
-
-    printf("A2GSPU: Device initialized in slot %d (HW %s, EMU %s)\n",
-           slot,
-           ad->serial_handle ? "connected" : "no serial",
-           ad->emu.initialized ? "ready" : "failed");
+    // No serial port is opened here: the frame callback opens one only when a
+    // rail asks (A2GSPU_SERIAL_PORT, A2GSPU_BUS_STREAM, A2GSPU_SERIAL_TELEMETRY).
+    if (ad->legacy)
+        printf("A2GSPU: Device initialized in slot %d (model legacy, EMU %s)\n",
+               slot, ad->emu.initialized ? "ready" : "failed");
+    else
+        printf("A2GSPU: Device initialized in slot %d (model card, command register $C0%02X write-only)\n",
+               slot, ad->cmdreg.reg_lo);
 }

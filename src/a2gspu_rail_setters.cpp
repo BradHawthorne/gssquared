@@ -29,6 +29,7 @@
 // guest memory; the unarmed-hash gate covers the ones that tap the CPU.
 #include "gs2_app.hpp"
 #include "a2gspu_rail_setters.hpp"
+#include "devices/a2gspu/a2gspu_cmdreg.hpp"   // the card model's command log
 
 namespace {
 
@@ -425,6 +426,24 @@ int set_keyram(const char *v, char *m, size_t n) {
     return SET_OK;
 }
 
+// A2GSPU_CARD_CMDLOG=<file>|1 -- every frame the host sends the card's command
+// register, and every byte run the assembler drops, as records.
+int set_card_cmdlog(const char *v, char *m, size_t n) {
+    if (g_a2gspu_cmdlog_out) { fclose(g_a2gspu_cmdlog_out); g_a2gspu_cmdlog_out = nullptr; }
+    g_a2gspu_cmdlog_path.clear();
+    if (!v) { g_a2gspu_cmdlog_on = false; snprintf(m, n, "A2GSPU_CARD_CMDLOG: off"); return SET_OK; }
+    if (!*v) { snprintf(m, n, "A2GSPU_CARD_CMDLOG: want a file or 1, got ''"); return SET_INVALID; }
+    if (strcmp(v, "1")) {
+        g_a2gspu_cmdlog_out = fopen(v, "wb");
+        if (!g_a2gspu_cmdlog_out) { snprintf(m, n, "A2GSPU_CARD_CMDLOG: cannot open '%s'", v); return SET_INVALID; }
+        g_a2gspu_cmdlog_path = v;
+    }
+    g_a2gspu_cmdlog_on = true;
+    snprintf(m, n, "A2GSPU_CARD_CMDLOG: card command frames -> %s%s", g_a2gspu_cmdlog_out ? v : (a2record::g_global ? "A2GSPU_RECORDS" : "stdout"),
+             g_a2gspu_cmdreg ? "" : " (no card in the card model in this machine yet)");
+    return SET_OK;
+}
+
 int set_keydelay(const char *v, char *m, size_t n) {
     int x = 0;
     if (v && (!parse_int(v, x) || x < 0)) { snprintf(m, n, "A2GSPU_KEYSCHED_DELAY: want frames >= 0, got '%s'", v); return SET_INVALID; }
@@ -779,6 +798,8 @@ a2rails::SetterRegistrar r_milestones   {"A2GSPU_MILESTONES",      set_milestone
 a2rails::SetterRegistrar r_romsyms      {"A2GSPU_ROM_SYMBOLS",     set_rom_symbols};
 a2rails::SetterRegistrar r_watchipc     {"A2GSPU_WATCH_IPC_ZP",    set_watch_ipc_zp};
 a2rails::SetterRegistrar r_keyram       {"A2GSPU_KEYRAM",          set_keyram};
+a2rails::SetterRegistrar r_cardcmdlog   {"A2GSPU_CARD_CMDLOG",     set_card_cmdlog};
+a2rails::Registrar       g_reader_cardcmdlog{"A2GSPU_CARD_CMDLOG", a2gspu_cmdreg_format};
 a2rails::SetterRegistrar r_keydelay     {"A2GSPU_KEYSCHED_DELAY",  set_keydelay};
 }  // namespace
 

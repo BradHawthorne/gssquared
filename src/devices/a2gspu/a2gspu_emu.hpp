@@ -40,7 +40,7 @@ struct video_system_t;
 // The remaining modes are UHR (Ultra-High Resolution) variants that
 // exceed what the native IIgs hardware can produce.  They are entered
 // by the IIgs application via the Mosaic slot-I/O protocol (SET_MODE
-// command on slot 3).  On real hardware this drives a RP2350 card; in
+// command on slot 3).  On real hardware this drives the card; in
 // the emulator it switches this renderer into the matching mode.
 //
 // A2GSPU_MODE_TERM is the terminal mode.  It uses the same 640×400 UHR

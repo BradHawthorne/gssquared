@@ -285,8 +285,8 @@ bool a2gspu_emu_frame_processor(a2gspu_emu_state *emu, bool force) {
         // rasterized into uhr_fb on every frame.  On x86 at 60 fps this costs
         // roughly 2 MB/s of cache-friendly writes for the 640×400 grid, which
         // is negligible.  Dirty tracking on the physical card is omitted for
-        // the same reason — the RP2350 at 384 MHz can rasterize all 2,000 cells
-        // faster than the HSTX DMA consumes one frame's worth of pixels.
+        // the same reason -- the card can rasterize all 2,000 cells faster
+        // than its display output consumes one frame's worth of pixels.
         case A2GSPU_MODE_TERM:
             a2gspu_emu_telnet_poll(emu);  // read TCP data → VT100 parser → TERM commands
             render_term_to_fb(emu);

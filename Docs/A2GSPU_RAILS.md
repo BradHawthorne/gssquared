@@ -137,6 +137,7 @@ Where the code lives (by function, not line number — line numbers here went st
 | `A2GSPU_SYM_SUSPECT=1` | append `[SUSPECT reused]` to any symbol whose name resolves at >1 address (advisory only) | observe | env |
 | `A2GSPU_BUS_DUMP=<path>` | `~BUS` cycle dump (source = slot_bus) for the gssquared→card host gate | observe | env |
 | `A2GSPU_BUS_STREAM=1` | live `~BUS` slot-bus CDC streaming to the card's raw-cycle input | observe | env |
+| `A2GSPU_CARD_CMDLOG=<file>\|1` | **the A2GSPU card model's command register, as records.** The card watches the slot bus and never drives it, so the host's one channel to it is the write-only register `$C0nF` (`$C0BF` in slot 3), a byte per write: `[SYNC $A2][seq u16 LE][op][len][payload × len]`. The model assembles frames by the card's rules — bytes before a SYNC are skipped and counted; a `len` over 32 drops the frame and resyncs at the header, a `len` of `$A2` being a new SYNC; `len` 0 completes at once; `seq` wraps at 16 bits, a forward jump of d adding d−1 to `gaps`, zero or backward counting as a duplicate; at most 16 commands per video frame, the rest counted as `overflow` — and writes one `card.cmd` per frame (`seq op len payload gap dup overflow`, `name` NOP for op `$00`, HELLO for `$01`, empty otherwise: any other op is recorded by number and payload with no meaning given) and one `card.drop` per skipped run or oversize frame. `rail read A2GSPU_CARD_CMDLOG` and `devstate A2GSPU` give the counters (writes, frames, presync_skipped, oversize, gaps, duplicates, overflow, nop/hello/other, the last op, HELLO's version). Nothing here changes the machine | observe | env |
 | `A2GSPU_COVERAGE="LO-HI"\|"BANK:LO-HI"` | **per-byte execution bitmap** over that range, one bit per byte, set when the byte was part of an executed instruction — this is what turns deasmiigs's code/data split from a heuristic into a measurement (`--coverage`). A lower bound, never an upper one: a byte that did not execute in this run is *not proven code*, not *proven data*; union several runs to widen it. Live equivalent: the `cov` verb, which also binds a source plan (`A2COV2`) | observe | env |
 | `A2GSPU_COVERAGE_OUT=<file>` | file the bitmap is flushed to. Written **before** the gate block, which exits on any gate and would otherwise throw the run's coverage away | observe | env |
 | `A2GSPU_HGR_PAGE=1\|2` | which HGR page the II-family dump/golden gate reads — for a workload that gates on the page it just drew | observe | env |
@@ -486,7 +487,10 @@ none) and are the named exemption in `railparity.ps1`.
 | `A2GSPU_FAKETIME=<epoch-s>` | freeze the RTC at that instant (bypasses `localtime`/timezone) so RTC-derived OS state is run-to-run stable | determinism | env |
 | `A2GSPU_RAMDISK=1` | serve a mounted image from a copy-on-write RAM buffer; writes never touch the host file | device | env |
 | `A2GSPU_SP_NDEV=<n>` | override the SmartPort device count (A/B faithfulness; `32` reproduces pre-fix enumeration) | device | env |
-| `A2GSPU_SERIAL_PORT=<COMx>` | override the real-card CDC probe port (default tries `COM10` first) | device | env |
+| `A2GSPU_CARD_MODEL=card\|legacy` | which A2GSPU card a configuration with one gets. **`card`** (the default): the card watches the slot bus and never drives the data lines, so every read of its I/O block floats and there is no ident byte — software finds the card from its own configuration; the one host-writable address is the command register `$C0nF` (see `A2GSPU_CARD_CMDLOG`). **`legacy`**: the earlier register protocol at `$C0n0-$C0nF` (a status read and the `$A2` ident at `$C0nF`), its local UHR/TERM renderer and its video-state serial payload, kept for software written against it. Any other value is fatal (exit 2). Until 2026-09-16 the legacy model was the only one | device | env |
+| `A2GSPU_SERIAL_PORT=<COMx>` | the physical card's stream port. **Serial hardware is opt-in:** nothing is opened unless this or `A2GSPU_BUS_STREAM` is set (the stream alone tries `COM10 COM9 COM7 COM6 COM8 COM5`). Any run of a configuration with the card used to open a port and write into it — gates included — locking a separate live session out | device | env |
+| `A2GSPU_SERIAL_TELEMETRY=<COMx>` | the physical card's output-only telemetry port: read without waiting every frame and appended raw to `A2GSPU_SERIAL_TELEMETRY_OUT` (default `<A2GSPU_OUT_DIR>/card_telemetry.bin`, else `./card_telemetry.bin`); the emulator does not parse it. `devstate A2GSPU` shows the byte count; a lost port is retried about once a second | device | env |
+| `A2GSPU_SERIAL_TELEMETRY_OUT=<file>` | the file the telemetry capture appends to | device | env |
 | `A2GSPU_SERIAL_DEBUG=1` | verbose real-card serial/reconnect logging | device | env |
 | `A2GSPU_OUT_DIR=<dir>` | directory prefix applied to rail output filenames. An absolute path (or a Windows drive letter) is honoured verbatim, so a path a caller chose explicitly is never rewritten | meta | env |
 
@@ -716,6 +720,6 @@ any of them is a contract change: say so in the commit, and update the consumer.
 
 > Note on the `A2GSPU_CMD_*` / `A2GSPU_REG_*` / `A2GSPU_STATUS_*` / `A2GSPU_MODE_*` /
 > `A2GSPU_SHR_*` / `A2GSPU_UHR_*` / `A2GSPU_PAL_OFFSET` / `A2GSPU_SCB_OFFSET` /
-> `A2GSPU_IDENT_BYTE` identifiers in `src/devices/a2gspu/`: those are the **a2gspu card
-> protocol** compile-time constants (register offsets, command opcodes, status bits), **not**
+> `A2GSPU_IDENT_BYTE` identifiers in `src/devices/a2gspu/`: those are the **legacy card
+> model's protocol** compile-time constants (register offsets, command opcodes, status bits), **not**
 > env-gated instrumentation rails — they are not listed here.

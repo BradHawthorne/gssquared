@@ -202,7 +202,7 @@ $recordExempt = @{
 # failure this whole script was written about.
 $railSinks = @(
     'g_gtap\.out', 'g_gtap\.zp_f', 'g_gtap\.pages_f', 'g_gtap\.keys_f', 'g_gtap\.disk_f',
-    'g_watch_out', 'g_callstream_out', 'g_snap_out', 'g_liveness_out', 'g_default_out', 'g_iigs_loadmap_out',
+    'g_watch_out', 'g_callstream_out', 'g_snap_out', 'g_liveness_out', 'g_default_out', 'g_iigs_loadmap_out', 'g_a2gspu_cmdlog_out',
     'g_wiz5_diskwr_out', 'g_wiz5_ec19_out', 'g_wiz5_csp6_out'
 )
 $sink = '(?:' + ($railSinks -join '|') + ')(?![A-Za-z0-9_])'

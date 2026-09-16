@@ -188,7 +188,7 @@
  *
  * MOTIVATION — BBS terminal rendering on a DVI card
  * ─────────────────────────────────────────────────
- * A2GSPU is installed in the IIgs video slot and has direct HSTX DVI output.
+ * A2GSPU is installed in the IIgs video slot and has direct digital video output.
  * Running a BBS terminal application on the IIgs (e.g., connecting via
  * Uthernet II + Marinetti or a WiModem232 serial adapter) requires rendering
  * VT100/ANSI escape sequences at interactive speeds. The native IIgs soft-font
@@ -205,9 +205,9 @@
  *     blink period
  *   • A scroll region (top/bottom row pair, defaulting to 0/24)
  *   • A saved-cursor register (VT100 DECSC/DECRC)
- *   • A CP437 8×16 bitmap font (glyphs rendered into the HSTX framebuffer)
+ *   • A CP437 8×16 bitmap font (glyphs rendered into the card's framebuffer)
  *
- * The card renders the terminal into its 640×400 HSTX framebuffer using the
+ * The card renders the terminal into its 640×400 framebuffer using the
  * active UHR palette for color mapping. Character cells are 8×16 pixels
  * (80×25 → 640×400, exactly filling the active area with no letterboxing).
  *

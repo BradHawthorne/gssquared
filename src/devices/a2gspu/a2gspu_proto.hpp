@@ -152,8 +152,8 @@
 //
 // Rationale: the IIgs has limited RAM for a 65816 VT100 parser, and
 // ProDOS / GS/OS serial drivers emit raw bytes with no terminal
-// interpretation.  By delegating parsing to the card (RP2350, 384 MHz,
-// 512 KB SRAM), the IIgs application becomes a simple byte pump:
+// interpretation.  By delegating parsing to the card, which has far more
+// headroom, the IIgs application becomes a simple byte pump:
 //   POKE slot+0, $2E        ; CMD = TERM_WRITE_RAW
 //   POKE slot+1, next_byte  ; DATA_LO = raw byte
 //   POKE slot+2, $00        ; DATA_HI = 0, triggers execution

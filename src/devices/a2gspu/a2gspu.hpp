@@ -2,9 +2,14 @@
  *   A2GSPU - Apple IIgs Graphics and Sound Processing Unit
  *   Emulator device plugin for GSSquared
  *
- *   Two backends sharing a single write observer:
- *   - HW: streams bus writes over USB serial to physical RP2350 card
- *   - EMU: renders UHR modes locally via SDL3 (no hardware needed)
+ *   Two models (A2GSPU_CARD_MODEL):
+ *   - card (the default): a card that watches the slot bus and never drives
+ *     it. The host's one channel is the write-only command register $C0nF
+ *     (a2gspu_cmdreg.hpp); reads float. With a serial port named, the slot-bus
+ *     cycle stream goes to a physical card and its telemetry port is captured.
+ *   - legacy: the earlier register protocol at $C0n0-$C0nF, its local UHR/TERM
+ *     renderer and its video-state serial payload, kept for software written
+ *     against it.
  *
  *   Copyright (c) 2026 Brad Hawthorne
  *   Licensed under GPL-3.0 (matching GSSquared)
@@ -16,6 +21,7 @@
 #include "computer.hpp"
 #include "a2gspu_emu.hpp"
 #include "a2gspu_proto.hpp"
+#include "a2gspu_cmdreg.hpp"
 
 class MMU_IIgs;
 class display_state_t;
@@ -42,15 +48,25 @@ struct a2gspu_data : public SlotData {
     // lifetime of the computer and always holds the current scanner pointer.
     VideoScannerII *video_scanner = nullptr;
 
-    // ── HW backend (USB serial to physical card) ───────────────
-    void *serial_handle = nullptr;    // HANDLE on Windows. Null when disconnected; auto-reconnect
-                                      // tries COM ports every ~1s until a CDC device is found.
+    // ── Model ────────────────────────────────────────────────────
+    bool legacy = false;              // A2GSPU_CARD_MODEL=legacy; the card model otherwise
+    A2gspuCmdReg cmdreg;              // card model: the host's command register at $C0nF
+
+    // ── HW backend (serial to a physical card) ──────────────────
+    void *serial_handle = nullptr;    // HANDLE on Windows. Null when disconnected. Opened only when
+                                      // A2GSPU_SERIAL_PORT or A2GSPU_BUS_STREAM asks for it.
+    std::string serial_name;          // the port the stream is on, once connected
+    void *telemetry_handle = nullptr; // A2GSPU_SERIAL_TELEMETRY: the card's output-only port, read raw
+    FILE *telemetry_file = nullptr;
+    std::string telemetry_path;
+    uint64_t telemetry_bytes = 0;
+    int telemetry_retry = 0;
 
     // ── EMU backend (local UHR rendering) ──────────────────────
     a2gspu_emu_state emu;             // shadows SHR memory via write observer for local rendering
 
-    // ── Mosaic slot I/O protocol ────────────────────────────────
-    a2gspu_proto_state proto;         // register-mapped tile commands from IIgs 6502 code
+    // ── Legacy slot register protocol ───────────────────────────
+    a2gspu_proto_state proto;         // legacy model: register-mapped commands from IIgs code
 
     // ── Key injection buffer (drains a few chars per frame) ────
     std::string key_queue;            // rate-limited to 4 keys/frame to avoid 16-entry ADB overflow

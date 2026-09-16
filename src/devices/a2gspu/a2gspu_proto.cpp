@@ -535,8 +535,8 @@ static void execute_with_data(a2gspu_data *ad, uint16_t data16) {
         //     ANSI escape sequence awareness.
         //   - A 65816 VT100 parser is non-trivial to implement and
         //     consumes scarce IIgs RAM.
-        //   - The RP2350 has a 384 MHz ARM M33 core and 512 KB SRAM;
-        //     parsing ANSI sequences is essentially free on the card.
+        //   - the card has far more processing headroom than the IIgs;
+        //     parsing ANSI sequences is essentially free there.
         //
         // Execution path:
         //   IIgs POKE slot+$02 (DATA_HI)
