@@ -1041,15 +1041,15 @@ inline const char *iigs_tool_name(uint16_t w) {
 // the FIRST time execution reaches that 24-bit PC, then halts the spike — so the
 // checkpoint is captured at the EXACT instruction (before its fetch), not at
 // end-of-frame. The heavy lift (a2gspu_cpu_save + MMU_IIgs::A2GSPU_snapshot, which
-// live in gs2.cpp with the mmu_iigs handle) is invoked through a host-registered
+// live in a2gspu_snapshot.cpp with the mmu_iigs handle) is invoked through a host-registered
 // callback; when SAVE_AT is unset the callback stays null and this is one untaken
-// branch. A2GSPU_RESTORE=<file> is parsed in gs2.cpp as an alias of SNAP_LOAD (load
+// branch. A2GSPU_RESTORE=<file> is parsed in a2gspu_spike.cpp as an alias of SNAP_LOAD (load
 // at start — the existing mechanism this generalizes). Off by default; public-safe.
 // ============================================================================
 inline bool     g_save_at_enabled = false;
 inline uint32_t g_save_at_addr    = 0;
 inline bool     g_save_at_fired   = false;
-inline void   (*g_save_at_fn)(cpu_state *cpu) = nullptr;   // set by the host (gs2.cpp)
+inline void   (*g_save_at_fn)(cpu_state *cpu) = nullptr;   // set by the host (a2gspu_spike.cpp)
 
 // ============================================================================
 // A2GSPU_POKE — mid-run state injection / splice at a PC (the control primitive).
@@ -1059,7 +1059,7 @@ inline void   (*g_save_at_fn)(cpu_state *cpu) = nullptr;   // set by the host (g
 // force-return (RTS pops 2+1, RTL pops 3+1), or skip N bytes (SKIP=<n>). This is
 // NOT faithful hardware behaviour — it is a deliberate splice — so every applied
 // action is logged loudly ("IIGS POKE ...") and it is one-shot + fully gated, so it
-// can never be mistaken for real emulated behaviour. Parsed in gs2.cpp into
+// can never be mistaken for real emulated behaviour. Parsed in a2gspu_spike.cpp into
 // g_poke_actions; applied here. Off by default => one untaken branch.
 // ============================================================================
 struct IigsPokeAction { char kind; uint32_t addr; uint32_t val; };
@@ -1155,7 +1155,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
 
     // A2GSPU_SAVE_AT: snapshot the machine at the EXACT instruction the first time
     // PC reaches the target, then halt (the arbitrary-breakpoint checkpoint). The
-    // save itself runs in the host callback (has the gs2.cpp save fns + mmu handle).
+    // save itself runs in the host callback (has the a2gspu_snapshot.cpp save fns + mmu handle).
     if (g_save_at_enabled && !g_save_at_fired && lpc == g_save_at_addr) {
         g_save_at_fired = true;
         if (g_save_at_fn) g_save_at_fn(cpu);

@@ -3,7 +3,7 @@
 // ============================================================================
 // iigs_shr_layout.hpp - the canonical Super Hi-Res memory layout within Mega II
 // bank $E1. One reference so the diagnostics (and any new SHR code) don't
-// re-derive the offsets by hand. The golden-critical paths (gs2.cpp's $E1 hash
+// re-derive the offsets by hand. The golden-critical paths (the spike's $E1 hash in a2gspu_spike.cpp
 // window + bus_trace.hpp's BUS_TRACE_SHR_LO/HI) deliberately keep their own
 // already-named constants - these MUST equal the values below; this header is
 // the single documented source they agree with.

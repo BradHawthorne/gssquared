@@ -15,6 +15,8 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstdio>
+#include <cstdlib>
 #include "devices.hpp"
 
 #include "devices/keyboard/keyboard.hpp"
@@ -283,12 +285,12 @@ Device_t Devices[NUM_DEVICE_IDS] = {
         NULL
     },
     {
-        DEVICE_ID_A2GSPU,
-        "A2GSPU Video Card",
-        true,
-        0b11111110,  // slots 1-7
+        DEVICE_ID_SECOND_SIGHT,
+        "Second Sight",
+        false,
+        0,
         PLATFLAG_APPLE_IIGS,
-        init_slot_a2gspu,
+        init_secondsight,
         NULL
     },
     {
@@ -301,16 +303,26 @@ Device_t Devices[NUM_DEVICE_IDS] = {
         NULL
     },
     {
-        DEVICE_ID_SECOND_SIGHT,
-        "Second Sight",
-        false,
-        0,
+        DEVICE_ID_A2GSPU,
+        "A2GSPU Video Card",
+        true,
+        0b11111110,  // slots 1-7
         PLATFLAG_APPLE_IIGS,
-        init_secondsight,
+        init_slot_a2gspu,
         NULL
     },
 };
 
 Device_t *get_device(device_id id) {
-    return &Devices[id-1];
+    // Devices[] is positional: entry id-1 must describe device id. The fork reordered
+    // the enum once to line up with upstream; a table that drifts from it would hand a
+    // slot the wrong device with no error at all, so a mismatch stops here, named.
+    Device_t *d = &Devices[id-1];
+    if (d->id != id) {
+        fprintf(stderr, "FATAL: Devices[] out of order: entry %d is device %d (%s), expected device %d -- "
+                        "reorder devices.cpp to match Device_ID.hpp\n", (int)id - 1, (int)d->id,
+                d->name ? d->name : "?", (int)id);
+        abort();
+    }
+    return d;
 }

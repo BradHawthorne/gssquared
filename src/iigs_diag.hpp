@@ -8,7 +8,7 @@
 // for confirming what a program wrote (e.g. a command ring at $E1:$1E00, or a
 // table in the app's load bank) without minting/decoding a trace by hand.
 //
-// gs2.cpp-only (not the CPU core). The CPU-register dump itself lives in
+// control-plane-only (the spike and CTRL units, not the CPU core). The CPU-register dump itself lives in
 // iigs_toolbox.hpp (iigs_cpu_state_dump_regs), shared with the BRK path.
 // ============================================================================
 #include "a2gspu_observe.hpp"   // a2obs_peek (M11)
@@ -242,7 +242,7 @@ inline int iigs_eval_asserts(const char *spec, cpu_state *cpu, const uint8_t *e1
         // number with nothing in the log to say so. Refuse the ambiguity rather
         // than pick a base on the caller's behalf. SCOPED TO peek: on purpose:
         // scb_mode==640, idx6==28800 and gsos_err==0 are decimal by nature --
-        // the fork's own README and HeadlessDiagnostics examples write them
+        // the fork's own README and rail-catalogue examples write them
         // bare -- and a blanket refusal would break every one of them.
         if (!strncmp(name, "peek:", 5) && !expl && ambig) {
             char m[256];

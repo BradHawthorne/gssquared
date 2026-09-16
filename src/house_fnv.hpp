@@ -10,7 +10,7 @@
 // load-bearing). Changing it, "fixing" it toward canonical, or mistyping a
 // single digit silently invalidates EVERY golden with NO compile error. It is
 // defined ONCE here and referenced everywhere so the value cannot drift across
-// the 4 sites (bus_trace.hpp, slot_bus.hpp, mmu_state_trace.hpp, gs2.cpp).
+// the 4 sites (bus_trace.hpp, slot_bus.hpp, mmu_state_trace.hpp, a2gspu_spike.cpp).
 // ============================================================================
 inline constexpr uint64_t HOUSE_FNV_BASIS = 1469598103934665603ULL;
 inline constexpr uint64_t HOUSE_FNV_PRIME = 1099511628211ULL;

@@ -383,6 +383,13 @@ if ($noRow.Count -or $wrongGroup.Count -or $badSynop.Count) {
 # like are sub-commands (`on`, `off`, `status`, `bus`) and are not verbs; the
 # first word of the literal is taken so `strncmp(line,"read ",5)` reads as
 # `read`.
+#
+# WHERE it looks is declared by the source, not by this script: only between
+# `// A2CTRL-DISPATCH-BEGIN` and `// A2CTRL-DISPATCH-END`, in any file under src/.
+# It used to scan two named files, which meant moving the dispatcher out of
+# gs2.cpp would have silently emptied the verb set -- and it also counted the
+# co-pilot allow-list's literals as CTRL verbs. Unbalanced markers, or none at
+# all, fail the gate rather than scanning nothing.
 $manifestFile = Join-Path $srcDir 'a2gspu_manifest.hpp'
 $verbTable = [System.Collections.Generic.HashSet[string]]::new()
 $inVerbs   = $false
@@ -396,16 +403,31 @@ if ($verbTable.Count -lt 2) {
     exit 1
 }
 $dispatched = [System.Collections.Generic.HashSet[string]]::new()
-foreach ($f in @('gs2.cpp', 'a2gspu_ctrl_cmds.hpp')) {
-    $p = Join-Path $srcDir $f
-    if (-not (Test-Path $p)) {
-        Write-Host "railparity: FAIL - CTRL dispatcher source not found at $p" -ForegroundColor Red
-        exit 1
+$regions = 0
+foreach ($file in (Get-ChildItem -Path $srcDir -Recurse -Include *.cpp, *.hpp | Where-Object { $_.FullName -notmatch '[\\/]imgui[\\/]' })) {
+    $inRegion = $false
+    $n = 0
+    foreach ($ln in [IO.File]::ReadAllLines($file.FullName)) {
+        $n++
+        if ($ln -match '//\s*A2CTRL-DISPATCH-BEGIN') {
+            if ($inRegion) { Write-Host "railparity: FAIL - nested A2CTRL-DISPATCH-BEGIN at $($file.Name):$n" -ForegroundColor Red; exit 1 }
+            $inRegion = $true; $regions++; continue
+        }
+        if ($ln -match '//\s*A2CTRL-DISPATCH-END') {
+            if (-not $inRegion) { Write-Host "railparity: FAIL - A2CTRL-DISPATCH-END without BEGIN at $($file.Name):$n" -ForegroundColor Red; exit 1 }
+            $inRegion = $false; continue
+        }
+        if (-not $inRegion) { continue }
+        foreach ($m in [regex]::Matches($ln, 'strn?cmp\s*\(\s*line\s*,\s*"([^"]+)"')) {
+            $w = ($m.Groups[1].Value -split '\s+')[0]
+            if ($w -match '^[a-z][a-z0-9-]*$') { [void]$dispatched.Add($w) }
+        }
     }
-    foreach ($m in [regex]::Matches([IO.File]::ReadAllText($p), 'strn?cmp\s*\(\s*line\s*,\s*"([^"]+)"')) {
-        $w = ($m.Groups[1].Value -split '\s+')[0]
-        if ($w -match '^[a-z][a-z0-9-]*$') { [void]$dispatched.Add($w) }
-    }
+    if ($inRegion) { Write-Host "railparity: FAIL - A2CTRL-DISPATCH-BEGIN never closed in $($file.Name)" -ForegroundColor Red; exit 1 }
+}
+if ($regions -eq 0 -or $dispatched.Count -lt 2) {
+    Write-Host "railparity: FAIL - no A2CTRL-DISPATCH regions found under src/ ($regions regions, $($dispatched.Count) words) -- the verb check would check nothing" -ForegroundColor Red
+    exit 1
 }
 $hidden  = @($dispatched | Where-Object { -not $verbTable.Contains($_) } | Sort-Object)
 $unreach = @($verbTable  | Where-Object { -not $dispatched.Contains($_) } | Sort-Object)

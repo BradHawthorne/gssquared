@@ -464,7 +464,7 @@ inline void wiz5_config_arm(computer_t *computer) {
 
     // --- WIZ5_NO_WRITEBACK: recognized here (mutation-guard flag). Main writes
     // disk FILES back only on an explicit UI save-and-unmount, so the flag's
-    // presence is honored by the WIZ5_WRITEBACK suppression in gs2.cpp; the
+    // presence is honored by the WIZ5_WRITEBACK suppression in a2gspu_spike.cpp; the
     // in-flight per-file write suppression proper lives in the floppy device. ---
     if (getenv("WIZ5_NO_WRITEBACK"))
         printf("WIZ5_NO_WRITEBACK: disk-image files will not be rewritten (mutation guard)\n");

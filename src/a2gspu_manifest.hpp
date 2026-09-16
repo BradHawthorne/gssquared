@@ -323,7 +323,7 @@ inline void write_manifest(FILE *f) {
     // being true once save started writing device blocks: a IIgs snapshot holds
     // adb, ensoniq, vgcint, iwm and pdblock, and this line told a consumer cold
     // that it held none of them. The class letter is now DERIVED per file
-    // (gs2.cpp a2gspu_snap_manifest_text) from Docs/INSTRUMENTATION_SHAPE.md M5's
+    // (a2gspu_snapshot.cpp a2gspu_snap_manifest_text) from Docs/INSTRUMENTATION_SHAPE.md M5's
     // definitions, so the only honest thing to state here is the rule and where
     // the per-file answer lives -- never a letter, which varies by platform and
     // by what the machine had when the save ran.

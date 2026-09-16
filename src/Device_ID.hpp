@@ -28,8 +28,13 @@ typedef enum device_id {
     DEVICE_ID_SCC8530,
     DEVICE_ID_IWM,
     DEVICE_ID_PD_BLOCK3,
-    DEVICE_ID_A2GSPU,
-    DEVICE_ID_UTHERNET2,
     DEVICE_ID_SECOND_SIGHT,
+    // Fork devices after upstream's, in upstream's order where upstream has them:
+    // upstream appends HOST_FST, UTHERNET2, SUPER_SERIAL and VOC after SECOND_SIGHT,
+    // so keeping SECOND_SIGHT in its upstream position and A2GSPU last makes a future
+    // merge add lines instead of reordering them. Devices[] in devices.cpp is
+    // positional (get_device returns Devices[id-1]) and must follow this order.
+    DEVICE_ID_UTHERNET2,
+    DEVICE_ID_A2GSPU,
     NUM_DEVICE_IDS
 } device_id;
