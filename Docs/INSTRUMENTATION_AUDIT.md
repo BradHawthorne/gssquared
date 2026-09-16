@@ -39,7 +39,7 @@ touched.
 | P3.13 snapshot classes documented and expanded | **partial** | every snapshot carries a manifest and the class letter is derived from the blocks written; `adb`, `ensoniq`, `vgcint`, `iwm` and `pdblock` are saved. Scanner state is still out — see `INSTRUMENTATION_SHAPE.md` M5 |
 
 §2's scorecard is likewise 2026-07-31. Two of its stated reasons have since
-gone: "root `INSTRUMENTATION.md` stale" (P0.3) and the D for CTRL↔env parity.
+gone: "root `A2GSPU_INSTRUMENTATION.md` stale" (P0.3) and the D for CTRL↔env parity.
 For the current state read the **Status** paragraph of each of M1–M12 in
 [`INSTRUMENTATION_SHAPE.md`](INSTRUMENTATION_SHAPE.md), which is the document
 that carries the live picture.
@@ -128,7 +128,7 @@ current state.*
 | CTRL ↔ env parity | D | Large env surface; CTRL incomplete; docs lag |
 | Fail-loud instruments | C | Cycle bracket historically lied; soft fails elsewhere |
 | IIe vs IIgs first-class | C | Heavy IIgs bias; a2engine is IIe DHGR |
-| Doc as contract | B- | `A2GSPU_RAILS.md` good; root `INSTRUMENTATION.md` stale |
+| Doc as contract | B- | `A2GSPU_RAILS.md` good; root `A2GSPU_INSTRUMENTATION.md` stale |
 | Composition safety | C | Combinatorial explosion of rails; little schema |
 | Upstream-merge cost | B | Separable, but `gs2.cpp` is a god-file |
 | Agentic latency | C | File poll 20 Hz is OK; giant ack texts / shot BMPs less so |
@@ -390,7 +390,7 @@ Likely true for many observe verbs; less tested for:
 
 1. **Cycles contract** written into RAILS + CTRL help: only in-command deltas are valid; add `cycles` field to every `run`/`step`/`run-until` ack.  
 2. **Visual profile field** mandatory on every image rail ack.  
-3. **Stale doc quarantine:** INSTRUMENTATION.md → “see RAILS”.  
+3. **Stale doc quarantine:** A2GSPU_INSTRUMENTATION.md → “see RAILS”.  
 
 ### P1 — Close agent loops without relaunch
 

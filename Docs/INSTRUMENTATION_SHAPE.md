@@ -311,7 +311,7 @@ switches it. Snapshots get a header and manifest-trailer check only; the other
 
 ### M7 — Symbols by default  (P10) — M
 
-Ship ROM symbol tables for each ROM personality under `resources/symbols/`
+Ship ROM symbol tables for each ROM personality under `assets/symbols/` (copied to `resources/symbols/` in the build)
 and auto-load the matching one; ship a GS/OS 6.0.1 table derived from the
 published source. Every address a rail prints carries `"sym":"NAME+off"` or
 `"sym":null` — explicitly null, so an unnamed address cannot pass for a named
