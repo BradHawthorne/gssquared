@@ -16,6 +16,7 @@
  */
 // Snapshot file I/O -- moved out of gs2.cpp; see gs2_app.hpp.
 #include "gs2_app.hpp"
+#include "devices/diskii/diskii_controller.hpp"   // g_a2gspu_diskii: the Disk II controllers, by slot
 
 
 // ---- A2GSPU warm-boot snapshot: file magic + cpu_state value-field (de)serialize ----
@@ -94,7 +95,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "pdblock", "media", "scanner", "rtc", "serial", "clock" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -149,6 +150,12 @@ static long a2gspu_snap_dev_begin(FILE *f, const char *name, uint32_t version) {
     long at = ftell(f); fwrite(&len, 4, 1, f);
     return at;
 }
+// A u32 length in front of a sub-record, so a reader can step over one it cannot apply.
+static long a2gspu_snap_len_begin(FILE *f) { uint32_t len = 0; long at = ftell(f); fwrite(&len, 4, 1, f); return at; }
+static void a2gspu_snap_len_end(FILE *f, long at) {
+    long end = ftell(f); uint32_t len = (uint32_t)(end - at - 4);
+    fseek(f, at, SEEK_SET); fwrite(&len, 4, 1, f); fseek(f, end, SEEK_SET);
+}
 static void a2gspu_snap_dev_end(FILE *f, long at) {
     long end = ftell(f); uint32_t len = (uint32_t)(end - at - 4);
     fseek(f, at, SEEK_SET); fwrite(&len, 4, 1, f); fseek(f, end, SEEK_SET);
@@ -180,6 +187,34 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
     if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
         long at = a2gspu_snap_dev_begin(f, "iwm", 1); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "iwm" : ",iwm";
+    }
+    // Every Disk II controller, by slot; each entry length-prefixed, so a machine
+    // without a controller in that slot steps over it.
+    int ndiskii = 0;
+    for (int s = 1; s < 8; s++) if (g_a2gspu_diskii[s]) ndiskii++;
+    if (ndiskii) {
+        long at = a2gspu_snap_dev_begin(f, "diskii", 1);
+        uint8_t cnt = (uint8_t)ndiskii; fwrite(&cnt, 1, 1, f);
+        for (int s = 1; s < 8; s++) if (g_a2gspu_diskii[s]) {
+            uint8_t sl = (uint8_t)s; fwrite(&sl, 1, 1, f);
+            long la = a2gspu_snap_len_begin(f); g_a2gspu_diskii[s]->A2GSPU_snapshot(f); a2gspu_snap_len_end(f, la);
+        }
+        a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "diskii" : ",diskii";
+    }
+    // The disks behind the heads: every track of a disk written since it was
+    // mounted, for the IWM's drives and each Disk II's, length-prefixed likewise.
+    if ((g_a2gspu_iwm && g_a2gspu_iwm->iwm) || ndiskii) {
+        long at = a2gspu_snap_dev_begin(f, "media", 1);
+        uint8_t has_iwm = (g_a2gspu_iwm && g_a2gspu_iwm->iwm) ? 1 : 0; fwrite(&has_iwm, 1, 1, f);
+        if (has_iwm) { long la = a2gspu_snap_len_begin(f); iwm_A2GSPU_media_snapshot(g_a2gspu_iwm, f); a2gspu_snap_len_end(f, la); }
+        uint8_t cnt = (uint8_t)ndiskii; fwrite(&cnt, 1, 1, f);
+        for (int s = 1; s < 8; s++) if (g_a2gspu_diskii[s]) {
+            uint8_t sl = (uint8_t)s; fwrite(&sl, 1, 1, f);
+            long la = a2gspu_snap_len_begin(f); g_a2gspu_diskii[s]->A2GSPU_media_snapshot(f); a2gspu_snap_len_end(f, la);
+        }
+        a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "media" : ",media";
     }
     if (pdblock3_A2GSPU_present()) {
         long at = a2gspu_snap_dev_begin(f, "pdblock", 1); pdblock3_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
@@ -226,8 +261,58 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 r = iwm_A2GSPU_restore(g_a2gspu_iwm, f, &mismatch) ? RESTORED : FAILED;
                 if (r == RESTORED && mismatch)
                     a2gspu_warn("A2GSPU SNAP", "iwm: a drive holds a different image than the snapshot's; its head state was left alone "
-                                "(the media is not in the snapshot -- mount what the manifest's run mounted)");
+                                "(mount what the manifest's run mounted)");
             }
+        } else if (!strcmp(nm, "diskii") && ver == 1) {
+            // Each saved controller applies to this machine's controller in the same
+            // slot; one this machine lacks is stepped over and said.
+            int mismatch = 0, absent = 0;
+            uint8_t cnt = 0;
+            bool ok = fread(&cnt, 1, 1, f) == 1;
+            for (int i = 0; ok && i < cnt; i++) {
+                uint8_t sl = 0; uint32_t l = 0;
+                ok = fread(&sl, 1, 1, f) == 1 && fread(&l, 4, 1, f) == 1;
+                if (!ok) break;
+                const long start = ftell(f);
+                if (sl < 8 && g_a2gspu_diskii[sl]) ok = g_a2gspu_diskii[sl]->A2GSPU_restore(f, &mismatch) && ftell(f) == start + (long)l;
+                else { absent++; ok = fseek(f, start + (long)l, SEEK_SET) == 0; }
+            }
+            r = ok ? RESTORED : FAILED;
+            if (r == RESTORED && cnt && absent == cnt) r = ABSENT;   // nothing here to apply it to: skipped= says so
+            if (r == RESTORED && mismatch)
+                a2gspu_warn("A2GSPU SNAP", "diskii: a drive holds a different image than the snapshot's; its head state was left alone "
+                            "(mount what the manifest's run mounted)");
+            if (r == RESTORED && absent)
+                a2gspu_warn("A2GSPU SNAP", "diskii: a saved controller's slot has no Disk II in this machine; that controller was not applied");
+        } else if (!strcmp(nm, "media") && ver == 1) {
+            int mismatch = 0, applied = 0, absent = 0;
+            uint8_t has_iwm = 0; uint32_t l = 0;
+            bool ok = fread(&has_iwm, 1, 1, f) == 1;
+            if (ok && has_iwm) {
+                ok = fread(&l, 4, 1, f) == 1;
+                const long start = ftell(f);
+                if (ok && g_a2gspu_iwm && g_a2gspu_iwm->iwm) ok = iwm_A2GSPU_media_restore(g_a2gspu_iwm, f, &mismatch, &applied) && ftell(f) == start + (long)l;
+                else if (ok) { absent++; ok = fseek(f, start + (long)l, SEEK_SET) == 0; }
+            }
+            uint8_t cnt = 0;
+            ok = ok && fread(&cnt, 1, 1, f) == 1;
+            for (int i = 0; ok && i < cnt; i++) {
+                uint8_t sl = 0;
+                ok = fread(&sl, 1, 1, f) == 1 && fread(&l, 4, 1, f) == 1;
+                if (!ok) break;
+                const long start = ftell(f);
+                if (sl < 8 && g_a2gspu_diskii[sl]) ok = g_a2gspu_diskii[sl]->A2GSPU_media_restore(f, &mismatch, &applied) && ftell(f) == start + (long)l;
+                else { absent++; ok = fseek(f, start + (long)l, SEEK_SET) == 0; }
+            }
+            r = ok ? RESTORED : FAILED;
+            if (r == RESTORED && absent && absent == (int)cnt + (has_iwm ? 1 : 0)) r = ABSENT;
+            if (r == RESTORED && applied)
+                printf("A2GSPU SNAP: media: %d written disk(s) restored track by track\n", applied);
+            if (r == RESTORED && mismatch)
+                a2gspu_warn("A2GSPU SNAP", "media: a written disk's tracks were not applied -- the drive holds a different "
+                            "image, or the same name with a different track layout; that disk reads what its file holds");
+            if (r == RESTORED && absent)
+                a2gspu_warn("A2GSPU SNAP", "media: a saved controller's disks have no controller to go to in this machine");
         } else if (!strcmp(nm, "pdblock") && ver == 1) {
             if (pdblock3_A2GSPU_present()) {
                 int mismatch = 0;

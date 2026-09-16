@@ -355,6 +355,39 @@ public:
         return drives[key.drive].status();
     }
 
+    // ---- A2GSPU snapshot (M5): the addressable latch, the motor and its 555
+    // timer (the time left, re-armed from the restore instant), the data
+    // register and sequencer, the sound bookkeeping, and each drive's head.
+    // The disks themselves are the `media` block.
+    void A2GSPU_snapshot(FILE *f) {
+        fwrite(switches, 1, DISKII_SWITCH_COUNT, f);
+        uint8_t b[4] = { motor_on, data_register, (uint8_t)sequencer_state, (uint8_t)diskii_running_last };
+        fwrite(b, 1, 4, f);
+        int32_t i3[3] = { (int32_t)running_chunknumber, (int32_t)start_track_movement, (int32_t)tracknumber_last };
+        fwrite(i3, 4, 3, f);
+        const uint64_t now = clock->get_c14m();
+        uint64_t left = !mark_cycles_turnoff ? 0 : (mark_cycles_turnoff > now ? mark_cycles_turnoff - now : 1);
+        fwrite(&left, 8, 1, f);
+        for (int d = 0; d < 2; d++) drives[d].A2GSPU_snapshot(f);
+    }
+    bool A2GSPU_restore(FILE *f, int *media_mismatch) {
+        uint8_t sw[DISKII_SWITCH_COUNT]; if (fread(sw, 1, DISKII_SWITCH_COUNT, f) != DISKII_SWITCH_COUNT) return false;
+        uint8_t b[4]; if (fread(b, 1, 4, f) != 4) return false;
+        int32_t i3[3]; if (fread(i3, 4, 3, f) != 3) return false;
+        uint64_t left = 0; if (fread(&left, 8, 1, f) != 1) return false;
+        memcpy(switches, sw, sizeof sw);
+        motor_on = b[0]; data_register = b[1]; sequencer_state = b[2] != 0; diskii_running_last = b[3] != 0;
+        running_chunknumber = i3[0]; start_track_movement = i3[1]; tracknumber_last = i3[2];
+        mark_cycles_turnoff = left ? clock->get_c14m() + left : 0;
+        for (int d = 0; d < 2; d++) if (!drives[d].A2GSPU_restore(f, media_mismatch)) return false;
+        return true;
+    }
+    void A2GSPU_media_snapshot(FILE *f) { for (int d = 0; d < 2; d++) drives[d].A2GSPU_media_snapshot(f); }
+    bool A2GSPU_media_restore(FILE *f, int *mismatch, int *applied) {
+        for (int d = 0; d < 2; d++) if (!drives[d].A2GSPU_media_restore(f, mismatch, applied)) return false;
+        return true;
+    }
+
     DebugFormatter *debug() {
         DebugFormatter *f = new DebugFormatter();
         f->addLine("Drive Select: %d", diskii_select);
@@ -364,3 +397,6 @@ public:
         return f;
     }
 };
+
+// Each Disk II controller by slot, for the snapshot code (cleared at machine shutdown).
+inline DiskII_WOZ_Controller *g_a2gspu_diskii[8] = {};

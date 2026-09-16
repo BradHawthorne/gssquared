@@ -819,6 +819,21 @@ public:
         }
         return true;
     }
+    // The media overlay (the `media` block): each drive's written tracks.
+    void A2GSPU_media_snapshot(FILE *f) {
+        for (int k = 0; k < 2; k++) for (int d = 0; d < 2; d++) {
+            uint8_t present = drives[k][d] ? 1 : 0; fwrite(&present, 1, 1, f);
+            if (drives[k][d]) drives[k][d]->A2GSPU_media_snapshot(f);
+        }
+    }
+    bool A2GSPU_media_restore(FILE *f, int *mismatch, int *applied) {
+        for (int k = 0; k < 2; k++) for (int d = 0; d < 2; d++) {
+            uint8_t present = 0; if (fread(&present, 1, 1, f) != 1) return false;
+            if (present && !drives[k][d]) return false;
+            if (present && !drives[k][d]->A2GSPU_media_restore(f, mismatch, applied)) return false;
+        }
+        return true;
+    }
 };
 
 

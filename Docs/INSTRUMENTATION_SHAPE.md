@@ -18,7 +18,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M2 attribution in summaries | done | — |
 | M3 unhonourable inputs are fatal | done | a few "skipped" paths remain counted warnings by choice |
 | M4 liveness | done | — |
-| M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, scanner (Class B), iwm and pdblock are saved; floppy media and the clock are not |
+| M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, scanner (Class B), iwm, diskii, media and pdblock are saved; the clock, the RTC and serial are not |
 | M6 artifact discipline | done | — |
 | M7 names by default | done | segments loaded later by `LoadSegNum`, and loads that happen before the call tracker runs, are not named |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table; 42 are also armable live (`rail set`) |
@@ -297,6 +297,23 @@ rendered black (the scanner still in text mode) and, once the scanner was
 restored, stretched (the display still choosing the non-SHR frame rectangle).
 Measured against the continuing run: `vid` agrees exactly after restore, and the
 rendered frame differs in 336 pixels of host window chrome instead of everywhere.
+**The media followed (2026-09-16),** with the II family's disk controller. A
+`diskii` block carries each Disk II controller by slot — the addressable latch,
+the motor and the time left on its 555 timer (re-armed from the restore
+instant), the data register and sequencer, and both drives' heads — so a IIe is
+no longer restored with its disk controller at power-on state. A `media` block
+carries, for the IWM's drives and each Disk II's, every track of the WOZ image
+of a disk written since it was mounted (an unwritten disk contributes its name
+only); each controller's part is length-prefixed, so a machine without that
+controller steps over it and says so. A restore applies a disk's tracks only
+when the same image is mounted with the same track map and count, and reports
+either way: `media: N written disk(s) restored track by track`, or a counted
+warning that the disk reads what its file holds. Measured on a IIe and a IIgs,
+each booting DOS 3.3 from a 5.25 disk: `SAVE T`, `CATALOG`, save the machine;
+restore into a session whose copy of the image was never written, clear the
+screen, `CATALOG` again — `T` is listed; the same restore with the disk under
+another name warns and the fresh listing has no `T`. The host file is never
+written from a snapshot, as with `pdblock`.
 The scan position is saved but not applied: it belongs to the clock, which is not
 in the snapshot, and restoring it against another clock's frame boundaries drew
 the picture shifted. Still out: floppy media and the clock. The test the roadmap

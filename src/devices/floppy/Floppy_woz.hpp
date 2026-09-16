@@ -232,6 +232,56 @@ public:
         last_cycle = get_current_time();   // the bit clock restarts now; the position is what it was
         return true;
     }
+    // ---- A2GSPU snapshot (M5): the media overlay. The head block above is the
+    // drive; this is what is on the disk. A disk written since it was mounted
+    // saves every track's bits (the WOZ image as the drive now holds it); an
+    // unwritten one saves only its name. A restore applies the tracks only to the
+    // same image with the same track map and count -- anything else is counted
+    // for the caller to warn about -- so a restored machine reads what the saved
+    // one wrote. The host file is never written from a snapshot.
+public:
+    void A2GSPU_media_snapshot(FILE *f) {
+        const std::string name = (is_mounted && media_d) ? media_d->filename : std::string();
+        uint32_t n = (uint32_t)name.size(); fwrite(&n, 4, 1, f); if (n) fwrite(name.data(), 1, n, f);
+        const uint8_t has = (is_mounted && modified) ? 1 : 0; fwrite(&has, 1, 1, f);
+        if (!has) return;
+        const woz_image_t &img = woz.image();
+        fwrite(img.tmap, 1, 160, f);
+        uint32_t nt = (uint32_t)img.tracks.size(); fwrite(&nt, 4, 1, f);
+        for (const woz_track_t &t : img.tracks) {
+            uint32_t hdr[2] = { t.bit_count, (uint32_t)t.bits.size() }; fwrite(hdr, 4, 2, f);
+            if (hdr[1]) fwrite(t.bits.data(), 1, hdr[1], f);
+        }
+    }
+    bool A2GSPU_media_restore(FILE *f, int *mismatch, int *applied) {
+        uint32_t n = 0; if (fread(&n, 4, 1, f) != 1 || n > 4096) return false;
+        std::string name(n, '\0'); if (n && fread(&name[0], 1, n, f) != n) return false;
+        uint8_t has = 0; if (fread(&has, 1, 1, f) != 1) return false;
+        if (!has) return true;
+        uint8_t tmap[160]; if (fread(tmap, 1, 160, f) != 160) return false;
+        uint32_t nt = 0; if (fread(&nt, 4, 1, f) != 1 || nt > 256) return false;
+        std::vector<woz_track_t> saved(nt);
+        for (woz_track_t &t : saved) {
+            uint32_t hdr[2]; if (fread(hdr, 4, 2, f) != 2 || hdr[1] > (1u << 20)) return false;
+            t.bit_count = hdr[0]; t.bits.resize(hdr[1]);
+            if (hdr[1] && fread(t.bits.data(), 1, hdr[1], f) != hdr[1]) return false;
+        }
+        woz_image_t &img = woz.image();
+        const std::string now = (is_mounted && media_d) ? media_d->filename : std::string();
+        if (now != name || nt != img.tracks.size() || memcmp(tmap, img.tmap, 160) != 0) {
+            if (mismatch) (*mismatch)++;
+            return true;
+        }
+        const uint64_t head = head_position;
+        for (uint32_t i = 0; i < nt; i++) { img.tracks[i].bits = std::move(saved[i].bits); img.tracks[i].bit_count = saved[i].bit_count; }
+        modified = true;
+        cur_track_ptr = nullptr;                 // the track under the head was replaced: take it fresh,
+        update_track_ptr();                      // then keep the head block's angle
+        head_position = head; read_position = head;
+        if (cur_track_ptr && cur_track_ptr->bit_count) { head_position %= cur_track_ptr->bit_count * POSITION_FP_MUL; read_position = head_position; }
+        if (applied) (*applied)++;
+        return true;
+    }
 protected:
     bool a2gspu_restore_apply = true;   // the base decided from the media name; the subclass follows it
 };

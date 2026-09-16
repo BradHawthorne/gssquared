@@ -86,6 +86,8 @@ void init_slot_ndiskII_woz(computer_t *computer, SlotType_t slot) {
     DiskII_WOZ_Controller *dc = new DiskII_WOZ_Controller(
         computer->sound_effect, computer->clock, computer->cpu_event_timer, slot);
     diskII_d->dc = dc;
+    g_a2gspu_diskii[slot & 7] = dc;   // the snapshot code reaches the controller through this
+    computer->register_shutdown_handler([slot]() { g_a2gspu_diskii[slot & 7] = nullptr; return true; });
 
     drive_type_t drive_type;
     if (computer->platform->id >= PLATFORM_APPLE_IIE) {

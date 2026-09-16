@@ -106,6 +106,10 @@ void iwm_A2GSPU_snapshot(iwm_state_t *st, FILE *f) {
     fwrite(r, 1, 3, f);
     st->iwm->A2GSPU_snapshot(f);
 }
+void iwm_A2GSPU_media_snapshot(iwm_state_t *st, FILE *f) { st->iwm->A2GSPU_media_snapshot(f); }
+bool iwm_A2GSPU_media_restore(iwm_state_t *st, FILE *f, int *mismatch, int *applied) {
+    return st->iwm->A2GSPU_media_restore(f, mismatch, applied);
+}
 bool iwm_A2GSPU_restore(iwm_state_t *st, FILE *f, int *media_mismatch) {
     uint8_t r[3];
     if (fread(r, 1, 3, f) != 3) return false;
