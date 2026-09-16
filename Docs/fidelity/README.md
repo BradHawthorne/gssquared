@@ -36,13 +36,13 @@ below records what has been done since.
 | Uthernet II: no interrupts, state machine, silent LISTEN failure, host timing inside register reads | serial_hostio, slot_bus | **Done**: fused card `25c787d2` (a replayable network log is still open) |
 | No snapshot for the new cards | video_cards, serial_hostio, sound_time | **Done**: `u2`, `tclock`, `mousecd`, `voc`, `ssc`, `ssight` (SecondSight GPU mode is unsaveable and says so) |
 | Debug protocol reads actuate I/O (`READMEM`/`FINDMEM`, stop snapshots) | control_plane (U1, U2) | **Done**: `b96f1c3d` (peek by default, explicit `MAIN_BUS`, `*_READABLE`) |
-| SecondSight `ClearScreen`/`ScrollScreen` host heap overrun; `GetVGAReg` stale remainder | video_cards | **Open**: next |
-| ADB `$08` writes past the 96-byte RAM; `$09` underflows the ROM index | input | **Open**: next |
-| IRQ-line recomputation | memory_video | Open |
-| SCC interrupt block, receiver FIFO, host queue drops and shutdown hang | serial_hostio | Open |
-| Host-file safety: `.nib` overwrite, zeroed sectors on export, truncating saves | storage | Open |
+| SecondSight `ClearScreen`/`ScrollScreen` host heap overrun; `GetVGAReg` stale remainder; later upload chunks unchecked | video_cards | **Done**: clipped to the card's 1 MB and reported; whole upload checked; `GetVGAReg` completes (`UPSTREAM_SYNC.md` §15) |
+| ADB `$08` writes past the 96-byte RAM; `$09` underflows the ROM index; repeat tables unclamped | input | **Done**: stage 2 took upstream's bounded `read_uc_memory`/`write_uc_memory` and clamps (the fork's 3-bit response count kept) |
+| IRQ-line recomputation | memory_video | **Done**: `$C023`/`$C041` writes recompute the line; Mega II VBL and quarter-second flags latch only while enabled (§15) |
+| SCC interrupt block (S1-S4, WR0 commands, IUS, software INTACK) | serial_hostio | **Done** (§15). Receiver FIFO, special conditions in the data path, modem lines, host queue drops and the shutdown hang are still open |
+| Host-file safety: `.nib` overwrite, zeroed sectors on export, truncating saves, writeback without `modified` | storage | **Done**: no write unless modified; atomic saves; no lossy export (a `.written.woz` sidecar instead) (§15). Content-hash media identity is still open |
 | Slot bus: `$C02D` gating, per-card `$C800` flip-flop, stream defects, card-driven pins | slot_bus | Open |
-| Sound: host and debugger state gating DOC IRQs; ticking FAKETIME origin | sound_time | Open |
+| Sound: host and debugger state gating DOC IRQs | sound_time | **Done**: the DOC runs on emulated time with or without a host stream, and while stepping (§15). A ticking FAKETIME origin is still open |
 | Control plane: one op registry, one trigger engine, one record stream, hermetic configuration | control_plane | Open |
 | SecondSight: the host setting `ss_text_mode` rewrites card state; handshakes advance on polls, not time | video_cards | Open (recorded in `UPSTREAM_SYNC.md` §12) |
 
@@ -58,3 +58,7 @@ machine (or card) before either tree's behaviour is kept.
 - The 3.5 drive's status polarities (disk-switched, drive-installed, head select).
 - W5100 `MR` bit 0 (IND) after reset on the Uthernet II.
 - SecondSight `SetPaletteEntry` length (fixed to 4 data bytes; confirm against the card's library).
+
+**Also from the study's hardware list:** whether the Mega II VBL and quarter-second flags latch
+while disabled. The fork now follows MAME and KEGS (they do not), from recollection of those
+sources. A hardware test belongs with the other decisions above.

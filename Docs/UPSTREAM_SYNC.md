@@ -763,3 +763,23 @@ per-machine file. `A2GSPU PINS:` names the source: `cwd`/`cwd-absent` or
 **Verified:** three consecutive reproductions of the Rosetta boot (fresh directories, BRAM unpinned)
 gave `2E304BF0147B220A`, distinct 32, 39,710 SHR writes and 84 of 1,269 toolbox returns failing,
 identical to Rosetta's recorded baseline, with identical cycle counts and run hashes.
+
+## 15. Acting on the fidelity study, first pass (2026-09-16)
+
+Each change below was checked against the study's evidence and verified with a scratch test. The
+consumer checks it touched pass: a2engine `5def62b` holds six check updates, each against
+behaviour the port replaced with the hardware's.
+
+| Change | Before | Verified |
+|---|---|---|
+| **Capture files have stable names on automated runs** (`a2gspu_run_kind.hpp`, used by the preferences gate, BRAM and `FileDevice`) | Upstream's file device named each capture `GS2.<port>.<local time>` and closed it after 10 s idle, so the parallel card's `parallel.out` was gone and no harness could find its output | an automated run appends `parallel.out` for a parallel port and `GS2.<port>.out` otherwise, and announces the path; a2engine `pluscheck` 10/10 |
+| **Floppy images are never destroyed** (`util/file_safety.hpp`) | Every `mount` and dialog close was a `SAVE_AND_UNMOUNT`, and `writeback()` ignored `modified`, so reading a disk re-encoded it over its own file. A `.nib` was overwritten with WOZ bytes. Block export zeroed undecodable sectors and wrote them. `woz.save` truncated first. The 5.25 writer reported success as failure. Nibblizers leaked | no write unless modified; atomic temp-flush-rename; no lossy export (the disk goes to `<file>.written.woz`, reported); swap test leaves the image byte- and mtime-identical; a2engine disk write 7/7, format 9/9, write-protect 6/6 |
+| **SecondSight host memory** | `ClearScreen`/`ScrollScreen` wrote guest ranges past the 1 MB VRAM buffer; only an upload's first chunk was range-checked; `GetVGAReg` ran the upload's chunk loop on stale state and never finished after an upload | ranges clipped to VRAM and reported once; the whole upload checked and refused as a unit; `GetVGAReg` completes (upload then GetVGAReg then an out-of-range ClearScreen: completes, reported, emulator alive) |
+| **VGC and Mega II IRQ line** | `$C023` and `$C041` writes forced the line down even with status AND enable holding; Mega II VBL and quarter-second flags latched while disabled | writes recompute the line; the Mega II flags latch only while enabled. The recompute alone moved the GS/OS 300-frame boot (`9BD63D456598B27F`): A/B isolated it to `$C041`, and a trace showed GS/OS's first enable (`$00` to `$08`) meeting flags latched while disabled. With latching gated on the enable, the boot is back on the baseline exactly. A scan-line IRQ pending and enabled survives a `$C023` rewrite |
+| **DOC on emulated time** | `ensoniq_catch_up` returned without advancing when the host had no audio stream, and pinned DOC time while stepping | the chip advances whenever 14M does; host output only needs the stream. a2engine `periphcheck` passes with the audio subsystem unavailable (confirmed in the session log) |
+| **SCC interrupt block** (datasheet interrupt model) | the line was computed from the accessed channel; any RR0/RR3 read consumed Tx IP; B's pending bits lived in A's RR3 while the vector read B's copy; priority Rx > Ext > Tx; the Status Low mask zeroed WR2's other bits; WR0 commands mostly ignored; RR0 reads wrote DCD/CTS | one IP and IUS register in RR3A order (also priority order); Tx IP latched on buffer empty, cleared by a data write or Reset Tx IP; Rx modes 01/10/11 with special conditions; Reset Ext/Status per channel, Enable Int on Next Rx, Error Reset, Reset Highest IUS; software INTACK on RR2 read; INT = MIE and a pending source above every IUS. With nothing pending RR2B = WR2 with code 011 (`$F6` for WR2 `$F0`); a channel B Tx IP survives RR0 reads, codes 000, and holds the line across a channel A access; a2engine `scccheck` 5/5; the GS/OS boot is on baseline |
+
+**Not an emulator bug:** a scratch test wrote `$80` to `$C029` and then stored to `$E1` from the
+CPU. `$80` clears NEWVIDEO bit 0, the bank latch, so `$E1` addressed `$E0`, as the Hardware
+Reference says; the ROM keeps bit 0 set. One real gap: the rail's `E1:` peek ignores the bank
+latch (open, small).
