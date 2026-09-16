@@ -18,12 +18,13 @@ constexpr bool SCDEBUG = 0;
 
 /* Timing Clock fed into SCC by the IIgs */
 constexpr uint64_t SCC_RX_CLOCK = 3'686'400;
+// FORK: the other clock input. Docs/SCC8530_Serial.md's schematic reading has PCLK on CREF,
+// next to 14M and 7M, most likely the 3.579545 MHz colour reference (unverified). Only a
+// program that sets WR14 D1 (BRG source = PCLK) sees it.
+constexpr uint64_t SCC_PCLK_HZ = 3'579'545;
 
 /* Emulator master clock (14M clock) */
 constexpr uint64_t MASTER_CLOCK = 14'318'180;
-
-/* Maximum baud rate to emulate timing for */
-constexpr float MAX_TIMED_BAUD = 115'200.0f;
 
 enum scc_channel_t {
     SCC_CHANNEL_A,
@@ -300,6 +301,41 @@ class Z85C30 {
         bool rx_poll_scheduled[SCC_CHANNEL_COUNT] = { false, false };
         static constexpr uint64_t RX_POLL_14M = MASTER_CLOCK / 1000;   // 1 ms of 14M time
 
+        // FORK: CLOCKS AS WR11 AND WR14 ROUTE THEM (fidelity study, serial step 6). The Rx and
+        // Tx clocks each come from the RTxC pin (the 3.6864 MHz crystal), the TRxC pin (not
+        // known to be driven on a IIgs), the baud-rate generator or the DPLL (taken as the BRG
+        // here). The BRG divides its source (WR14 D1: RTxC or PCLK) by 2*(TC+2) and runs only
+        // while WR14 D0 enables it. A character takes bits * clock mode * divider source
+        // periods, computed in whole 14M ticks -- no float, and no rate above which timing
+        // stopped (115200 baud used to complete instantly). With no clock a character does not
+        // complete: it waits (stalled) until the routing gives it one, as on the chip.
+        bool tx_stalled[SCC_CHANNEL_COUNT] = { false, false };
+        bool rx_stalled[SCC_CHANNEL_COUNT] = { false, false };
+        uint64_t tx_due_14m[SCC_CHANNEL_COUNT] = { 0, 0 };
+        uint64_t rx_due_14m[SCC_CHANNEL_COUNT] = { 0, 0 };
+        bool trxc_reported = false;
+
+        // FORK: EXTERNAL/STATUS AND THE MODEM LINES (serial steps 4 and 6). DCD, CTS and break
+        // come from the attached device (MESSAGE_MODEM_STATUS, MESSAGE_BREAK_ON/OFF; a device
+        // that sends none leaves DCD and CTS asserted, as before). A change of a source WR15
+        // enables (D1 zero count, D3 DCD, D5 CTS, D7 break -- the same positions as RR0) latches
+        // RR0's status bits and, with WR1 D0, raises the Ext/Status IP; Reset Ext/Status
+        // re-opens the latch and interrupts again at once if the lines moved meanwhile. DTR,
+        // RTS and break go to the device when WR5 changes them, and line parameters only when
+        // they change.
+        bool dcd_in[SCC_CHANNEL_COUNT] = { true, true };
+        bool cts_in[SCC_CHANNEL_COUNT] = { true, true };
+        bool break_in[SCC_CHANNEL_COUNT] = { false, false };
+        bool zero_count[SCC_CHANNEL_COUNT] = { false, false };
+        bool ext_latched[SCC_CHANNEL_COUNT] = { false, false };
+        uint8_t ext_latched_bits[SCC_CHANNEL_COUNT] = { 0, 0 };
+        uint8_t ext_last_bits[SCC_CHANNEL_COUNT] = { 0x28, 0x28 };
+        uint8_t line_ctl_last[SCC_CHANNEL_COUNT] = { 0xFF, 0xFF };
+        uint8_t break_out_last[SCC_CHANNEL_COUNT] = { 0xFF, 0xFF };
+        uint64_t line_params_last[SCC_CHANNEL_COUNT] = { ~0ull, ~0ull };
+        uint64_t zc_timer_id[SCC_CHANNEL_COUNT];
+        bool zc_scheduled[SCC_CHANNEL_COUNT] = { false, false };
+
         inline uint8_t get_bits_per_char(scc_channel_t channel, bool is_tx) {
             // Start bit (always 1)
             uint8_t bits = 1;
@@ -329,27 +365,151 @@ class Z85C30 {
             return bits;
         }
 
-        inline uint64_t get_cycles_per_char(scc_channel_t channel, bool is_tx) {
-            if (baud_rate[channel] <= 0.0f || baud_rate[channel] > MAX_TIMED_BAUD) {
-                return 0; // No timing for invalid or very high baud rates
+        // FORK: the clock for one direction: its source frequency and the divider in front of
+        // the clock mode. False when nothing clocks it (TRxC, or a BRG that is not enabled).
+        inline bool clock_source(scc_channel_t channel, bool is_tx, uint64_t &hz, uint64_t &div) {
+            const auto &r = registers[channel];
+            const uint8_t sel = is_tx ? r.r11_tx_clock : r.r11_rx_clock;
+            div = 1;
+            switch (sel) {
+                case 0b00: hz = SCC_RX_CLOCK; return true;             // RTxC pin: the crystal
+                case 0b01:                                               // TRxC pin
+                    if (!trxc_reported) {
+                        fprintf(stderr, "SCC: a channel clocks from the TRxC pin, which nothing drives here; its characters wait\n");
+                        trxc_reported = true;
+                    }
+                    hz = 0; return false;
+                default:                                                 // BRG output (and the DPLL, taken as the BRG)
+                    if (!r.r14_br_gen_enable) { hz = 0; return false; }
+                    hz = r.r14_br_gen_source ? SCC_PCLK_HZ : SCC_RX_CLOCK;
+                    div = 2ull * ((uint64_t)r.r12_time_constant + 2ull);
+                    return true;
             }
+        }
 
-            uint8_t bits = get_bits_per_char(channel, is_tx);
-            float chars_per_second = baud_rate[channel] / (float)bits;
-            uint64_t cycles = (uint64_t)(MASTER_CLOCK / chars_per_second);
-
-            return cycles;
+        // FORK: 14M ticks for one character, or false when the direction has no clock.
+        inline bool char_ticks(scc_channel_t channel, bool is_tx, uint64_t &ticks) {
+            uint64_t hz = 0, div = 1;
+            if (!clock_source(channel, is_tx, hz, div) || hz == 0) return false;
+            const uint64_t bits = get_bits_per_char(channel, is_tx);
+            const uint64_t mode = clock_mode_table[registers[channel].r4_clock_mode];
+            // MASTER_CLOCK * bits * mode * div fits comfortably: 14.3e6 * 12 * 64 * 131074 < 2^64
+            ticks = (MASTER_CLOCK * bits * mode * div) / hz;
+            if (ticks == 0) ticks = 1;
+            return true;
         }
 
         inline void update_timing_sources(scc_channel_t channel) {
-            uint16_t time_constant = registers[channel].r12_time_constant;
             uint16_t clock_mode_index = registers[channel].r4_clock_mode;
             uint16_t new_mode = clock_mode_table[clock_mode_index];
             clock_mode[channel] = new_mode;
-            float baud_rate = (float)SCC_RX_CLOCK / (2.0f * (float)new_mode * ((float)time_constant + 2.0f));
-            this->baud_rate[channel] = baud_rate;
-            if (SCDEBUG) printf("SCC: Ch %d: Clock Mode: %d, Time Constant: %d, Baud Rate: %08.2f\n", channel, new_mode, time_constant, baud_rate);
+            uint64_t hz = 0, div = 1;
+            const bool clocked = clock_source(channel, true, hz, div);
+            this->baud_rate[channel] = (clocked && hz) ? (float)((double)hz / ((double)new_mode * (double)div)) : 0.0f;
+            if (SCDEBUG) printf("SCC: Ch %d: Clock Mode: %d, Baud Rate: %08.2f\n", channel, new_mode, baud_rate[channel]);
             push_line_params(channel);
+            // A character that had no clock starts its time now that it may have one.
+            if (registers[channel].tx_in_progress && tx_stalled[channel]) schedule_tx_complete(channel);
+            if (registers[channel].rx_in_progress && rx_stalled[channel]) schedule_rx_complete(channel);
+            zc_arm(channel);
+        }
+
+        void schedule_tx_complete(scc_channel_t channel) {
+            uint64_t ticks = 0;
+            if (!event_timer || !clock) { tx_stalled[channel] = false; tx_complete(channel); return; }
+            if (!char_ticks(channel, true, ticks)) { tx_stalled[channel] = true; return; }
+            tx_stalled[channel] = false;
+            tx_due_14m[channel] = clock->get_c14m() + ticks;
+            event_timer->scheduleEvent(tx_due_14m[channel], tx_complete_callback, tx_timer_id[channel], this);
+        }
+
+        void schedule_rx_complete(scc_channel_t channel) {
+            uint64_t ticks = 0;
+            if (!event_timer || !clock) { rx_stalled[channel] = false; rx_complete(channel); return; }
+            if (!char_ticks(channel, false, ticks)) { rx_stalled[channel] = true; return; }
+            rx_stalled[channel] = false;
+            rx_due_14m[channel] = clock->get_c14m() + ticks;
+            event_timer->scheduleEvent(rx_due_14m[channel], rx_complete_callback, rx_timer_id[channel], this);
+        }
+
+        // ---- External/Status -------------------------------------------------------
+        inline uint8_t ext_live_bits(scc_channel_t channel) const {
+            return (uint8_t)((zero_count[channel] ? 0x02 : 0) | (dcd_in[channel] ? 0x08 : 0) |
+                             (cts_in[channel] ? 0x20 : 0) | (break_in[channel] ? 0x80 : 0));
+        }
+        inline uint8_t ext_ie_mask(scc_channel_t channel) const {
+            return (uint8_t)(registers[channel].w_regs[WR15] & 0xAA);
+        }
+        // A source may have changed: latch and interrupt if an enabled one did.
+        void ext_update(scc_channel_t channel) {
+            const uint8_t live = ext_live_bits(channel);
+            if (!ext_latched[channel]) {
+                if ((live ^ ext_last_bits[channel]) & ext_ie_mask(channel)) {
+                    ext_latched[channel] = true;
+                    ext_latched_bits[channel] = live;
+                    if (registers[channel].r1_ext_int_enable) ext_ip_latch[channel] = true;
+                }
+                ext_last_bits[channel] = live;
+            }
+            // Auto enables: CTS gates the transmitter; a character waiting for it may now go.
+            if (registers[channel].r3_auto_enables && cts_in[channel] && !registers[channel].tx_in_progress &&
+                !registers[channel].r0_tx_buffer_empty) tx_load_shift(channel);
+            update_interrupts(channel);
+        }
+        void ext_reset(scc_channel_t channel) {
+            ext_ip_latch[channel] = false;
+            const bool was = ext_latched[channel];
+            const uint8_t held = ext_latched_bits[channel];
+            ext_latched[channel] = false;
+            const uint8_t live = ext_live_bits(channel);
+            if (was && ((live ^ held) & ext_ie_mask(channel))) {   // moved while latched: interrupt again
+                ext_latched[channel] = true;
+                ext_latched_bits[channel] = live;
+                if (registers[channel].r1_ext_int_enable) ext_ip_latch[channel] = true;
+            }
+            ext_last_bits[channel] = live;
+        }
+
+        // ---- zero count: an Ext/Status source at the BRG's count-zero rate, armed only while
+        // WR15 enables it and the BRG runs (it would otherwise be tens of thousands of events a
+        // second that nothing asked for).
+        void zc_arm(scc_channel_t channel) {
+            const auto &r = registers[channel];
+            if (!event_timer || !clock || zc_scheduled[channel]) return;
+            if (!(r.w_regs[WR15] & 0x02) || !r.r14_br_gen_enable) return;
+            const uint64_t hz = r.r14_br_gen_source ? SCC_PCLK_HZ : SCC_RX_CLOCK;
+            uint64_t period = (MASTER_CLOCK * ((uint64_t)r.r12_time_constant + 2ull)) / hz;
+            if (period == 0) period = 1;
+            zc_scheduled[channel] = true;
+            event_timer->scheduleEvent(clock->get_c14m() + period, zc_callback, zc_timer_id[channel], this);
+        }
+        void zc_tick(scc_channel_t channel) {
+            zc_scheduled[channel] = false;
+            zero_count[channel] = true;       // the counter is at zero for this instant
+            ext_update(channel);
+            zero_count[channel] = false;
+            ext_last_bits[channel] = ext_latched[channel] ? ext_last_bits[channel] : ext_live_bits(channel);
+            zc_arm(channel);
+        }
+        static void zc_callback(uint64_t instanceID, void *userData) {
+            Z85C30 *scc = static_cast<Z85C30 *>(userData);
+            if (instanceID == scc->zc_timer_id[SCC_CHANNEL_A]) scc->zc_tick(SCC_CHANNEL_A);
+            else if (instanceID == scc->zc_timer_id[SCC_CHANNEL_B]) scc->zc_tick(SCC_CHANNEL_B);
+        }
+
+        // ---- lines out ----------------------------------------------------------------
+        void lines_out_update(scc_channel_t channel, bool force = false) {
+            if (serial_devices[channel] == nullptr) return;
+            const auto &r = registers[channel];
+            const uint8_t ctl = (uint8_t)((r.r5_dtr ? 1 : 0) | (r.r5_rts ? 2 : 0));
+            if (force || ctl != line_ctl_last[channel]) {
+                if (serial_devices[channel]->q_host.send(SerialMessage{MESSAGE_MODEM_CTL, ctl})) line_ctl_last[channel] = ctl;
+            }
+            const uint8_t brk = r.r5_send_break ? 1 : 0;
+            if (force || brk != break_out_last[channel]) {
+                if (serial_devices[channel]->q_host.send(SerialMessage{brk ? MESSAGE_BREAK_ON : MESSAGE_BREAK_OFF, 0}))
+                    break_out_last[channel] = brk;
+            }
         }
 
         inline void push_line_params(scc_channel_t channel) {
@@ -381,8 +541,10 @@ class Z85C30 {
                 default:   line.stop_bits = 1; break;
             }
 
-            serial_devices[channel]->q_host.send(
-                SerialMessage{MESSAGE_LINE, host_serial_pack_line(line)});
+            // FORK: only when something changed (every WR3/WR5 write used to re-send it).
+            const uint64_t packed = host_serial_pack_line(line);
+            if (packed == line_params_last[channel]) return;
+            if (serial_devices[channel]->q_host.send(SerialMessage{MESSAGE_LINE, packed})) line_params_last[channel] = packed;
         }
 
         static inline uint8_t ip_shift(scc_channel_t channel) { return channel == SCC_CHANNEL_A ? 3 : 0; }
@@ -475,7 +637,7 @@ class Z85C30 {
                 // TODO: need to process the various commands here. (resetting interrupts, etc.)
                 switch (registers[channel].r0_cmd) {
                     case 0b001: new_register += 8; break;                          // point high
-                    case 0b010: ext_ip_latch[channel] = false; break;              // reset Ext/Status interrupts (this channel)
+                    case 0b010: ext_reset(channel); break;                         // reset Ext/Status interrupts (this channel)
                     case 0b011: break;                                             // send abort (SDLC)
                     case 0b100: rx_first_armed[channel] = true; break;             // enable int on next Rx character
                     case 0b101: tx_ip_latch[channel] = false; break;               // reset Tx int pending
@@ -539,6 +701,10 @@ class Z85C30 {
             print_write_register(channel, WR5, data);
             registers[channel].w_regs[WR5] = data;
             push_line_params(channel);
+            lines_out_update(channel);   // FORK: DTR, RTS and break reach the device
+            // FORK: a character waiting in the buffer starts once the transmitter is enabled.
+            if (registers[channel].r5_tx_enable && !registers[channel].tx_in_progress &&
+                !registers[channel].r0_tx_buffer_empty) tx_load_shift(channel);
         }
 
         inline void write_register_6(scc_channel_t channel, uint8_t data) {
@@ -592,10 +758,13 @@ class Z85C30 {
         inline void write_register_14(scc_channel_t channel, uint8_t data) {
             print_write_register(channel, WR14, data);
             registers[channel].w_regs[WR14] = data;
+            update_timing_sources(channel);   // FORK: WR14 enables the BRG and picks its source
         }
         inline void write_register_15(scc_channel_t channel, uint8_t data) {
             print_write_register(channel, WR15, data);
             registers[channel].w_regs[WR15] = data;
+            ext_last_bits[channel] = ext_live_bits(channel);   // FORK: enabling a source is not a change of it
+            zc_arm(channel);
         }
 
         /* Reads */
@@ -604,7 +773,10 @@ class Z85C30 {
             //registers[channel].r0_tx_buffer_empty = 1; // duh, don't override this.
             // FORK: a read no longer writes DCD and CTS; they are set at construction and
             // left alone (external pins, not modelled yet -- the study's step 4).
-            uint8_t retval = registers[channel].r_reg_0;
+            // FORK: D1/D3/D5/D7 are the Ext/Status sources -- as latched when an enabled one
+            // changed, otherwise live; D0, D2, D4 and D6 are the chip's own.
+            const uint8_t ext = ext_latched[channel] ? ext_latched_bits[channel] : ext_live_bits(channel);
+            uint8_t retval = (uint8_t)((registers[channel].r_reg_0 & 0x55) | (ext & 0xAA));
             print_read_register(channel, RR0, retval);
             return retval; // TODO: fix. for now fake CTS=1, DCD=1, Tx Buffer Empty=1
         }
@@ -676,6 +848,8 @@ class Z85C30 {
             rx_timer_id[SCC_CHANNEL_B] = base_instance_id + 3;
             rx_poll_id[SCC_CHANNEL_A] = base_instance_id + 4;
             rx_poll_id[SCC_CHANNEL_B] = base_instance_id + 5;
+            zc_timer_id[SCC_CHANNEL_A] = base_instance_id + 6;
+            zc_timer_id[SCC_CHANNEL_B] = base_instance_id + 7;
 
             // clear the data structures on boot.
             memset(reg_select, 0, sizeof(reg_select));
@@ -713,6 +887,10 @@ class Z85C30 {
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
             rx_fifo[channel].count = 0;   // FORK: RR0 D0 resets to 0 -- nothing is available
+            tx_stalled[channel] = false; rx_stalled[channel] = false;   // FORK: clocks and Ext/Status
+            ext_latched[channel] = false; zero_count[channel] = false;
+            if (event_timer) event_timer->cancelEvents(zc_timer_id[channel]);
+            zc_scheduled[channel] = false;
             set_bits_by_mask(registers[channel].w_regs[WR0], 0b1111'1111, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR1], 0b1101'1011, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR3], 0b0000'0001, 0b0000'0000);
@@ -750,6 +928,10 @@ class Z85C30 {
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
             rx_fifo[channel].count = 0;   // FORK: RR0 D0 resets to 0 -- nothing is available
+            tx_stalled[channel] = false; rx_stalled[channel] = false;   // FORK: clocks and Ext/Status
+            ext_latched[channel] = false; zero_count[channel] = false;
+            if (event_timer) event_timer->cancelEvents(zc_timer_id[channel]);
+            zc_scheduled[channel] = false;
             set_bits_by_mask(registers[channel].w_regs[WR0], 0b1111'1111, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR1], 0b1101'1011, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR3], 0b0000'0001, 0b0000'0000);
@@ -848,20 +1030,14 @@ class Z85C30 {
         // (when enabled) and the guest may load the next character while this one is sent.
         void tx_load_shift(scc_channel_t channel) {
             auto &r = registers[channel];
+            // FORK: with auto enables (WR3 D5) CTS is the transmitter enable; the character
+            // waits in the buffer until CTS asserts (ext_update starts it).
+            if (r.r3_auto_enables && !cts_in[channel]) return;
             tx_shift[channel] = r.char_tx;
             r.r0_tx_buffer_empty = true;
             r.tx_in_progress = true;
             if (r.r1_tx_int_enable) tx_ip_latch[channel] = true;
-
-            uint64_t cycles_per_char = get_cycles_per_char(channel, true);
-            if (cycles_per_char > 0 && event_timer && clock) {
-                event_timer->scheduleEvent(clock->get_c14m() + cycles_per_char, tx_complete_callback, tx_timer_id[channel], this);
-                if (SCDEBUG) printf("SCC: Ch %c TX scheduled for %llu cycles (baud: %.2f)\n",
-                    ch_name(channel), (unsigned long long)cycles_per_char, baud_rate[channel]);
-            } else {
-                // High baud rate or no timer - complete immediately
-                tx_complete(channel);
-            }
+            schedule_tx_complete(channel);
         }
 
         uint8_t readCmd(scc_channel_t channel) {
@@ -899,19 +1075,34 @@ class Z85C30 {
 
         // FORK: start receiving the next host byte if the receive shift register is idle.
         // Not in local loopback: RxD is disconnected from the pin there, and the host's
-        // bytes wait instead of landing in the FIFO beside the looped-back ones. Untimed
-        // (no event timer, or a rate above MAX_TIMED_BAUD) a byte waits for FIFO room, since
-        // nothing paces it.
+        // bytes wait instead of landing in the FIFO beside the looped-back ones. With no event
+        // timer (nothing paces the receiver) a byte waits for FIFO room.
         void rx_try_start(scc_channel_t channel) {
             if (serial_devices[channel] == nullptr) return;
             if (registers[channel].rx_in_progress || registers[channel].r14_local_loopback) return;
-            const bool timed = get_cycles_per_char(channel, false) > 0 && event_timer && clock;
+            const bool timed = event_timer && clock;
             if (!timed && rx_fifo[channel].count >= 3) return;
-            SerialMessage msg = serial_devices[channel]->q_dev.get();
-            if (msg.type == MESSAGE_DATA) {
-                schedule_rx_char(channel, (uint8_t)msg.data);
-            } else if (msg.type != MESSAGE_NONE && SCDEBUG) {
-                printf("SCC: READ %c: got unexpected message type: %d\n", ch_name(channel), msg.type);
+            // FORK: line changes from the device apply in order with its bytes; a data byte
+            // starts a character and ends the look.
+            for (;;) {
+                SerialMessage msg = serial_devices[channel]->q_dev.get();
+                if (msg.type == MESSAGE_NONE) return;
+                if (msg.type == MESSAGE_DATA) { schedule_rx_char(channel, (uint8_t)msg.data); return; }
+                if (msg.type == MESSAGE_MODEM_STATUS) {
+                    dcd_in[channel] = (msg.data & 1) != 0;
+                    cts_in[channel] = (msg.data & 2) != 0;
+                    ext_update(channel);
+                } else if (msg.type == MESSAGE_BREAK_ON || msg.type == MESSAGE_BREAK_OFF) {
+                    const bool on = msg.type == MESSAGE_BREAK_ON;
+                    if (break_in[channel] && !on && registers[channel].r3_rx_enable) {
+                        // A break ends with a single null character in the receiver.
+                        rx_push(channel, 0x00);
+                    }
+                    break_in[channel] = on;
+                    ext_update(channel);
+                } else if (SCDEBUG) {
+                    printf("SCC: READ %c: got unexpected message type: %d\n", ch_name(channel), msg.type);
+                }
             }
         }
 
@@ -973,7 +1164,12 @@ class Z85C30 {
 
         void set_device_channel(scc_channel_t channel, SerialDevice *device) {
             serial_devices[channel] = device;
+            line_params_last[channel] = ~0ull;
             push_line_params(channel);
+            lines_out_update(channel, true);   // FORK: the new device learns DTR, RTS and break
+            // FORK: a new device starts with DCD and CTS asserted until it reports otherwise.
+            dcd_in[channel] = true; cts_in[channel] = true; break_in[channel] = false;
+            ext_update(channel);
             rx_poll_arm(channel);   // FORK: the receiver takes host bytes without a guest access
         }
 
@@ -996,6 +1192,14 @@ class Z85C30 {
             df->addLine("r_reg_3 A: %02X  B: 00", registers[SCC_CHANNEL_A].r_reg_3) ;
             df->addLine("r_reg_10 A: %02X  B: %02X", registers[SCC_CHANNEL_A].r_reg_10, registers[SCC_CHANNEL_B].r_reg_10);
             df->addLine("Baud Rate A: %08.2f  B: %08.2f", baud_rate[SCC_CHANNEL_A], baud_rate[SCC_CHANNEL_B]);
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                const scc_channel_t ch = (scc_channel_t)c;
+                df->addLine("%c lines in: DCD %d CTS %d break %d | out: DTR %d RTS %d break %d | ext %s %02X | Tx %s Rx %s",
+                    ch_name(c), dcd_in[c], cts_in[c], break_in[c], registers[c].r5_dtr, registers[c].r5_rts,
+                    registers[c].r5_send_break, ext_latched[c] ? "latched" : "live",
+                    ext_latched[c] ? ext_latched_bits[c] : ext_live_bits(ch),
+                    tx_stalled[c] ? "STALLED(no clock)" : "clocked", rx_stalled[c] ? "STALLED(no clock)" : "clocked");
+            }
             for (int i = 0; i < 16; i++) {
                 df->addLine("WReg[%2d]   A: %02X  B: %02X", i, registers[SCC_CHANNEL_A].w_regs[i], registers[SCC_CHANNEL_B].w_regs[i]);
             }
@@ -1050,7 +1254,8 @@ class Z85C30 {
         // Schedule reception of a character
         void schedule_rx_char(scc_channel_t channel, uint8_t data) {
             // Check if RX is enabled
-            if (!registers[channel].r3_rx_enable) {
+            if (!registers[channel].r3_rx_enable || (registers[channel].r3_auto_enables && !dcd_in[channel])) {
+                // FORK: with auto enables (WR3 D5) DCD is the receiver enable.
                 if (SCDEBUG) printf("SCC: Ch %c RX disabled, dropping char %02X\n", ch_name(channel), data);
                 return;
             }
@@ -1062,19 +1267,7 @@ class Z85C30 {
             registers[channel].char_rx = data;
             registers[channel].rx_in_progress = true;
 
-            uint64_t cycles_per_char = get_cycles_per_char(channel, false);
-
-            if (cycles_per_char > 0 && event_timer && clock) {
-                uint64_t trigger_cycle = clock->get_c14m() + cycles_per_char;
-                event_timer->scheduleEvent(trigger_cycle, rx_complete_callback, rx_timer_id[channel], this);
-
-                if (SCDEBUG) printf("SCC: Ch %c RX scheduled for %llu cycles\n",
-                    ch_name(channel), (unsigned long long)cycles_per_char);
-            } else {
-                // High baud rate or no timer - complete immediately
-                if (SCDEBUG) printf("SCC: Ch %c RX completing immediately\n", ch_name(channel));
-                rx_complete(channel);
-            }
+            schedule_rx_complete(channel);   // FORK: clocked as WR11/WR14 route it (or stalled)
         }
 
         // Static callback wrappers for EventTimer

@@ -239,6 +239,20 @@ class ModemDevice : public SerialDevice {
         // (the caller then answers NO CARRIER). Other messages are not needed mid-dial.
         bool shutdown_pending = false;
 
+        // FORK: THE MODEM LINES (fidelity study, serial step 4). Carrier (DCD) is reported to
+        // the port whenever it changes -- asserted while a connection is up, in data mode or
+        // escaped to command mode -- with CTS always asserted. A DTR drop while connected hangs
+        // up and answers NO CARRIER, the usual &D2 behaviour ProTERM and GS/OS drivers rely on.
+        int last_dcd = -1;
+        bool last_dtr = false;
+        bool dtr_seen = false;
+
+        void report_lines() {
+            const int dcd = socket ? 1 : 0;
+            if (dcd == last_dcd) return;
+            if (q_dev.try_send(SerialMessage{MESSAGE_MODEM_STATUS, (uint64_t)(dcd | 2)})) last_dcd = dcd;
+        }
+
         bool dial_aborted() {
             while (!q_host.is_empty()) {
                 SerialMessage msg = q_host.get();
@@ -437,6 +451,7 @@ class ModemDevice : public SerialDevice {
         void device_loop() override {
             while (true) {
                 SDL_Delay(10); // Check every 10ms for better responsiveness
+                report_lines();   // FORK: DCD follows the connection
                 
                 // Check for incoming TCP data if we're online
                 if (state == STATE_ONLINE) {
@@ -532,6 +547,18 @@ class ModemDevice : public SerialDevice {
                             break;
                         }
                         
+                        case MESSAGE_MODEM_CTL: {
+                            const bool dtr = (msg.data & 1) != 0;
+                            if (dtr_seen && last_dtr && !dtr && socket) {
+                                printf("ModemDevice: DTR dropped -- hanging up\n");
+                                hangup();
+                                send_response("\r\nNO CARRIER\r\n");
+                            }
+                            last_dtr = dtr;
+                            dtr_seen = true;
+                            break;
+                        }
+
                         default:
                             break;
                     }
