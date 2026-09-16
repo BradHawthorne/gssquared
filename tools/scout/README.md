@@ -20,7 +20,7 @@ to frame 336). scout makes that repeatable.
 
 ```powershell
 # AUTO-spike: force past the current stall to the next on-path milestone, name the next wall
-& tools/scout/scout.ps1 -Img .../owned_boot.po -Frames 300
+& tools/scout/scout.ps1 -Img <boot.po> -Kernel <kernel dir> -Frames 300
 
 # An explicit golden-bytes splice (the named write-24 $E06014 case), fired on the Nth PC hit
 & tools/scout/scout.ps1 -Splice "FF0C64:ME119A0=D0;ME119A1=19;ME119A2=E1" -Nth 2 -Label "write-24 record-addr"
@@ -83,7 +83,7 @@ milestones 10/12  distinct 25  hash CF6F1315...
 scout's `Invoke-ScoutBoot` is the **G3 run-until pattern** (a hard frame cap **and** a
 wall-clock `Stop-Process` watchdog — the 371-CPU-sec wedge can't recur), plus the wall-PC
 extraction the raw harness doesn't surface. It shares `run_until.ps1`'s env hygiene (clears
-every arming/trace var so nothing leaks across runs) and the G5 oracle-env pin.
+every `A2GSPU_*`, `MEMVU_*` and `WIZ5_*` variable, by prefix, so nothing leaks across runs) and the G5 oracle-env pin.
 
 ## `A2GSPU_POKE_NTH` (the occurrence-targeting primitive)
 
@@ -114,5 +114,9 @@ scout_sym.py     wall symbolizer + classifier (resolve <pc> | classify < telemet
 README.md        this file
 ```
 
-Relies on `m0/oracle_env.ps1` (G5 manifest pin), `m0/_kernel/kernel.sym.dbg` +
-`kernel.milestones.txt` (symbolization). Not committed (Brad-gated).
+Inputs: `-Img` (or `GDIFF_IMG`), `-Kernel` (or `GDIFF_KERNEL`: the directory holding
+`kernel.sym.dbg` and `kernel.milestones.txt`), `-Manifest` (or `GDIFF_ORACLE_ENV`: a script
+defining `Set-OracleEnv`, optional), `-Gss` (default: this repo's build via
+`tools/a2rail/toolpin.ps1`). A missing image, kernel directory, emulator or named manifest is
+exit 2 with the path named, not a scout of nothing. `scout_sym.py` takes `--sym`/`--milestones`
+or reads `GDIFF_KERNEL`.

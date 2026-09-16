@@ -119,7 +119,7 @@ def t_overlay_synth():
 
 # --------------------------------------------------------------------------
 def t_watchspec():
-    print("watchspec  (the 'WATCH didn't fire' bare-24-bit trap + probe_peek $EE liar)")
+    print("watchspec  (the 'WATCH didn't fire' bare-24-bit trap + soft-switch addresses)")
     ok, res = watchspec.validate_watch_spec("E119A0")
     bare = any("BARE-24-BIT" in w for r in res for w in r["warnings"])
     check("watchspec: bare 'E119A0' REJECTED as the trap", (not ok) and bare)
@@ -128,12 +128,22 @@ def t_watchspec():
     ok3, res3 = watchspec.validate_watch_spec("E1:19A3-19A0")
     inv = any("inverted" in w for r in res3 for w in r["warnings"])
     check("watchspec: inverted 'E1:19A3-19A0' warned", (not ok3) and inv)
-    check("watchspec: probe_suspect bank $00 $EE = liar", watchspec.probe_suspect(0x00BA00, 0xEE))
-    check("watchspec: probe_suspect bank $01 $EE = liar", watchspec.probe_suspect(0x01D000, 0xEE))
-    check("watchspec: probe_suspect bank $E1 $EE = NOT a bank0/1 liar",
-          not watchspec.probe_suspect(0xE11858, 0xEE))
-    check("watchspec: probe_suspect bank $00 non-$EE = fine",
-          not watchspec.probe_suspect(0x00BA00, 0x33))
+    check("watchspec: $EE in bank $00 RAM is data, not a liar", not watchspec.probe_suspect(0x00BA00, 0xEE))
+    check("watchspec: $EE in bank $01 LC space is data, not a liar", not watchspec.probe_suspect(0x01D000, 0xEE))
+    check("watchspec: bank $00 $C030 is a soft switch", watchspec.probe_suspect(0x00C030, 0x00))
+    check("watchspec: bank $E1 $C03D is a soft switch", watchspec.probe_suspect(0xE1C03D, 0x5A))
+    check("watchspec: bank $02 $C030 is plain RAM", not watchspec.probe_suspect(0x02C030, 0x00))
+    check("watchspec: bank $00 $C100 is past the switch page", not watchspec.probe_suspect(0x00C100, 0xEE))
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".ndjson", delete=False) as tf:
+        tf.write('{"event":"watch.write","pc":1,"addr":49200,"data":0}\n')
+        tf.write('{"event":"watch.write","pc":1,"addr":47616,"data":238}\n')
+        tfn = tf.name
+    n, sus = watchspec.probe_lint_ndjson(tfn)
+    os.remove(tfn)
+    check("watchspec: lint reads record-contract watch.* events", n == 2, f"n={n}")
+    check("watchspec: lint flags the $C030 event only", len(sus) == 1 and int(sus[0]["addr"]) == 0xC030,
+          f"suspects={len(sus)}")
 
 
 # --------------------------------------------------------------------------
@@ -176,9 +186,9 @@ def t_bearings():
     check("bearings: higher-trust segdiff marked trusted", v["trusted"] == "segdiff",
           f"trusted={v['trusted']}")
     vp = bearings.bearings_split("value at $00BA00",
-        [dict(sensor="itrace", value="$33"), dict(sensor="probe_peek", value="$EE")])
-    check("bearings: probe_peek flagged suspected liar on split",
-          "probe_peek" in vp["suspected_liars"])
+        [dict(sensor="itrace", value="$33"), dict(sensor="floating_bus", value="$EE")])
+    check("bearings: floating-bus placeholder flagged suspected liar on split",
+          "floating_bus" in vp["suspected_liars"])
     va = bearings.bearings_split("scb width",
         [dict(sensor="spike", value="640"), dict(sensor="golden", value="640")])
     check("bearings: agreeing sensors report CONSISTENT", va["agree"])

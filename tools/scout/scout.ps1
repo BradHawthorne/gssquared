@@ -34,7 +34,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string] $Img        = "D:/projects/a2vga/m0/_kernel/owned_boot.po",
+  [string] $Img        = $env:GDIFF_IMG,
   [string] $Splice     = "",                 # raw A2GSPU_POKE spec "<pc>:<acts>"
   [string] $At         = "",                 # convenience trigger PC (with -Force)
   [string] $Force      = "",                 # convenience action list (with -At)
@@ -45,20 +45,29 @@ param(
   [string] $Ndev       = "32",              # A2GSPU_SP_NDEV (oracle pin)
   [int]    $TimeoutSec = 120,
   [switch] $NoBaseline,                       # skip the baseline run (wall already known)
-  [string] $Kernel     = "D:/projects/a2vga/m0/_kernel",
-  [string] $Gss        = "D:/projects/a2vga/gssquared/build/GSSquared.exe",
-  [string] $Manifest   = "D:/projects/a2vga/m0/oracle_env.ps1"
+  [string] $Kernel     = $env:GDIFF_KERNEL,          # dir holding kernel.sym.dbg + kernel.milestones.txt
+  [string] $Gss        = "",                          # default: this repo's build, via toolpin.ps1
+  [string] $Manifest   = $env:GDIFF_ORACLE_ENV        # optional Set-OracleEnv script
 )
 $ErrorActionPreference = "Continue"
 $PSNativeCommandUseErrorActionPreference = $false
-$env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $HERE '..\a2rail\toolpin.ps1')
+. (Join-Path $HERE '..\a2rail\runtime.ps1')
+$null = Initialize-A2RailRuntime
+if (-not $Gss) { $Gss = Get-GSSquaredExe }
+if (-not $Img -or -not (Test-Path $Img)) { Write-Host "scout: FAIL - boot image '$Img' not found (pass -Img or set GDIFF_IMG)" -ForegroundColor Red; exit 2 }
+if (-not (Test-Path $Gss)) { Write-Host "scout: FAIL - emulator '$Gss' not found (build it, or pass -Gss / set A2_GSSQUARED)" -ForegroundColor Red; exit 2 }
+if (-not $Kernel -or -not (Test-Path $Kernel)) { Write-Host "scout: FAIL - kernel directory '$Kernel' not found (pass -Kernel or set GDIFF_KERNEL)" -ForegroundColor Red; exit 2 }
 $SYMPY = "$HERE/scout_sym.py"
 $SYM   = "$Kernel/kernel.sym.dbg"
 $MILE  = "$Kernel/kernel.milestones.txt"
-$SP = "C:/Users/X99/AppData/Local/Temp/claude/D--projects-a2vga/58f9a28a-3801-45c3-bff9-ceb148184cc9/scratchpad"
-if (-not (Test-Path $SP)) { $SP = [System.IO.Path]::GetTempPath() }
-if (Test-Path $Manifest) { . $Manifest }    # G5: Set-OracleEnv / Assert-OracleEnv
+$SP = Join-Path ([System.IO.Path]::GetTempPath()) 'scout'
+New-Item -ItemType Directory -Force -Path $SP | Out-Null
+if ($Manifest) {                              # G5: Set-OracleEnv / Assert-OracleEnv
+  if (-not (Test-Path $Manifest)) { Write-Host "scout: FAIL - oracle manifest '$Manifest' not found" -ForegroundColor Red; exit 2 }
+  . $Manifest
+}
 
 # ---- milestones (name -> addr), in boot order ----
 $Miles = @()
@@ -73,20 +82,17 @@ function Is-Death($n) { return ($n -match '(?i)death|fatal') }
 function Invoke-ScoutBoot {
   param([int]$nframes, [string]$tag, [string]$poke)
   # env hygiene: clear every arming/trace var so nothing leaks across runs (rb.ps1 discipline)
-  foreach ($v in "A2GSPU_ITRACE_LO","A2GSPU_ITRACE_HI","A2GSPU_ITRACE_OUT","A2GSPU_ITRACE_REARM",
-                  "A2GSPU_ITRACE_FROM","A2GSPU_ITRACE_N","A2GSPU_ITRACE_FRAME","A2GSPU_WATCH",
-                  "A2GSPU_WATCH_MAX","A2GSPU_WATCH_OUT","A2GSPU_WATCH_READ","A2GSPU_WATCH_CHANGE",
-                  "A2GSPU_PCTRAP","A2GSPU_SNAP_LO","A2GSPU_SNAP_HI","A2GSPU_SNAP_PCS","A2GSPU_SNAP_OUT",
-                  "A2GSPU_RETGUARD","A2GSPU_CALLTRACE","A2GSPU_CALLTRACE_N","A2GSPU_GOLDEN",
-                  "A2GSPU_POKE","A2GSPU_POKE_NTH","A2GSPU_SAVE_AT","A2GSPU_RESTORE","A2GSPU_STACKWATCH","A2GSPU_TEXT40",
-                  "A2GSPU_MODETRACE","A2GSPU_INTLOG") {
-    Remove-Item "Env:$v" -ErrorAction SilentlyContinue
-  }
+  # Clean env slate: every instrumentation variable, by prefix, so no rail -- including
+  # ones added after this script was written -- leaks from the caller or a previous run.
+  # (This used to be a hand list of 28 names that had missed TRAP, TAP, RECORDS, BRAM,
+  # every MEMVU_* and every WIZ5_* rail while its README said "every arming var".)
+  Get-ChildItem Env: | Where-Object { $_.Name -match '^(A2GSPU_|MEMVU_|WIZ5_)' } |
+    ForEach-Object { Remove-Item ("Env:" + $_.Name) -ErrorAction SilentlyContinue }
   # G5: pin the determinism manifest (Scout mode = allow the deliberate splice).
   if (Get-Command Set-OracleEnv -ErrorAction SilentlyContinue) {
     Set-OracleEnv -Mode Scout -Frames $nframes -Ndev $Ndev -Allow @("A2GSPU_POKE") -Quiet | Out-Null
   } else {
-    $env:A2GSPU_SEED = "1"; $env:A2GSPU_FAKETIME = "1000000000"; $env:A2GSPU_SP_NDEV = "$Ndev"; $env:A2GSPU_SPIKE_FRAMES = "$nframes"
+    $env:A2GSPU_SEED = "1"; $env:A2GSPU_FAKETIME = "1000000000"; $env:A2GSPU_SP_NDEV = "$Ndev"; $env:A2GSPU_SPIKE_FRAMES = "$nframes"; $env:A2GSPU_BRAM = "default"
   }
   $env:A2GSPU_BRKDUMP = "1"; $env:A2GSPU_STOP_ON_FAULT = "1"; $env:A2GSPU_BRKMEM = "1"; $env:A2GSPU_SYM_BASE = "0"
   if (Test-Path $SYM)  { $env:A2GSPU_SYMBOLS    = $SYM }
@@ -96,7 +102,7 @@ function Invoke-ScoutBoot {
   $outf = "$SP/$tag.out"; $errf = "$SP/$tag.err"
   Remove-Item $outf,$errf -ErrorAction SilentlyContinue
   $p = Start-Process -FilePath $Gss -ArgumentList @("-p","5","-d","s7d1=$Img","-n") `
-         -WorkingDirectory (Split-Path $Gss) -NoNewWindow -PassThru `
+         -WorkingDirectory $SP -NoNewWindow -PassThru `
          -RedirectStandardOutput $outf -RedirectStandardError $errf
   $killed = $false
   Wait-Process -Id $p.Id -Timeout $TimeoutSec -ErrorAction SilentlyContinue

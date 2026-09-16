@@ -2,7 +2,7 @@
 """gdiff.bearings -- "bearings split -> suspect a liar" cross-check (trust-hierarchy).
 
 The single most expensive campaign lesson: an instrument that CONFIDENTLY answers a
-question can be lying (a dest-keyed dict, a probe_peek $EE, a mis-armed WATCH). The
+question can be lying (a dest-keyed dict, a floating-bus placeholder, a mis-armed WATCH). The
 methodology that caught every one was NOT a better single sensor -- it was noticing
 that two INDEPENDENT sensors gave DIFFERENT answers to the SAME fact ("bearings
 split") and refusing to trust either until the split was resolved.
@@ -10,8 +10,8 @@ split") and refusing to trust either until the split was resolved.
 This helper mechanizes that. Feed it >=2 readings of ONE fact from named sensors; it
 never silently picks one. If they agree it says CONSISTENT; if they split it says
 BEARINGS SPLIT -- SUSPECT A LIAR, shows every reading, and (using a default trust
-hierarchy -- on-glass capture authoritative, golden-differential high, probe_peek/
-floating-bus low) points at the likeliest liar WITHOUT collapsing the disagreement.
+hierarchy -- on-glass capture authoritative, golden-differential high, a floating-bus
+placeholder low) points at the likeliest liar WITHOUT collapsing the disagreement.
 
 Standalone:
     python bearings.py --fact "what loads at 01D000" segdiff=Loader_LC overlay=init3
@@ -33,7 +33,11 @@ DEFAULT_TRUST = {
     "itrace": 62, "retguard": 62, "watch": 60, "milestone": 55, "calltrace": 58,
     "overlay": 52, "symbolizer": 50, "orgmap": 50, "sidecar": 50,
     "spike_frame": 22, "videomap": 30, "heuristic": 20,
-    "probe_peek": 10, "peek": 10, "floating": 5, "guess": 5,
+    # The probe is the fork's observation path (INSTRUMENTATION_SHAPE.md M11) and
+    # answers like the CPU everywhere but $C0xx; it ranks with the other
+    # instruments. It used to rank beside "floating", from an older probe that
+    # returned floating bus for IIgs banks $00/$01.
+    "probe_peek": 58, "peek": 58, "floating": 5, "guess": 5,
 }
 
 

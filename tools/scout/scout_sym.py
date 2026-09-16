@@ -18,8 +18,9 @@ Usage:  python scout_sym.py resolve 00FA42 [--sym <kernel.sym.dbg>]
 """
 import sys, os, re, json
 
-DEF_SYM  = "D:/projects/a2vga/m0/_kernel/kernel.sym.dbg"
-DEF_MILE = "D:/projects/a2vga/m0/_kernel/kernel.milestones.txt"
+_KDIR    = os.environ.get("GDIFF_KERNEL", "")
+DEF_SYM  = os.path.join(_KDIR, "kernel.sym.dbg") if _KDIR else ""
+DEF_MILE = os.path.join(_KDIR, "kernel.milestones.txt") if _KDIR else ""
 
 # kernel.sym.dbg lines look like:
 #   symbol "map_vrn" type LABEL addr $00FA42 file 0 line 0

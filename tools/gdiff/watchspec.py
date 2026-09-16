@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gdiff.watchspec -- WATCH spec format-checker + probe_peek/$EE lying-sensor lint.
+"""gdiff.watchspec -- WATCH spec format-checker + soft-switch-address lint.
 
 TWO campaign lying sensors, mechanized away:
 
@@ -12,10 +12,20 @@ TWO campaign lying sensors, mechanized away:
    EXACTLY and refuses/warns on the bare-24-bit (and bank>$FF, lo>hi, >16-bit offset)
    cases before you waste a boot on a dead watchpoint.
 
-2. THE probe_peek $EE LIAR.  probe_peek of banks $00/$01 can return floating-bus $EE
-   for handler/relocated pages that read_raw cannot see. A sensor that reads $EE from
-   bank $00/$01 and reports it as fact lied ~6x in the campaign. probe_suspect()/the
-   --probe-lint mode flag such reads as SUSPECT rather than trusting them.
+2. THE SOFT-SWITCH ADDRESS.  The IIgs probe (MMU_IIgs::probe_peek) resolves banks
+   $00/$01 the way the CPU does and answers every address except the $C0xx soft
+   switches in banks $00/$01/$E0/$E1, where reading would throw the switch; there it
+   returns a placeholder and probe_readable() says so. probe_suspect() flags an
+   address in that window: a probe value there is not memory, and a bus event there
+   is an I/O access with side effects rather than a store.
+
+   This used to flag any $EE read from banks $00/$01 as a floating-bus liar. That was
+   true of an older probe and is not of this one (Docs/INSTRUMENTATION_SHAPE.md M11):
+   $EE is INC abs and an ordinary data byte, so the heuristic taught distrust of
+   correct data -- and WATCH records carry bus-funnel data, not probe reads, so it
+   never applied to them. It also counted only event=="watch", while the record
+   contract names these events watch.<kind>, so on current output it scanned nothing
+   and always reported clean.
 
 Standalone:
     python watchspec.py "E1:19A0-19A3"          # validate (exit 1 if any warning)
@@ -107,15 +117,18 @@ def validate_watch_spec(spec):
     return ok, results
 
 
-def probe_suspect(addr, val):
-    """True when a probe_peek reading is a SUSPECTED floating-bus liar: banks
-    $00/$01 returning $EE (handler/relocated pages read_raw cannot see)."""
-    return ((addr >> 16) & 0xFF) in (0x00, 0x01) and (val & 0xFF) == 0xEE
+def probe_suspect(addr, val=None):
+    """True when addr is a $C0xx soft switch in a bank where the IIgs probe cannot
+    answer ($00/$01/$E0/$E1). The value is irrelevant: any byte there is a
+    placeholder, and no byte elsewhere is suspect for being $EE."""
+    return (((addr >> 16) & 0xFF) in (0x00, 0x01, 0xE0, 0xE1)
+            and 0xC000 <= (addr & 0xFFFF) <= 0xC0FF)
 
 
 def probe_lint_ndjson(path):
-    """Scan a WATCH/dump NDJSON for bank $00/$01 reads returning $EE and flag them
-    as suspect. Returns (n_events, suspects[list])."""
+    """Scan a WATCH NDJSON for events at soft-switch addresses. Accepts both the
+    record-contract names (watch.write, watch.read, ...) and the older "watch".
+    Returns (n_events, suspects[list])."""
     suspects = []
     n = 0
     with open(path) as f:
@@ -127,7 +140,8 @@ def probe_lint_ndjson(path):
                 j = json.loads(ln)
             except Exception:
                 continue
-            if j.get("event") != "watch":
+            ev = str(j.get("event", ""))
+            if ev != "watch" and not ev.startswith("watch."):
                 continue
             n += 1
             if probe_suspect(int(j.get("addr", 0)), int(j.get("data", 0))):
@@ -140,7 +154,7 @@ def cmd_watchspec(argv):
         description="Validate an A2GSPU_WATCH spec (bank:lo-hi) or lint a probe NDJSON.")
     ap.add_argument("spec", nargs="?", help='WATCH spec, e.g. "E1:19A0-19A3"')
     ap.add_argument("--probe-lint", metavar="NDJSON",
-                    help="scan a WATCH NDJSON for bank $00/$01 $EE floating-bus liars")
+                    help="scan a WATCH NDJSON for events at $C0xx soft-switch addresses")
     ap.add_argument("--quiet", action="store_true", help="only print on problems")
     a = ap.parse_args(argv)
 
@@ -148,14 +162,17 @@ def cmd_watchspec(argv):
     if a.probe_lint:
         n, suspects = probe_lint_ndjson(a.probe_lint)
         print(f"# gdiff watchspec v{VERSION} probe-lint {a.probe_lint}: {n} watch events")
-        if suspects:
+        if n == 0:
             rc = 1
-            print(f"** {len(suspects)} SUSPECT probe read(s): bank $00/$01 returned $EE "
-                  "(floating bus) -- do NOT trust these as memory truth **")
+            print("** 0 watch events -- nothing was checked (wrong file, or no watch.* records) **")
+        elif suspects:
+            rc = 1
+            print(f"** {len(suspects)} event(s) at $C0xx soft-switch addresses: these are I/O "
+                  "accesses, not stores, and a probe value there is a placeholder **")
             for s in suspects[:20]:
-                print(f"   addr=${int(s['addr']):06X} data=$EE pc=${int(s['pc']):06X}")
+                print(f"   addr=${int(s['addr']):06X} data=${int(s.get('data', 0)):02X} pc=${int(s.get('pc', 0)):06X}")
         else:
-            print("   no bank $00/$01 $EE floating-bus reads -- clean")
+            print("   no events at soft-switch addresses")
     if a.spec:
         ok, results = validate_watch_spec(a.spec)
         if not (a.quiet and ok):

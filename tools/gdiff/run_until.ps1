@@ -26,12 +26,22 @@
   => just slow, give it more frames.
 
   In-process use (env injection preserved from rb.ps1):
-    & run_until.ps1 -Img D:/projects/a2vga/m0/_kernel/owned_boot.po -Until stall -Frames 300 -Env @{A2GSPU_SP_NDEV="32"}
-    & run_until.ps1 -Until 'brk,complete,stall' -Milestone init_gim -Distinct 41 -Frames 800
+    & run_until.ps1 -Img <boot.po> -Kernel <dir with kernel.milestones.txt> -Until stall -Frames 300 -Env @{A2GSPU_SP_NDEV="32"}
+    & run_until.ps1 -Img <boot.po> -Until 'brk,complete,stall' -Milestone init_gim -Distinct 41 -Frames 800
+
+  -Until takes the condition NAMES only (brk, hang, complete, milestone, distinct, stall,
+  timeout); the targets for milestone and distinct are the -Milestone and -Distinct
+  parameters, not a MILESTONE:<n> suffix.
+
+  Inputs are parameters, with environment fallbacks for a workspace that sets them once:
+    -Img      GDIFF_IMG          the boot image (required)
+    -Kernel   GDIFF_KERNEL       directory holding kernel.milestones.txt / kernel.sym.dbg
+    -Manifest GDIFF_ORACLE_ENV   a script defining Set-OracleEnv (optional; pins the run env)
+    -Gss      A2_GSSQUARED       the emulator (default: this repo's build, via toolpin.ps1)
 #>
 [CmdletBinding()]
 param(
-  [string]   $Img         = "D:/projects/a2vga/m0/_kernel/owned_boot.po",
+  [string]   $Img         = $env:GDIFF_IMG,
   [string]   $Until       = "brk,complete,stall",   # comma-list of target conditions
   [int]      $Frames      = 300,                     # checkpoint-A frame cap
   [int]      $Frames2     = 0,                        # checkpoint-B cap (0 => auto)
@@ -39,40 +49,45 @@ param(
   [int]      $Distinct    = -1,                        # target SHR distinct >=
   [int]      $TimeoutSec  = 120,
   [int]      $Ndev        = 32,                        # A2GSPU_SP_NDEV pin (oracle env)
-  [string]   $Kernel      = "D:/projects/a2vga/m0/_kernel",
-  [string]   $Gss         = "D:/projects/a2vga/gssquared/build/GSSquared.exe",
+  [string]   $Kernel      = $env:GDIFF_KERNEL,
+  [string]   $Gss         = "",
+  [string]   $Manifest    = $env:GDIFF_ORACLE_ENV,
   [string]   $Tag         = "run_until",
   [hashtable]$Env         = @{}
 )
 $ErrorActionPreference = "Continue"
 $PSNativeCommandUseErrorActionPreference = $false
-$env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH
+. (Join-Path $PSScriptRoot '..\a2rail\toolpin.ps1')
+. (Join-Path $PSScriptRoot '..\a2rail\runtime.ps1')
+$null = Initialize-A2RailRuntime
+if (-not $Gss) { $Gss = Get-GSSquaredExe }
+# Fail loud on a missing input: a boot that never started reports a verdict about nothing.
+if (-not $Img -or -not (Test-Path $Img)) { Write-Host "run_until: FAIL - boot image '$Img' not found (pass -Img or set GDIFF_IMG)" -ForegroundColor Red; exit 2 }
+if (-not (Test-Path $Gss)) { Write-Host "run_until: FAIL - emulator '$Gss' not found (build it, or pass -Gss / set A2_GSSQUARED)" -ForegroundColor Red; exit 2 }
 # G5 env-explicit oracle: pin the determinism manifest instead of ad-hoc inline pins.
-$OracleEnv = "D:/projects/a2vga/m0/oracle_env.ps1"
-if (Test-Path $OracleEnv) { . $OracleEnv }
-$SP = "C:/Users/X99/AppData/Local/Temp/claude/D--projects-a2vga/58f9a28a-3801-45c3-bff9-ceb148184cc9/scratchpad"
-if (-not (Test-Path $SP)) { $SP = [System.IO.Path]::GetTempPath() }
+if ($Manifest) {
+  if (-not (Test-Path $Manifest)) { Write-Host "run_until: FAIL - oracle manifest '$Manifest' not found" -ForegroundColor Red; exit 2 }
+  . $Manifest
+}
+$SP = Join-Path ([System.IO.Path]::GetTempPath()) 'gdiff-run-until'
+New-Item -ItemType Directory -Force -Path $SP | Out-Null
 if ($Frames2 -le 0) { $Frames2 = $Frames + [Math]::Max(150, [int]($Frames / 2)) }
 
 # ---- one bounded boot -> parsed telemetry -------------------------------------
 function Invoke-Boot([int]$nframes, [string]$tag) {
-  # clean env slate so arming/trace vars never leak across runs (rb.ps1 discipline)
-  foreach ($v in "A2GSPU_ITRACE_LO","A2GSPU_ITRACE_HI","A2GSPU_ITRACE_OUT","A2GSPU_ITRACE_REARM",
-                  "A2GSPU_ITRACE_FROM","A2GSPU_ITRACE_N","A2GSPU_ITRACE_FRAME","A2GSPU_WATCH",
-                  "A2GSPU_WATCH_MAX","A2GSPU_WATCH_OUT","A2GSPU_WATCH_READ","A2GSPU_WATCH_CHANGE",
-                  "A2GSPU_PCTRAP","A2GSPU_SNAP_LO","A2GSPU_SNAP_HI","A2GSPU_SNAP_PCS","A2GSPU_SNAP_OUT",
-                  "A2GSPU_RETGUARD","A2GSPU_CALLTRACE","A2GSPU_CALLTRACE_N","A2GSPU_GOLDEN",
-                  "A2GSPU_POKE","A2GSPU_SAVE_AT","A2GSPU_RESTORE","A2GSPU_STACKWATCH","A2GSPU_TEXT40",
-                  "A2GSPU_MODETRACE","A2GSPU_INTLOG") {
-    Remove-Item "Env:$v" -ErrorAction SilentlyContinue
-  }
+  # Clean env slate: every instrumentation variable, by prefix, so no rail -- including
+  # ones added after this script was written -- leaks from the caller or a previous run.
+  # (This used to be a hand list of 28 names that had missed TRAP, TAP, RECORDS, BRAM,
+  # every MEMVU_* and every WIZ5_* rail while its README said "every arming var".)
+  Get-ChildItem Env: | Where-Object { $_.Name -match '^(A2GSPU_|MEMVU_|WIZ5_)' } |
+    ForEach-Object { Remove-Item ("Env:" + $_.Name) -ErrorAction SilentlyContinue }
   # G5: pin the determinism manifest (SEED/FAKETIME/SP_NDEV/SPIKE_FRAMES) + WARN on drift.
   # Scout mode: leave any deliberate -Env splice (A2GSPU_POKE) alone; -Ndev override warns
   # if it deviates from the oracle pin (=32) -- the dev-loop faithfulness axis.
   if (Get-Command Set-OracleEnv -ErrorAction SilentlyContinue) {
     Set-OracleEnv -Mode Scout -Frames $nframes -Ndev "$Ndev" -Allow @("A2GSPU_POKE") -Quiet | Out-Null
   } else {
-    $env:A2GSPU_SPIKE_FRAMES = "$nframes"; $env:A2GSPU_FAKETIME = "1000000000"; $env:A2GSPU_SEED = "1"; $env:A2GSPU_SP_NDEV = "$Ndev"
+    $env:A2GSPU_SPIKE_FRAMES = "$nframes"; $env:A2GSPU_FAKETIME = "1000000000"; $env:A2GSPU_SEED = "1"; $env:A2GSPU_SP_NDEV = "$Ndev"; $env:A2GSPU_BRAM = "default"
   }
   $env:A2GSPU_BRKDUMP       = "1"
   $env:A2GSPU_STOP_ON_FAULT = "1"
@@ -86,7 +101,7 @@ function Invoke-Boot([int]$nframes, [string]$tag) {
   Remove-Item $outf,$errf -ErrorAction SilentlyContinue
   $t0 = Get-Date
   $p = Start-Process -FilePath $Gss -ArgumentList @("-p","5","-d","s7d1=$Img","-n") `
-         -WorkingDirectory (Split-Path $Gss) -NoNewWindow -PassThru `
+         -WorkingDirectory $SP -NoNewWindow -PassThru `
          -RedirectStandardOutput $outf -RedirectStandardError $errf
   $killed = $false
   Wait-Process -Id $p.Id -Timeout $TimeoutSec -ErrorAction SilentlyContinue

@@ -13,14 +13,14 @@ The build-time per-segment byte-diff (`segdiff`) lives with the Rosetta side (R2
 > behaviour; the C++ self-checks are gated behind their env vars (one untaken branch when
 > off) and the flag-OFF determinism golden is unchanged (verified: gsos601.po 150f →
 > E1 `108683C9C967EEBF`, MMU `0925578EE375CA76`, status=OK).
-> Use `python` on this box (`python3` is a Windows Store alias). Not committed (Brad-gated).
+> Use `python` on this box (`python3` is a Windows Store alias).
 
 ## One entry point
 
 ```
 python gdiff.py <subcommand> [args]      # or run any module standalone
 python gdiff.py --help
-python gdiff.py selftest                 # 30 checks against the real campaign cases
+python gdiff.py selftest                 # 34 checks against the real campaign cases
 ```
 
 | subcommand  | what it does | the lying sensor it kills |
@@ -28,7 +28,7 @@ python gdiff.py selftest                 # 30 checks against the real campaign c
 | `wdiff`     | positional align of two `A2GSPU_WATCH` NDJSON streams ($E1 queue) + auto little-endian record-pointer decode at the divergence | manual byte-by-byte pointer decode |
 | `itrdiff`   | execution-trace resync diff (shift-tolerant `--nopc`, interrupt-skew resync, `@ea=val` DATA/CONTROL classification) | one extra IRQ line cascading into 1000s of false diffs |
 | `overlay`   | overlay-aware OMF symbolizer + **dup-destination OVERLAY WARNING**; index-keyed (never dest-keyed); flags the LIVE overlay by ITRACE **content** | **SIG-031**: a dest-keyed dict collapsed two $01D000 segs → mislabeled init3 as check_express_seg |
-| `watchspec` | validate a WATCH spec (`bank:lo-hi`; reject the bare-24-bit trap) + lint a WATCH NDJSON for probe_peek/$EE floating-bus liars | the "WATCH didn't fire" trap; the probe_peek `$EE` liar (×6) |
+| `watchspec` | validate a WATCH spec (`bank:lo-hi`; reject the bare-24-bit trap) + lint a WATCH NDJSON for events at `$C0xx` soft-switch addresses | the "WATCH didn't fire" trap; an I/O access read as a store |
 | `bearings`  | cross-check ≥2 sensor readings of one fact; loud "**suspect a liar**" on a split (trust-hierarchy) | trusting one confident-but-wrong sensor |
 | `selftest`  | runs all of the above against `fixtures/` (the REAL captures) | regressions in the tools themselves |
 
@@ -75,25 +75,35 @@ by comparing the state fingerprint `(SHR-hash, distinct, milestones)` across two
 — the ≥600-frame lesson, mechanized.
 
 ```powershell
-& tools/gdiff/run_until.ps1 -Img .../owned_boot.po -Until stall -Frames 300 -Env @{A2GSPU_SP_NDEV="32"}
+& tools/gdiff/run_until.ps1 -Img <boot.po> -Kernel <kernel dir> -Until stall -Frames 300 -Env @{A2GSPU_SP_NDEV="32"}
 #  checkpoint-A cap=300 -> STALLED d26 m10/12 hash=196C114F...
 #  checkpoint-B cap=450 -> STALLED d26 m10/12 hash=196C114F...   (identical)
 #  VERDICT: NO-BRK STALL   (genuinely wedged; not a crash, not slow-progress)
 ```
 
-Conditions: `BRK | HANG | COMPLETE | MILESTONE:<n|name> | DISTINCT:<n> | STALL | TIMEOUT`.
-`-Until` is a comma-list of the positive conditions you're waiting for; exit 0 if met, 3 if
-not (with the stall/progress classification always reported). Keeps the in-process
-`& run_until.ps1 -Env @{...}` form and pins the oracle env (`-Ndev`, default 32).
+Conditions: `brk | hang | complete | milestone | distinct | stall | timeout`. `-Until` is a
+comma-list of the condition NAMES you're waiting for; the targets are separate parameters,
+`-Milestone <count|name>` and `-Distinct <n>` (a `MILESTONE:<n>` suffix in `-Until` matches
+nothing). Exit 0 if met, 3 if not (with the stall/progress classification always reported),
+2 if an input is missing. Keeps the in-process `& run_until.ps1 -Env @{...}` form and pins the
+oracle env (`-Ndev`, default 32).
+
+Inputs: `-Img` (or `GDIFF_IMG`, required), `-Kernel` (or `GDIFF_KERNEL`: the directory holding
+`kernel.milestones.txt`), `-Manifest` (or `GDIFF_ORACLE_ENV`: a script defining `Set-OracleEnv`,
+optional), `-Gss` (default: this repo's `build\GSSquared.exe` via `tools/a2rail/toolpin.ps1`, or
+`A2_GSSQUARED`), plus `-Frames`, `-Frames2`, `-TimeoutSec`, `-Tag`, `-Env`.
 
 ## Validation (against the current boot state — reproducible)
 
-`python gdiff.py selftest` → **30/30**. The fixtures are the ACTUAL campaign captures:
+`python gdiff.py selftest` → **34/34** with every fixture present. The two `.omf` fixtures are
+derived from GS/OS and are not redistributed (`.gitignore`); without them the overlay checks
+that need them do not run, and the selftest's own header line says so. The fixtures are the
+ACTUAL campaign captures:
 - **G1 wdiff** reproduces the `$E119A0` 32-vs-64-node diff at **write-24** (`$E06014` vs `$E119D0`).
 - **G2 overlay** WARNING fires on the real `$01D000` Loader_LC/init3 overlap (SIG-031) and,
   with ITRACE opcode evidence, flags the live overlay (content match, since the windows overlap).
-- **G2 watchspec** rejects `E119A0` (bare-24-bit) and accepts `E1:19A0-19A3`; probe_peek `$EE`
-  bank $00/$01 lint fires.
+- **G2 watchspec** rejects `E119A0` (bare-24-bit) and accepts `E1:19A0-19A3`; the lint reads the
+  record contract's `watch.<kind>` events and flags only `$C0xx` soft-switch addresses
 - **G3** classifies the current splash-stall as **NO-BRK STALL** (300 vs 450 identical) and an
   early window as **SLOW-PROGRESS** (40 vs 200 advances).
 - Emulator C++ self-checks: WATCH format-check fires on `E119A0` at the source; flag-OFF golden
@@ -105,7 +115,7 @@ not (with the stall/progress classification always reported). Keeps the in-proce
 |----------|--------|-----|
 | **SIG-031** dest-keyed dict collapsed two `$01D000` segs | init3 mislabeled `check_express_seg`; a burned /debug cycle + G-015/G-016 | `overlay` is index-keyed, WARNS on the dup, names BOTH, flags the live one by ITRACE content |
 | **WATCH-format** bare-24-bit | "the write never happened" (silent dead watch) | `watchspec` + the emulator parse both WARN loudly (`E119A0` → arms `$A00000`, never fires) |
-| **probe_peek `$EE`** (×6) | floating-bus byte trusted as memory truth | `probe_suspect()` / `watchspec --probe-lint` / the SYSFAIL dump flag bank $00/$01 `$EE` as SUSPECT |
+| **probe_peek `$EE`** (×6, historical) | an older probe returned a floating-bus `$EE` for IIgs banks $00/$01 | fixed in the emulator: `MMU_IIgs::probe_peek` resolves those banks like the CPU, and the rails read through it (`a2gspu_observe.hpp`). The `$EE` heuristic that used to stand here marked correct data as suspect and was removed; `watchspec --probe-lint` now flags only `$C0xx` addresses, the one place the probe gives a placeholder |
 | interrupt-skew | one extra IRQ line → thousands of false trace diffs | `itrdiff` resync reports "N extra line(s) on OURS/PRIS" and re-aligns |
 | single confident sensor | trusted silently | `bearings` surfaces the split ("suspect a liar") |
 
@@ -116,6 +126,7 @@ gdiff.py        entry point / dispatcher
 watchdiff.py    wdiff        watchspec.py   watchspec + probe lint
 itracediff.py   itrdiff      bearings.py    bearings-split cross-check
 overlay.py      overlay symbolizer (the SIG-031 anti-liar core; imported by others)
-selftest.py     30 checks    run_until.ps1  G3 bounded boot harness
+selftest.py     34 checks    run_until.ps1  G3 bounded boot harness
+calldiff.py     first-divergence diff of two A2GSPU_CALLSTREAM NDJSON files
 fixtures/       the real campaign captures (watch_*.ndjson, gsos_*.omf)
 ```
