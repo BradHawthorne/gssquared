@@ -15,6 +15,7 @@ Keep reading for Project Status, Design, and development journals.
 
 * [Project Status](#project-status-as-of-2026-03-10)
 * [Code Organization](#code-organization)
+* [Intentionally Unimplemented](Unimplemented.md) — features left out by choice (not open todos)
 
 # Project Status (as of 2026-03-10)
 
@@ -89,7 +90,7 @@ RGB is an accurate (exact) Apple IIgs RGB presentation.
 
 | Type | Status |
 |------|--------|
-| Cassette | No support planned. |
+| Cassette | No support planned. See [Unimplemented.md](Unimplemented.md). |
 | Disk II Controller Card | ✅ |
 | ProDOS Block-Device Interface | ✅ |
 | SmartPort / ProDOS Block-Device Interface | ✅ |
@@ -123,7 +124,7 @@ Additional notes: 5.25 Floppy does not support quarter or half tracks.
 |--------|--------|-------|
 | Printer / parallel port | Work in progress | Right now just dumps binary data to file, no processsing or printer emulation |
 | Printer / serial port | Partial | GS-only, support SCC chip and "print to file" |
-| Modem / serial port | Not started | GS-only, support SCC chip and Hayes-compatible modem with telnet |
+| Modem / serial port | Partial | IIgs SCC8530 + Hayes modem; IIe Super Serial Card (`super_serial`) + same ModemDevice — see [SSC.md](SSC.md) |
 | ImageWriter printer emulation | Not started | |
 | Joystick / paddles | ✅ Complete | Mouse emulation of Joystick; Gamepads;  |
 | Sirius JoyPort (Atari) | ✅ | Implemented Single Joystick - enable mode with F6 |

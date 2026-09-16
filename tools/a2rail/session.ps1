@@ -152,7 +152,7 @@ for ($i = 0; $i -lt 120; $i++) {          # 30s: ROM load and video init take a 
     Start-Sleep -Milliseconds 250
     if (Test-Path $ack) {
         Write-Host "rail is up, CPU paused at:" -ForegroundColor Green
-        Write-Host ("  " + (Get-Content $ack -Raw).Trim())
+        Write-Host ("  " + (Read-AckText $ack).Trim())
         exit 0
     }
     if ($proc.HasExited) {

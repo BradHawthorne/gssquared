@@ -1,9 +1,13 @@
 #pragma once
 
+#include <functional>
 #include <vector>
+#include <string>
+#include <optional>
 
 #include "mmus/mmu_ii.hpp"
 #include "Module_ID.hpp"
+#include "Device_ID.hpp"
 #include "SlotData.hpp"
 #include "util/EventDispatcher.hpp"
 #include "util/EventQueue.hpp"
@@ -17,6 +21,7 @@
 //#include "util/ResetController.hpp"
 #include "util/AudioSystem.hpp"
 #include "util/SoundEffect.hpp"
+#include "util/StorageDevice.hpp"
 #include "systemconfig.hpp"
 #include "device_reset_id.hpp"
 
@@ -26,9 +31,12 @@ struct cpu_state;
 struct debug_window_t; // don't bring in debugwindow.hpp, it would create a depedence on SDL.
 struct video_system_t; // same.
 class Mounts;
+class Connections;
 class EventTimer;
 class VideoScannerII;
 class ResetController;
+class BreakpointTable;
+class DebugProtocolServer;
 
 enum execution_modes_t {
     EXEC_NORMAL = 0,
@@ -37,13 +45,23 @@ enum execution_modes_t {
     //EXEC_STEP_OVER // no longer used?
 };
 
+/** Ops for register_device_debug / call_device_debug (protocol STATE_GET / STATE_SET, …). */
+enum : uint32_t {
+    DEVOP_STATE_GET = 1,
+    DEVOP_STATE_SET = 2,
+};
 
 struct computer_t {
 
     using ResetHandler = std::function<bool (bool cold_start)>;
     using ShutdownHandler = std::function<bool ()>;
     using DebugDisplayHandler = std::function<DebugFormatter *()>;
-    
+    using DeviceDebugHandler = std::function<bool(
+        uint32_t op,
+        const std::vector<uint8_t> &req,
+        std::vector<uint8_t> &reply,
+        std::string &err)>;
+
     struct DebugDisplayHandlerInfo {
         std::string name;
         uint64_t id;
@@ -72,6 +90,8 @@ struct computer_t {
 
     video_system_t *video_system = nullptr;
     debug_window_t *debug_window = nullptr;
+    BreakpointTable *breakpoints = nullptr;
+    DebugProtocolServer *debug_protocol = nullptr;
 
     AudioSystem *audio_system = nullptr;
     SoundEffect *sound_effect = nullptr;
@@ -85,14 +105,21 @@ struct computer_t {
     DeviceFrameDispatcher *device_frame_dispatcher = nullptr;
 
     Mounts *mounts = nullptr;
+    Connections *connections = nullptr;
+
+    /** UI drive key used by File > Mount Drivers (BazFast 3 + drivers.hdv). */
+    std::optional<storage_key_t> drivers_mount_key;
 
     // For use by OSD.
     int system_id = -1;
+    const SystemConfig_t *system_config_override = nullptr;
+    std::string machine_id;  // UUID from .gs2 / builtin; keys PrefPath/bram/<id>.bin
 
     std::vector<ResetHandler> reset_handlers;
     std::vector<ShutdownHandler> shutdown_handlers;
     std::vector<DebugDisplayHandlerInfo> debug_display_handlers;
-    
+    DeviceDebugHandler device_debug_handlers[NUM_DEVICE_IDS]{};
+
     void *module_store[MODULE_NUM_MODULES];
 
     // Status, Statistics, etc.
@@ -135,7 +162,14 @@ struct computer_t {
     void set_cpu(cpu_state *cpu) { this->cpu = cpu; }
     void set_platform(platform_info *platform) { this->platform = platform; }
     void set_system_id(int system_id) { this->system_id = system_id; }
-    inline SystemConfig_t *get_system() { return get_system_config(system_id); }
+    void set_system_config(const SystemConfig_t *system_config) { this->system_config_override = system_config; }
+    void set_machine_id(const std::string& id) { machine_id = id; }
+    const std::string& get_machine_id() const { return machine_id; }
+    inline SystemConfig_t *get_system() {
+        return system_config_override
+            ? const_cast<SystemConfig_t *>(system_config_override)
+            : get_system_config(system_id);
+    }
     void set_video_scanner(video_scanner_t video_scanner) { this->video_scanner = video_scanner; }
     video_scanner_t get_video_scanner() { return video_scanner; }
     void reset(bool cold_start);
@@ -148,6 +182,12 @@ struct computer_t {
     void register_debug_display_handler(std::string name, uint64_t id, DebugDisplayHandler handler);
     DebugFormatter *call_debug_display_handler(std::string name);
 
+    void register_device_debug(device_id id, DeviceDebugHandler handler);
+    bool call_device_debug(device_id id, uint32_t op,
+                          const std::vector<uint8_t> &req,
+                          std::vector<uint8_t> &reply,
+                          std::string &err);
+
     void *get_module_state( module_id_t module_id);
     void set_module_state( module_id_t module_id, void *state);
 
@@ -155,4 +195,8 @@ struct computer_t {
     void frame_status_update();
 
     void send_full_screen_message();
+
+    bool has_bazfast();
+    bool is_drivers_mounted();
+    void toggle_mount_drivers();
 };

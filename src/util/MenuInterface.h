@@ -44,11 +44,18 @@ public:
 	void toggleSleepMode();
 	void toggleAudioDecorrelation();
 	void toggleRightMouseAccel();
+	void toggleCrtShader();
+	void toggleHudStats();
+	void toggleHudDrives();
+	void toggleDisconnectedWhenNoGamepad();
 	void displayFullScreen();
 	void editCopyScreen();
 	void editPasteText();
+	void fileSaveScreenshot();
+	void toggleMountDrivers();
 	void openDebugWindow();
 	void diskToggle(storage_key_t key);
+	void openSystemConfig();
 
 	void setControllerMode(int mode);
 
@@ -57,9 +64,16 @@ public:
 	bool getSleepMode();
 	bool getAudioDecorrelation();
 	bool getRightMouseAccel();
+	bool getCrtShader();
+	bool getCrtShaderAvailable();
+	bool getHudStats();
+	bool getHudDrives();
+	bool getDisconnectedWhenNoGamepad();
 	bool isEmulationRunning();
 	bool isPaused();
 	bool isMouseCaptured();
+	bool hasBazFast();
+	bool getMountDrivers();
 	int  getCurrentControllerMode();
 	std::vector<MenuDriveInfo> getDriveList();
 };

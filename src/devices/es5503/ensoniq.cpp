@@ -73,10 +73,8 @@ void ES5503::reset() {
         osc.accumulator = 0;
         osc.irqpend = 0;
     }
-    // Drop the system IRQ line too. Clearing per-oscillator irqpend above leaves
-    // the InterruptController's SOUNDGLU assert stuck until something happens to
-    // read $E0 -- so a machine reset could come up with a phantom interrupt
-    // already pending from before it. (Ported from upstream be5c869.)
+    // Drop the system IRQ line as well — clearing irqpend alone leaves
+    // InterruptController's SOUNDGLU assert stuck until the next $E0 read.
     update_irq_status();
     update_sdl_stream_rate();
 }
@@ -90,45 +88,12 @@ uint8_t ES5503::read_wave_byte(uint32_t address) {
 }
 
 void ES5503::update_sdl_stream_rate() {
-    if (!m_sdl_stream) {
-        return;
-    }
-    
-    uint32_t es5503_output_rate = calculate_output_rate();
-    
-    SDL_AudioSpec src_spec;
-    src_spec.freq = es5503_output_rate;
-    src_spec.format = SDL_AUDIO_S16LE;
-    src_spec.channels = m_output_channels;
-    
-    // NULL destination means use device's native rate
-    if (!SDL_SetAudioStreamFormat(m_sdl_stream, &src_spec, NULL)) {
-        // Log error but don't fail -- and that is what happens now. The
-        // assert(false) that used to sit here contradicted the line above it,
-        // and this build ships asserts LIVE: CMakeLists overrides
-        // CMAKE_CXX_FLAGS_RELEASE to plain -O3, dropping CMake's default
-        // -DNDEBUG. So a transient host audio failure -- a device change, a
-        // sample rate the driver refuses -- aborted the whole emulator instead
-        // of degrading the sound. Nothing about the emulated machine is wrong
-        // when this fails, so it must not take the machine down.
-        // Reported ONCE. This runs from the $E1 (oscillator enable) write path,
-        // which guest music code touches constantly, so an unguarded message
-        // here would bury every other line in the log at audio rates.
-        static bool said = false;
-        if (!said) {
-            said = true;
-            fprintf(stderr, "[ES5503] Failed to update SDL stream rate to %u Hz: %s\n"
-                            "         Audio continues at the previous rate. This is a HOST\n"
-                            "         audio condition, not an emulated-machine fault, and is\n"
-                            "         reported once -- it may still be happening.\n",
-                    es5503_output_rate, SDL_GetError());
-        }
-        return;
-    }
-    printf("updated sdl stream rate to %u Hz\n", es5503_output_rate);
+    // SDL stream is fixed at the host device rate. DOC output rate changes only
+    // affect Sound GLU's per-frame resampler — do not call SDL_SetAudioStreamFormat
+    // here (that resets SDL's resampler and was a live-only glitch source).
 }
 
-void ES5503::halt_osc(int onum, int type, uint32_t *accumulator, int resshift) {
+void ES5503::halt_osc(int onum, int type, uint32_t *accumulator, int resshift, uint8_t newCtrl) {
     Oscillator *pOsc = &m_oscillators[onum];
     Oscillator *pPartner = &m_oscillators[onum ^ 1];
     int mode = (pOsc->control >> 1) & 3;
@@ -150,13 +115,11 @@ void ES5503::halt_osc(int onum, int type, uint32_t *accumulator, int resshift) {
     if ((mode != MODE_FREE) || (type != 0)) {
         pOsc->control |= 1;
     } else {
-        // Preserve the relative phase of the oscillator when looping
-        const uint16_t wtsize = pOsc->wtsize;
-        if ((*accumulator >> resshift) < wtsize) {
-            *accumulator -= ((*accumulator >> resshift) << resshift);
-        } else {
-            *accumulator -= (wtsize << resshift);
-        }
+        // Preserve fractional phase when looping (MAME / Peter Ferrie).
+        // Subtract (wtsize - 1) << resshift — not full wtsize, and not "zero the
+        // integer index". Wrong wrap skips/jumps within the waveform.
+        const uint16_t wtsize_m1 = pOsc->wtsize - 1;
+        *accumulator -= ((uint32_t)wtsize_m1 << resshift);
     }
 
     // If we're in swap mode, start the partner
@@ -174,11 +137,14 @@ void ES5503::halt_osc(int onum, int type, uint32_t *accumulator, int resshift) {
 
     // IRQ enabled for this voice?
     if (pOsc->control & 0x08) {
+        // MAME: when the halt is coming from a CPU write (type == 0), only fire
+        // the IRQ if the newly written control value also has IRQ enabled. This avoids
+        // spurious IRQs after NTPstop / Bard's Tale (CPU halt with IE cleared).
+        if ((type == 0) && !(newCtrl & 0x08)) {
+            return;
+        }
         pOsc->irqpend = 1;
-        int irq_osc = update_irq_status();
-        /* if (m_irq_callback) {
-            m_irq_callback(true);
-        } */
+        update_irq_status();
     }
 }
 
@@ -197,11 +163,9 @@ void ES5503::generate_samples(int16_t *buffer, int num_samples) {
         for (int osc = 0; osc < m_oscsenabled; osc++) {
             Oscillator *pOsc = &m_oscillators[osc];
 
-            // Channel select is control[7:4] (CA0-CA3). With two host outputs
-            // only CA0 is decoded. Stereo cards map odd -> left, even -> right,
-            // and interleave slot 0 is left, so CA0 is flipped when it becomes
-            // a mix index. With one output channel the mask is 0 and every
-            // oscillator lands in the single slot, which is the mono path.
+            // Channel select is control[7:4] (CA0–CA3). With 2 host outputs we
+            // decode CA0 only. Apple TN #19 stereo cards: odd → left, even → right
+            // (interleaved [L,R]), so flip CA0 when mapping to the mix index.
             int assigned = (pOsc->control >> 4) & (m_output_channels - 1);
             if (m_output_channels == 2) {
                 assigned ^= 1;
@@ -230,7 +194,7 @@ void ES5503::generate_samples(int16_t *buffer, int num_samples) {
                     data = (int32_t)read_wave_byte(ramptr + wtptr) ^ 0x80;
 
                     if (read_wave_byte(ramptr + wtptr) == 0x00) {
-                        halt_osc(osc, 1, &acc, resshift);
+                        halt_osc(osc, 1, &acc, resshift, pOsc->control);
                         // Update ctrl from pOsc->control since halt_osc may have modified it
                         ctrl = pOsc->control;
                     } else {
@@ -261,11 +225,10 @@ void ES5503::generate_samples(int16_t *buffer, int num_samples) {
                         }
                         mixp += m_output_channels;
 
-                        // Check if we've reached or exceeded the wavetable size
-                        // Calculate new position after incrementing to detect boundary crossing
-                        uint32_t new_altram = acc >> resshift;
-                        if (new_altram > wtsize) {
-                            halt_osc(osc, 0, &acc, resshift);
+                        // MAME: wrap/halt when pre-increment position reaches end
+                        // (wtsize here is already pOsc->wtsize - 1).
+                        if (altram >= wtsize) {
+                            halt_osc(osc, 0, &acc, resshift, pOsc->control);
                             // Update ctrl from pOsc->control since halt_osc may have modified it
                             ctrl = pOsc->control;
                         }
@@ -358,62 +321,37 @@ uint8_t ES5503::read(uint8_t offset) {
         // Global registers
         switch (offset) {
             case 0xe0:  { // Interrupt status
-                // TODO: if there is no pending IRQ does the osc number remain unchanged?
-                int irq_osc = update_irq_status();
+                // Follows MAME es5503_device::read(0xe0): report and clear the first
+                // pending oscillator, and re-assert the IRQ line if any others remain.
+                retval = m_rege0;
 
-
-                // Clear IRQ line immediately on read
-                /* if (m_irq_callback) {
+                // Reading the status register deasserts the IRQ line.
+                if (m_irq_callback) {
                     m_irq_callback(false);
-                } */
-                // update_irq_status() returns -1 when no IRQ is pending; only
-                // clear a real oscillator's pending flag to avoid indexing [-1].
-                if (irq_osc >= 0) {
-                    m_oscillators[irq_osc].irqpend = 0;
                 }
-                // D0 and D6 of the interrupt-status register always read as 1.
-                return m_rege0 | 0x41;
 
-                // Scan all oscillators, find first one with IRQ
-                /* bool found_interrupt = false;
+                // Scan all oscillators; report & clear the first with a pending IRQ.
                 for (int i = 0; i < m_oscsenabled; i++) {
                     if (m_oscillators[i].irqpend) {
-                        // Signal this oscillator has an interrupt
-                        // IR bit is active-low: bit 7 = 0 means interrupt asserted                        
                         retval = (i << 1);
-                        
-                        // Clear this oscillator's pending flag
+                        m_rege0 = retval | 0x80;
                         m_oscillators[i].irqpend = 0;
-                        found_interrupt = true;
                         break;
                     }
-                } */
+                }
 
-                // Check if any oscillators still need servicing
-                /* bool has_more_pending = false;
+                // If any oscillators still need servicing, re-assert IRQ immediately.
                 for (int i = 0; i < m_oscsenabled; i++) {
                     if (m_oscillators[i].irqpend) {
-                        has_more_pending = true;
                         if (m_irq_callback) {
                             m_irq_callback(true);
                         }
                         break;
                     }
-                } */
-                
-                // IR bit is active-low: bit 7 = 0 means interrupt asserted, bit 7 = 1 means no interrupt
-                /* if (!has_more_pending) {
-                    // No more pending interrupts: set IR bit to 1 (no interrupt)
-                    m_rege0 |= 0x80;  // Set bit 7 (IR bit = 1 = no interrupt)
-                    retval |= 0x80;   // Also set in return value
-                } else if (found_interrupt) {
-                    // We found an interrupt and there are more: keep IR bit clear (interrupt asserted)
-                    m_rege0 &= ~0x80;  // Clear bit 7 (IR bit = 0 = interrupt asserted)
-                    retval &= ~0x80;    // Also clear in return value
                 }
-                m_rege0 = retval | 0x41; // bits 0 and 6 are always set, plus oscillator number and IR bit
-                // Return value: bits 0 and 6 are always set, plus oscillator number and IR bit
-                return m_rege0; */
+
+                // Bits 0 and 6 are always set, plus oscillator number and IR bit.
+                return retval | 0x41;
             }
             case 0xe1:  // Oscillator enable
                 return m_rege1;
@@ -465,7 +403,7 @@ void ES5503::write(uint8_t offset, uint8_t data) {
                 // Handle CPU halting with swap mode
                 if (!(m_oscillators[osc].control & 1) && ((data & 1)) && ((data >> 1) & 1)) {
                     halt_osc(osc, 0, &m_oscillators[osc].accumulator, 
-                            resshifts[m_oscillators[osc].resolution]);
+                            resshifts[m_oscillators[osc].resolution], data);
                 }
                 m_oscillators[osc].control = data;
                 break;

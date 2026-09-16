@@ -1,4 +1,6 @@
-#ifdef __linux__
+// Portable Dear ImGui menu shared by the Linux and Emscripten (web) builds.
+// It only uses ImGui + the SDL3 renderer backend; nothing GTK/X11-specific.
+#if defined(__linux__) || defined(__EMSCRIPTEN__)
 
 #include <SDL3/SDL.h>
 
@@ -106,21 +108,46 @@ static void build_menu_bar()
 
     // ── File ─────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::BeginMenu("Drives")) {
-            render_drives_menu();
-            ImGui::EndMenu();
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Close Emulation")) {
-            SDL_Event ev = {};
-            ev.type = SDL_EVENT_QUIT;
-            SDL_PushEvent(&ev);
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Quit")) {
-            SDL_Event ev = {};
-            ev.type = SDL_EVENT_QUIT;
-            SDL_PushEvent(&ev);
+        if (!running) {
+            if (ImGui::MenuItem("Launch Config...")) {
+                mi->openSystemConfig();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Quit")) {
+                SDL_Event ev = {};
+                ev.type = SDL_EVENT_QUIT;
+                SDL_PushEvent(&ev);
+            }
+        } else {
+            if (ImGui::BeginMenu("Drives")) {
+                render_drives_menu();
+                ImGui::EndMenu();
+            }
+            {
+                bool drivers_on = mi->getMountDrivers();
+                bool can_mount  = mi->hasBazFast();
+                if (!can_mount) ImGui::BeginDisabled();
+                if (ImGui::MenuItem("Mount Drivers", nullptr, drivers_on)) {
+                    mi->toggleMountDrivers();
+                }
+                if (!can_mount) ImGui::EndDisabled();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Save Screenshot", "Shift+PrintScreen")) {
+                mi->fileSaveScreenshot();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Close Emulation")) {
+                SDL_Event ev = {};
+                ev.type = SDL_EVENT_QUIT;
+                SDL_PushEvent(&ev);
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Quit")) {
+                SDL_Event ev = {};
+                ev.type = SDL_EVENT_QUIT;
+                SDL_PushEvent(&ev);
+            }
         }
         ImGui::EndMenu();
     }
@@ -178,6 +205,10 @@ static void build_menu_bar()
                 if (ImGui::MenuItem(c.label, nullptr, checked))
                     mi->setControllerMode(c.mode);
             }
+            ImGui::Separator();
+            bool absent_disconnected = mi->getDisconnectedWhenNoGamepad();
+            if (ImGui::MenuItem("Disconnected When No Gamepad", nullptr, absent_disconnected))
+                mi->toggleDisconnectedWhenNoGamepad();
             ImGui::EndMenu();
         }
 
@@ -223,6 +254,16 @@ static void build_menu_bar()
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("HUD")) {
+            bool stats_on = mi->getHudStats();
+            if (ImGui::MenuItem("Stats", nullptr, stats_on))
+                mi->toggleHudStats();
+            bool drives_on = mi->getHudDrives();
+            if (ImGui::MenuItem("Drives", nullptr, drives_on))
+                mi->toggleHudDrives();
+            ImGui::EndMenu();
+        }
+
         if (ImGui::MenuItem("Full Screen"))
             mi->displayFullScreen();
 
@@ -234,6 +275,8 @@ static void build_menu_bar()
     if (ImGui::BeginMenu("Docs")) {
         if (ImGui::MenuItem("Online Documentation"))
             SDL_OpenURL("https://jawaidbazyar2.github.io/gssquared/");
+        if (ImGui::MenuItem("Donate"))
+            SDL_OpenURL("https://gssquared.net/support");
         ImGui::EndMenu();
     }
 }
@@ -331,6 +374,17 @@ void pumpMenuEvents()
     // No-op: ImGui is fully driven by renderMenuOverlay each frame.
 }
 
+bool menuNeedsFrame()
+{
+    if (!g_imgui_inited) return false;
+    ImGuiIO &io = ImGui::GetIO();
+    // WantCapture* is set at end of the previous NewFrame. While either is set,
+    // handleMenuEvent swallows input that would otherwise dirty SelectSystem /
+    // EditSystem — so those phases must keep calling renderMenuOverlay or ImGui
+    // (and the rest of the UI) freezes.
+    return io.WantCaptureMouse || io.WantCaptureKeyboard;
+}
+
 void renderMenuOverlay(SDL_Renderer *renderer, int /*win_w*/, int /*win_h*/)
 {
     if (!g_imgui_inited) return;
@@ -361,4 +415,4 @@ void renderMenuOverlay(SDL_Renderer *renderer, int /*win_w*/, int /*win_h*/)
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
 }
 
-#endif // __linux__
+#endif // __linux__ || __EMSCRIPTEN__

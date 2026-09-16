@@ -118,24 +118,12 @@ int read_2mg_header(format_2mg_t &hdr_out, const std::string& filename) {
     // Convert little-endian fields
     hdr_out.header_size = le16_to_cpu(raw.header_size);
     hdr_out.version = le16_to_cpu(raw.version);
-    /* The flags word is FOUR SEPARATE BYTES at offset $10, not a uint8_t[4],
-       so it has to be assembled by hand -- which is presumably how it came to
-       be read from raw.image_format instead. That copy-paste meant hdr.flag
-       always held the image FORMAT (0=DOS order, 1=ProDOS, 2=NIB), and both
-       flags tested against it are therefore dead:
-
-         FLAG_LOCKED (bit 31)  -- a write-protected 2MG mounted WRITABLE, so a
-                                  disk the user had locked could be written.
-         FLAG_DOS33  (bit 8)   -- the DOS 3.3 volume number was never honoured
-                                  and always defaulted to 254.
-
-       Byte roles per the 2MG spec, and matching the field comments in
-       format_2mg_raw_t: [0] DOS 3.3 volume number, [1] 0x01 = that volume
-       number is valid, [3] 0x80 = write protected. */
-    hdr_out.flag = (uint32_t)raw.flag_byte
-                 | ((uint32_t)raw.flag_type  << 8)
-                 | ((uint32_t)raw.flag_byte2 << 16)
-                 | ((uint32_t)raw.flag_byte3 << 24);
+    hdr_out.image_format = le32_to_cpu(raw.image_format);
+    // Flags are four little-endian bytes immediately after image_format.
+    hdr_out.flag = raw.flag_byte
+                 | (uint32_t(raw.flag_type) << 8)
+                 | (uint32_t(raw.flag_byte2) << 16)
+                 | (uint32_t(raw.flag_byte3) << 24);
     hdr_out.block_count = le32_to_cpu(raw.block_count);
     hdr_out.data_offset = le32_to_cpu(raw.data_offset);
     hdr_out.bytes_count = le32_to_cpu(raw.data_length);
@@ -143,7 +131,6 @@ int read_2mg_header(format_2mg_t &hdr_out, const std::string& filename) {
     hdr_out.comment_length = le32_to_cpu(raw.comment_length);
     hdr_out.creator_data = le32_to_cpu(raw.creator_data);
     hdr_out.creator_data_length = le32_to_cpu(raw.creator_data_length);
-    hdr_out.image_format = le32_to_cpu(raw.image_format);
 
     // Validate variable-length blobs against the file size before allocating.
     // comment_length == 0xFFFFFFFF would make `new char[len + 1]` wrap to new char[0]
@@ -240,8 +227,10 @@ int display_2mg_header(format_2mg_t& hdr) {
     std::cout << "  Creator: " << hdr.creator << " (" << get_2mg_creator_name(hdr.creator) << ")" << std::endl;
     std::cout << "  Header Size: " << hdr.header_size << std::endl;
     std::cout << "  Version: " << hdr.version << std::endl;
-    std::cout << "  Image Format: " << hdr.flag << std::endl;
+    std::cout << "  Image Format: " << hdr.image_format << std::endl;
+    std::cout << "  Flags: 0x" << std::hex << hdr.flag << std::dec << std::endl;
     std::cout << "  Block Count: " << hdr.block_count << std::endl;
+    std::cout << "  Data Offset: " << hdr.data_offset << std::endl;
     std::cout << "  Bytes Count: " << hdr.bytes_count << std::endl;
     std::cout << "  Comment Offset: " << hdr.comment_offset << std::endl;
     std::cout << "  Comment Length: " << hdr.comment_length << std::endl;
@@ -341,61 +330,67 @@ int identify_media(media_descriptor& md) {
         }
         display_2mg_header(hdr);
 
+        md.file_size = get_file_size(md.filename);
+
+        // Prefer the explicit data_offset field. Some creators (e.g. "pdos")
+        // set header_size to 52 while still placing disk data at offset 64.
+        md.data_offset = hdr.data_offset ? hdr.data_offset : hdr.header_size;
+        if (md.data_offset >= (uint64_t)md.file_size) {
+            std::cerr << "2MG data offset past end of file: " << md.filename << std::endl;
+            return -1;
+        }
+        uint64_t avail = (uint64_t)md.file_size - md.data_offset;
+
+        // Neither length field can be trusted. Sweet 16 ("WOOF") writes
+        // data_length 0, and the spec only defines block_count for ProDOS-order
+        // images, so DOS-order and nibblized images legitimately carry 0 there.
+        // Fall back through block_count to what the file actually holds; a
+        // zero here used to divide by zero and produce block_size 0.
+        uint64_t data_size = hdr.bytes_count;
+        if (data_size == 0) data_size = (uint64_t)hdr.block_count * 512;
+        if (data_size == 0 || data_size > avail) data_size = avail;
+
         if (hdr.image_format == 0x00000000) { // DOS 3.3 Sector Order. Only ever 143k disks.
+            if (avail < 560 * 256) {
+                std::cerr << "2MG DOS 3.3 image is short: " << md.filename << std::endl;
+                return -1;
+            }
             md.interleave = INTERLEAVE_DO;
             md.media_type = MEDIA_NYBBLE;
+            md.block_size = 256;
+            md.data_size = 560 * 256;
         } else if (hdr.image_format == 0x00000001) { // ProDOS Sector Order.
             // if disk size is 143k, treat as a nybble disk.
-            if (hdr.bytes_count == 560 * 256) { // floppy
+            if (data_size == 560 * 256) { // floppy
                 md.interleave = INTERLEAVE_PO;
                 md.media_type = MEDIA_NYBBLE;
+                md.block_size = 256;
             } else {                            // any other media size, just a bunch of blocks.
                 md.interleave = INTERLEAVE_NONE;
                 md.media_type = MEDIA_BLK;
+                md.block_size = 512;
             }
+            md.data_size = data_size - (data_size % md.block_size);
         } else if (hdr.image_format == 0x00000002) { // NIB data
+            if (avail < 35 * 6656) { // 35 tracks of raw nibbles
+                std::cerr << "2MG nibblized image is short: " << md.filename << std::endl;
+                return -1;
+            }
             md.interleave = INTERLEAVE_NONE;
             md.media_type = MEDIA_PRENYBBLE;
+            md.block_size = 256;
+            md.data_size = 140 * 1024;
         } else {
             std::cerr << "Unknown image format: " << hdr.image_format << std::endl;
             return -1;
         }
-        if (hdr.block_count == 0) {   // G16: a block_count of 0 would SIGFPE on the divide below
-            std::cerr << "2MG block_count is zero (malformed): " << md.filename << std::endl;
+        // Derive the count from the data we actually have rather than the
+        // header, so a block_count that overruns EOF can't let the guest
+        // read or write past the end of the image data.
+        md.block_count = md.data_size / md.block_size;
+        if (md.block_count == 0) {
+            std::cerr << "2MG image has no data: " << md.filename << std::endl;
             return -1;
-        }
-        // Sanity-check bytes_count before dividing: it must be a whole multiple of the
-        // block count (else block_size truncates and data_size disagrees with the geometry).
-        if (hdr.bytes_count == 0 || (hdr.bytes_count % hdr.block_count) != 0) {
-            std::cerr << "2MG bytes_count " << hdr.bytes_count
-                      << " inconsistent with block_count " << hdr.block_count
-                      << " (malformed): " << md.filename << std::endl;
-            return -1;
-        }
-        md.file_size = get_file_size(md.filename);
-        md.block_count = hdr.block_count;
-        md.block_size = hdr.bytes_count / hdr.block_count;
-        md.data_size = hdr.bytes_count;
-        /* Prefer the file's OWN data offset ($18) over header_size. They are
-           both 64 in every ordinary image, which is why using header_size has
-           worked, but the format does not require them to match -- a writer may
-           place a comment or creator blob between the header and the data. When
-           they differ, header_size reads the payload at the wrong offset and
-           every block is quietly shifted.
-
-           Defensive, because a wrong data_offset is worse than an unused one:
-           accept it only when it is plausible, and say so when it is not. */
-        md.data_offset = hdr.header_size;
-        if (hdr.data_offset != 0 && hdr.data_offset != hdr.header_size) {
-            if (hdr.data_offset >= hdr.header_size &&
-                (uint64_t)hdr.data_offset + hdr.bytes_count <= md.file_size) {
-                md.data_offset = hdr.data_offset;
-            } else {
-                std::cerr << "2MG data_offset " << hdr.data_offset
-                          << " is out of range for header_size " << hdr.header_size
-                          << " / file size " << md.file_size
-                          << "; using header_size: " << md.filename << std::endl;
-            }
         }
         md.write_protected = md.write_protected || (hdr.flag & FLAG_LOCKED) != 0;
         md.dos33_volume = (hdr.flag & FLAG_DOS33) != 0 ? (hdr.flag & FLAG_DOS33_VOL_MASK) : 254; // if not set, then 254
@@ -440,7 +435,7 @@ int identify_media(media_descriptor& md) {
         md.interleave = INTERLEAVE_PO;
         md.data_offset = 0;
         //md.write_protected = false /*true*/;
-        md.dos33_volume = 0x01; // might want to try to snag this from the DOS33 VTOC
+        md.dos33_volume = 254; // match .dsk/.do and CiderPress; ProDOS FX XRW treats V=1 as stepping×1
     } else if (compare_suffix(md.filename, ".nib")) {
         md.media_type = MEDIA_PRENYBBLE;
         md.file_size = get_file_size(md.filename);

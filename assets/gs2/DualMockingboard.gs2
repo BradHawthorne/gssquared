@@ -1,0 +1,21 @@
+gs2_version = 1
+id = "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c01"
+name = "IIe Enh Dual Mockingboard"
+description = "128K RAM; Disk II; Clock; DUAL Mockingboard"
+platform = "apple2e_enhanced"
+
+[[cards]]
+slot = 4
+card = "mockingboard"
+
+[[cards]]
+slot = 5
+card = "bazfast3"
+
+[[cards]]
+slot = 6
+card = "disk_ii"
+
+[[cards]]
+slot = 7
+card = "mockingboard"

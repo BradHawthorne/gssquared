@@ -33,6 +33,8 @@ On a real GS, if we read C000 w/o clearing strobe, it does change as we type cha
 
 So what the hell does the GS do? ah ha!!! By default, GS has keyboard buffering DISABLED. When I ENABLE it, it behaves the same as GS2. So I need to respect the "buffer yes/no" bit and do the right thing.
 
+GS now respects "buffer disable/enable" modes_byte flags and this now works correctly.
+
 ## Taxman
 
 TAXMAN loads switches to text page 2 and I got no other display..  hit reset, and then it starts working.. ?  ctrl-c switches back to text page 2. huh..  WE'RE NOT SHADOWING PAGE 2, HA HA  
@@ -62,14 +64,22 @@ My recollection is this worked ok. Well something was working somewhere, because
 boots to "NO SMARTPORT" error. Doesn't like running off the hard disk.
 After Woz3.5 support, now boots to initial screen! But crashes with RESTART SYSTEM (Ensoniq interrupt problem).
 
+plays at correct tempo now, but if you skip the intro song and text, dies with Unclaimed Sound Interrupt.
+
 ## Christmas Music (Christmas.2mg)
 
 Error: 13 (from PlayMidiStartup).
 2/18/26: the midi tool is now starting, and playing a song.. way too slowly, just like QiX. Still, this is a big improvement over crashing.
 
+with ensoniq interrupt fix... runs and plays correctly. mostly. the second song sounds out of tune. not sure if it's on purpose? Guess I can try it in KEGaroo. OK it's the same off-key stuff in KEGS. 
+
 ## FTA XMAS Demo (FTAXMAS)
 
 immediately hits BRK at 5300 after loading boot block. I read this loads stuff from disk while animations are occurring, so this may depend on directly manipulating the IWM.
+
+with WOZ 3.5 support and ensoniq interrupt fix, playing pretty well.
+
+there is a slight cycle timing defect where it does not seem to want to draw in the very lower right corner of the border. (so, several cycles worth of border at the very end is wrong). Is there latency in changing the border color?
 
 ## A2Desktop 1.5
 
@@ -131,6 +141,10 @@ boots to "Demo Configuration";
 asks for volume; 
 tries to load stuff off slot 6 for a while then crashes. is likely expecting IWM in slot 5.
 
+Even with WOZ 3.5 it's dying looking for a disk over and over. Weird.
+
+ah, you have to load both disks in the set when you boot it up. With the latest DOC fixes (7-16-26) is now good to go.
+
 ## Qix
 
 sometimes we have a crash booting GS/OS, and then a reboot, and it works.
@@ -138,10 +152,16 @@ This feels like there is a s/s not being set correctly on powerup or reset.
 At splash screen hangs in tight loop waiting for 1D00 to be non-zero. It's waiting for an interrupt handler to set a variable.
 it's just slow. The music is playing like 8 times too slow. Weeeird.
 
+with ensoniq interrupt fix, runs and plays correctly! Music and sound effects at correct rate. 
+
 ## Rastan
 
 gets a little further now, you can start the game, but the game screen draws as the guy falls on the left, eventually screen blacks and audio keeps repeating in a loop. Getting closer!
 Likely a Ensoniq issue.
+
+with esoniq interrupt fix, runs and plays correctly!
+
+there are a couple places however where a sound effect sounds like noise. Unsure if that's intentional (probably not)
 
 ## Gauntlet
 
@@ -161,17 +181,20 @@ Interestingly, same media boots and plays fine on //e.
 
 ## Donkey Kong
 
-Plays very well with keyboard. (It does not support keyboard) Does support SNESMAX for gamepads, so look into adding this in the future.
+Plays very well with keyboard. (It does not support joystick) Does support SNESMAX for gamepads, so look into adding this in the future.
 
 ## NoiseTracker
 
 there was a MMU bug involving RAMRD/RAMWRT and direct access to bank 1. (we were adding an extra 0x1'0000 erroneously).
 It now starts but then hits a BRK; it plays music for a while; then dies with a "RESTART SYSTEM". Could be Ensoniq IRQ or another memory issue.
 2/18/26: gets a little further now before crashing, it displays a 3d Ball pyramid.
+7/16/26: working well with latest round of Ensoniq fixes.
 
 ## Senseiplay
 
 similar to noisetracker, now starts and plays a song for a couple seconds, then fails with a "RESTART SYSTEM-$01".
+
+with ensoniq interrupt fix, Does not trigger RESTART SYSTEM 01 but does not play songs correctly.
 
 ## Telcom 0.28 (1991)
 
@@ -215,6 +238,8 @@ takes a bit to load up, but starts. Ran for a long while (prefers to be accelera
 Uses fill mode, which we haven't implemented yet.
 OK fine, I implemented fill, only took 20 minutes, but this still crashes.
 
+with ensoniq interrupt fix, runs mostly correctly! There are two segments where it gets bogged down. but no longer crashes with RESTART SYSTEM 01. 
+
 ### No Hard Feelings
 
 Also desperately wants fill mode. Also implemented. What a great demo.
@@ -222,6 +247,8 @@ Also desperately wants fill mode. Also implemented. What a great demo.
 ### Plasma
 
 crashes on start with sound interrupt stutter issue like Rastan has. Very similar to Plasmagoria. It's working this time though.. 
+
+with ensoniq interrupt fix, seems to run correctly.
 
 ### Lower Planes
 
@@ -235,6 +262,8 @@ it's slamming the disk drives trying to do direct 3.5" stuff. "Non bootable disk
 
 causes a segfault! Whoo, that's entertaining. The mask for "oscillators enabled" in ensoniq was 0x3F, when it should have been 0x1F. Boots up to the menu now but then is non-responsive.
 
+there are some defects in the initial screen where fillmode lines don't seem to be getting set correctly.
+
 ### Modulae
 
 Causes a segfault also! Same problem as above, now starts up.. plays music and rotates text. click button to get past the start screen.
@@ -245,14 +274,26 @@ all the controls work, the mouse is just a little sluggish sometimes.
 
 interrupt issues. Also, after it spazzes out, even RESET isn't turning off some VGC interrupts.
 
+with ensoniq interrupt fix, it's not crashing out any more. however, there are artifacts on the main instruments (instr other than the bass). Probably similar to what's happening in Sales Demo. 
+
+### Apple IIgs Sales Demo
+
+with ensoniq interrupt fix, now is running correctly mostly. the intro jazz music is good. 
+
+After 7/16/26, the digitized speech playback "Introducing the Apple IIgs" is now working.
+
 ### Revenge of the Bobs
 
 Coredump! I didn't have the 2nd disk mounted, sadly did not replicate.
 Boots, starts to run, wants accelerated mode, but then dies with SYSTEM ERROR 01
 
+with ensoniq interrupt fix, now runs correctly.
+
 ### Shoddy Demo
 
-starts to load, hits a BRK
+starts to load, hits a BRK.
+
+with ensoniq interrupt fix, now runs correctly.
 
 ### Airforce Demo
 
@@ -272,8 +313,12 @@ POLL FDB DEVICE - unimplemented
 interesting!
 WORKING!!! Implemented improvements to ADB emulation to support what w3d wanted.
 
+with ensoniq interrupt fix, intro music and game sound effects play correctly now.
+
 **PLAYS LIKE A CHAMP**
 
 ### Zany Golf
 
 Works right up until you are actually playing a level, then the screen is black where level should be. Say wha.
+
+Retested after IIgs fast-RAM sizing matched KEGS (ROM01 8.125MB / ROM03 9MB): still black playfield with HUD + music. Blit LocInfo at DP `$0C28+` can hold long-pointer junk in the Y/rows fields, so the mask blit reads nonsense banks; not fixed by RAM size alone.

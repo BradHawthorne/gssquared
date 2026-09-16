@@ -18,6 +18,7 @@
 #include "display/display.hpp"
 #include "videosystem.hpp"
 #include "devices/adb/keygloo.hpp"
+#include "devices/adb/ADB_Micro.hpp"   // KeyGloo is only forward-declared by keygloo.hpp since upstream 4d761b08
 #include "devices/displaypp/VideoScannerII.hpp"
 #include "Module_ID.hpp"
 #include "bus_protocol.h"
@@ -440,7 +441,7 @@ static void inject_keys(a2gspu_data *ad) {
 //   C         — click (down + up next frame)
 //   RD        — right button down
 //   RU        — right button up
-#include "devices/applemouseii/mouse.hpp"   // card-level injection (Pascal MOUSE driver is a card client)
+#include "devices/applemouseiii/applemouseiii.hpp"   // card-level injection (Pascal MOUSE driver is a card client)
 static const char *MOUSE_CMD_FILE = "a2gspu_mouse.txt";
 
 // Encode relative motion into ADB mouse register format
@@ -467,7 +468,7 @@ static void inject_mouse(a2gspu_data *ad) {
     if (!ad->keygloo) return;
     // Feed BOTH surfaces: the ADB mouse (keygloo) and, when mounted, the Apple Mouse II
     // card (Pascal 1.3's MOUSE driver reads only the card -- U-047b/c in the pascal repo).
-    mouse_state_t *mcard = (mouse_state_t *)ad->computer->get_module_state(MODULE_MOUSECARD);
+    applemouseiii_state_t *mcard = (applemouseiii_state_t *)ad->computer->get_module_state(MODULE_MOUSECARD);
 
     // Only poll file every 4 frames (~15Hz) to reduce I/O when idle.
     static int mouse_poll_counter = 0;
@@ -497,22 +498,22 @@ static void inject_mouse(a2gspu_data *ad) {
             sscanf(line + 1, "%d %d", &dx, &dy);
             encode_mouse_motion(dx, dy, mouse_btn_left, mouse_btn_right, &d0, &d1);
             ad->keygloo->inject_mouse_data(d0, d1);
-            if (mcard) mouse_inject(mcard, dx, dy, -1);
+            if (mcard) applemouseiii_inject(mcard, dx, dy, -1);
         } else if (line[0] == 'D' || line[0] == 'd') {
             mouse_btn_left = true;
             encode_mouse_motion(0, 0, mouse_btn_left, mouse_btn_right, &d0, &d1);
             ad->keygloo->inject_mouse_data(d0, d1);
-            if (mcard) mouse_inject(mcard, 0, 0, 1);
+            if (mcard) applemouseiii_inject(mcard, 0, 0, 1);
         } else if (line[0] == 'U' || line[0] == 'u') {
             mouse_btn_left = false;
             encode_mouse_motion(0, 0, mouse_btn_left, mouse_btn_right, &d0, &d1);
             ad->keygloo->inject_mouse_data(d0, d1);
-            if (mcard) mouse_inject(mcard, 0, 0, 0);
+            if (mcard) applemouseiii_inject(mcard, 0, 0, 0);
         } else if (line[0] == 'C' || line[0] == 'c') {
             mouse_btn_left = true;
             encode_mouse_motion(0, 0, mouse_btn_left, mouse_btn_right, &d0, &d1);
             ad->keygloo->inject_mouse_data(d0, d1);
-            if (mcard) mouse_inject(mcard, 0, 0, 1);
+            if (mcard) applemouseiii_inject(mcard, 0, 0, 1);
         } else if (line[0] == 'R' && (line[1] == 'D' || line[1] == 'd')) {
             mouse_btn_right = true;
             encode_mouse_motion(0, 0, mouse_btn_left, mouse_btn_right, &d0, &d1);

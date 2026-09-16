@@ -169,7 +169,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         names += "adb";
     }
     if (g_a2gspu_ensoniq) {
-        long at = a2gspu_snap_dev_begin(f, "ensoniq", 1); ensoniq_A2GSPU_snapshot(g_a2gspu_ensoniq, f); a2gspu_snap_dev_end(f, at);
+        long at = a2gspu_snap_dev_begin(f, "ensoniq", 2); ensoniq_A2GSPU_snapshot(g_a2gspu_ensoniq, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "ensoniq" : ",ensoniq";
     }
     display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
@@ -185,7 +185,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         names += names.empty() ? "scanner" : ",scanner";
     }
     if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
-        long at = a2gspu_snap_dev_begin(f, "iwm", 1); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);
+        long at = a2gspu_snap_dev_begin(f, "iwm", 2); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "iwm" : ",iwm";
     }
     // Every Disk II controller, by slot; each entry length-prefixed, so a machine
@@ -242,7 +242,7 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 r = kg->kg->A2GSPU_restore(f) ? RESTORED : FAILED;
                 if (r == RESTORED) keygloo_update_interrupt_status(kg, kg->kg);
             }
-        } else if (!strcmp(nm, "ensoniq") && ver == 1) {
+        } else if (!strcmp(nm, "ensoniq") && ver == 2) {
             if (g_a2gspu_ensoniq) r = ensoniq_A2GSPU_restore(g_a2gspu_ensoniq, f) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "vgcint") && ver == 1) {
             display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
@@ -255,7 +255,7 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 r = (display_A2GSPU_new_video_restore(ds, f) && ds->video_scanner->A2GSPU_restore(f)) ? RESTORED : FAILED;
                 if (r == RESTORED && ftell(f) != payload + (long)len) r = FAILED;   // not this scanner's layout
             }
-        } else if (!strcmp(nm, "iwm") && ver == 1) {
+        } else if (!strcmp(nm, "iwm") && ver == 2) {
             if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
                 int mismatch = 0;
                 r = iwm_A2GSPU_restore(g_a2gspu_iwm, f, &mismatch) ? RESTORED : FAILED;

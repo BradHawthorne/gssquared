@@ -209,4 +209,3 @@ int SoundEffect::get_queued(uint64_t key)
     }
     return audio_system->get_stream_queued(si->stream);
 }
-

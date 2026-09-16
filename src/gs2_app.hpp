@@ -36,6 +36,7 @@
 #include <time.h>
 #include <getopt.h>
 #include <regex>
+#include <memory>
 
 #include "gs2.hpp"
 #include "platform-specific/menu.h"
@@ -49,11 +50,19 @@
 #include "platforms.hpp"
 #include "util/dialog.hpp"
 #include "util/mount.hpp"
+#include "util/Connections.hpp"
+#include "util/SystemConfig.hpp"
+#include "util/SystemSettings.hpp"
 #include "ui/OSD.hpp"
+#if defined(__EMSCRIPTEN__)
+#include "platform-specific/emscripten/web_file_dialog.hpp"
+#endif
 #include "systemconfig.hpp"
 #include "slots.hpp"
 #include "videosystem.hpp"
 #include "debugger/debugwindow.hpp"
+#include "debugger/DebugProtocolServer.hpp"
+#include "debugger/BreakpointTable.hpp"
 #include "computer.hpp"
 #include "mmus/mmu_ii.hpp"
 #include "mmus/mmu_iie.hpp"
@@ -96,6 +105,7 @@
 #include "wiz5_config.hpp"   // WIZ5_* title/interp-specific config layer (env-gated, off => no-op)
 #include "util/EventTimer.hpp"
 #include "ui/SelectSystem.hpp"
+#include "ui/EditSystem.hpp"
 #include "ui/MainAtlas.hpp"
 #include "cpus/cpu_implementations.hpp"
 #include "NClock.hpp"
@@ -109,6 +119,7 @@
 
 enum AppPhase {
     PHASE_SYSTEM_SELECT,
+    PHASE_EDIT_SYSTEM,
     PHASE_EMULATION,
     PHASE_SHUTTING_DOWN,
 };
@@ -120,20 +131,25 @@ struct GS2AppState {
     // Parsed from command line (persistent across system-select cycles)
     int platform_id = PLATFORM_APPLE_II_PLUS;
     std::vector<disk_mount_t> disks_to_mount;
+    std::unique_ptr<SystemConfig> loaded_config;
 
-    // True when the user gave -p PLATFORM and we skipped the system
-    // selector at startup. In that mode, closing the emulator window
+    // True when the user gave -p PLATFORM or a config file path and we skipped
+    // the system selector at startup. In that mode, closing the emulator window
     // quits the app (rather than bouncing back to the selector) — the
     // user expressly asked for one specific machine and there's no
     // "back" to return to.
     bool auto_launched = false;
 
-    // System selection
+    // System selection / config editor
     SelectSystem *select_system = nullptr;
+    EditSystem *edit_system = nullptr;
     AssetAtlas_t *aa = nullptr;
 
     // Emulation state
     computer_t *computer = nullptr;
+
+    // External debug protocol (optional; started via --debug / -D)
+    std::unique_ptr<DebugProtocolServer> debug_protocol;
 
     // MMU pointers tracked for cleanup
     MMU_II *mmu_ii = nullptr;

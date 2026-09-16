@@ -246,22 +246,26 @@ class MMU_IIgs : public MMU {
         
         virtual uint8_t *get_rom_base() { return main_rom; };
 
-        // Byte offset within main_rom of virtual bank $FF -- always the LAST
-        // physical bank of the image, whatever its size. ROM01 is 2 banks
-        // (128K) -> $10000; ROM03 and ROM04 are 4 banks (256K) -> $30000.
-        // Fixed-offset lookups that key off bank $FF (the LC-area ROM overlay
-        // read, vp_read) hardcoded $10000, which is silently correct ONLY for a
-        // 128K ROM -- and this fork ships ROM3 (Tenspeed) and ROM4 (Mark Twain)
-        // systems, both 256K, where it read the wrong bank entirely.
-        // init_map already derived this correctly by hand; now there is one
-        // definition instead of two conventions. (Ported from upstream f6a9a5c.)
+        // Byte offset within main_rom of the start of virtual bank $FF (the
+        // top bank, always the *last* physical bank in the ROM image
+        // regardless of total ROM size). ROM01 is 2 banks (128KB) -> 0x10000;
+        // ROM03 is 4 banks (256KB) -> 0x30000. Fixed-offset lookups (LC-area
+        // ROM overlay reads, the $C100-$CFFF slot-firmware mapping, the
+        // embedded IIe-compat ROM pointer) key off bank $FF and used to
+        // hardcode 0x10000, silently only correct for a 128KB ROM.
         inline uint32_t rom_bank_ff_offset() const { return (rom_banks - 1) * BANK_SIZE; }
+        // FORK: the ROM generation, derived from the image size in the
+        // constructor. Consumers that need "ROM 03 or later" ask here rather
+        // than testing the platform ID, which is PLATFORM_APPLE_IIGS for the
+        // fork's ROM 03 and ROM 04 personalities.
+        bool rom03() const { return is_rom03; }
+        uint8_t *get_memory_base() override { return main_ram; }
+        uint32_t get_memory_size() override { return ram_banks * BANK_SIZE; }
         // Base of ROM bank $FF (the last 64KB) — the language-card / $D000-$FFFF ROM
         // region. Bank $FF lives at the TOP of the image: offset (rom_banks-1)*64KB =
         // 0x10000 for a 128KB ROM01, 0x30000 for a 256KB ROM03/ROM04. Use this instead
         // of a hardcoded 0x10000 so the LC-ROM read path is size-agnostic.
         inline uint8_t *get_lc_rom_base() { return main_rom + (rom_banks - 1) * BANK_SIZE; }
-        virtual uint8_t *get_memory_base() { return main_ram; };
         inline uint8_t *get_megaii_memory_base() { return megaii ? megaii->get_memory_base() : nullptr; }
         // Observation-free 24-bit peek for the introspection floor: NO soft-switch
         // dispatch, NO slot-bus emit, NO clock tick — an external probe, never a hook

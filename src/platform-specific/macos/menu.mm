@@ -101,6 +101,8 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 
 @interface MenuActionHandler : NSObject <NSMenuItemValidation>
 - (void)fileClose:(id)sender;
+- (void)fileSaveScreenshot:(id)sender;
+- (void)toggleMountDrivers:(id)sender;
 - (void)appQuit:(id)sender;
 - (void)machineReset:(id)sender;
 - (void)machineRestart:(id)sender;
@@ -114,16 +116,21 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 - (void)toggleAudioDecorrelation:(id)sender;
 - (void)toggleRightMouseAccel:(id)sender;
 - (void)controllerMode:(id)sender;
+- (void)toggleDisconnectedWhenNoGamepad:(id)sender;
 - (void)monitorComposite:(id)sender;
 - (void)monitorGSRGB:(id)sender;
 - (void)monitorMonoGreen:(id)sender;
 - (void)monitorMonoAmber:(id)sender;
 - (void)monitorMonoWhite:(id)sender;
 - (void)displayFullScreen:(id)sender;
+- (void)toggleCrtShader:(id)sender;
+- (void)toggleHudStats:(id)sender;
+- (void)toggleHudDrives:(id)sender;
 - (void)editCopyScreen:(id)sender;
 - (void)editPasteText:(id)sender;
 - (void)diskToggleDrive:(id)sender;
 - (void)helpOpenDocs:(id)sender;
+- (void)helpDonate:(id)sender;
 @end
 
 @implementation MenuActionHandler
@@ -133,6 +140,21 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 		event.type = SDL_EVENT_QUIT;
 		SDL_PushEvent(&event);
 	}
+	(void)sender;
+}
+
+- (void)fileOpenConfig:(id)sender {
+	getMenuInterface()->openSystemConfig();
+	(void)sender;
+}
+
+- (void)fileSaveScreenshot:(id)sender {
+	getMenuInterface()->fileSaveScreenshot();
+	(void)sender;
+}
+
+- (void)toggleMountDrivers:(id)sender {
+	getMenuInterface()->toggleMountDrivers();
 	(void)sender;
 }
 
@@ -152,9 +174,30 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 		int current = getMenuInterface()->getCurrentControllerMode();
 		[menuItem setState:([menuItem tag] == current) ? NSControlStateValueOn : NSControlStateValueOff];
 	}
+	if (menuItem.action == @selector(toggleDisconnectedWhenNoGamepad:)) {
+		[menuItem setState:getMenuInterface()->getDisconnectedWhenNoGamepad() ? NSControlStateValueOn : NSControlStateValueOff];
+	}
+	if (menuItem.action == @selector(toggleHudStats:)) {
+		[menuItem setState:getMenuInterface()->getHudStats() ? NSControlStateValueOn : NSControlStateValueOff];
+	}
+	if (menuItem.action == @selector(toggleHudDrives:)) {
+		[menuItem setState:getMenuInterface()->getHudDrives() ? NSControlStateValueOn : NSControlStateValueOff];
+	}
+	if (menuItem.action == @selector(toggleCrtShader:)) {
+		[menuItem setState:getMenuInterface()->getCrtShader() ? NSControlStateValueOn : NSControlStateValueOff];
+		return getMenuInterface()->isEmulationRunning() && getMenuInterface()->getCrtShaderAvailable();
+	}
+	if (menuItem.action == @selector(toggleMountDrivers:)) {
+		[menuItem setState:getMenuInterface()->getMountDrivers() ? NSControlStateValueOn : NSControlStateValueOff];
+		return getMenuInterface()->isEmulationRunning() && getMenuInterface()->hasBazFast();
+	}
 	// Help items are always available regardless of emulation state
-	if (menuItem.action == @selector(helpOpenDocs:)) {
+	if (menuItem.action == @selector(helpOpenDocs:) ||
+	    menuItem.action == @selector(helpDonate:)) {
 		return YES;
+	}
+	if (menuItem.action == @selector(fileOpenConfig:)) {
+		return !getMenuInterface()->isEmulationRunning();
 	}
 	// All other items (File, Edit, Machine, Settings, Display) require emulation
 	return getMenuInterface()->isEmulationRunning();
@@ -179,12 +222,20 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 	getMenuInterface()->setControllerMode((int)[item tag]);
 }
 
+- (void)toggleDisconnectedWhenNoGamepad:(id)sender {
+	getMenuInterface()->toggleDisconnectedWhenNoGamepad();
+	(void)sender;
+}
+
 - (void)monitorComposite:(id)sender { getMenuInterface()->setMonitor(MONITOR_COMPOSITE); (void)sender; }
 - (void)monitorGSRGB:(id)sender     { getMenuInterface()->setMonitor(MONITOR_GS_RGB); (void)sender; }
 - (void)monitorMonoGreen:(id)sender  { getMenuInterface()->setMonitor(MONITOR_MONO_GREEN); (void)sender; }
 - (void)monitorMonoAmber:(id)sender  { getMenuInterface()->setMonitor(MONITOR_MONO_AMBER); (void)sender; }
 - (void)monitorMonoWhite:(id)sender  { getMenuInterface()->setMonitor(MONITOR_MONO_WHITE); (void)sender; }
 - (void)displayFullScreen:(id)sender { getMenuInterface()->displayFullScreen(); (void)sender; }
+- (void)toggleCrtShader:(id)sender   { getMenuInterface()->toggleCrtShader(); (void)sender; }
+- (void)toggleHudStats:(id)sender    { getMenuInterface()->toggleHudStats(); (void)sender; }
+- (void)toggleHudDrives:(id)sender   { getMenuInterface()->toggleHudDrives(); (void)sender; }
 - (void)editCopyScreen:(id)sender    { getMenuInterface()->editCopyScreen(); (void)sender; }
 - (void)editPasteText:(id)sender     { getMenuInterface()->editPasteText(); (void)sender; }
 
@@ -197,6 +248,11 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 
 - (void)helpOpenDocs:(id)sender {
 	SDL_OpenURL("https://jawaidbazyar2.github.io/gssquared/");
+	(void)sender;
+}
+
+- (void)helpDonate:(id)sender {
+	SDL_OpenURL("https://gssquared.net/support");
 	(void)sender;
 }
 @end
@@ -250,11 +306,39 @@ I don't know what all these words mean exactly. But I confirmed it does seem to 
 @interface ControllerMenuDelegate : NSObject <NSMenuDelegate>
 @end
 
+#define CONTROLLER_TAG_ABSENT_DISCONNECTED 100
+
 @implementation ControllerMenuDelegate
 - (void)menuNeedsUpdate:(NSMenu *)menu {
 	int current = getMenuInterface()->getCurrentControllerMode();
+	bool absentDisconnected = getMenuInterface()->getDisconnectedWhenNoGamepad();
 	for (NSMenuItem *item in [menu itemArray]) {
-		[item setState:([item tag] == current) ? NSControlStateValueOn : NSControlStateValueOff];
+		if ([item isSeparatorItem]) {
+			continue;
+		}
+		if ([item tag] == CONTROLLER_TAG_ABSENT_DISCONNECTED) {
+			[item setState:absentDisconnected ? NSControlStateValueOn : NSControlStateValueOff];
+		} else {
+			[item setState:([item tag] == current) ? NSControlStateValueOn : NSControlStateValueOff];
+		}
+	}
+}
+@end
+
+@interface HudMenuDelegate : NSObject <NSMenuDelegate>
+@end
+
+#define HUD_TAG_STATS  1
+#define HUD_TAG_DRIVES 2
+
+@implementation HudMenuDelegate
+- (void)menuNeedsUpdate:(NSMenu *)menu {
+	for (NSMenuItem *item in [menu itemArray]) {
+		if ([item tag] == HUD_TAG_STATS) {
+			[item setState:getMenuInterface()->getHudStats() ? NSControlStateValueOn : NSControlStateValueOff];
+		} else if ([item tag] == HUD_TAG_DRIVES) {
+			[item setState:getMenuInterface()->getHudDrives() ? NSControlStateValueOn : NSControlStateValueOff];
+		}
 	}
 }
 @end
@@ -266,6 +350,7 @@ static MenuActionHandler *sMenuHandler = nil;
 static SpeedMenuDelegate *sSpeedMenuDelegate = nil;
 static SettingsMenuDelegate *sSettingsMenuDelegate = nil;
 static MonitorMenuDelegate *sMonitorMenuDelegate = nil;
+static HudMenuDelegate *sHudMenuDelegate = nil;
 static DrivesMenuDelegate *sDrivesMenuDelegate = nil;
 static ControllerMenuDelegate *sControllerMenuDelegate = nil;
 
@@ -370,6 +455,15 @@ static void setupMenus(void) {
 	// File menu
 	NSMenu *fileMenu = addMenu(NSLocalizedString(@"File", nil));
 
+	NSMenuItem *openConfigItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Launch Config...", nil)
+		       action:@selector(fileOpenConfig:)
+		keyEquivalent:@""] autorelease];
+	[openConfigItem setTarget:sMenuHandler];
+	[fileMenu addItem:openConfigItem];
+
+	[fileMenu addItem:[NSMenuItem separatorItem]];
+
 	// Drives submenu — populated dynamically by DrivesMenuDelegate on each pull-down
 	NSMenu *drivesMenu = [[[NSMenu alloc] initWithTitle:NSLocalizedString(@"Drives", nil)] autorelease];
 	[drivesMenu setDelegate:sDrivesMenuDelegate];
@@ -380,6 +474,22 @@ static void setupMenus(void) {
 		keyEquivalent:@""] autorelease];
 	[drivesMenuItem setSubmenu:drivesMenu];
 	[fileMenu addItem:drivesMenuItem];
+
+	NSMenuItem *mountDriversItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Mount Drivers", nil)
+		       action:@selector(toggleMountDrivers:)
+		keyEquivalent:@""] autorelease];
+	[mountDriversItem setTarget:sMenuHandler];
+	[fileMenu addItem:mountDriversItem];
+
+	[fileMenu addItem:[NSMenuItem separatorItem]];
+
+	NSMenuItem *saveScreenshotItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Save Screenshot", nil)
+		       action:@selector(fileSaveScreenshot:)
+		keyEquivalent:@""] autorelease];
+	[saveScreenshotItem setTarget:sMenuHandler];
+	[fileMenu addItem:saveScreenshotItem];
 
 	[fileMenu addItem:[NSMenuItem separatorItem]];
 
@@ -492,6 +602,14 @@ static void setupMenus(void) {
 		[item setTag:ci.tag];
 		[controllerMenu addItem:item];
 	}
+	[controllerMenu addItem:[NSMenuItem separatorItem]];
+	NSMenuItem *absentDisconnectedItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Disconnected When No Gamepad", nil)
+		       action:@selector(toggleDisconnectedWhenNoGamepad:)
+		keyEquivalent:@""] autorelease];
+	[absentDisconnectedItem setTarget:sMenuHandler];
+	[absentDisconnectedItem setTag:CONTROLLER_TAG_ABSENT_DISCONNECTED];
+	[controllerMenu addItem:absentDisconnectedItem];
 
 	NSMenuItem *controllerMenuItem = [[[NSMenuItem alloc]
 		initWithTitle:NSLocalizedString(@"Game Controller", nil)
@@ -556,12 +674,46 @@ static void setupMenus(void) {
 	[monitorMenuItem setSubmenu:monitorMenu];
 	[displayMenu addItem:monitorMenuItem];
 
+	sHudMenuDelegate = [[HudMenuDelegate alloc] init];
+	NSMenu *hudMenu = [[[NSMenu alloc] initWithTitle:NSLocalizedString(@"HUD", nil)] autorelease];
+	[hudMenu setDelegate:sHudMenuDelegate];
+
+	NSMenuItem *hudStatsItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Stats", nil)
+		       action:@selector(toggleHudStats:)
+		keyEquivalent:@""] autorelease];
+	[hudStatsItem setTarget:sMenuHandler];
+	[hudStatsItem setTag:HUD_TAG_STATS];
+	[hudMenu addItem:hudStatsItem];
+
+	NSMenuItem *hudDrivesItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Drives", nil)
+		       action:@selector(toggleHudDrives:)
+		keyEquivalent:@""] autorelease];
+	[hudDrivesItem setTarget:sMenuHandler];
+	[hudDrivesItem setTag:HUD_TAG_DRIVES];
+	[hudMenu addItem:hudDrivesItem];
+
+	NSMenuItem *hudMenuItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"HUD", nil)
+		       action:nil
+		keyEquivalent:@""] autorelease];
+	[hudMenuItem setSubmenu:hudMenu];
+	[displayMenu addItem:hudMenuItem];
+
 	NSMenuItem *fullScreenItem = [[[NSMenuItem alloc]
 		initWithTitle:NSLocalizedString(@"Full Screen", nil)
 		       action:@selector(displayFullScreen:)
 		keyEquivalent:@""] autorelease];
 	[fullScreenItem setTarget:sMenuHandler];
 	[displayMenu addItem:fullScreenItem];
+
+	NSMenuItem *crtShaderItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"CRT Shader", nil)
+		       action:@selector(toggleCrtShader:)
+		keyEquivalent:@""] autorelease];
+	[crtShaderItem setTarget:sMenuHandler];
+	[displayMenu addItem:crtShaderItem];
 
 	// Docs menu — intentionally NOT named "Help" to prevent macOS from
 	// injecting its search bar (which requires an Apple Help Book bundle)
@@ -575,6 +727,13 @@ static void setupMenus(void) {
 		keyEquivalent:@""] autorelease];
 	[onlineDocsItem setTarget:sMenuHandler];
 	[helpMenu addItem:onlineDocsItem];
+
+	NSMenuItem *donateItem = [[[NSMenuItem alloc]
+		initWithTitle:NSLocalizedString(@"Donate", nil)
+		       action:@selector(helpDonate:)
+		keyEquivalent:@""] autorelease];
+	[donateItem setTarget:sMenuHandler];
+	[helpMenu addItem:donateItem];
 }
 
 void initMenu(SDL_Window *window) {

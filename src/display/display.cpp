@@ -107,7 +107,19 @@ bool update_display_apple2_cycle(display_state_t *ds) {
     ii_frame_src.w += (float)ds->hsize*2;
     ii_frame_src.h += (float)ds->vsize*2;
 
-    ds->video_system->render_frame(ds->frame_vsg->get_texture(), &ii_frame_src, nullptr);
+    // TODO: content_inset offsets are fixed for default hpos/vpos/hsize/vsize (all zero).
+    // ii_frame_src above shifts/expands the source crop, so guest content moves within
+    // that rect; render_frame scales w/h from the adjusted srcrect but still applies
+    // these fixed x/y offsets. When monitor H/V calibration is non-zero, GS/OS mouse
+    // tracking (vs->content via content_inset) will misalign unless inset x/y are
+    // adjusted too, e.g. x += hsize - hpos, y += vsize - vpos (w/h unchanged).
+    static constexpr SDL_FRect ii_content_inset = { 42.0f, 19.0f, 560.0f, 192.0f };
+    static constexpr SDL_FRect shr_content_inset = { 48.0f, 19.0f, 640.0f, 200.0f };
+    const SDL_FRect &content_inset =
+        (ds->new_video & 0x80) ? shr_content_inset : ii_content_inset;
+
+    ds->video_system->render_frame(ds->frame_vsg->get_texture(), &ii_frame_src, nullptr, true,
+        &content_inset);
 
     return true;
 }
@@ -318,6 +330,7 @@ bool handle_display_event(display_state_t *ds, const SDL_Event &event) {
         return true;
     }
     // TODO: get rid of these for production
+#if 0
     if (key == SDLK_F7) {
         if (mod & SDL_KMOD_CTRL) {
             // dump hires image page 1
@@ -330,6 +343,7 @@ bool handle_display_event(display_state_t *ds, const SDL_Event &event) {
             return true;
         }
     }
+#endif
     if (key == SDLK_F8) {
         ds->vsg->setDumpNextFrame(true);
         return true;
@@ -599,9 +613,6 @@ uint8_t display_read_vbl(void *context, uint32_t address) {
     // This is enough to get basic VBL working. Total Replay boots anyway.
     display_state_t *ds = (display_state_t *)context;
 
-    // Null-guard ported from upstream 6b91d9c: $C019 can be read before the
-    // scanner is constructed, and an unguarded deref crashes rather than
-    // reporting a machine state.
     const bool in_vbl = ds->video_scanner && ds->video_scanner->is_vbl();
     uint8_t fl = in_vbl ? 0x00 : 0x80;
     if (ds->video_scanner_type == Scanner_AppleIIgs) { // inverted sense on IIgs.
@@ -875,14 +886,11 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
     ds->vsgc = new VideoScanGenerator_Comp(charrom, false, ds->frame_vsg);
     ds->vsgc->set_render(&ds->mon_ntsc);
 
-    switch (computer->platform->id) {
-        case PLATFORM_APPLE_IIE_65816:
-        case PLATFORM_APPLE_IIGS:
-            ds->vsg = ds->vsgr;
-            break;
-        default:
-            ds->vsg = ds->vsgc;
-            break;
+    if (computer->platform->id == PLATFORM_APPLE_IIE_65816
+        || platform_is_iigs(computer->platform->id)) {
+        ds->vsg = ds->vsgr;
+    } else {
+        ds->vsg = ds->vsgc;
     }
 
     ds->char_rom = charrom;
@@ -918,7 +926,7 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
     });
     computer->sys_event->registerHandler(SDL_EVENT_KEY_DOWN, [ds](const SDL_Event &event) {
         int key = event.key.key;
-        if ((key == SDLK_F7) || (key == SDLK_F8) || (key == SDLK_KP_PLUS) || (key == SDLK_KP_MINUS)) {
+        if (/* (key == SDLK_F7) ||  */(key == SDLK_F8) || (key == SDLK_KP_PLUS) || (key == SDLK_KP_MINUS)) {
             return true; // eat the keydown
         }
         return false;
@@ -930,7 +938,7 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
     });
 
     computer->register_reset_handler([ds](bool cold_start) {
-        if (ds->computer->platform->id == PLATFORM_APPLE_IIGS) {
+        if (platform_is_iigs(ds->computer->platform->id)) {
             display_write_c041(ds, 0xC041, 0x00);
             // TODO: this is the cleanest way to do it for now, but it feels a little hacky, as if
             // reset handler in mmu and here should each be responsible for clearing their own bits.
@@ -975,7 +983,7 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
     });
 
     if (computer->platform->id == PLATFORM_APPLE_IIE || computer->platform->id == PLATFORM_APPLE_IIE_ENHANCED
-    || computer->platform->id == PLATFORM_APPLE_IIE_65816 || computer->platform->id == PLATFORM_APPLE_IIGS) {
+    || computer->platform->id == PLATFORM_APPLE_IIE_65816 || platform_is_iigs(computer->platform->id)) {
         ds->f_altcharset = false;
 
         mmu->set_C0XX_write_handler(0xC000, { ds_bus_write_C00X, ds });
@@ -999,7 +1007,7 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
         mmu->set_C0XX_read_handler(0xC019, { display_read_vbl, ds });
 
     }
-    if (computer->platform->id == PLATFORM_APPLE_IIGS) {
+    if (platform_is_iigs(computer->platform->id)) {
         mmu->set_C0XX_write_handler(0xC023, { display_write_c023, ds });
         mmu->set_C0XX_read_handler(0xC023, { display_read_c023, ds });
         mmu->set_C0XX_write_handler(0xC041, { display_write_c041, ds });
@@ -1012,7 +1020,7 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
         mmu->set_C0XX_read_handler(0xC02B, { display_read_C02B, ds });
     }
 
-    if (computer->platform->id == PLATFORM_APPLE_IIE_65816 || computer->platform->id == PLATFORM_APPLE_IIGS) {
+    if (computer->platform->id == PLATFORM_APPLE_IIE_65816 || platform_is_iigs(computer->platform->id)) {
         mmu->set_C0XX_read_handler(0xC02E, { display_read_C02EF, ds });
         mmu->set_C0XX_read_handler(0xC02F, { display_read_C02EF, ds });
         //no display_read_C021;  actually floating bus all the time.

@@ -35,7 +35,13 @@ Once done, Close the OSD (F4 again or the OSD Button).
 
 ### Menus
 
-You can choose a storage device from the menu, and mount/unmount images to the device the same as above.
+You can choose a storage device from the menu (**File → Drives**), and mount/unmount images to the device the same as above.
+
+### Mount Drivers
+
+**File → Mount Drivers** mounts GSSquared’s built-in drivers disk (`/GS2.DRIVERS`) onto an empty BazFast drive. Check the menu item to mount; uncheck it to unmount that same drive.
+
+The image is write-protected. It currently includes the Host FST driver files (see [Host FST](HostFST.md)). The menu item is grayed out if the current machine has no BazFast card, or if emulation is not running. If all six BazFast icons already have media mounted, Mount Drivers does nothing until you free a drive.
 
 ### Drag and Drop
 
@@ -82,6 +88,10 @@ G_Games with Path Mods.hdv
 ```
 
 If you mount this pmap on a BazFast device, all 7 images will be mounted at once, a big time-saver for those with complex setups, multi-disk collections like What Is the AppleIIgs or Golden Orchard.
+
+## Host FST
+
+Host FST shares a folder on your real computer with GS/OS as the **`:Host`** volume. Full setup (Mount Drivers, copy **Host.FST** / **Host.Driver** into `System/FSTs` and `System/Drivers`, and **Host Folder…**) is in [Host FST](HostFST.md).
 
 ## Write-protection
 

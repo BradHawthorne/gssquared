@@ -37,6 +37,9 @@
 #include "SelectButton.hpp"
 #include "StatusMessage.hpp"
 #include "DrivesOSD.hpp"
+#include "SerialPortsOSD.hpp"
+#include "SlotsPanel.hpp"
+#include "SystemBadge.hpp"
 
 #define SLIDE_IN 1
 #define SLIDE_OUT 2
@@ -72,6 +75,9 @@ protected:
     
     //Container_t *drive_container = nullptr;
     DrivesOSD_t *drive_container = nullptr;
+    SerialPortsOSD_t *serial_ports_container = nullptr;
+    Container_t *connection_picker = nullptr;
+    connection_key_t picking_connection_key_{};
 
     Container_t *speed_con = nullptr;
     SelectButton_t *speed_btn_10 = nullptr;
@@ -81,6 +87,9 @@ protected:
     SelectButton_t *speed_btn_14 = nullptr;
 
     Container_t *mon_color_con = nullptr;
+
+    Container_t *host_fst_con = nullptr;
+    Button_t *host_fst_btn = nullptr;
 
     Button_t *save_btn = nullptr;
     Button_t *save_as_btn = nullptr;
@@ -95,7 +104,9 @@ protected:
 
     // System badge
     SystemConfig_t *system_config = nullptr;
-    Button_t *system_badge = nullptr;
+    SystemBadge_t *system_badge = nullptr;
+
+    SlotsPanel_t *slot_container = nullptr;
     
     std::vector<Container_t *> containers;
     std::vector<Container_t *> ncontainers;
@@ -122,6 +133,12 @@ protected:
     modal_stack mstack;
 
     int slideStatusBeforeDrop = SLIDE_NONE;
+
+    // Web (Emscripten) drag-and-drop: the SDL Emscripten backend sends no
+    // DROP_BEGIN and delivers DROP_FILE asynchronously (after DROP_COMPLETE),
+    // so we synthesize the "begin" on the first DROP_POSITION and defer the
+    // panel close until the file actually arrives. Harmless/unused elsewhere.
+    bool web_drag_active = false;
 
     const std::map<int, int> monitor_asset =  {
         {MONITOR_COMPOSITE, ColorDisplayButton},
@@ -183,6 +200,12 @@ public:
     void set_raise_window();
 
     void open_file_dialog(storage_key_t key);
+    void open_host_fst_folder_dialog();
+    void refresh_host_fst_button();
+
+    void show_connection_picker(connection_key_t key, connection_port_kind_t kind);
+    void dismiss_connection_picker();
+    void refresh_serial_ports();
 
     void show_diskii_modal(storage_key_t key, uint64_t data);
 
@@ -192,6 +215,14 @@ public:
 
     void open_panel();
     void close_panel();
+
+    bool is_control_panel_active() const {
+        return currentSlideStatus == SLIDE_IN || slideStatus != SLIDE_NONE;
+    }
+
+    bool requires_host_cursor() const {
+        return is_control_panel_active() || !mstack.stack.empty();
+    }
 
     void set_clock(NClock *clock) { this->clock = clock; }
 

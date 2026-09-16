@@ -1,0 +1,11 @@
+gs2_version = 1
+id = "d1c32cde-93d3-4cd7-ac7a-e189e3a1fa34"
+name = "Alias Test (smartport only)"
+platform = "apple2plus"
+clock = "ntsc"
+scanner = "apple2"
+builtin = false
+
+[[cards]]
+slot = 5
+card = "bazfast3"

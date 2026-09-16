@@ -34,6 +34,9 @@
 #include "util/DebugHandlerIDs.hpp"
 #include "util/DebugFormatter.hpp"
 #include "util/printf_helper.hpp"
+#include "util/SystemSettings.hpp"
+
+#include <cstdint>
 
 /**
  * this is a relatively naive implementation of game controller,
@@ -56,6 +59,64 @@
 
 // and scaled for 14M cycles
 #define GAME_INPUT_DECAY_TIME (2805*14)
+
+namespace {
+
+// SW0 / SW2 (pad0 / pad1): EAST, NORTH, LEFT_SHOULDER
+constexpr SDL_GamepadButton kApplePadButtons0[] = {
+    SDL_GAMEPAD_BUTTON_EAST,
+    SDL_GAMEPAD_BUTTON_NORTH,
+    SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
+};
+// SW1 (pad0): SOUTH, WEST, RIGHT_SHOULDER
+constexpr SDL_GamepadButton kApplePadButtons1[] = {
+    SDL_GAMEPAD_BUTTON_SOUTH,
+    SDL_GAMEPAD_BUTTON_WEST,
+    SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
+};
+
+inline bool paddles_report_disconnected(const gamec_state_t *ds) {
+    return ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD
+        && ds->gps[0].gamepad == nullptr
+        && SystemSettings::instance().disconnected_when_no_gamepad();
+}
+
+inline uint64_t paddle_trigger_at(gamec_state_t *ds, int apple_0_255) {
+    return ds->clock->get_c14m()
+         + (GAME_INPUT_DECAY_TIME * apple_0_255) / 255;
+}
+
+inline uint8_t bit7_with_float(gamec_state_t *ds, bool pressed) {
+    return (pressed ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+}
+
+// Real Joyport holds PB0/PB1 active after reset and trips self-test; suspend mux until past that window.
+inline bool joyport_active(const gamec_state_t *ds) {
+    return ds->joystick_mode == JOYSTICK_ATARI_DPAD
+        && ds->clock->get_cycles() > ds->computer->last_reset + ds->joyport_suspend_cycles;
+}
+
+template <size_t N>
+bool gamepad_any_button(SDL_Gamepad *pad, const SDL_GamepadButton (&buttons)[N]) {
+    for (size_t i = 0; i < N; i++) {
+        if (SDL_GetGamepadButton(pad, buttons[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <size_t N>
+int sample_apple_gamepad_switch(gamec_state_t *ds, int pad_index,
+                                const SDL_GamepadButton (&buttons)[N],
+                                int absent_value) {
+    if (ds->gps[pad_index].gamepad == nullptr) {
+        return absent_value;
+    }
+    return gamepad_any_button(ds->gps[pad_index].gamepad, buttons) ? 1 : 0;
+}
+
+}  // namespace
 
 /**
  * @brief Converts modern circular joystick values to Apple II square joystick range
@@ -118,49 +179,49 @@ uint8_t strobe_game_inputs(void *context, uint32_t address) {
        Checked FIRST so a headless session -- which has no mouse and no gamepad
        -- can still drive the paddles. */
     if (ds->inject_active) {
-        ds->game_input_trigger_0 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[0]) / 255);
-        ds->game_input_trigger_1 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[1]) / 255);
-        ds->game_input_trigger_2 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[2]) / 255);
-        ds->game_input_trigger_3 = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * ds->inject_paddle[3]) / 255);
+        for (int i = 0; i < 4; i++) {
+            ds->game_input_trigger[i] = paddle_trigger_at(ds, ds->inject_paddle[i]);
+        }
         return ds->mmu->floating_bus_read();
     }
 
     if (ds->joystick_mode == JOYSTICK_APPLE_MOUSE) {
         float mouse_x, mouse_y;
         SDL_GetMouseState(&mouse_x, &mouse_y);
+        int x = std::clamp(static_cast<int>(std::round(float(mouse_x) / WINDOW_WIDTH * 255)), 0, 255);
+        int y = std::clamp(static_cast<int>(std::round(float(mouse_y) / WINDOW_HEIGHT * 255)), 0, 255);
         if (ds->paddle_flip_01) {
-            uint64_t x_trigger =  ds->clock->get_c14m() + (GAME_INPUT_DECAY_TIME * (1.0f - (float(mouse_x) / WINDOW_WIDTH)));
-            uint64_t y_trigger = ds->clock->get_c14m() + (GAME_INPUT_DECAY_TIME * (1.0f - (float(mouse_y) / WINDOW_HEIGHT)));
-
-            ds->game_input_trigger_0 = y_trigger;
-            ds->game_input_trigger_1 =x_trigger;   
+            ds->game_input_trigger[0] = paddle_trigger_at(ds, 255 - y);
+            ds->game_input_trigger[1] = paddle_trigger_at(ds, 255 - x);
         } else {
-            uint64_t x_trigger =  ds->clock->get_c14m() + (GAME_INPUT_DECAY_TIME * (float(mouse_x) / WINDOW_WIDTH));
-            uint64_t y_trigger = ds->clock->get_c14m() + (GAME_INPUT_DECAY_TIME * (float(mouse_y) / WINDOW_HEIGHT));
-
-            ds->game_input_trigger_0 = x_trigger;
-            ds->game_input_trigger_1 = y_trigger;
+            ds->game_input_trigger[0] = paddle_trigger_at(ds, x);
+            ds->game_input_trigger[1] = paddle_trigger_at(ds, y);
         }
-        if (DEBUG(DEBUG_GAME)) fprintf(stdout, "Strobe game inputs: %f, %f: %llu, %llu\n", mouse_x, mouse_y, u64_t(ds->game_input_trigger_0), u64_t(ds->game_input_trigger_1));
+        if (DEBUG(DEBUG_GAME)) fprintf(stdout, "Strobe game inputs: %f, %f: %llu, %llu\n", mouse_x, mouse_y, u64_t(ds->game_input_trigger[0]), u64_t(ds->game_input_trigger[1]));
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD /* ds->gps[0].game_type == GAME_INPUT_TYPE_GAMEPAD */) {
-        // Scale the axes larger, to get the corners to full extent
-        
-        // Same null case as the switch readers: this is the DEFAULT joystick
-        // mode, so a machine with no controller attached reaches here on every
-        // $C070 strobe. Centre the stick rather than handing SDL a null handle.
-        int32_t axis0 = 0, axis1 = 0;
-        if (ds->gps[0].gamepad) {
-            axis0 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTX);
-            axis1 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+        JoystickValues jv;
+        if (ds->gps[0].gamepad == nullptr) {
+            if (SystemSettings::instance().disconnected_when_no_gamepad()) {
+                // Never expire: classic "no paddle connected" (bit 7 stays set).
+                for (int i = 0; i < 4; i++) {
+                    ds->game_input_trigger[i] = UINT64_MAX;
+                }
+                ds->last_jv = {0, 0};
+                return ds->mmu->floating_bus_read();
+            }
+            // Default: fake a centered stick so software (e.g. Total Replay) still
+            // treats a joystick as present when no gamepad is attached.
+            jv = {128, 128};
+        } else {
+            // Scale the axes larger, to get the corners to full extent
+            int32_t axis0 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+            int32_t axis1 = SDL_GetGamepadAxis(ds->gps[0].gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+            jv = convertJoystickValues(axis0, axis1);
         }
 
-        JoystickValues jv = convertJoystickValues(axis0, axis1);
         ds->last_jv = jv;
-        uint64_t x_trigger = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * jv.x) / 255);
-        uint64_t y_trigger = ds->clock->get_c14m() + ((GAME_INPUT_DECAY_TIME * jv.y) / 255);
-
-        ds->game_input_trigger_0 = x_trigger;
-        ds->game_input_trigger_1 = y_trigger;
+        ds->game_input_trigger[0] = paddle_trigger_at(ds, jv.x);
+        ds->game_input_trigger[1] = paddle_trigger_at(ds, jv.y);
     }
     return ds->mmu->floating_bus_read();
 }
@@ -169,237 +230,116 @@ void strobe_game_inputs_w(void *context, uint32_t address, uint8_t value) {
     strobe_game_inputs(context, address);
 }
 
-uint8_t read_game_input_0(void *context, uint32_t address) {
+uint8_t read_game_input(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
-    uint8_t val;
-    if (ds->game_input_trigger_0 > ds->clock->get_c14m()) {
-        val = 0x80;
-    } else {
-        val = 0x00;
-    }
-    return val | (ds->mmu->floating_bus_read() & 0x7F);
-}
-
-uint8_t read_game_input_1(void *context, uint32_t address) {
-    gamec_state_t *ds = (gamec_state_t *)context;
-    
-    uint8_t val;
-    if (ds->game_input_trigger_1 > ds->clock->get_c14m()) {   
-        val = 0x80;
-    } else {
-        val = 0x00;
-    }
-    return val | (ds->mmu->floating_bus_read() & 0x7F);
-}
-
-uint8_t read_game_input_2(void *context, uint32_t address) {
-    gamec_state_t *ds = (gamec_state_t *)context;
-
-    uint8_t val;
-    if (ds->game_input_trigger_2 > ds->clock->get_c14m()) {
-        val = 0x80;
-    } else {
-        val = 0x00;
-    }
-    return val | (ds->mmu->floating_bus_read() & 0x7F);
-}
-
-uint8_t read_game_input_3(void *context, uint32_t address) {
-    gamec_state_t *ds = (gamec_state_t *)context;
-    
-    uint8_t val;
-    if (ds->game_input_trigger_3 > ds->clock->get_c14m()) {
-        val = 0x80;
-    } else {
-        val = 0x00;
-    }
-    return val | (ds->mmu->floating_bus_read() & 0x7F);
-}
-
-/* A real Joyport holds PB0/PB1 active coming out of reset, which trips the
-   ROM's button self-test, so the mux stays suspended for a window afterwards.
-
-   The condition was spelled out at all THREE switch readers with the same
-   literal 100000 in each. Three copies of one rule is three chances for a
-   change to land in two of them -- and the change below is exactly that: the
-   window is a CYCLE count, so it means different wall-clock time on machines
-   that run at different speeds, and it was wrong on one of them. Ported from
-   upstream 5bd804a. */
-inline bool joyport_active(const gamec_state_t *ds) {
-    return ds->joystick_mode == JOYSTICK_ATARI_DPAD
-        && ds->clock->get_cycles() > ds->computer->last_reset + ds->joyport_suspend_cycles;
+    int n = address & 3;  // C064..C067 (and C06C..C06F mirrors)
+    return bit7_with_float(ds,
+        (!ds->inject_active && paddles_report_disconnected(ds))
+        || ds->game_input_trigger[n] > ds->clock->get_c14m());
 }
 
 uint8_t read_game_switch_0(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
-
     /* A2GSPU injection: checked first, so a headless session can press
        buttons that no host gamepad exists to press. */
     if (ds->inject_active) {
-        return (ds->inject_button[0] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+        return bit7_with_float(ds, ds->inject_button[0]);
     }
     
     if (joyport_active(ds)) { // reverse polarity for atari
-        // Guarded like the other readers. This branch was missed when the rest
-        // were: SDL is reached here only in Atari mode, which nothing gated.
         bool val = ds->gps[0].gamepad
-                && SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST);
-        return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);
+            && SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST);
+        return bit7_with_float(ds, !val);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
-        // Guard the pointer before handing it to SDL. Upstream added this
-        // alongside a behavioural change (an ABSENT pad floats the switch);
-        // that half is NOT taken -- see the note below -- but calling into SDL
-        // with a null gamepad on the default joystick mode, which is what a
-        // machine with no controller attached does on every $C06x read, should
-        // not depend on SDL choosing to validate for us.
-        //
-        // BEHAVIOUR DELIBERATELY UNCHANGED: absent pad still reads NOT pressed.
-        // Upstream iterated twice here -- d79be3c set SW2 from a platform test
-        // (is_ii_or_iiplus_or_iie), then 0e60636 replaced that with an
-        // unconditional 1, "on all platforms, SW2 will float". Two passes at the
-        // same line reads like empirical tuning rather than a settled fact, and
-        // this fork has no hardware citation either way, so the value stays as
-        // it was and the question stays open rather than being answered by
-        // whichever revision was read last.
-        if (ds->gps[0].gamepad == nullptr) {
-            ds->game_switch_0 = 0;
-        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
-            ds->game_switch_0 = 1;
-        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_NORTH)) {
-            ds->game_switch_0 = 1;
-        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) {
-            ds->game_switch_0 = 1;
-        } else {
-            ds->game_switch_0 = 0;
-        }
+        // FORK: an absent pad reads NOT pressed (absent_value 0). Upstream floats
+        // it here (d79be3c0, 0e606364: SW0/SW1 on II/II+, SW2 on every platform).
+        // Upstream iterated twice on the value and this fork has no hardware
+        // citation either way, so the fork's value stands and the question stays
+        // open (Docs/UPSTREAM_SYNC.md, section 3). The structure is upstream's.
+        ds->game_switch[0] = sample_apple_gamepad_switch(
+            ds, 0, kApplePadButtons0, 0);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_MOUSE) {
-        ds->game_switch_0 = (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0;
+        ds->game_switch[0] = (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0;
     } else {
-        ds->game_switch_0 = 0;
+        ds->game_switch[0] = 0;
     }
 
-    SDL_Keymod mod = SDL_GetModState();
     if (SDL_GetModState() & KEYMOD_OPENAPPLE) { // TODO: restrict to Apple IIe and up
-        ds->game_switch_0 = 1;
+        ds->game_switch[0] = 1;
     }
-    return (ds->game_switch_0 ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
-
+    return bit7_with_float(ds, ds->game_switch[0]);
 }
 
 uint8_t read_game_switch_1(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
-
     /* A2GSPU injection: checked first, so a headless session can press
        buttons that no host gamepad exists to press. */
     if (ds->inject_active) {
-        return (ds->inject_button[1] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+        return bit7_with_float(ds, ds->inject_button[1]);
     }
 
     if (joyport_active(ds)) {
         bool val = false;
 
         bool anc_1 = ds->annunciators[1];
-        if (anc_1) { // up-1 
-            val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
-        } else { // left-1
-            val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+        if (ds->gps[0].gamepad) {
+            if (anc_1) { // up-1
+                val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
+            } else { // left-1
+                val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+            }
         }
         if (SDL_GetModState() & KEYMOD_CLOSEDAPPLE) { // TODO: restrict to Apple IIe
             val = true;
         }
-        return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);
+        return bit7_with_float(ds, !val);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
-        // Guard the pointer before handing it to SDL. Upstream added this
-        // alongside a behavioural change (an ABSENT pad floats the switch);
-        // that half is NOT taken -- see the note below -- but calling into SDL
-        // with a null gamepad on the default joystick mode, which is what a
-        // machine with no controller attached does on every $C06x read, should
-        // not depend on SDL choosing to validate for us.
-        //
-        // BEHAVIOUR DELIBERATELY UNCHANGED: absent pad still reads NOT pressed.
-        // Upstream iterated twice here -- d79be3c set SW2 from a platform test
-        // (is_ii_or_iiplus_or_iie), then 0e60636 replaced that with an
-        // unconditional 1, "on all platforms, SW2 will float". Two passes at the
-        // same line reads like empirical tuning rather than a settled fact, and
-        // this fork has no hardware citation either way, so the value stays as
-        // it was and the question stays open rather than being answered by
-        // whichever revision was read last.
-        if (ds->gps[0].gamepad == nullptr) {
-            ds->game_switch_1 = 0;
-        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_SOUTH)) {
-            ds->game_switch_1 = 1;
-        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_WEST)) {
-            ds->game_switch_1 = 1;
-        } else if (SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
-            ds->game_switch_1 = 1;
-        } else {
-            ds->game_switch_1 = 0;
-        }
+        // FORK: absent pad reads not pressed; see read_game_switch_0.
+        ds->game_switch[1] = sample_apple_gamepad_switch(
+            ds, 0, kApplePadButtons1, 0);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_MOUSE) {
-        ds->game_switch_1 = (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+        ds->game_switch[1] = (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
     } else {
-        ds->game_switch_1 = 0;
+        ds->game_switch[1] = 0;
     }
     
     if (SDL_GetModState() & KEYMOD_CLOSEDAPPLE) { // TODO: restrict to Apple IIe
-        ds->game_switch_1 = 1;
+        ds->game_switch[1] = 1;
     }
-    return (ds->game_switch_1 ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
-   /*  } */
+    return bit7_with_float(ds, ds->game_switch[1]);
 }
 
 uint8_t read_game_switch_2(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
-
     /* A2GSPU injection: checked first, so a headless session can press
        buttons that no host gamepad exists to press. */
     if (ds->inject_active) {
-        return (ds->inject_button[2] ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+        return bit7_with_float(ds, ds->inject_button[2]);
     }
 
     if (joyport_active(ds)) {
         bool val = false;
 
         bool anc_1 = ds->annunciators[1];
-        if (anc_1) { // down-1 
-            val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
-        } else { // right-1
-            val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+        if (ds->gps[0].gamepad) {
+            if (anc_1) { // down-1
+                val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+            } else { // right-1
+                val = SDL_GetGamepadButton(ds->gps[0].gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+            }
         }
-        return (val ? 0x00 : 0x80) | (ds->mmu->floating_bus_read() & 0x7F);
+        return bit7_with_float(ds, !val);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
-        // Guard the pointer before handing it to SDL. Upstream added this
-        // alongside a behavioural change (an ABSENT pad floats the switch);
-        // that half is NOT taken -- see the note below -- but calling into SDL
-        // with a null gamepad on the default joystick mode, which is what a
-        // machine with no controller attached does on every $C06x read, should
-        // not depend on SDL choosing to validate for us.
-        //
-        // BEHAVIOUR DELIBERATELY UNCHANGED: absent pad still reads NOT pressed.
-        // Upstream iterated twice here -- d79be3c set SW2 from a platform test
-        // (is_ii_or_iiplus_or_iie), then 0e60636 replaced that with an
-        // unconditional 1, "on all platforms, SW2 will float". Two passes at the
-        // same line reads like empirical tuning rather than a settled fact, and
-        // this fork has no hardware citation either way, so the value stays as
-        // it was and the question stays open rather than being answered by
-        // whichever revision was read last.
-        if (ds->gps[1].gamepad == nullptr) {
-            ds->game_switch_2 = 0;
-        } else if (SDL_GetGamepadButton(ds->gps[1].gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
-            ds->game_switch_2 = 1;
-        } else if (SDL_GetGamepadButton(ds->gps[1].gamepad, SDL_GAMEPAD_BUTTON_NORTH)) {
-            ds->game_switch_2 = 1;
-        } else if (SDL_GetGamepadButton(ds->gps[1].gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) {
-            ds->game_switch_2 = 1;
-        } else {
-            ds->game_switch_2 = 0;
-        }
+        // Upstream: "on all platforms, SW2 will float when pad1 is absent."
+        // FORK: absent pad reads not pressed; see read_game_switch_0.
+        ds->game_switch[2] = sample_apple_gamepad_switch(
+            ds, 1, kApplePadButtons0, 0);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_MOUSE) {
-        ds->game_switch_2 = (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+        ds->game_switch[2] = (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
     } else {
-        ds->game_switch_2 = 0;
+        ds->game_switch[2] = 0;
     }
-    return (ds->game_switch_2 ? 0x80 : 0x00) | (ds->mmu->floating_bus_read() & 0x7F);
+    return bit7_with_float(ds, ds->game_switch[2]);
 }
 
 /**
@@ -438,10 +378,6 @@ bool recompute_gamepads(gamec_state_t *gp_d) {
         gp_d->gps[0].id = -1;
         gp_d->gps[1].id = -1;
     }
-    // >= 1, not == 1. With TWO pads attached this branch was skipped entirely,
-    // so pad 0 was never opened and only pad 1 worked -- the failure looked like
-    // "the first controller is dead" rather than a count test.
-    // (Ported from upstream cf94661.)
     if (gpcount >= 1) {
         gp_d->gps[0].gamepad = SDL_OpenGamepad(gpid[0]);
         if (gp_d->gps[0].gamepad== NULL) {
@@ -449,7 +385,7 @@ bool recompute_gamepads(gamec_state_t *gp_d) {
             return false;
         }
         gp_d->gps[0].id = gpid[0];
-        // zero out second gamepad info; the gpcount >= 2 branch below fills it in
+        // zero out second gamepad info
         gp_d->gps[1].gamepad = nullptr;
         gp_d->gps[1].id = -1;
     }
@@ -457,10 +393,6 @@ bool recompute_gamepads(gamec_state_t *gp_d) {
         gp_d->gps[1].gamepad = SDL_OpenGamepad(gpid[1]);
         if (gp_d->gps[1].gamepad== NULL) {
             printf("Error opening gamepad: %s\n", SDL_GetError());
-            // No SDL_Quit() here. A second controller failing to open tore down
-            // the whole SDL subsystem -- taking video, audio and input with it --
-            // for a peripheral the machine does not require. Report and refuse
-            // the pad; do not kill the emulator.
             return false;
         }
         gp_d->gps[1].id = gpid[1];
@@ -514,7 +446,7 @@ DebugFormatter *debug_gamecontroller(gamec_state_t *ds) {
     DebugFormatter *df = new DebugFormatter();
     df->addLine("Joystick mode: %s", get_mode_name(ds->joystick_mode));
     df->addLine("Last Read");
-    df->addLine("  Button 0: %d  Button 1: %d  Button 2: %d", ds->game_switch_0, ds->game_switch_1, ds->game_switch_2);
+    df->addLine("  Button 0: %d  Button 1: %d  Button 2: %d", ds->game_switch[0], ds->game_switch[1], ds->game_switch[2]);
     df->addLine("  Values  : %d, %d", ds->last_jv.x, ds->last_jv.y);
     df->addLine("OpenApple: %d  ClosedApple: %d", (SDL_GetModState() & KEYMOD_OPENAPPLE) != 0, (SDL_GetModState() & KEYMOD_CLOSEDAPPLE) != 0);
      
@@ -526,11 +458,6 @@ DebugFormatter *debug_gamecontroller(gamec_state_t *ds) {
         const char *name = SDL_GetGamepadNameForID(ds->gps[i].id);
         df->addLine("GamePad %d (%s)", i, name);
 
-        // gps[i], not gps[0]. The loop names each pad by its own id and then
-        // read pad 0's axes and buttons for every one of them, so the debug
-        // display reported gamepad 0's stick position under gamepad 1's name.
-        // An instrument that mislabels which device it is describing is worse
-        // than one that shows nothing. (Ported from upstream a359889.)
         int32_t axis0 = SDL_GetGamepadAxis(ds->gps[i].gamepad, SDL_GAMEPAD_AXIS_LEFTX);
         int32_t axis1 = SDL_GetGamepadAxis(ds->gps[i].gamepad, SDL_GAMEPAD_AXIS_LEFTY);
         df->addLine("  Axis LX: %d  Axis LY: %d", axis0, axis1);
@@ -573,13 +500,12 @@ void init_mb_game_controller(computer_t *computer, SlotType_t slot) {
     ds->computer = computer;
 
     ds->joystick_mode = JOYSTICK_APPLE_GAMEPAD;
-    ds->game_switch_0 = 0;
-    ds->game_switch_1 = 0;
-    ds->game_switch_2 = 0;
-    ds->game_input_trigger_0 = 0;
-    ds->game_input_trigger_1 = 0;
-    ds->game_input_trigger_2 = 0;
-    ds->game_input_trigger_3 = 0;
+    for (int i = 0; i < 3; i++) {
+        ds->game_switch[i] = 0;
+    }
+    for (int i = 0; i < 4; i++) {
+        ds->game_input_trigger[i] = 0;
+    }
     ds->mouse_wheel_pos_0 = 0;
     ds->paddle_flip_01 = 0; // to swap the mouse axes so Y is paddle 0
     ds->gps[0].gamepad = nullptr;
@@ -596,16 +522,15 @@ void init_mb_game_controller(computer_t *computer, SlotType_t slot) {
 
     // register the I/O ports
     for (int i = 0; i <= 8; i+=8) { // in II+ and //e appears at C061 etc AND C069 etc.
-        computer->mmu->set_C0XX_read_handler(GAME_ANALOG_0 + i, { read_game_input_0, ds });
-        computer->mmu->set_C0XX_read_handler(GAME_ANALOG_1 + i, { read_game_input_1, ds });
-        computer->mmu->set_C0XX_read_handler(GAME_ANALOG_2 + i, { read_game_input_2, ds });
-        computer->mmu->set_C0XX_read_handler(GAME_ANALOG_3 + i, { read_game_input_3, ds });
+        for (int n = 0; n < 4; n++) {
+            computer->mmu->set_C0XX_read_handler(GAME_ANALOG_0 + n + i, { read_game_input, ds });
+        }
         computer->mmu->set_C0XX_read_handler(GAME_SWITCH_0 + i, { read_game_switch_0, ds });
         computer->mmu->set_C0XX_read_handler(GAME_SWITCH_1 + i, { read_game_switch_1, ds });
         computer->mmu->set_C0XX_read_handler(GAME_SWITCH_2 + i, { read_game_switch_2, ds }); 
     }
     // the reset strobe apparently responds at 0xC070-7F.
-    for (int i = 0x00; i <= (computer->platform->id == PLATFORM_APPLE_IIGS ? 0x00 : 0x0F); i++) { // GS only at $C070
+    for (int i = 0x00; i <= (platform_is_iigs(computer->platform->id) ? 0x00 : 0x0F); i++) { // GS only at $C070
         computer->mmu->set_C0XX_read_handler(GAME_ANALOG_RESET + i, { strobe_game_inputs, ds });
         computer->mmu->set_C0XX_write_handler(GAME_ANALOG_RESET + i, { strobe_game_inputs_w, ds });
     }
@@ -657,31 +582,21 @@ void init_mb_game_controller(computer_t *computer, SlotType_t slot) {
         }
     );
 
-    // How long the Joyport mux stays suspended after a reset. It is a CYCLE
-    // count, so one number cannot serve both machines: 100,000 cycles is ~100ms
-    // on a 1 MHz II/IIe and only ~36ms on a 2.8 MHz IIgs -- short enough that
-    // the GS ROM, which gets round to checking buttons later than the II ROM
-    // does, still sees the mux live and trips its self-test. 560,000 restores
-    // the ~200ms the GS actually needs. (Upstream 5bd804a.)
-    ds->joyport_suspend_cycles =
-        (computer->platform->id == PLATFORM_APPLE_IIGS) ? 560000 : 100000;
-
     computer->register_reset_handler(
         [ds](bool cold_start) {
-            // The suspend window is timed from computer->last_reset rather than
-            // stamped here. Holding reset used to keep the CPU clock ticking
-            // past a deadline captured at reset time, so the window expired
-            // while reset was still asserted -- which is what the deleted
-            // joyport_activate line was working around.
-
-            // reset annunciators
-            ds->annunciators[3] = 0;
-            ds->annunciators[2] = 0;
-            ds->annunciators[1] = 0;
-            ds->annunciators[0] = 0;
+            // Joyport suspend window is timed from computer->last_reset (assert/deassert).
+            for (int i = 0; i < 4; i++) {
+                ds->annunciators[i] = 0;
+            }
 
             return true;
         });
 
     computer->set_module_state(MODULE_GAMECONTROLLER, ds);
+
+    ds->is_ii_or_iiplus = (computer->platform->id == PLATFORM_APPLE_II || computer->platform->id == PLATFORM_APPLE_II_PLUS) ? 1 : 0;
+    ds->is_ii_or_iiplus_or_iie = (computer->platform->id == PLATFORM_APPLE_II || computer->platform->id == PLATFORM_APPLE_II_PLUS || computer->platform->id == PLATFORM_APPLE_IIE) ? 1 : 0;
+    // GS ROM checks buttons later; 200ms @ 2.8MHz. II/IIe keep ~100ms @ 1MHz.
+    ds->joyport_suspend_cycles = platform_is_iigs(computer->platform->id) ? 560000 : 100000;
+
 }

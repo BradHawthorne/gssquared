@@ -2585,9 +2585,9 @@ Instead of an ordered set or something, just do this sort of optimized thing:
 
 ## Feb 22, 2025
 
-Taking a look at OpenEmulator, another Mac A2 emu. It is Mac specific, they claim other platforms coming but never got done.
+Taking a look at OpenEmulator, another Mac A2 emu. It is Mac specific (other platforms were mentioned as future work).
 
-Uses 3D effects to simulate CRT monitor "barrel distortion" and such. I think it's overkill. It's fairly accurate I think. It's flash mode is quite a bit faster than mine. I may have that wrong. I can check on the IIe. I do!
+Uses 3D effects to simulate CRT monitor "barrel distortion" and such. Interesting approach, though more visual effect than I need for day-to-day use. It's fairly accurate I think. It's flash mode is quite a bit faster than mine. I may have that wrong. I can check on the IIe. I do!
 
 Clock speed: only 1MHz and Free Run are working correctly. 2.8 and 4MHz are not working right. They are both reading at like 1.2-1.4mhz effective rate.
 
@@ -2630,7 +2630,7 @@ Another event that can trigger a buffer underrun is dragging the window to anoth
 been programming my brain with NTSC stuff over the last week. I am starting to get a clear picture of it. The section of UTA2 page 8-20 is making sense.
 
 The display emulation in OpenEmulator is the best one I've found. By far the most accurate. It processes in a number of steps. First, it creates a bitmap of 1/0 signal that is delayed or undelayed in a 560x192 grid. Good, that's basically what I came up with, though it generates it a little differently than I did. But that difference doesn't matter.
-Two, it then applies a number of shaders to that data. A shader is just a small function/program that runs inside a GPU. OE is using the OpenGL 3D API to run shaders. It has shaders that do all kinds of crazy stuff, like project the display onto a curved surface of a simulated CRT tube, handle brightness and color hue controls, etc. I'm not interested in going that crazy, as I think those effects interfere with the usability of the emulator. (Though, they accurately simulate how frustrating it was to use computers on cheap monitors in the 1980s!)
+Two, it then applies a number of shaders to that data. A shader is just a small function/program that runs inside a GPU. OE is using the OpenGL 3D API to run shaders. It has shaders for a lot of visual effects, like project the display onto a curved surface of a simulated CRT tube, handle brightness and color hue controls, etc. I'm not planning to go that far for day-to-day use, as I think those effects can get in the way of usability. (Though, they accurately simulate how frustrating it was to use computers on cheap monitors in the 1980s!)
 The basic shader in OE though compares a phase signal to the bit pattern to calculate the color of each pixels, and, also performs multiple samples of each pixel at slightly different places to simulate blur that occurs because an old CRT can't shift its beams around very fast. (It is this that causes 010101 to generate solid green for instance even though every other pixel is off, and, that shows alternating green and black stripes on screen on a high-frequency-response CRT like the AppleColor RGB on the IIgs.)
 I've got a utility program that can read a hires file and output a PPM image of the display (PGM, as it's in grayscale right now). Next step is to apply the logic from the shaders and see if I can get a good color output.
 
@@ -3456,7 +3456,7 @@ Mockingboard is coming together!
 I think the envelope is phasing in a little slowly though. You can hear it on certain notes in the music box dancer song. 
 Alternate doesn't seem to work. wait, it is working with continue and attack=n and hold=y.
 
-OK, that has been fixed. The envelopes all work correctly according to the data sheet; that's better than Virtual II, whose emulation here does not seem very good.
+OK, that has been fixed. The envelopes all work correctly according to the data sheet. (Worth comparing against Virtual II and AppleWin as a cross-check.)
 
 I should be testing on AppleWin, too..
 
@@ -6283,7 +6283,7 @@ Excellent detail from Apple.
 
 So this is suggesting: 19 scanlines of top border, 21 of bottom border; more like 6 cycles left and 7 cycles right. ISH. This aspect of the timing does not correspond to the cpu cycles exactly. It might to 14M, explore that some more. (and 14M would be, two 14M per dot). So this would be pretty straightforward to implement into the VideoScanner, just knowing the hcount and vcount where we should read and emit border color. This is where I think we use a special flag or value in the VideoScanner table - "no output". (that could just be memory location 0). For reading the palettes in SHR, those would have certain addresses, and be in the LUT but would be interpreted not as "emit color dot" but "transfer palette value". (might have to do 4 transfers per cycle). Also, a flag for "border color" which would read the border color register at that moment. 
 
-KEGS has an extra-wide right border in Apple II mode. I think he is doing only integer scaling, so in SHR mode I would expect less border.. yep, that's what's going on. In SHR in Kegs the aspect ratio is really off.
+KEGS has an extra-wide right border in Apple II mode. I think it is doing only integer scaling, so in SHR mode I would expect less border.. yep, that's what's going on. In SHR in KEGS the aspect ratio differs from the RGB monitor timing chart above.
 
 So then this comes into the aspect ratio conversation. I suppose since I have a "real" monitor I can just take some measurements!
 
@@ -6559,13 +6559,13 @@ export MTL_HUD_ENABLED
 
 So the time to render a 320 shr frame and get it to window is 135 to 140uS. Comparable with text! Which makes sense because we're only doing a single stage, and no complex lookups. Scrunching the image from 640 pixels into 560 pixels looks ok on here too. of course we're not really downsizing we're upsizing once the double-scale is taken into account. I haven't implemented 320 fill mode of course.
 
-Linear interpolation subtly changes perceived colors in dithered source by altering the ratio of one color to the next. An area in the Airball screen streaming from the moon is orange dithered with blue, and that gets noticably more blue when using linear interpolation. In straight upscaling however some IIgs pixels are smaller than others, as you might expect. The only way around this will be to have a mode where we display the pixels 1:1 (well, guaranteed 2:4 anyway :). In KEGS there is exactly ONE scale (presumably, the integer scale) where a 640 desktop doesn't have noticeable and awful weird banding in the GS/OS desktop dithering.
+Linear interpolation subtly changes perceived colors in dithered source by altering the ratio of one color to the next. An area in the Airball screen streaming from the moon is orange dithered with blue, and that gets noticably more blue when using linear interpolation. In straight upscaling however some IIgs pixels are smaller than others, as you might expect. The only way around this will be to have a mode where we display the pixels 1:1 (well, guaranteed 2:4 anyway :). In KEGS there is exactly ONE scale (presumably, the integer scale) where a 640 desktop doesn't show noticeable banding in the GS/OS desktop dithering.
 
 Ah ha! SDL3 now supports scale mode PIXELART. with the legacy apple ii modes, it seems to be indistinguishable from nearest - ah, because we're not doing fractional scaling in dpp. however, in SHR mode, it DOES make a difference since we are not scaling horizontally. it makes a big difference!! it's got those sharp edges line nearest, but pixel dot sizes are much more consistent.   I think add this scale mode to GS2 and experiment with it a lot. Compared to scaling in preview, the colors seem unchanged, and color balance unchanged. This could be a big game changer.  
 
 ok, that actually looks pretty good - EXCEPT in text mode, where the color is too bright. Well, that's because I'm doing 0xFFFFFF, and what I'm used to is linear toning that down somewhat. I think this is definitely the way to go for GS modes. And maybe tone that white and green levels down a bit when in that mode in text.
 
-Acid test: I got a GSOS desktop image out of kegs. In pixelart mode, it's not awful - the scaling from 640 to 560 is every 4th dither line is a little different than the others. It's noticable, but consistent unlike KEGS where you get the weird banding. nearest IS awful. and linear is pretty decent too. The fuzz actually isn't that bad. There would likely be a window size with no scaling artifacts, just like there is in KEGS. And, of course my aspect ratio is better.  Text on shr is nice and crisp.
+Acid test: I got a GSOS desktop image out of kegs. In pixelart mode, the scaling from 640 to 560 makes every 4th dither line a little different than the others. It's noticable, but consistent (at non-integer scales KEGS shows more irregular banding). nearest looks rough. and linear is pretty decent too. The fuzz actually isn't that bad. There would likely be a window size with no scaling artifacts, just like there is in KEGS. And the aspect ratio from the timing chart above looks closer.  Text on shr is nice and crisp.
 
 -> Again, I think maybe we start an emulated GS in a window size that provides integer scaling - with PIXELART mode that should be pretty good. And hope they have a big enough monitor. ha ha.
 
@@ -7630,7 +7630,7 @@ Shadowing is a separate stage, where we pass the original address/val down throu
 
 ## Dec 4, 2025
 
-ok the test generator for GS MMU stuff is in place, and a number of tests written so far which all pass on a real GS. Some tests don't pass on KEGS but these are all related to "all banks shadow" which KEGS only handles far enough to make one demo work. (Same with the other currently working GS emulators).
+ok the test generator for GS MMU stuff is in place, and a number of tests written so far which all pass on a real GS. Some tests don't pass on KEGS but these are all related to "all banks shadow", which appears to be only partially implemented there (enough for at least one known demo). (Similar partial coverage in the other currently working GS emulators).
 
 Have done a minor refactor of MMU to allow for page sizes other than 256 bytes; MMU_IIgs of course is using 64KByte "pages" (i.e. banks). Does not seem to be affecting performance using variables instead of constant for page table calculations and memory fetches.
 
@@ -8789,7 +8789,7 @@ if(g_c027_val & ADB_C027_MOUSE_INT) {
 } that value is 0x40, so it's ..
 
 yeah. I did not have a routine to actually write c027. c027 is a mix of read-only status bits, and r/w config bits, including 0x40 which is mouse interrupt enable.
-KEGS does have a red herring in there somewhere.. checking adb_mode 2.. oh, perhaps he disables interrupts when mode&2 is set for "disable automatic polling". Makes sense.
+KEGS also checks adb_mode & 2 here.. oh, perhaps it disables interrupts when mode&2 is set for "disable automatic polling". Makes sense.
 
 ok, I was crashing into monitor on boot..
       //(data_interrupt_enabled && data_register_full) ||
@@ -8834,7 +8834,7 @@ Splash screens of "The Tinies" game is a 3200 pic, looks correct.
 [x] mouse - if you have moved, but then do ONLY a click, we're getting an event that still has movement components from last event. probably need to clear/ignore that.
 [ ] mouse - should only interrupt max 60 times per second during vbl
 
-KEGS does this thing where it doesn't capture, it somehow syncs the GS mouse location with the real OS mouse location. how the heck does it do that? (I'm not sure I like that, and it seems it would be prone to problems / weird interactions).
+KEGS does this thing where it doesn't capture, it somehow syncs the GS mouse location with the real OS mouse location. how the heck does it do that? (Interesting approach; I'd want to understand the edge cases before adopting something similar.)
 
 arekkusu writes:
 
@@ -10529,7 +10529,7 @@ ok, so now I have the buttons show up only when the mouse is over that area, and
 
 there's a bug, when you close the CP, if you leave the mouse where it is and just click again, it acts and reopens CP. Whoopsie.
 
-OK, how KEGS does the mouse sync is as follows: it looks to see if the Event Manager is active. If it is, it stores mouse location into various memory locations, E1, screen holes, etc. I've got to think there is some fragility to that. What if instead, we -observe- the Event Manager, but use that to generate synchronizing x/y deltas, instead of simply passing SDL's deltas in. I.e., use SDL's *absolute* coordinates, and create deltas that get us to that target based on observing the EM x/y locations. This should work better. We can still have it be an option the user can enable/disable.
+OK, how KEGS does the mouse sync is as follows: it looks to see if the Event Manager is active. If it is, it stores mouse location into various memory locations, E1, screen holes, etc. That may be sensitive to Event Manager internals changing. What if instead, we -observe- the Event Manager, but use that to generate synchronizing x/y deltas, instead of simply passing SDL's deltas in. I.e., use SDL's *absolute* coordinates, and create deltas that get us to that target based on observing the EM x/y locations. This might be a bit more robust. We can still have it be an option the user can enable/disable.
 
 ## Mar 7, 2026
 
@@ -10864,7 +10864,7 @@ load symbols, save trace
 
 ## Mar 22, 2026
 
-I investigated integrating in the Cyrene debugger. It doesn't look all that bad. There is a relatively small contact surface where it needs state variables. They are somewhat spread around the system tho. Where KEGS has gobs of global variables for everything, we have things broken into different modules.
+I investigated integrating in the Cyrene debugger. The integration surface looks manageable. There is a relatively small contact surface where it needs state variables. They are somewhat spread around the system tho. KEGS tends to keep a lot of that state in globals; our state is split across modules, so the wiring would look different.
 
 "abnormal LORES"
 
@@ -12216,3 +12216,178 @@ counter (16-bit); state ID; true or false for turn on or turn off.
 ok, that becomes very clean and straightforward. Display asks VideoScanner to change state; VS decides when to apply that request.
 
 re SecondSight support, I am not really happy with how the delay stuff is working. I'm currently checking for cycles, and, had to bump it up to 60 cycles because Cogito had the odd hang on handshaking. Perhaps instead of cycles, I Could count a certain number of handshake reads. 
+
+## Jun 24, 2026
+
+well you know what's been going on. Big ow.
+
+trying to debug the boot loop in Jason's odds.po image.
+boot with pr#7: boot loop.
+boot with ctrl-oa-reset: no boot loop.
+
+does NOT reproduce on my boot.
+odds: system 6.0.4
+mine: system 6.0.1
+
+Clod doesn't think the issue is with pdblock3, because the block commands are identical up to the point of reset.
+
+Confirmed the reboot loop also happens in KEGS, so this looks like a guest/image issue rather than something unique to GS2. I should have tried that first.
+
+## July 1, 2026
+
+thinking about external debug interface so llms can help me debug the emulator more easily, and, to assist users with debugging software they are writing with LLMs.
+
+there is the existing remote debugger interface uses by Cyrene. I should examine that in some detail.
+
+I'm not sure where the docs are, or if there are docs. I had composer make docs. that is likely "close enough" to get an understanding.
+
+ah I need to fix the debugger VideoScanner bug where we trigger interrupts in GS mode drawing the screen - also the weird update effect.
+
+let's fix the interrupt triggering first.
+
+in debug single step mode, gs2 makes a call to update the video frame by calling video_cycle 17,030 times then calling VideoScanGenerator.
+
+however in GS mode (videoscanner_iigs) this causes interrupts to fire, causing single step mode to basically constantly fire interrupts and execute the IRQ handler.
+
+so we need to prevent that from happening when we generate the full video frame in debug. 
+
+however, we do need to also execute video_cycle to get interrupts when we WANT them. 
+
+So, this is where I need to read back the current frame (or maintain it?) and do a partial update, then display that.
+
+## July 2, 2026
+
+ok so have a crt shader in this thing! it's enabled with -g on the command line, then F7. It's just a demo CRT shader example in the SDL3 repo, but it doesn't look awful. 
+
+I am also looking at this one, which has a zillion knobs and is highly respected.
+
+https://github.com/artzox/CRT-Standalone/blob/main/CRT-Standalone.fx
+
+there is also the postprocessing shader that is in written by rikkles. it looks pretty good, though by default it is pretty dim and you have to crank the brightness up. there are quite a few knobs, so maybe that can be worked around.
+
+The demo shader works "out of the box" with one issue, which is that bloom effect is too pronounced. I need to make that much more subtle, but that involves compiling sdl3's shadercross and making it available to the build. I don't want to make casual builders have to install all that, so will likely separate out into separate project like I did with firmware / Merlin32.
+
+Two issues. maybe 3. ha!
+
+2. in the e character, there's a "scanline" in the middle of the middle stroke. also a.
+3. vertical dithering / blending (e.g. in Kareteka) is messed up, vertical scaling is not 
+maybe these are the same thing. 
+theories: 1) maybe the scanlines are just not in the right place compared to my overall scaling factor. there is a number of scanlines setting, so perhaps that needs to be adjusted.
+
+also, made changes to the debugger so that it updates display cycle by cycle, or optionally, shows the older style "whatever is on video memory right now" mode. not sure which should be default. probably the "memory" mode, as that is most natural for folks debugging normal software. (cycle mode is if you want to debug cycle-accurate demos and such).
+
+Also considering an external debugger interface. emdeejay wants to take a swing at it, and I'm happy to have him dig in. I gave him some guidance based on my own research - essentially, a binary protocol to run over a local socket. write a library in python (or another language of choice) to provide a tool for LLMs to debug the emulator as well as regular guest applications.
+
+I evaluated using Cyrene's method, but there are two drawbacks I see to that. The first is it currently is windows-specific, which doesn't help me as I don't want to do emulator debugging on windows. second is it uses shared memory, which prevents debugging over a network. 
+perhaps a protocol converter could be made for Cyrene, to let it manage GS2 across a network. (I don't know how much data it's moving typically, it may still need to be local). 
+
+I came to that thought because I was dreading further debugging on senseiplay. back and forth through chat. would be much simpler if the thing had a tool to drive debugging itself.
+
+## July 5, 2026
+
+made good progess - mouse tracking for GS/OS is implemented. when event manager is active (determined by sneakily peeking through memory) instead of passing through the actual mouse events direct from SDL, we inject simulated events to move the emulated mouse to the correct EM position. This is done through a series of steps, if necessary (since IIgs mouse has max 64 mouse movement) with ongoing feedback reading the EM position. The mouse gracefully returns when the cursor leaves the edge of the content area, making it easy to reach the menu and sidebar buttons, all without needing mouse capture. Mouse Capture is still recommended for applications that don't use event manager.
+
+Looking at integrating the Host FST. There are a few things with this.
+1. the linux support isn't quite complete
+2. it uses WDM xx to trigger the paravirtual calls. I don't want to do this, because this will never work on hardware, and, there is no registry to mediate the use of this opcode in emulators.
+3. I mention hardware in 2, because in theory you could use this to provide network file access via any number of real network file server protocols, in addition to host access.
+4. So, I would move this to a slot card I/O registers, and use something like the BazFast interface. In GS2, we will actually use the BazFast interface with a new pdblock v3 format.
+5. We need to make sure people use the right driver. So we'll have a menu item that mounts an included "driver disk" with initially the bare driver, and later an installer to install the driver, for our new version of the Host FST. Will be the same except adds support for our new way of invoking the PV.
+
+So this is a fairly involved project with a lot of pieces, but entirely worth doing. Have in the 0.10 release.
+
+Since we've knocked a few other roadmap items out (mouse tracking, CRT shader) that sort of leaves a choice - issue 0.9 as-is (it's been delayed due to my neck) or go ahead and do one more thing, which is the edit / load / select system config feature.
+
+I think a solid roadmap for this would be a phased approach:
+Phase 1: allow open pre-edited configs from disk. Folder icon, open 
+
+This tests the loader - and lets us iterate on the format and loader code before getting into generating it.
+
+Phase 2: allow saving current session as a config - i.e., user can open existing config, but with disks attached etc.
+
+Phase 3; finalize the SelectSystem "create profile" editor.
+
+And the Profiles thing ties in here too. A button for triggering the profiles browser. 
+
+So that's 3 extra buttons on the UI there: + (to create), folder (to open), profile (to browse profiles)
+
+and I can remove four buttons from the current select system and store them as configs on disk instead. e.g. pal. 
+
+So we'll have:
+
+First row:
+Apple II
+Apple II+
+Apple IIe
+Apple IIe Enh
+2nd row: Apple IIgs
+
+then the four most recent configs loaded from disk can fill out the 12 buttons. and be displayed between IIgs and the 3 generic buttons.
+We could use different, smaller buttons for +, folder, profile. at the bottom under the 12. then we could show the most recent 7 disk-loaded profiles.
+
+## July 20, 2026
+
+so I believe there's been an issue in the system this whole time, which is that in the cpu we have called mmu->read/write and  THEN incr_cycles - and THEN the video routines.
+
+In a real apple, the video fetch happens first. Having it reversed, there are several effects:
+1. a write to a video softswitch takes effect on the immediate cycle, and affects the video output that cycle; whereas on a real II it would happen on the -next- cycle. 
+
+You can see this effect in deater megademo re the separator line between lores/hires early on.
+
+2. this caused calculations related to the mockingboard timers to be off one cycle compared to the cpu access. All that stuff is incredibly timing sensitive. 
+
+I have a branch cycletimingfix that seeks to address this. HOWEVER. There are some things to discuss.
+
+First, the mockingboard 6522 timer code had to change, as it had the previous order baked in. I got opus to get through modifying the MB code and it's passing the mb-audit tests again.
+
+A further issue is going to be GS cycle timing. Currently, the mmu read or write sets the cycle type after it's decoded everything - but reversed, we're affecting how the -next- cycle will time which isn't right. So somehow we need to split the cycle-timing decode.
+
+Is there a way we can efficiently classify an access just by the address? We need to know Fast-rom, fast-ram, and slow.
+
+There is a different approach to fix, which is in the issue124 branch. This was looking to peek back in the video buffer and alter the flags for 0-latency modifications. That may be required regardless of the approach:
+
+the alt char set flag is "0 cycle latency". which means it gets set somehow in the current cycle before the lookup occurs? With the current test ordering (video-before-mmu) the vidsync tests are all either -1, 0, or 1. -1 being, for instance, ALTCHAR. this implies a lookback. let's retest this with the orig code
+Huh, altchar is still phase -1. how is that possible.
+
+ok Grokky says it's because the way the syncs are timed the relative offset between sync and altchar isn't changing. that makes a certain sense.
+
+So now what.. video-before-mmu is in some sense "more right" but it's going to drive a lot of changes maybe I don't want to do before version 1.0.  And ALTCHAR (and others) have to lookback in either case.
+
+## July 26, 2026
+
+Researching guest network services (e.g. Uthernet). The key challenge is: raw packet access is simple in terms of API, but hard in terms of UX. Requires: root access on linux; installing pcap driver into Windows; getting a developer entitlement from Apple.
+
+Alternatively, there is this approach: libslirp as practiced by QEMU. This implements essentially a NAT router that runs inside your own program. The guest can do its pretend ethernet between itself and slirp; then slirp initiates NATed 
+
+https://gitlab.com/qemu-project/libslirp/
+https://github.com/virtualsquare/libvdeslirp
+
+I think this is a pretty clean approach for most user applications. However, it does prevent certain things from working:
+SMB discovery;
+anything else requiring broadcast to the real network;
+another potential con is this is basically double NAT - though Apple II applications are not likely to have a problem with this.
+libslirp works on mac/linux/windows.
+
+So I think there could be two implementations of this (eventually). First, slirp for all platforms. Then, could add pcap/bpf if there is demand. (Could just have two different Uthernet II card types).
+
+## July 27, 2026
+
+Uthernet II (slirp) is in and working on IIe + IIgs: Contiki DHCP, HTTP browsing, etc. Double NAT remains: HTTP is fine; FTP with **SAFE2 (latest) in PASV mode** works; active FTP / older clients still struggle. Note in Networking.md; pcap backend still the escape hatch for full LAN/FTP fidelity.
+
+Upgraded to latest SAFE2 FTP client, and PASV is working correctly now!
+
+## July 27, 2026 (evening)
+
+Super Serial Card v1: `card = "super_serial"`, MOS 6551 from datasheet, stock `341-0065-A.bin` (Cn page at file `$700`), DIP defaults for modem 9600/8N1 Communications, ModemDevice attach (FileDevice on Emscripten). Docs: SSC.md. `[[connections]]` still not applied (shared with SCC).
+
+## August 4, 2026
+
+nearing the goal on 1.0!!!
+
+Focus: bug fixes. Right now most bugs are about rom03. There is one report about a program that uses undocumented (i.e. fake broken) nmos 6502 instructions.
+
+Should avoid features for the most part, however, it makes sense to clean stuff up.
+
+[X] installer setup on the virtual disk that includes the host FST, but also the Marinetti stuff. 
+[ ] IIe multi-language support. 
+

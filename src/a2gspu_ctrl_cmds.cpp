@@ -1488,7 +1488,7 @@ bool try_assert_dhgr(const char *line, char *result, size_t rsz,
         char fbuf[512] = {0}, mode[32] = {0};
         int narg = sscanf(line + 11, "%511s %31s", fbuf, mode);
         if (narg < 1 || !fbuf[0]) { snprintf(result, rsz, "status=FAIL shr-golden-need-file"); return true; }
-        if (!computer || !computer->platform || computer->platform->id != PLATFORM_APPLE_IIGS) {
+        if (!computer || !computer->platform || !platform_is_iigs(computer->platform->id)) {
             snprintf(result, rsz, "status=FAIL shr-golden-platform requires=Apple-IIgs"); return true;
         }
         uint64_t h = HOUSE_FNV_BASIS;

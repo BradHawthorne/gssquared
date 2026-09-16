@@ -35,6 +35,7 @@ struct SystemConfig_t {
     clock_set_t clock_set;
     video_scanner_t scanner_type;
     const char *description;
+    const char *id;  // machine identity (UUID); keys PrefPath/bram/<id>.bin
     device_id slot_devices[NUM_SLOTS];
     // Optional ROM-folder override (roms/<rom_dir>/). When null, the platform's
     // default rom_dir is used. Lets several IIgs ROM "personalities" (ROM01 /

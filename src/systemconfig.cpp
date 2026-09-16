@@ -142,6 +142,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleII,
         "48K RAM; Disk II",
+        "6b2f0c1a-8e4d-4a91-9c3b-1f7e2d4a5b01",
         {
             DEVICE_ID_LANGUAGE_CARD,
             DEVICE_ID_PARALLEL,
@@ -161,6 +162,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleII,
         "64K RAM (incl Lang Card); Disk II; Clock; Parallel Port; VIDEX 80-col; Mockingboard",
+        "6b2f0c1a-8e4d-4a91-9c3b-1f7e2d4a5b02",
         {
             DEVICE_ID_LANGUAGE_CARD,
             DEVICE_ID_PARALLEL,
@@ -179,7 +181,8 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         true,
         CLOCK_SET_US,
         Scanner_AppleIIe,
-        "128K RAM; Disk II; Clock; Parallel Port; Mockingboard",
+        "128K RAM; Disk II; AppleMouse II; Mockingboard",
+        "6b2f0c1a-8e4d-4a91-9c3b-1f7e2d4a5b03",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -198,18 +201,24 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         true,
         CLOCK_SET_US,
         Scanner_AppleIIe,
-        "128K RAM; Disk II; Clock; Parallel Port; Mockingboard",
+        "128K RAM; Disk II; Clock; AppleMouse II; Mockingboard",
+        "6b2f0c1a-8e4d-4a91-9c3b-1f7e2d4a5b04",
         {
             DEVICE_ID_NONE,
-            DEVICE_ID_NONE,
+            DEVICE_ID_PRODOS_CLOCK,
             DEVICE_ID_MEM_EXPANSION,
             DEVICE_ID_NONE,
             DEVICE_ID_MOCKINGBOARD,
-            DEVICE_ID_PD_BLOCK3,
-            DEVICE_ID_DISK_II,
             DEVICE_ID_MOUSE,
+            DEVICE_ID_DISK_II,
+            DEVICE_ID_PD_BLOCK3
         },
     },
+    /* FORK: upstream moved the next four configs (and "Apple IIgs / Disk II"
+       below) out of this table into .gs2 files under assets/gs2/, seeded into
+       PrefPath/SystemConfigs. They stay here too, in their old positions, because
+       `-c N` indexes this table and consumers name machines by that index; each
+       keeps the machine id (UUID) of its .gs2 counterpart where one exists. */
     {
         "Apple IIe Enhanced w/Mouse",
         PLATFORM_APPLE_IIE_ENHANCED,
@@ -218,6 +227,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIe,
         "128K RAM; Disk II; Clock; Mouse",
+        "7992bd60-89df-411c-8ec0-9c038fd81340",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -237,6 +247,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIe,
         "128K RAM; Disk II; Clock; DUAL Mockingboard",
+        "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c01",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -256,6 +267,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "128K RAM; Disk II; Clock; Mouse; 65816",
+        "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c02",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -275,6 +287,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_PAL,
         Scanner_AppleIIePAL,
         "PAL Video; 128K RAM; Disk II; Clock; Parallel Port; Mockingboard",
+        "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c03",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -295,6 +308,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "Apple IIgs 8MB RAM",
+        "6b2f0c1a-8e4d-4a91-9c3b-1f7e2d4a5b05",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -315,6 +329,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "Apple IIgs 8MB RAM, Only 5.25 Drives",
+        "7c3a1d2b-9f5e-4b82-ad4c-2e8f3c5b6c04",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -334,6 +349,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "Apple IIgs 8MB RAM + A2GSPU video card in slot 3",
+        "9d704741-e273-4289-abd9-0562f36355ab",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -364,6 +380,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "Apple IIgs 8MB RAM + Uthernet II network card in slot 3",
+        "94c7a7b9-ded1-41a4-b600-d32a9038cc03",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -382,6 +399,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "Apple IIgs ROM 4 Mark Twain prototype (1992 dump) — 256KB, GS/OS-in-ROM",
+        "a7743a55-825e-4867-824b-2b6c2ce34d06",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -395,12 +413,13 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         "apple2gs4",   // ROM-folder override -> roms/apple2gs4/ (Mark Twain 256KB)
     },
     {
-        "Apple IIgs (ROM 3)",
+        "Apple IIgs (ROM 3 Tenspeed)",
         PLATFORM_APPLE_IIGS,
         true,
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "Apple IIgs ROM 3 (256KB) — Tenspeed late-1988 variant",
+        "6550412f-d840-42d3-a70b-aae517f4970d",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -435,6 +454,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIe,
         "128K RAM; Disk II; Thunderclock Plus; Mockingboard",
+        "e5b5c1c6-30c3-4d1d-874e-ae3eeb4c6ab7",
         {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
@@ -463,6 +483,7 @@ SystemConfig_t BuiltinSystemConfigs[] = {
         CLOCK_SET_US,
         Scanner_AppleIIgs,
         "Apple IIgs 8MB RAM + A2GSPU (slot 3) + Apple Mouse II (slot 1)",
+        "b5bb31fd-6909-480d-a8a6-877701e841d6",
         {
             DEVICE_ID_NONE,
             /* Slot 1, not 4: on the IIgs, EMPTY slots expose internal firmware whose
@@ -477,6 +498,31 @@ SystemConfig_t BuiltinSystemConfigs[] = {
             DEVICE_ID_NONE,
             DEVICE_ID_NONE,
             DEVICE_ID_PD_BLOCK3,   // slot 7 -- boot
+        }
+    },    /* Upstream's ROM 03 machine: its own platform (PLATFORM_APPLE_IIGS_ROM3) and
+       its bundled ROM folder. Appended LAST so every existing -c index keeps its
+       meaning; `-p 6` selects it. The fork's own ROM 03 and ROM 04 personalities
+       above run on PLATFORM_APPLE_IIGS with a ROM-folder override, and the MMU
+       derives the ROM generation from the image size either way. */
+    {
+        "Apple IIgs (ROM 3)",
+        PLATFORM_APPLE_IIGS_ROM3,
+        //DeviceMap_IIGS,
+        //Badge_IIGS,
+        true,
+        CLOCK_SET_US,
+        Scanner_AppleIIgs,
+        "Apple IIgs (ROM 3) 8MB RAM",
+        "ec541ad4-f57c-4889-96b8-9c854b11dd10",
+        {
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_SECOND_SIGHT,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_NONE,
+            DEVICE_ID_PD_BLOCK3,
         }
     },
 };

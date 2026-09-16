@@ -1,0 +1,26 @@
+gs2_version = 1
+id = "5cd3999a-10cf-4a14-be5a-2e4b2ca3c87b"
+name = "BazFast Volumes"
+platform = "apple2gs"
+clock = "ntsc"
+scanner = "apple2gs"
+builtin = false
+
+[[cards]]
+slot = 7
+card = "bazfast3"
+
+[[storage]]
+slot = 7
+drive = 1
+image = "volumes/GSOS.po"
+
+[[storage]]
+slot = 7
+drive = 2
+image = "volumes/Games1.po"
+
+[[storage]]
+slot = 7
+drive = 3
+image = "volumes/Games2.po"

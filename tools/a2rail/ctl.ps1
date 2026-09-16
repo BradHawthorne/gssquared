@@ -140,6 +140,26 @@ function Wait-Ack([string]$path, [int]$ms) {
   }
 }
 
+# READ THE ACK THROUGH A SHARING VIOLATION. The emulator renames ack.N into place
+# atomically and closes it first, yet a gate run on 2026-09-16 still failed with
+# "The process cannot access the file 'ack.21' because it is being used by another
+# process" -- something else on the host (a file scanner inspecting the freshly
+# created file is the usual suspect) held it open for an instant. Rerun, the same
+# suite was green: a race, not a rail defect. Retry that one IOException briefly
+# instead of reporting a harness hiccup as a failed check; any other error, or a
+# lock that outlasts ~3 s, still surfaces. runtime.ps1 has the twin for the scripts
+# that load it.
+function Read-AckText([string]$path) {
+  for ($i = 0; ; $i++) {
+    try {
+      return [IO.File]::ReadAllText($path)
+    } catch [IO.IOException] {
+      if ($i -ge 30) { throw }
+      Start-Sleep -Milliseconds 100
+    }
+  }
+}
+
 if (-not (Test-SessionAlive)) {
   # Say WHICH of the two it is. "GSSquared is not running" was a guess dressed as
   # a fact -- it was printed both when this directory had never had a session and
@@ -199,7 +219,7 @@ Move-Item -Path $tmp -Destination (Join-Path $Dir "cmd.$seq") -Force
 Write-RailEvent 'issued' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); command=$Cmd }
 $ack = Join-Path $Dir "ack.$seq"
 if (Wait-Ack $ack $TimeoutMs) {
-  $reply = (Get-Content $ack -Raw).Trim()
+  $reply = (Read-AckText $ack).Trim()
   Write-RailEvent 'ack' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); command=$Cmd; reply=$reply }
   "[$seq] $Cmd"
   "     -> " + $reply

@@ -5,6 +5,7 @@
 #include <ctime>
 #include <cstdlib>
 #include <cassert>
+#include <string>
 
 #include "util/DebugFormatter.hpp"
 #include "debug.hpp"
@@ -84,9 +85,9 @@ class RTC {
     uint8_t transaction_step_count = 0;
     RTC_State state = RTC_STATE_AWAIT_COMMAND;
 
-    const char *bram_filename = "gs2-bram.bin";
+    std::string bram_filename;
 public:
-    RTC() {
+    explicit RTC(std::string bram_path) : bram_filename(std::move(bram_path)) {
         // preload with gibberish
         for (int i = 0; i < 256; i++) {
             bram[i] = i;
@@ -94,7 +95,7 @@ public:
         // A2GSPU_BRAM pins the starting BRAM; unset keeps the stock cwd file.
         const char *pin = a2gspu_bram_pin();
         if (!pin) {
-            a2gspu_bram_note(load_bram_from_file(bram_filename) ? "cwd" : "cwd-absent", bram);
+            a2gspu_bram_note(load_bram_from_file(bram_filename.c_str()) ? "cwd" : "cwd-absent", bram);
         } else if (!strcmp(pin, "default")) {
             a2gspu_bram_note("default", bram);
         } else {
@@ -114,7 +115,7 @@ public:
     };
     ~RTC() {
         // A pinned BRAM (default or a file) is an input: never written back.
-        if (!a2gspu_bram_pin()) save_bram_to_file(bram_filename);
+        if (!a2gspu_bram_pin()) save_bram_to_file(bram_filename.c_str());
     };
 
     inline uint8_t get_bram_value(uint8_t address) {

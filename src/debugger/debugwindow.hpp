@@ -7,9 +7,13 @@
 #include "cpu.hpp"
 #include "util/TextRenderer.hpp"
 #include "ui/Container.hpp"
+#include "ui/WrapContainer.hpp"
 #include "ui/UIContext.hpp"
 #include "ui/TextInput.hpp"
+#include "ui/ScrollBar.hpp"
 #include "debugger/MemoryWatch.hpp"
+#include "debugger/BreakpointTable.hpp"
+#include "debugger/Monitor.hpp"
 #include "debugger/disasm.hpp"
 
 struct computer_t;
@@ -43,8 +47,9 @@ struct debug_window_t {
     int font_line_height = 14;
     std::vector<Container_t *> containers;
     Container_t *tab_container, *step_container;
+    WrapContainer_t *debug_display_container = nullptr;
     MemoryWatch memory_watches;
-    MemoryWatch breaks;
+    Monitor monitor_;
     uint32_t stepover_bp = 0;
     bool step_out_active = false;
     
@@ -56,11 +61,23 @@ struct debug_window_t {
     SDL_Rect pane_area[DEBUG_PANEL_COUNT];
 
     TextInput_t* mon_textinput;
+    ScrollBar_t *trace_scroll_ = nullptr;
+    ScrollBar_t *mon_scroll_ = nullptr;
     std::vector<std::string> mon_display_buffer;
     std::vector<std::string> mon_history;
     int mon_history_position = 0;
+    int mon_view_position = 0;
 
     MMU *mmu = nullptr;
+
+    static constexpr size_t kTraceDisasmLineCount = 10;
+    void sync_trace_scrollbar();
+    void apply_trace_scroll_position();
+    void monitor_layout_metrics(int &base_line, int &buf_area_lines, int &textarea_pos) const;
+    void sync_monitor_scrollbar();
+    void apply_monitor_scroll_position();
+    void mon_scroll_by(int lines);
+    bool point_in_panel(debug_panel_t pane, float x, float y) const;
 
     debug_window_t(computer_t *computer);
     ~debug_window_t();
@@ -73,6 +90,9 @@ struct debug_window_t {
     void resize(int width, int height);
     void separator_line(debug_panel_t pane, int y);
     void draw_text(debug_panel_t pane, int x, int y, const char *text);
+    void draw_trace_line_colored(debug_panel_t pane, int x, int y, const char *line,
+                                 const trace_column_layout &layout, bool show_opbytes,
+                                 bool header);
     void resize_window();
     void toggle_panel(debug_panel_t panel);
     void render_pane_trace();
@@ -80,13 +100,18 @@ struct debug_window_t {
     void render_pane_memory();
     void render_pane_devices();
     void set_panel_visible(debug_panel_t panel, bool visible);
-    bool is_pane_first(debug_panel_t pane);
+    bool is_pane_first(debug_panel_t pane) const;
     int num_lines_in_pane(debug_panel_t pane);
+    void sync_debug_display_buttons();
+    void layout_debug_display_container();
+    void toggle_debug_display(const std::string &name);
+    int memory_pane_base_line() const;
     void event_pane_monitor(SDL_Event &event);
     bool handle_pane_event_monitor(SDL_Event &event);
-    bool check_pre_breakpoint(cpu_state *cpu);
-    bool check_post_breakpoint(system_trace_entry_t *entry);
-    void set_mmu(MMU *mmu) { this->mmu = mmu; }
+    bool check_pre_breakpoint(cpu_state *cpu, StopHit *hit_out = nullptr);
+    bool check_post_breakpoint(cpu_state *cpu, system_trace_entry_t *entry, StopHit *hit_out = nullptr);
+    bool needs_breakpoint_checks() const;
+    void set_mmu(MMU *mmu);
 
 protected:
     void execute_command(const std::string& command);

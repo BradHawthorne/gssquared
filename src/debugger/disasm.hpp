@@ -6,7 +6,7 @@
 
 #include "mmus/mmu.hpp"
 #include "cpus/processor_type.hpp"
-
+#include "debugger/trace.hpp"
 
 class Disassembler {
     public:
@@ -16,24 +16,18 @@ class Disassembler {
         void setAddress(uint32_t address);
         std::vector<std::string> disassemble(int count);
         void disassemble_one();
-        void setLinePrepend(int spaces) { line_prepend = spaces; }
 
-        // 65816 IMMEDIATE WIDTH — the state this class did not have.
-        //
-        // On a 65816 `LDA #` is TWO operand bytes when M is clear and one when
-        // it is set, and address_mode_formats fixes IMM at one. So a listing of
-        // `A9 34 12 8F 00 10 7E` in native 16-bit mode read `LDA #$34` / `ORA
-        // ($8F)` / `BRK` — desynchronised from the second instruction onward and
-        // inventing every instruction after it, while the CPU in the same
-        // session decoded it correctly as `LDA #$1234` / `STA $7E1000`.
-        //
-        // Defaults are 8-bit, which is the conservative reading of unknown code
-        // and keeps the three existing call sites (the debugger overlay's two
-        // Disassemblers and the CTRL `dis` verb) byte-identical until they opt
-        // in by calling this.
-        void setMX(bool m, bool x) { m8 = m; x8 = x; }
-        bool mIs8() const { return m8; }
-        bool xIs8() const { return x8; }
+        /** Seed assumed M/X widths (1 = 8-bit, 0 = 16-bit). Also used after SEP/REP while walking. */
+        void set_mx(bool m_8bit, bool x_8bit);
+
+        /** Match trace column layout and Bytes toggle for prospective / list output. */
+        void set_format(const trace_column_layout &layout, bool show_opbytes);
+
+        // FORK: the CTRL `dis` verb's names for the same seed, and what the walk
+        // assumed. setMX is set_mx under the name the rail used first.
+        void setMX(bool m, bool x) { set_mx(m, x); }
+        bool mIs8() const { return m_8bit; }
+        bool xIs8() const { return x_8bit; }
 
         // Bytes the MMU could not show (I/O and other handler-backed pages).
         // A listing built on the placeholder byte is fiction, so the caller
@@ -44,14 +38,19 @@ class Disassembler {
 
     private:
         uint32_t address;
-        uint16_t length;
         MMU *mmu;
-        int line_prepend;
         std::vector<std::string> output_buffer;
         processor_type cpu_type;
-        bool m8 = true, x8 = true;   // 65816 M/X widths assumed for the walk
-        int  n_unreadable = 0;       // bytes the MMU refused to show
-        bool last_read_ok = true;    // did the most recent read_mem see memory?
+        int16_t cpu_mask;
+        bool m_8bit = true;
+        bool x_8bit = true;
+        trace_column_layout layout_{};
+        bool show_opbytes_ = true;
+        bool layout_set_ = false;
+        int  n_unreadable = 0;       // FORK: bytes the MMU refused to show
+        bool last_read_ok = true;    // FORK: did the most recent read_mem see memory?
 
         uint8_t read_mem(uint32_t address);
+        int resolve_insn_size(const disasm_entry *da, const address_mode_entry *am) const;
+        void apply_sep_rep(const disasm_entry *da, uint8_t mask);
 };

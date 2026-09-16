@@ -160,15 +160,42 @@ void frame_appevent(computer_t *computer, cpu_state *cpu) {
  * Update window
  */
 void frame_video_update(computer_t *computer, bool force_full_frame = false) {
+    video_system_t *vs = computer->video_system;
 
-    computer->video_system->update_display(force_full_frame);    
+    vs->update_display(force_full_frame);
+
+    // If the CRT post-process shader is active, composite the offscreen scene
+    // onto the swapchain (through the shader) before the OSD is drawn on top.
+    vs->present_scene();
+
+    // The OSD and its modals/HUD are authored in window-point coordinates (the
+    // OSD lays out against SDL_GetWindowSize, which returns points). On a high-DPI
+    // backbuffer the renderer output is in real pixels, so render the UI through a
+    // points-sized logical presentation to keep its layout correct, then restore
+    // the emulator's "draw in real output pixels" convention (DISABLED).
+    //
+    // The logical size MUST match the point coordinate space the OSD uses; scaling
+    // it by the display scale here would desync the layout and make the UI render
+    // oversized (the STRETCH already maps points onto the full pixel backbuffer).
+    int points_w = 0, points_h = 0;
+    SDL_GetWindowSize(vs->window, &points_w, &points_h);
+    SDL_SetRenderLogicalPresentation(vs->renderer, points_w, points_h,
+        SDL_LOGICAL_PRESENTATION_STRETCH);
     osd->render();
+    SDL_SetRenderLogicalPresentation(vs->renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+
     computer->debug_window->render();
-    computer->video_system->present();
+    vs->present();
 }
 
 void frame_sleep(computer_t *computer, uint64_t last_cycle_time, uint64_t ns_per_frame)
     /* uint64_t frame_count) */ {
+#ifdef __EMSCRIPTEN__
+    // In the browser the main thread must return promptly so requestAnimationFrame
+    // can drive the next SDL_AppIterate. Busy-waiting / sleeping here would hang the
+    // tab, so we let vsync (RAF) pace the frame instead.
+    return;
+#endif
     if (gs2_app_values.modal_tracking) return;
 
     uint64_t wakeup_time = last_cycle_time + ns_per_frame; /*  + (frame_count & 1); */ // even frames have 16688154, odd frames have 16688154 + 1
@@ -334,6 +361,7 @@ bool run_one_frame(computer_t *computer) {
     if (computer->execution_mode == EXEC_STEP_INTO) {
 
         /* This will run about 60fps, primarily waiting on user input in the debugger window. */
+        const bool had_work = computer->instructions_left > 0;
         while (computer->instructions_left) {
             if (computer->event_timer->isEventPassed(clock->get_c14m())) {
                 computer->event_timer->processEvents(clock->get_c14m());
@@ -346,6 +374,9 @@ bool run_one_frame(computer_t *computer) {
             }
             (cpu->cpun->execute_next)(cpu);
             computer->instructions_left--;
+        }
+        if (had_work && computer->debug_protocol) {
+            computer->debug_protocol->emit_stopped_step(computer);
         }
 
         MEASURE(computer->event_times, frame_event(computer, cpu));
@@ -376,14 +407,17 @@ bool run_one_frame(computer_t *computer) {
         }
 
         // sleep for 1/60th second ish, without updating frame counts etc.
+        // On the web, RAF paces the loop; blocking here would hang the tab.
+#ifndef __EMSCRIPTEN__
         uint64_t wakeup_time = computer->last_cycle_time + 16667000;
         SDL_DelayPrecise(wakeup_time - SDL_GetTicksNS());
+#endif
         
     } else if ((computer->execution_mode == EXEC_NORMAL) && (clock->get_clock_mode() != CLOCK_FREE_RUN)) {
 
         computer->set_frame_start_cycle();
 
-        if (computer->debug_window->window_open) {
+        if (computer->debug_window->needs_breakpoint_checks()) {
             while (clock->get_c14m() < clock->get_frame_end_c14M() && !cpu->halt) { // 1/60th second. (halt: see the fast loop below)
                 if (computer->event_timer->isEventPassed(clock->get_c14m())) {
                     computer->event_timer->processEvents(clock->get_c14m());
@@ -394,19 +428,32 @@ bool run_one_frame(computer_t *computer) {
                 if (computer->cpu_event_timer->isEventPassed(clock->get_cycles())) {
                     computer->cpu_event_timer->processEvents(clock->get_cycles());
                 }
-                // do the pre check.
-                if (computer->debug_window->check_pre_breakpoint(cpu)) {
+                StopHit hit{};
+                if (computer->debug_window->check_pre_breakpoint(cpu, &hit)) {
+                    uint32_t prev = computer->execution_mode;
                     computer->execution_mode = EXEC_STEP_INTO;
                     computer->instructions_left = 0;
+                    if (computer->debug_protocol) {
+                        computer->debug_protocol->emit_stopped(computer, hit);
+                        computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
+                    }
                     break;
                 }
 
+                uint32_t pc_before = cpu->full_pc;
                 (cpu->cpun->execute_next)(cpu);
-                
-                // Do the post check.
-                if (computer->debug_window->check_post_breakpoint(&cpu->trace_entry)) {
+                if (computer->breakpoints) {
+                    computer->breakpoints->on_instruction_retired(pc_before);
+                }
+
+                if (computer->debug_window->check_post_breakpoint(cpu, &cpu->trace_entry, &hit)) {
+                    uint32_t prev = computer->execution_mode;
                     computer->execution_mode = EXEC_STEP_INTO;
                     computer->instructions_left = 0;
+                    if (computer->debug_protocol) {
+                        computer->debug_protocol->emit_stopped(computer, hit);
+                        computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
+                    }
                     break;
                 }
                 if (cpu->trace_entry.opcode == 0x00) { // catch a BRK and stop execution.
@@ -414,7 +461,7 @@ bool run_one_frame(computer_t *computer) {
                     computer->instructions_left = 0;
                     break;
                 }
-            
+
             }
         } else { // skip all debug checks if debug window is not open - this may seem repetitious but it saves all kinds of cycles where every cycle counts
             // `&& !cpu->halt`: a halt raised INSIDE the frame (a rail breakpoint,
@@ -493,8 +540,8 @@ bool run_one_frame(computer_t *computer) {
 
         computer->last_start_frame_c14m = clock->get_frame_start_c14M();
         
-        if (computer->debug_window->window_open) {
-            while (SDL_GetTicksNS() < next_frame_time && !cpu->halt) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast. (halt: see above)
+        if (computer->debug_window->needs_breakpoint_checks()) {
+            while (SDL_GetTicksNS() < next_frame_time && !cpu->halt) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast.
                 if (computer->event_timer->isEventPassed(clock->get_c14m())) {
                     computer->event_timer->processEvents(clock->get_c14m());
                 }
@@ -504,17 +551,32 @@ bool run_one_frame(computer_t *computer) {
                 if (computer->cpu_event_timer->isEventPassed(clock->get_cycles())) {
                     computer->cpu_event_timer->processEvents(clock->get_cycles());
                 }
-                if (computer->debug_window->check_pre_breakpoint(cpu)) {
+                StopHit hit{};
+                if (computer->debug_window->check_pre_breakpoint(cpu, &hit)) {
+                    uint32_t prev = computer->execution_mode;
                     computer->execution_mode = EXEC_STEP_INTO;
                     computer->instructions_left = 0;
+                    if (computer->debug_protocol) {
+                        computer->debug_protocol->emit_stopped(computer, hit);
+                        computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
+                    }
                     break;
                 }
 
+                uint32_t pc_before = cpu->full_pc;
                 (cpu->cpun->execute_next)(cpu);
-                
-                if (computer->debug_window->check_post_breakpoint(&cpu->trace_entry)) {
+                if (computer->breakpoints) {
+                    computer->breakpoints->on_instruction_retired(pc_before);
+                }
+
+                if (computer->debug_window->check_post_breakpoint(cpu, &cpu->trace_entry, &hit)) {
+                    uint32_t prev = computer->execution_mode;
                     computer->execution_mode = EXEC_STEP_INTO;
                     computer->instructions_left = 0;
+                    if (computer->debug_protocol) {
+                        computer->debug_protocol->emit_stopped(computer, hit);
+                        computer->debug_protocol->emit_run_state(EXEC_STEP_INTO, prev);
+                    }
                     break;
                 }
                 if (cpu->trace_entry.opcode == 0x00) { // catch a BRK and stop execution.
@@ -522,7 +584,7 @@ bool run_one_frame(computer_t *computer) {
                     computer->instructions_left = 0;
                     break;
                 }
-            
+
             }
         } else { // skip all debug checks if debug window is not open - this may seem repetitious but it saves all kinds of cycles where every cycle counts (GO FAST MODE)
             while (SDL_GetTicksNS() < next_frame_time && !cpu->halt) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast. (halt: see above)
@@ -585,18 +647,117 @@ bool run_one_frame(computer_t *computer) {
 
 gs2_app_t gs2_app_values;
 
+void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_config, int builtin_system_id);
+
+static bool apply_system_config_file(GS2AppState *state, const std::string& path, std::string& error_out) {
+    state->loaded_config = std::make_unique<SystemConfig>();
+    if (!state->loaded_config->load(path, error_out)) {
+        state->loaded_config.reset();
+        return false;
+    }
+    state->disks_to_mount = state->loaded_config->mounts();
+    state->platform_id = state->loaded_config->config().platform_id;
+    SystemSettings::instance().record_use(path);
+    return true;
+}
+
+struct open_config_dialog_data_t {
+    GS2AppState *state;
+    bool edit_mode = false;
+};
+
+static void transition_to_edit_system(GS2AppState *state) {
+    delete state->edit_system;
+    state->edit_system = new EditSystem(state->computer->video_system, state->aa);
+    state->phase = PHASE_EDIT_SYSTEM;
+}
+
+static void leave_edit_system(GS2AppState *state) {
+    delete state->edit_system;
+    state->edit_system = nullptr;
+    // Restore SelectSystem letterbox presentation.
+    video_system_t *vs = state->computer->video_system;
+    delete state->select_system;
+    state->select_system = new SelectSystem(vs, state->aa);
+    state->phase = PHASE_SYSTEM_SELECT;
+}
+
+static void system_config_dialog_callback(void *userdata, const char *const *filelist, int /*filter*/) {
+    auto *data = static_cast<open_config_dialog_data_t *>(userdata);
+    GS2AppState *state = data->state;
+    bool edit_mode = data->edit_mode;
+    delete data;
+
+    if (!filelist || !filelist[0]) {
+        return;
+    }
+
+    SystemSettings::instance().remember_file_dialog_selection(FileDialogKind::Config, filelist[0]);
+
+    std::string error;
+    if (!apply_system_config_file(state, filelist[0], error)) {
+        std::string diag = "Failed to load system config '" + std::string(filelist[0]) + "':\n" + error;
+        std::cerr << diag << "\n";
+        system_diag(diag.data());
+        return;
+    }
+
+    if (edit_mode) {
+        transition_to_edit_system(state);
+        state->edit_system->start_from_config(*state->loaded_config);
+        return;
+    }
+
+    transition_to_emulation(state, &state->loaded_config->config(), -1);
+}
+
+static void open_system_config_dialog(GS2AppState *state, bool edit_mode = false) {
+    static const SDL_DialogFileFilter filters[] = {
+        { "GS2 System Config (.gs2)", "gs2" },
+        { "Profiles Settings (.txt)", "txt" },
+        { "All files", "*" }
+    };
+
+    auto *data = new open_config_dialog_data_t{ state, edit_mode };
+
+#if defined(__EMSCRIPTEN__)
+    web_open_file_dialog(system_config_dialog_callback, data, ".gs2");
+#else
+    const std::string last_path =
+        SystemSettings::instance().get_file_dialog_default_location(FileDialogKind::Config);
+    SDL_ShowOpenFileDialog(
+        system_config_dialog_callback,
+        data,
+        state->computer->video_system->window,
+        filters,
+        sizeof(filters) / sizeof(SDL_DialogFileFilter),
+        last_path.empty() ? nullptr : last_path.c_str(),
+        false);
+#endif
+}
+
 /*
  * Configure the selected system and transition from system-select to emulation.
  * This is the code that was between select_system->select() and run_cpus() in old main().
  */
-void transition_to_emulation(GS2AppState *state, int system_id) {
+void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_config, int builtin_system_id = -1) {
     computer_t *computer = state->computer;
     video_system_t *vs = computer->video_system;
 
-    // Emulation manages its own timing, so turn off vsync.
-    SDL_SetRenderVSync(vs->renderer, 0);
+    // The system selector renders through a LETTERBOX logical presentation; the
+    // emulator draws in real output pixels, so clear it before emulation starts.
+    SDL_SetRenderLogicalPresentation(vs->renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
 
-    SystemConfig_t *system_config = get_system_config(system_id);
+    // Emulation manages its own timing, so turn off vsync.
+    // On the web we keep vsync on so SDL's Emscripten backend drives
+    // SDL_AppIterate via requestAnimationFrame (the frame_sleep busy-wait
+    // is disabled there — see frame_sleep()).
+#ifdef __EMSCRIPTEN__
+    SDL_SetRenderVSync(vs->renderer, 1);
+#else
+    SDL_SetRenderVSync(vs->renderer, 0);
+#endif
+
     state->platform_id = system_config->platform_id;
 
     platform_info* platform = get_platform(state->platform_id);
@@ -618,7 +779,15 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
 
     computer->set_platform(platform);
     computer->set_video_scanner(system_config->scanner_type);
-    computer->set_system_id(system_id);
+    if (state->loaded_config) {
+        computer->set_system_id(-1);
+        computer->set_system_config(&state->loaded_config->config());
+        computer->set_machine_id(state->loaded_config->id());
+    } else {
+        computer->set_system_id(builtin_system_id);
+        computer->set_system_config(nullptr);
+        computer->set_machine_id(system_config->id ? system_config->id : "");
+    }
     
     // TODO: load platform roms - this info should get stored in the 'computer'
     rom_data *rd = load_platform_roms(platform, system_config->rom_dir);
@@ -651,25 +820,34 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
             computer->set_mmu(state->mmu_iie);
             computer->debug_window->set_mmu(state->mmu_iie);
             break;
-        case MMU_MMU_IIGS: {
-            // ROM size is data-driven, not hardcoded: 0x20000 (128KB ROM01) or
-            // 0x40000 (256KB ROM03/ROM04). The //e-compat ROM window ($C000-$FFFF)
-            // is always the last 16KB of the image, i.e. base = (romsize - 0x4000).
-            // For a 128KB image this computes the original 0x1C000 (zero ROM01 change).
-            size_t romsize = (size_t) rd->main_rom_file->size();
-            state->mmu_iie = new MMU_IIe(256, 128*1024, /* (uint8_t *) */rd->main_rom_data + (romsize - 0x4000));
-            // Contiguous FPI RAM is motherboard base (ROM-dependent: 128K on
-            // ROM01, 1M on ROM03) PLUS the expansion card -- not a flat 8MB
-            // total, which under-allocated and left the banks above $7F
-            // floating on a machine that should have them. Matches KEGS.
-            // (Ported from upstream e0729c9, with its iigs_memory.hpp.)
-            const size_t fast_ram = iigs_memory::fast_ram_bytes(romsize);
-            printf("IIgs RAM: %s mobo %zuKB + exp %zuMB = %zu bytes (banks $00-$%02X)\n",
-                   iigs_memory::is_rom03(romsize) ? "ROM03" : "ROM01",
-                   iigs_memory::mobo_ram_bytes(romsize) / 1024,
-                   iigs_memory::kDefaultExpBytes / (1024 * 1024),
-                   fast_ram, iigs_memory::last_ram_bank(fast_ram));
-            state->mmu_iigs = new MMU_IIgs(256, (int) fast_ram, (uint32_t) romsize, /* (uint8_t *) */rd->main_rom_data, state->mmu_iie);
+        case MMU_MMU_IIGS:
+        {
+            // Bank $FF (the IIe-compatibility ROM the emulation-mode 6502
+            // core runs, and the source for the LC-area/IOLC ROM overlay
+            // reads inside MMU_IIgs) is always the *last* 64K bank of the
+            // ROM image, wherever that falls for the actual ROM size --
+            // NOT a hardcoded 128KB-ROM (ROM01) assumption. ROM01 is 128KB
+            // (bank $FF at file offset 0x10000); ROM03 is 256KB (0x30000).
+            // Previously hardcoded to 0x1'C000 / 128*1024, which silently
+            // only worked for a 128KB ROM01 image and scrambled the bank
+            // layout (and the emulation-mode reset vector) for ROM03.
+            const size_t main_rom_size = rd->main_rom_file->size();
+            const size_t rom_bank_ff_offset = main_rom_size - 65536;
+            // Contiguous FPI RAM = motherboard base (ROM-dependent) + 8MB expansion
+            // card, matching KEGS. Not a flat 8MB total — that left banks $80+ floating.
+            const size_t mobo_ram = iigs_memory::mobo_ram_bytes(main_rom_size);
+            const size_t exp_ram = iigs_memory::kDefaultExpBytes;
+            const size_t fast_ram = iigs_memory::fast_ram_bytes(main_rom_size, exp_ram);
+            const uint32_t last_bank = iigs_memory::last_ram_bank(fast_ram);
+            printf("IIgs RAM: %s mobo %zuKB + exp %zuMB = %zu bytes (banks $00–$%02X)\n",
+                   iigs_memory::is_rom03(main_rom_size) ? "ROM03" : "ROM01",
+                   mobo_ram / 1024,
+                   exp_ram / (1024 * 1024),
+                   fast_ram,
+                   last_bank);
+            state->mmu_iie = new MMU_IIe(256, 128*1024, /* (uint8_t *) */rd->main_rom_data + rom_bank_ff_offset + 0xC000);
+            state->mmu_iigs = new MMU_IIgs(256, (int)fast_ram, (uint32_t) main_rom_size, /* (uint8_t *) */rd->main_rom_data, state->mmu_iie);
+        }
             state->mmu_iigs->init_map();
             computer->cpu->set_mmu(state->mmu_iigs); // cpu gets FPI
             computer->set_mmu(state->mmu_iie); // everything else gets the Mega II
@@ -677,7 +855,6 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
             state->mmu_iigs->set_clock((NClockII *)nclock);
 
             break;
-        }
         default:
             printf("Unknown MMU type: %d\n", platform->mmu_type);
             break;
@@ -704,6 +881,13 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
             continue;
         }
         device->power_on(computer, SLOT_NONE);
+    }
+
+    std::string slot_error;
+    if (!validate_slot_devices(*system_config, slot_error)) {
+        printf("Invalid slot configuration: %s\n", slot_error.c_str());
+        system_failure(slot_error.c_str());
+        return;
     }
 
     // Iterate through SystemConfig Slot Devices and create/register/initialize the devices.
@@ -745,6 +929,19 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
         }
     }
 
+    // Apply serial/parallel [[connections]] after ports register during device init.
+    if (state->loaded_config) {
+        for (const auto& conn : state->loaded_config->connections()) {
+            const connection_key_t key = normalize_connection_key(conn.slot, conn.port);
+            const connection_device_type_t dtype = connection_device_type_from_string(conn.device);
+            if (!computer->connections->attach(key, dtype)) {
+                printf("Warning: connection slot %d device=%s not applied (port not registered?)\n",
+                       key.slot, conn.device.c_str());
+            }
+        }
+    }
+    computer->connections->apply_defaults();
+
     osd = new OSD(computer, vs->renderer, vs->window, computer->slot_manager, 1120, 768, state->aa);
 
     // TODO: this should be handled differently. have osd save/restore?
@@ -782,6 +979,10 @@ void transition_to_emulation(GS2AppState *state, int system_id) {
     }
 
     run_cpus_init(computer);
+    vs->set_crt_shader_enabled(false, false);
+    if (gs2_app_values.crt_shader_at_boot) {
+        vs->set_crt_shader_enabled(true, true);
+    }
     state->phase = PHASE_EMULATION;
 }
 
@@ -794,7 +995,7 @@ void transition_to_shutdown(GS2AppState *state) {
     // save cpu trace buffer, then exit.
     // TODO: move this to the trace buffer destructor.
     std::string tracepath;
-    Paths::calc_docs(tracepath, "trace.bin");
+    Paths::calc_docs(tracepath, "gssquared-trace.bin");
     computer->cpu->trace_buffer->save_to_file(tracepath);
 
     // deallocate stuff.
@@ -803,6 +1004,7 @@ void transition_to_shutdown(GS2AppState *state) {
 
     platform_info *platform = computer->platform;
     getMenuInterface()->setComputer(nullptr);
+    computer->set_system_config(nullptr);
     delete computer;
     state->computer = nullptr;
 
@@ -844,6 +1046,10 @@ void transition_to_shutdown(GS2AppState *state) {
     // Let vsync throttle the selection UI instead of spinning.
     SDL_SetRenderVSync(vs->renderer, 1);
     state->phase = PHASE_SYSTEM_SELECT;
+
+    state->loaded_config.reset();
+    state->disks_to_mount.clear();
+    state->auto_launched = false;
 }
 
 /* ========================================================================
@@ -914,10 +1120,25 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     int platform_id = PLATFORM_APPLE_II_PLUS;  // default to Apple II Plus
     bool platform_explicit = false;            // true when -p was given on CLI
     int config_index = -1;                     // -c N: select builtin system config by index
+    std::string config_path;
+    std::string debug_socket_path;
+    std::vector<disk_mount_t> cli_mounts;
     int opt;
     int slot, drive;
 
-    if (isatty(fileno(stdin))) {
+    auto upsert_mount = [](std::vector<disk_mount_t>& mounts, const disk_mount_t& mount) {
+        for (auto& existing : mounts) {
+            if (existing.slot == mount.slot && existing.drive == mount.drive) {
+                existing = mount;
+                return;
+            }
+        }
+        mounts.push_back(mount);
+    };
+
+    if (isatty(fileno(stdin)) || argc > 1) {
+        // argc>1: scripted/CLI launch (often no TTY) still needs program-files
+        // resource paths (…/resources/) so fonts and ROMs resolve.
         gs2_app_values.console_mode = true;
     }
     Paths::initialize(gs2_app_values.console_mode);
@@ -928,9 +1149,36 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     gs2_app_values.pref_path = get_pref_path();
     printf("pref_path: %s\n", gs2_app_values.pref_path.c_str());
 
-    { // always parse CLI args so headless/automation launches honor -p/-n (no TTY needed)
+    // FORK: a headless or rail-driven run reads no host preferences and writes none.
+    // system_settings.toml carries an input that changes what the guest reads
+    // (disconnected_when_no_gamepad: every paddle reads "no paddle" instead of a
+    // centred stick), and whatever file sits in the user's profile would silently
+    // become part of a gate's machine. Such a run's machine is its command line
+    // and its pins, the same rule that pins BRAM. Seeding the shipped .gs2 files
+    // into the profile is skipped with it: a gate must not write the user's prefs.
+    const bool a2gspu_rail_run = SDL_getenv("A2GSPU_SPIKE_FRAMES") || SDL_getenv("A2GSPU_CTRL");
+    if (!a2gspu_rail_run) {
+        // Load app settings before seeding defaults so dialog-path seed cannot overwrite
+        // an existing system_settings.toml with empty in-memory state.
+        SystemSettings::instance().load();
+        SystemConfig::ensure_default_system_configs();
+    } else {
+        SystemSettings::instance().set_persist(false);
+        printf("A2GSPU PREFS: not loaded (headless/rail run: host preferences are not machine inputs)\n");
+    }
+
+    // Parse CLI whenever there are arguments. console_mode (isatty) is still used
+    // elsewhere; without this, scripted launches (no TTY) would ignore --debug / -p / etc.
+    // (Fork: headless/automation launches rely on this for -p/-n/-c.)
+    if (gs2_app_values.console_mode || argc > 1) {
         // parse command line options
-        while ((opt = getopt(argc, argv, "snxp:d:c:")) != -1) {
+        enum { OPT_NO_QUIT_CONFIRM = 1000 };
+        static struct option long_options[] = {
+            {"debug", required_argument, nullptr, 'D'},
+            {"no-quit-confirm", no_argument, nullptr, OPT_NO_QUIT_CONFIRM},
+            {nullptr, 0, nullptr, 0}
+        };
+        while ((opt = getopt_long(argc, argv, "snxgp:d:c:D:", long_options, nullptr)) != -1) {
             switch (opt) {
                 case 'p':
                     platform_id = std::stoi(optarg);
@@ -948,9 +1196,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
                             slot = std::stoi(matches[1]);
                             drive = std::stoi(matches[2]) - 1;
                             filename = matches[3];
-                            //std::cout << std::format("Mounting disk {} in slot {} drive {}\n", filename, slot, drive) << std::endl;
                             std::cout << "Mounting disk " << filename << " in slot " << slot << " drive " << drive << std::endl;
-                            state->disks_to_mount.push_back({ (uint16_t)slot, (uint16_t)drive, filename});
+                            upsert_mount(cli_mounts, { (uint16_t)slot, (uint16_t)drive, filename});
                         }
                     }
                     break;
@@ -967,8 +1214,23 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
                     config_index = std::stoi(optarg);
                     platform_explicit = true;  // reuse the auto-launch path
                     break;
+                case 'g':
+                    gs2_app_values.crt_shader_at_boot = true;
+                    break;
+                case 'D':
+                    debug_socket_path = optarg;
+                    std::cerr << "Debug protocol socket: " << debug_socket_path << "\n";
+                    break;
+                case OPT_NO_QUIT_CONFIRM:
+                    gs2_app_values.no_quit_confirm = true;
+                    break;
                 default:
-                    std::cerr << "Usage: " << argv[0] << " [-p platform] [-dsXdY=filename] [-s]\n";
+                    std::cerr << "Usage: " << argv[0] << " [file.gs2|*Settings.txt] [-p platform] [-dsXdY=filename] [-s] [-g] [--debug PATH] [--no-quit-confirm]\n";
+                    std::cerr << "  file.gs2|*Settings.txt: load system configuration from a .gs2 TOML file\n";
+                    std::cerr << "        or Profiles Settings.txt file, skip the system-selector UI,\n";
+                    std::cerr << "        and auto-launch that system.\n";
+                    std::cerr << "        Closing the emulator window then quits the app rather\n";
+                    std::cerr << "        than returning to the selector.\n";
                     std::cerr << "  -p N: skip the system-selector UI and auto-launch the\n";
                     std::cerr << "        first builtin system that matches the given platform.\n";
                     std::cerr << "        Closing the emulator window then quits the app rather\n";
@@ -979,15 +1241,42 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
                     std::cerr << "  -dsXdY=filename: mount disk image `filename` in slot X drive Y.\n";
                     std::cerr << "        Drives are 1-indexed; e.g. -ds6d1=foo.dsk for the\n";
                     std::cerr << "        first drive of the controller in slot 6.\n";
+                    std::cerr << "        Overrides a [[storage]] entry from the config file for the same slot/drive.\n";
                     std::cerr << "  -s: sleep mode (don't busy-wait, sleep)\n";
+                    std::cerr << "  -n: no host input (fork: headless and rail-driven runs)\n";
+                    std::cerr << "  -c N: auto-launch builtin system config N (fork; see the systems catalog)\n";
+                    std::cerr << "  -g: enable CRT post-process shader when guest emulation\n";
+                    std::cerr << "        starts (same as pressing F7 with shader off).\n";
+                    std::cerr << "  -D PATH, --debug PATH: listen for external debug protocol on\n";
+                    std::cerr << "        Unix-domain socket PATH (see Docs/DebugProtocol.md).\n";
+                    std::cerr << "  --no-quit-confirm: skip QuitModal / dirty-disk prompts on\n";
+                    std::cerr << "        SDL_EVENT_QUIT (useful for tests that SIGTERM/kill the process).\n";
                     return SDL_APP_FAILURE;
             }
         }
+        if (optind < argc) {
+            config_path = argv[optind];
+        }
+    }
+
+    if (!config_path.empty()) {
+        std::string error;
+        if (!apply_system_config_file(state, config_path, error)) {
+            std::string diag = "Failed to load system config '" + config_path + "':\n" + error;
+            std::cerr << diag << "\n";
+            system_diag(diag.data());
+            delete state;
+            return SDL_APP_FAILURE;
+        }
+        for (const auto& mount : cli_mounts) {
+            upsert_mount(state->disks_to_mount, mount);
+        }
+    } else {
+        state->disks_to_mount = std::move(cli_mounts);
+        state->platform_id = platform_id;
     }
 
     gs2_app_values.menu_event_type = SDL_RegisterEvents(1);
-
-    state->platform_id = platform_id;
 
     // a2gspu headless-boot spike: env-gated, leaves normal launch untouched.
     {
@@ -1015,6 +1304,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 
     state->computer = new computer_t(nullptr); // We'll set the clock later.
 
+    // Start debug protocol after computer exists so GET_STATUS can read execution_mode.
+    if (!debug_socket_path.empty()) {
+        state->debug_protocol = std::make_unique<DebugProtocolServer>(debug_socket_path);
+        if (!state->debug_protocol->start()) {
+            std::cerr << "Failed to start debug protocol server on " << debug_socket_path << "\n";
+            delete state->computer;
+            state->computer = nullptr;
+            delete state;
+            return SDL_APP_FAILURE;
+        }
+        state->computer->debug_protocol = state->debug_protocol.get();
+    }
+
     video_system_t *vs = state->computer->video_system;
 
     initMenu(vs->window);
@@ -1028,17 +1330,25 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     SDL_SetRenderVSync(vs->renderer, 1);
     state->phase = PHASE_SYSTEM_SELECT;
 
-    // If the caller passed `-p PLATFORM`, skip the system-selector UI
-    // and jump straight into emulation using the first builtin system
-    // whose platform_id matches.
-    if (platform_explicit) {
+    // If the caller passed a config file path, skip the system-selector UI and
+    // jump straight into emulation using the loaded configuration.
+    if (state->loaded_config) {
+        std::cout << "Auto-launching system config: " << config_path << std::endl;
+        transition_to_emulation(state, &state->loaded_config->config(), -1);
+        state->auto_launched = true;
+        vs->raise();
+    } else if (platform_explicit) {
+        // If the caller passed `-p PLATFORM`, skip the system-selector UI
+        // and jump straight into emulation using the first builtin system
+        // whose platform_id matches -- or, with `-c N` (fork), builtin
+        // system N itself.
         const int system_id = (config_index >= 0)
                                   ? config_index
                                   : find_first_system_for_platform(platform_id);
         if (system_id >= 0 && system_id < NUM_SYSTEM_CONFIGS) {
             std::cout << "Auto-launching system_id=" << system_id
                       << " (" << get_system_config(system_id)->name << ")" << std::endl;
-            transition_to_emulation(state, system_id);
+            transition_to_emulation(state, get_system_config(system_id), system_id);
             state->auto_launched = true;
         } else {
             std::cerr << "No system config for index/platform "
@@ -1061,9 +1371,39 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     if (handleMenuEvent(event)) return SDL_APP_CONTINUE;
 
     if (state->phase == PHASE_SYSTEM_SELECT) {
+        if (event->type == gs2_app_values.menu_event_type
+            && event->user.code == MENU_OPEN_CONFIG) {
+            open_system_config_dialog(state, false);
+            return SDL_APP_CONTINUE;
+        }
+        if (event->type == SDL_EVENT_DROP_FILE && event->drop.data) {
+            const ConfigFileKind kind = detect_config_file_kind(event->drop.data);
+            if (kind == ConfigFileKind::Gs2 || kind == ConfigFileKind::Settings) {
+                std::string error;
+                if (!apply_system_config_file(state, event->drop.data, error)) {
+                    std::string diag = "Failed to load system config '" + std::string(event->drop.data) + "':\n" + error;
+                    std::cerr << diag << "\n";
+                    system_diag(diag.data());
+                    return SDL_APP_CONTINUE;
+                }
+                std::cout << "Auto-launching system config: " << event->drop.data << std::endl;
+                transition_to_emulation(state, &state->loaded_config->config(), -1);
+                state->auto_launched = true;
+                state->computer->video_system->raise();
+                return SDL_APP_CONTINUE;
+            }
+        }
         state->select_system->event(*event);
         if (event->type == SDL_EVENT_QUIT) {
             return SDL_APP_SUCCESS; // clean exit
+        }
+        return SDL_APP_CONTINUE;
+    }
+
+    if (state->phase == PHASE_EDIT_SYSTEM) {
+        state->edit_system->event(*event);
+        if (event->type == SDL_EVENT_QUIT) {
+            return SDL_APP_SUCCESS;
         }
         return SDL_APP_CONTINUE;
     }
@@ -1112,14 +1452,26 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     // in SDL_AppEvent to avoid blocking SDL's X11 connection (deadlock risk).
     pumpMenuEvents();
 
+    // Drain main-thread debug commands every frame (including while paused / on selector).
+    if (state->debug_protocol) {
+        state->debug_protocol->process_main_thread(state->computer);
+    }
+
     if (state->phase == PHASE_SYSTEM_SELECT) {
         /* Render the selection UI (one frame). Events already dispatched by SDL_AppEvent. */
         video_system_t *vs = state->computer->video_system;
 
+        // ImGui menu events are consumed by handleMenuEvent (WantCaptureMouse) and
+        // never dirty SelectSystem. Keep ticking the overlay while ImGui has capture,
+        // or the menu and the tile UI both freeze.
+        if (menuNeedsFrame()) {
+            state->select_system->mark_dirty();
+        }
         if (state->select_system->update()) {
             SDL_SetRenderDrawColor(vs->renderer, 0, 0, 0, 255);
             vs->clear();
             state->select_system->render();
+            renderMenuOverlay(vs->renderer, vs->window_width, vs->window_height);
             vs->present();
         }
 
@@ -1127,10 +1479,72 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         if (system_id == SELECT_QUIT) {
             return SDL_APP_SUCCESS; // user closed window during selection
         }
-        if (system_id >= 0) {
-            transition_to_emulation(state, system_id);
+        if (system_id == SELECT_NEW) {
+            state->select_system->clear_selection();
+            transition_to_edit_system(state);
+            state->edit_system->start_new();
+            return SDL_APP_CONTINUE;
         }
+        if (system_id == SELECT_OPEN_LAUNCH) {
+            state->select_system->clear_selection();
+            open_system_config_dialog(state, false);
+            return SDL_APP_CONTINUE;
+        }
+        if (system_id == SELECT_OPEN_EDIT) {
+            state->select_system->clear_selection();
+            open_system_config_dialog(state, true);
+            return SDL_APP_CONTINUE;
+        }
+        if (system_id >= SELECT_RECENT_BASE) {
+            const std::string& path = state->select_system->get_recent_path(system_id);
+            state->select_system->clear_selection();
+            if (path.empty()) {
+                return SDL_APP_CONTINUE;
+            }
+            std::string error;
+            if (!apply_system_config_file(state, path, error)) {
+                std::string diag = "Failed to load system config '" + path + "':\n" + error;
+                std::cerr << diag << "\n";
+                system_diag(diag.data());
+                return SDL_APP_CONTINUE;
+            }
+            transition_to_emulation(state, &state->loaded_config->config(), -1);
+            return SDL_APP_CONTINUE;
+        }
+        if (system_id >= 0) {
+            transition_to_emulation(state, get_system_config(system_id), system_id);
+        }
+        // On the web, vsync paces the selection UI; blocking would hang the tab.
+#ifndef __EMSCRIPTEN__
         SDL_Delay(16);
+#endif
+        return SDL_APP_CONTINUE;
+    }
+
+    if (state->phase == PHASE_EDIT_SYSTEM) {
+        video_system_t *vs = state->computer->video_system;
+        // Same ImGui capture / dirty-flag coupling as PHASE_SYSTEM_SELECT.
+        if (menuNeedsFrame()) {
+            state->edit_system->mark_dirty();
+        }
+        if (state->edit_system->update()) {
+            SDL_SetRenderDrawColor(vs->renderer, 0, 0, 0, 255);
+            vs->clear();
+            state->edit_system->render();
+            renderMenuOverlay(vs->renderer, vs->window_width, vs->window_height);
+            vs->present();
+        }
+
+        int edit_result = state->edit_system->get_result();
+        if (edit_result == EDIT_QUIT) {
+            return SDL_APP_SUCCESS;
+        }
+        if (edit_result == EDIT_CANCEL || edit_result == EDIT_SAVED) {
+            leave_edit_system(state);
+        }
+#ifndef __EMSCRIPTEN__
+        SDL_Delay(16);
+#endif
         return SDL_APP_CONTINUE;
     }
 
@@ -1140,15 +1554,18 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         osd->update();
 
         if (!run_one_frame(computer)) {
-            // User requested halt. Always run transition_to_shutdown
-            // so the trace buffer is saved and the computer/MMUs are
-            // properly destroyed. Then either go back to the selector
-            // (interactive flow) or exit the app (we auto-launched
-            // via -p PLATFORM and have no selector to return to).
-            transition_to_shutdown(state);
-            if (state->auto_launched) {
+            // User requested halt. Snapshot before transition_to_shutdown
+            // clears auto_launched. When exiting the process, skip selector
+            // recreation — SDL_AppQuit tears down; recreating first leaks
+            // SDL objects and can hang on an assertion dialog.
+            const bool exit_app = state->auto_launched || gs2_app_values.force_app_exit;
+            if (exit_app) {
+                std::string tracepath;
+                Paths::calc_docs(tracepath, "gssquared-trace.bin");
+                computer->cpu->trace_buffer->save_to_file(tracepath);
                 return SDL_APP_SUCCESS;
             }
+            transition_to_shutdown(state);
         }
         // THE WINDOWED FRAME CLOCK. Records stamp g_iigs_cur_frame and ITRACE_FRAME
         // arms from it, but only the spike and CTRL `run` ever advanced it, so every
@@ -1173,6 +1590,16 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     GS2AppState *state = (GS2AppState *)appstate;
     if (!state) return;
 
+    // Stop the debug protocol thread before tearing down computer/SDL objects;
+    // otherwise the bridge thread can race AppQuit and trip SDL object asserts.
+    if (state->debug_protocol) {
+        if (state->computer) {
+            state->computer->debug_protocol = nullptr;
+        }
+        state->debug_protocol->stop();
+        state->debug_protocol.reset();
+    }
+
     if (osd) {
         delete osd;
         osd = nullptr;
@@ -1187,6 +1614,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     delete state->mmu_iie;
     delete state->mmu_iigs;
 
+    delete state->edit_system;
     delete state->select_system;
     delete state->aa;
     delete state;

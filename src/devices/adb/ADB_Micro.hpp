@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #include <cstdio>
 #include <functional>
+#include <vector>
 
 #include "device_reset_id.hpp"
 #include "a2gspu_progress_taps.hpp"   // A2GSPU_TAP_SESSION: a key reaching the latch (off => 1 branch)
@@ -21,9 +22,9 @@
 constexpr bool MOUSE_X = false;
 constexpr bool MOUSE_Y = true;
 
-// modes_byte flag bits (ADB microcontroller SET MODES / CLR MODES / SYNCH)
+// modes_byte flag bits
 constexpr uint8_t keyboard_auto_poll_enabled = 0b0000'0001;
-constexpr uint8_t keyboard_buffer_enabled_bit = 0b0001'0000;
+constexpr uint8_t keyboard_buffer_enabled = 0b0001'0000;
 
 /* enum mouse_next_t {
     MOUSE_X,
@@ -68,6 +69,13 @@ struct uc_vars_t {
     uint8_t xkeys;
 };
 
+#include "devices/adb/keygloo_state.hpp"
+
+struct MotionChunk {
+    int dx;
+    int dy;
+};
+
 class KeyGloo
 {
     public:
@@ -76,6 +84,25 @@ class KeyGloo
         uint32_t    obs_uc_len()    const { return (uint32_t)sizeof(ram); }
     private:
         ADB_Host * adb_host = nullptr;
+        ADB_Mouse * adb_mouse = nullptr;
+        keygloo_state_t *host_ctx = nullptr;
+        bool em_active = false;
+        bool reported_valid = false;
+        int target_x = 0;
+        int target_y = 0;
+        int reported_x = 0;
+        int reported_y = 0;
+        int pending_dx = 0;
+        int pending_dy = 0;
+        bool em_host_cursor_hidden = false;
+        std::vector<MotionChunk> motion_queue;
+
+        // Closed-loop injection stepper state (used when closed_loop_enabled()).
+        bool pending_target = false;
+        int em_snapshot_x = 0;
+        int em_snapshot_y = 0;
+        bool step_outstanding = false;
+        int stale_frames = 0;
 
         uint8_t rom[3072];
 
@@ -188,13 +215,27 @@ class KeyGloo
             memset(ram, 0, sizeof(ram));
             adb_host = new ADB_Host();
             adb_host->add_device(0x02, new ADB_Keyboard());
-            adb_host->add_device(0x03, new ADB_Mouse());
+            adb_mouse = new ADB_Mouse();
+            adb_host->add_device(0x03, adb_mouse);
             //status = 0;
 
             reset();
 
         };
         ~KeyGloo();
+
+        void set_host_context(keygloo_state_t *ctx);
+        void detect_and_update_em_active();
+        void handle_em_mouse_motion(float wx, float wy);
+        void queue_motion_toward_target();
+        void drain_motion_queue();
+        void deliver_mouse_reg0();
+        void seed_reported_from_em();
+        void update_em_host_cursor(float wx, float wy);
+        void restore_em_host_cursor();
+        /* void on_em_c024_x_read();
+        void on_em_c024_y_read(); */
+        void step_em_closed_loop();
     
         // zero out 0x51 to force a power-on reset.
         void zero_0x51() {
@@ -255,9 +296,6 @@ class KeyGloo
             keysdown = 0;
         }
 
-        // Turning the key buffer OFF discards whatever is queued. A ring left
-        // populated across the mode change would deliver keys the guest typed
-        // under the old policy, arbitrarily later, through the latch path.
         void flush_key_queue() {
             vars.inpt = 0;
             vars.outpt = 0;
@@ -265,10 +303,6 @@ class KeyGloo
 
         void on_keyboard_buffer_disabled() {
             flush_key_queue();
-        }
-
-        bool keyboard_buffer_enabled() const {
-            return (modes_byte & keyboard_buffer_enabled_bit) != 0;
         }
 
         void set_vals_from_configuration() {
@@ -330,10 +364,64 @@ class KeyGloo
                         case '.': ascii = '>'; break;
                         case '/': ascii = '?'; break;
                         case '`': ascii = '~'; break;
+                        case '<': ascii = '>'; break; // ISO 102 (HID 0x64)
                     }
                 }
             } 
             return ascii;
+        }
+
+        // French AZERTY (IIgs Figure B-4). Ctrl uses French letter identity (ADB_Q → Ctrl-A).
+        // Dead keys (^ ¨) emit the accent character; no compose in v1.
+        uint8_t map_fr(uint8_t code, adb_mod_key_t mods) {
+            uint8_t ascii = adb_ascii_fr[code];
+            if (mods.ctrl) {
+                if (ascii >= 'a' && ascii <= 'z') ascii = ascii - 'a' + 1;
+                return ascii;
+            }
+            if (mods.caps) {
+                if (ascii >= 'a' && ascii <= 'z') ascii = ascii - 'a' + 'A';
+            }
+            if (mods.shift) {
+                if (ascii >= 'a' && ascii <= 'z') ascii = ascii - 'a' + 'A';
+                else if (code == ADB_GRAVE) ascii = '#'; // pos 1,1 (@/#); '@'==à byte in FR charset
+                else if (code == ADB_ISO_102) ascii = '>'; // HID 0x64
+                else {
+                    switch (ascii) {
+                        case '&': ascii = '1'; break;
+                        case ADB_FR_E_ACUTE: ascii = '2'; break; // é
+                        case '"': ascii = '3'; break;
+                        case '\'': ascii = '4'; break;
+                        case '(': ascii = '5'; break;
+                        case ADB_FR_SECTION: ascii = '6'; break; // §
+                        case ADB_FR_E_GRAVE: ascii = '7'; break; // è
+                        case '!': ascii = '8'; break;
+                        case ADB_FR_C_CEDILLA: ascii = '9'; break; // ç
+                        case ADB_FR_A_GRAVE: ascii = '0'; break; // à (number row)
+                        case ')': ascii = ADB_FR_DEGREE; break; // °
+                        case '-': ascii = '_'; break;
+                        case '^': ascii = ADB_FR_DIAERESIS; break; // ¨
+                        case '$': ascii = '*'; break;
+                        case ADB_FR_U_GRAVE: ascii = '%'; break; // ù
+                        case ',': ascii = '?'; break;
+                        case ';': ascii = '.'; break;
+                        case ':': ascii = '/'; break;
+                        case '=': ascii = '+'; break;
+                        case '`': ascii = ADB_FR_POUND; break; // £
+                    }
+                }
+            }
+            return ascii;
+        }
+
+        // Layout lang from KeyGLU config byte1 low nibble (not LANGSEL display).
+        // 0=US, 1=UK, 2=French, 3=Danish, 4=Spanish, 5=Italian,
+        // 6=German, 7=Swedish, 8=Dvorak, 9=French Canadian.
+        uint8_t map_key(uint8_t lang, uint8_t code, adb_mod_key_t mods) {
+            switch (lang) {
+                case 2: return map_fr(code, mods);
+                default: return map_us(code, mods);
+            }
         }
 
         /*
@@ -432,7 +520,7 @@ class KeyGloo
                     } else if (value == 0x04) { // set modes
                         modes_byte |= cmd[1]; 
                     } else if (value == 0x05) { // clr modes
-                        if (cmd[1] & keyboard_buffer_enabled_bit) on_keyboard_buffer_disabled();
+                        if (cmd[1] & 0x10) on_keyboard_buffer_disabled();
                         modes_byte &= ~cmd[1];
                     } else if (value == 0x06) { // set configuration bytes
                         configuration_bytes[0] = cmd[1];
@@ -445,7 +533,7 @@ class KeyGloo
                         // on boot/reset there should be mode that accepts only synch command, and after that we're good.
                         reset();
                         modes_byte = cmd[1];
-                        if (!(modes_byte & keyboard_buffer_enabled_bit)) on_keyboard_buffer_disabled();
+                        if (!(modes_byte & 0x10)) on_keyboard_buffer_disabled();
                         configuration_bytes[0] = cmd[2];
                         configuration_bytes[1] = cmd[3];
                         configuration_bytes[2] = cmd[4];
@@ -499,7 +587,7 @@ class KeyGloo
                         uint8_t kpflag = 0;
                         // TODO: this also needs to update currmod.keypad if a keypad key is being held down?
                         if (keycode >= 0x43 && keycode <= 0x5C) kpflag = 0x10;
-                        store_key_to_buffer(map_us(keycode, (adb_mod_key_t){0}), kpflag); // TODO: update modifiers.
+                        store_key_to_buffer(map_key(vars.lang, keycode, (adb_mod_key_t){0}), kpflag); // TODO: update modifiers.
                     } 
 
                     break;
@@ -656,6 +744,10 @@ class KeyGloo
             update_interrupt_status();
         }
         
+        bool keyboard_buffer_enabled() const {
+            return (modes_byte & 0x10) != 0;
+        }
+
         void store_key_to_buffer(uint8_t keycode, uint8_t keymods) {
             // A2GSPU key interceptor: swallow file-driven keys before the ADB buffer.
             if (key_intercept && key_intercept(keycode, keymods)) return;
@@ -814,7 +906,8 @@ class KeyGloo
             update_interrupt_status();
 
             // potentially load a new key from buffer.
-            load_key_from_buffer();
+            if (keyboard_buffer_enabled())
+                load_key_from_buffer();
             
             return (keysdown > 0 ? 0x80 : 0x00) | retval; // TODO: detect AKD and set hi bit if needed.
         }
@@ -827,7 +920,8 @@ class KeyGloo
             update_interrupt_status();
 
             // potentially load a new key from buffer.
-            load_key_from_buffer();
+            if (keyboard_buffer_enabled())
+                load_key_from_buffer();
         }
 
         void update_data_register_full() {
@@ -998,19 +1092,7 @@ class KeyGloo
             }
         }
 
-        // toggle between returning the X data, and the Y data.
-        uint8_t read_mouse_data() {
-            if (mouse_x_available == MOUSE_Y) {
-                mouse_data_full = false;
-                mouse_x_available = MOUSE_X; // means X is now available. Cortland doc contradicts IIgs HW Ref. (x=0, y=1)
-                update_interrupt_status();
-                return mouse_data[0];
-            } else { // mouse_x_available == MOUSE_X}
-                mouse_x_available = MOUSE_Y; // true means Y is now avail (switching back to Y)
-                update_interrupt_status();
-                return mouse_data[1];
-            }
-        }
+        uint8_t read_mouse_data();
 
         // File/automation-driven mouse injection (A2GSPU). Additive to the normal
         // adb_host->talk poll: stages a pre-encoded {data0,data1} pair and marks it
@@ -1047,9 +1129,17 @@ class KeyGloo
         }
 
         bool process_event(SDL_Event &event) {
-            
+
             // if key event, and it's a repeat, ignore it.
             if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && (event.key.repeat)) return true; // ignore ANY repeated key events.
+
+            if (event.type == SDL_EVENT_MOUSE_MOTION && host_ctx) {
+                detect_and_update_em_active();
+                if (em_active) {
+                    handle_em_mouse_motion(event.motion.x, event.motion.y);
+                    return true;
+                }
+            }
 
             // TODO: need to track which keys are down in this function.
             // TODO: after processing event, check keyboard register for new key event and read it here.
@@ -1101,7 +1191,6 @@ class KeyGloo
                     if (keyupdown) keysdown++;
                     else keysdown--;
 
-                    // TODO: Map the keycode here through a mapper based on the language setting.
                     if ((keycode == ADB_DELETE) && vars.currmod.ctrl && vars.currmod.open) flush_buffer();
                     else if ((keycode == ADB_ESCAPE) && vars.currmod.ctrl && vars.currmod.open) {
                         if (!keyupdown) { // only assert on key down.
@@ -1115,7 +1204,7 @@ class KeyGloo
                         uint8_t kpflag = 0;
                         // TODO: this also needs to update currmod.keypad if a keypad key is being held down?
                         if (keycode >= 0x43 && keycode <= 0x5C) kpflag = 0x10;
-                        last_key_down = map_us(keycode, vars.currmod);
+                        last_key_down = map_key(vars.lang, keycode, vars.currmod);
                         if (keyupdown) store_key_to_buffer(last_key_down, vars.currmod.value | kpflag); // TODO: update modifiers.
                         if (!keyupdown) stop_repeat();
                         else start_repeat(); // delay to repeat
@@ -1126,35 +1215,26 @@ class KeyGloo
                 //print_keyboard();
 
             } else if (status && (event.type == SDL_EVENT_MOUSE_MOTION || event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP)) {
-                ADB_Register reg;
-                adb_host->talk(0x03, 0b11, 0, reg);
-                /*
-                    * Mouse Register 0
-                    * Bit 15: Button Pressed
-                    * Bit 14: Moved Up
-                    * Bit 13-8: Y move value
-                    * Bit 7: always 1
-                    * Bit 6: Moved right
-                    * Bit 5-0: X move value
-                */
-                /* uint8_t mouse_status = (reg.data[1] & 0x80);
-                uint8_t mouse_x = (reg.data[0] & 0x7F);
-                uint8_t mouse_y = (reg.data[1] & 0x7F);
-                mouse_data[0] = mouse_y | mouse_status;
-                mouse_data[1] = mouse_x | mouse_status; */
-                mouse_data[0] = reg.data[1];
-                mouse_data[1] = reg.data[0];
-                mouse_data_full = true;
-                mouse_x_available = MOUSE_X;
-                //print_mouse();
-                update_interrupt_status();
+                deliver_mouse_reg0();
+                if (em_active) {
+                    drain_motion_queue();
+                }
             }
 
             return status;
         }
 
         void frame_handler() {
-            // TODO: implement this.
+            if (host_ctx) {
+                detect_and_update_em_active();
+                float wx = 0.0f;
+                float wy = 0.0f;
+                SDL_GetMouseState(&wx, &wy);
+                update_em_host_cursor(wx, wy);
+                if (em_active) {
+                    step_em_closed_loop();
+                }
+            }
             if (vars.dncntr) { // if there is a pending...
                 vars.dncntr--;
                 if (vars.dncntr == 0) {
@@ -1216,8 +1296,12 @@ class KeyGloo
             }
             df->addLine("  mods: %s", key_mods_str);
             df->addLine("MouseData: (%d) X=%02X, Y=%02X", mouse_data_full, mouse_data[0], mouse_data[1]);
+            df->addLine("EM active: %d  target: (%d, %d)  reported: (%d, %d)  queue: %zu",
+                em_active, target_x, target_y, reported_x, reported_y, motion_queue.size());
 
             adb_host->debug_display(df);
 
         }
     };
+
+#include "devices/adb/keygloo_mouse_sync.hpp"

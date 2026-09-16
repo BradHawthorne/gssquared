@@ -73,18 +73,23 @@
 
 ## Release 0.9
 
-[ ] Edit, Save, Load custom hw config. (Click "+ Custom").
-[ ] Mouse tracking for GS/OS  
-[ ] Fix all known / pending bugs  
+[X] Edit, Save, Load custom hw config. (Click "+ Custom"). (load, edit, save from inside editor is complete)
+[X] Mouse tracking for GS/OS  
+[X] CRT Effects
 
 ## Release 0.10
 
-[ ] Host FST
-[ ] Integrate with Cyrene Debugger  
+[X] Host FST
+[X] Built-in RO Disk with drivers (e.g. Host FST driver) mount/unmount with menu item; PPU mode demo; various other things.
+[X] Uthernet II support (via SLIRP)
+[ ] Optional pcap Uthernet path (slirp double-NAT; FTP fails, HTTP works)  
+[ ] Provide flexible AI-drivable binary protocol debugger interface  
 
 ## Release 1.0
 
-[ ] CRT Effects
+[ ] implement shaders on windows/linux
+[ ] Fix all known / pending bugs  
+
 
 ## Post-1.0
 

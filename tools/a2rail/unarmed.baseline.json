@@ -11,7 +11,7 @@
       "rom": "553724E147B80137",
       "hash": "92F1E19D6FE2A383",
       "cycles": 2043602,
-      "run": "A0F96F8F3D29F003"
+      "run": "212DD8122C4479ED"
     },
     {
       "name": "iigs-gsos601",
@@ -20,8 +20,8 @@
       "disk": "gsos601.po",
       "rom": "4E6B6EE5B32F63CF",
       "hash": "5F78F7C15131F43F",
-      "cycles": 10635389,
-      "run": "F24A685E8F44D186"
+      "cycles": 10635192,
+      "run": "F37832422CA8F090"
     },
     {
       "name": "iigs-rom",
@@ -30,8 +30,8 @@
       "disk": "",
       "rom": "4E6B6EE5B32F63CF",
       "hash": "6D9886E3B3EE0383",
-      "cycles": 7892937,
-      "run": "D3986966F44328C5"
+      "cycles": 6043351,
+      "run": "B773A6FF455DD39A"
     }
   ]
 }

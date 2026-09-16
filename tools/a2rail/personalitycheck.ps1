@@ -29,9 +29,10 @@ $personalities = @(
     @{ id=10; platform=5; name='Apple IIgs + A2GSPU'; cpu='65816' },
     @{ id=11; platform=5; name='Apple IIgs + Uthernet II'; cpu='65816' },
     @{ id=12; platform=5; name='Apple IIgs ROM 4 Mark Twain'; cpu='65816' },
-    @{ id=13; platform=5; name='Apple IIgs ROM 3'; cpu='65816' },
+    @{ id=13; platform=5; name='Apple IIgs ROM 3 Tenspeed'; cpu='65816' },
     @{ id=14; platform=3; name='Apple IIe Enhanced + Thunderclock'; cpu='65C02' },
-    @{ id=15; platform=5; name='Apple IIgs + A2GSPU + Mouse'; cpu='65816' }
+    @{ id=15; platform=5; name='Apple IIgs + A2GSPU + Mouse'; cpu='65816' },
+    @{ id=16; platform=6; name='Apple IIgs (ROM 3), upstream platform'; cpu='65816' }
 )
 
 # THE LIST ABOVE IS A TRANSCRIPTION, SO IT IS CHECKED AGAINST ITS SOURCE.
@@ -84,7 +85,7 @@ foreach ($p in $personalities) {
     Set-Content (Join-Path $pd 'cmd.1.tmp') 'cpu' -NoNewline
     Move-Item (Join-Path $pd 'cmd.1.tmp') (Join-Path $pd 'cmd.1') -Force
     $ready=Wait-File (Join-Path $pd 'ack.1') $StartupTimeoutMs $proc
-    $ack=if ($ready) { (Get-Content (Join-Path $pd 'ack.1') -Raw).Trim() } else { '' }
+    $ack=if ($ready) { (Read-AckText (Join-Path $pd 'ack.1')).Trim() } else { '' }
     if ($ready) {
         Set-Content (Join-Path $pd 'cmd.2.tmp') 'quit' -NoNewline
         Move-Item (Join-Path $pd 'cmd.2.tmp') (Join-Path $pd 'cmd.2') -Force

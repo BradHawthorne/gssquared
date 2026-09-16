@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 
 # Prefer Clang over GCC on Linux/Mac. Must happen before project() so CMake
 # hasn't already detected and cached the default system compiler.
-if(NOT WIN32)
+# Skip entirely when a toolchain file is in use (e.g. Emscripten via emcmake),
+# otherwise we'd FORCE the host clang into the cache ahead of emcc.
+if(NOT WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     find_program(CLANG_EXECUTABLE NAMES clang)
     find_program(CLANGPP_EXECUTABLE NAMES clang++)
 
@@ -27,7 +29,7 @@ project(gssquared)
 
 # Define base version (major.minor)
 set(VERSION_MAJOR "0")
-set(VERSION_MINOR "8")
+set(VERSION_MINOR "10")
 
 # Get git commit count for patch version (auto-incrementing)
 find_package(Git QUIET)
@@ -136,6 +138,9 @@ file(GLOB_RECURSE GS2_ASSET_FILES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/assets/sounds/*"
     "${CMAKE_SOURCE_DIR}/assets/fonts/*"
     "${CMAKE_SOURCE_DIR}/assets/symbols/*"
+    "${CMAKE_SOURCE_DIR}/assets/shaders/*"
+    "${CMAKE_SOURCE_DIR}/assets/gs2/*"
+    "${CMAKE_SOURCE_DIR}/assets/vdisk/*"
 )
 list(APPEND GS2_ASSET_FILES
     "${CMAKE_SOURCE_DIR}/assets/img/atlas.png"
@@ -143,10 +148,20 @@ list(APPEND GS2_ASSET_FILES
     "${CMAKE_SOURCE_DIR}/assets/img/IBM_VGA_8x16.png"
 )
 
-set(GS2_RESOURCES_STAMP "${CMAKE_BINARY_DIR}/resources/.assembled.stamp")
+# Per-directory stamps: if a tree is deleted (e.g. build/resources/roms), its
+# stamp vanishes and the copy rule re-runs. A single top-level stamp alone
+# stays "up to date" even when a subdirectory is missing.
+set(GS2_RESOURCES_STAMPS
+    "${CMAKE_BINARY_DIR}/resources/roms/.assembled.stamp"
+    "${CMAKE_BINARY_DIR}/resources/sounds/.assembled.stamp"
+    "${CMAKE_BINARY_DIR}/resources/fonts/.assembled.stamp"
+    "${CMAKE_BINARY_DIR}/resources/shaders/.assembled.stamp"
+    "${CMAKE_BINARY_DIR}/resources/gs2/.assembled.stamp"
+    "${CMAKE_BINARY_DIR}/resources/img/.assembled.stamp"
+)
 
 add_custom_command(
-    OUTPUT "${GS2_RESOURCES_STAMP}"
+    OUTPUT ${GS2_RESOURCES_STAMPS}
     # Create resources directory structure
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/roms
@@ -154,6 +169,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/img
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/fonts
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/symbols
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/shaders
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/gs2
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resources/vdisk
 
     # Copy static resources
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/assets/img/atlas.png ${CMAKE_BINARY_DIR}/resources/img/atlas.png
@@ -163,31 +181,59 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/sounds ${CMAKE_BINARY_DIR}/resources/sounds
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/fonts ${CMAKE_BINARY_DIR}/resources/fonts
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/symbols ${CMAKE_BINARY_DIR}/resources/symbols
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/shaders ${CMAKE_BINARY_DIR}/resources/shaders
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/gs2 ${CMAKE_BINARY_DIR}/resources/gs2
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/vdisk ${CMAKE_BINARY_DIR}/resources/vdisk
 
-    COMMAND ${CMAKE_COMMAND} -E touch "${GS2_RESOURCES_STAMP}"
+    COMMAND ${CMAKE_COMMAND} -E touch ${GS2_RESOURCES_STAMPS}
     DEPENDS ${GS2_ASSET_FILES}
     COMMENT "Assembling resources into build/resources/"
     VERBATIM
 )
 
-add_custom_target(assemble_resources ALL DEPENDS "${GS2_RESOURCES_STAMP}")
+add_custom_target(assemble_resources ALL DEPENDS ${GS2_RESOURCES_STAMPS})
 
 function(configure_sdl_builds)
-    set(BUILD_SHARED_LIBS ON)
+    if(EMSCRIPTEN)
+        # Emscripten cannot build/link shared libraries; build SDL statically.
+        set(BUILD_SHARED_LIBS OFF)
+        set(SDL_SHARED OFF)
+        set(SDL_STATIC ON)
+        set(SDL_TEST OFF)
+        set(SDLIMAGE_VENDORED ON)
+        set(SDLTTF_VENDORED ON)
+        # We only need PNG (atlas / IBM_VGA font). Disable the heavy optional
+        # decoders, in particular AVIF, whose vendored dav1d does not support
+        # the wasm architecture.
+        set(SDLIMAGE_PNG ON)
+        set(SDLIMAGE_AVIF OFF)
+        set(SDLIMAGE_JXL OFF)
+        set(SDLIMAGE_TIF OFF)
+        set(SDLIMAGE_WEBP OFF)
+        set(SDLIMAGE_JPG OFF)
+        set(SDLIMAGE_BMP ON)
+    else()
+        set(BUILD_SHARED_LIBS ON)
 
-    # Force SDL to build with the correct SDK
-    if(APPLE)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Deployment target" FORCE)
+        # Force SDL to build with the correct SDK
+        if(APPLE)
+            set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Deployment target" FORCE)
+        endif()
+
+        set(SDL_SHARED ON)
+        set(SDLTTF_VENDORED ON)
     endif()
-
-    set(SDL_SHARED ON)
-    set(SDLTTF_VENDORED ON)
 
     # Force rebuild SDL with these settings
     add_subdirectory(${CMAKE_SOURCE_DIR}/vendored/SDL)
     add_subdirectory(${CMAKE_SOURCE_DIR}/vendored/SDL_image)
     add_subdirectory(${CMAKE_SOURCE_DIR}/vendored/SDL_ttf)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/vendored/SDL_net)
+    # SDL_net has no Emscripten backend (its interface-enumeration code is a hard
+    # #error for unknown platforms). It is only used by the modem device, which
+    # we exclude from the web build, so skip building it entirely there.
+    if(NOT EMSCRIPTEN)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/vendored/SDL_net)
+    endif()
     set(BUILD_SHARED_LIBS OFF)
 endfunction()
 
@@ -204,7 +250,30 @@ set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# The whole web build (SDL, the gs2_* libs, and the executable) must be compiled
+# with atomics/shared-memory enabled, otherwise wasm-ld refuses to link a
+# pthreads binary against objects built without them. Set this before any
+# targets (including the vendored SDL subdirectories) are created.
+if(EMSCRIPTEN)
+    add_compile_options(-pthread)
+    add_link_options(-pthread)
+endif()
+
 configure_sdl_builds()
+
+# SDL target names differ between the shared (native) and static (Emscripten)
+# builds. Use these variables everywhere instead of hard-coding the suffix.
+if(EMSCRIPTEN)
+    set(GS2_SDL3 SDL3::SDL3-static)
+    set(GS2_SDL3_IMAGE SDL3_image::SDL3_image-static)
+    set(GS2_SDL3_TTF SDL3_ttf::SDL3_ttf-static)
+    set(GS2_SDL3_NET "")   # SDL_net is not built for the web (see configure_sdl_builds)
+else()
+    set(GS2_SDL3 SDL3::SDL3-shared)
+    set(GS2_SDL3_IMAGE SDL3_image::SDL3_image-shared)
+    set(GS2_SDL3_TTF SDL3_ttf::SDL3_ttf-shared)
+    set(GS2_SDL3_NET SDL3_net::SDL3_net-shared)
+endif()
 
 # When CMAKE_INSTALL_PREFIX points inside the build tree, CMake's RPATH_CHECK
 # deletes the source .so before file(INSTALL) can copy it (source == destination).
@@ -256,11 +325,11 @@ endif()
 # a new defect and not inherited debt -- which is what lets it be fatal.
 #
 # NOT yet fatal, and why:
-#   -Wclass-memaccess  8 live violations (7 in devices/uthernet2/vnat.cpp, 1 in
-#                      devices/scc8530/Z85C30.hpp): memset() over structs that
-#                      are non-trivial. Promote to -Werror= once those are
-#                      converted to value-initialization.
-#   -Wreorder          45 live violations. Member-init order only; harmless
+#   -Wclass-memaccess  memset() over structs that are non-trivial (counted at 8
+#                      before the 2026-09 upstream merge, 7 of them in the
+#                      virtual-NAT Uthernet II that upstream's device replaced).
+#                      Promote to -Werror= once the rest are value-initialized.
+#   -Wreorder          Member-init order only (45 before the merge); harmless
 #                      today, but it is how a field gets read before it is set.
 add_library(gs2_warnings INTERFACE)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -303,7 +372,7 @@ target_include_directories(gs2_headers
 # all following targets will link to SDL3, and are held to the first-party
 # warning policy. This line is the whole boundary: vendored/ was added by
 # configure_sdl_builds() above, before it, so nothing vendored inherits either.
-link_libraries(gs2_headers gs2_warnings SDL3::SDL3-shared SDL3_net::SDL3_net-shared)
+link_libraries(gs2_headers gs2_warnings ${GS2_SDL3} ${GS2_SDL3_NET})
 
 add_library(gs2_devices_game src/devices/game/gamecontroller.cpp src/devices/game/mousewheel.cpp )
 
@@ -331,18 +400,29 @@ add_library(gs2_devices_speaker     src/devices/speaker/speaker.cpp )
 add_library(gs2_devices_memexp     src/devices/memoryexpansion/memexp.cpp )
 
 add_library(gs2_devices_parallel     src/devices/parallel/parallel.cpp )
+target_link_libraries(gs2_devices_parallel PUBLIC gs2_serial_devices)
 
 add_library(gs2_devices_videx     src/devices/videx/videx.cpp src/devices/videx/videx_80x24.cpp )
 
 add_library(gs2_devices_mockingboard     src/devices/mockingboard/mb2.cpp )
 
-add_library(gs2_devices_mouse     src/devices/applemouseii/mouse.cpp )
+# Apple Mouse III (PIA+6805 / Apple ROM). Former BazMouse sources remain under
+# src/devices/applemouseii/ but are not built.
+add_library(gs2_devices_mouse
+    src/devices/applemouseiii/applemouseiii.cpp
+    src/devices/applemouseiii/MouseController.cpp
+    src/devices/applemouseiii/PIA6520.cpp
+)
 
 add_library(gs2_devices_iiememory src/devices/iiememory/iiememory.cpp)
 
 add_library(gs2_devices_ensoniq src/devices/es5503/ensoniq.cpp src/devices/es5503/soundglu.cpp)
 
 add_library(gs2_devices_scc8530 src/devices/scc8530/scc8530.cpp)
+target_link_libraries(gs2_devices_scc8530 PUBLIC gs2_serial_devices)
+
+add_library(gs2_devices_ssc src/devices/ssc/ssc.cpp)
+target_link_libraries(gs2_devices_ssc PUBLIC gs2_serial_devices)
 
 add_library(gs2_devices_secondsight
     src/devices/secondsight/secondsight.cpp
@@ -352,7 +432,7 @@ add_library(gs2_devices_secondsight
     src/devices/secondsight/vga_render_text_9x16.cpp
     src/devices/secondsight/vga_render_text_9x16_present.cpp
 )
-target_link_libraries(gs2_devices_secondsight PRIVATE SDL3_image::SDL3_image-shared)
+target_link_libraries(gs2_devices_secondsight PRIVATE ${GS2_SDL3_IMAGE})
 
 add_library(gs2_devices_iwm src/devices/iwm/iwm_device.cpp)
 
@@ -362,14 +442,58 @@ add_library(gs2_devices_vidhd     src/devices/vidhd/vidhd.cpp )
 
 add_library(gs2_devices_a2gspu    src/devices/a2gspu/a2gspu.cpp src/devices/a2gspu/a2gspu_emu.cpp src/devices/a2gspu/a2gspu_proto.cpp src/devices/a2gspu/vt100.c src/devices/a2gspu/utf8_decode.c )
 
-add_library(gs2_devices_uthernet2  src/devices/uthernet2/uthernet2.cpp src/devices/uthernet2/w5100.cpp src/devices/uthernet2/vnat.cpp )
-
 add_library(gs2_devices_adb     src/devices/adb/keygloo.cpp )
+
+# Host FST (GSPlus / Kelvin Sherlock) — full Unix/macOS; stub elsewhere
+set(GS2_HOSTFST_SOURCES
+    src/devices/hostfst/hostfst.cpp
+    src/devices/hostfst/hostfst_engine.cpp
+)
+if(NOT WIN32 AND NOT EMSCRIPTEN)
+    list(APPEND GS2_HOSTFST_SOURCES
+        src/devices/hostfst/host_fst.c
+        src/devices/hostfst/host_common.c
+        src/devices/hostfst/unix_host_common.c
+    )
+endif()
+add_library(gs2_devices_hostfst ${GS2_HOSTFST_SOURCES})
+target_include_directories(gs2_devices_hostfst PRIVATE ${CMAKE_SOURCE_DIR}/src/devices/hostfst)
+target_link_libraries(gs2_devices_hostfst PUBLIC gs2_systemconfig gs2_paths gs2_cpu gs2_mmu)
+if(NOT WIN32 AND NOT EMSCRIPTEN)
+    set_source_files_properties(
+        src/devices/hostfst/host_fst.c
+        src/devices/hostfst/host_common.c
+        src/devices/hostfst/unix_host_common.c
+        PROPERTIES LANGUAGE C
+    )
+endif()
+
+# Uthernet II + libslirp (stubbed on Emscripten)
+if(NOT EMSCRIPTEN)
+    include(${CMAKE_SOURCE_DIR}/vendored/libslirp_cmake/CMakeLists.txt)
+    add_library(gs2_devices_uthernet2
+        src/devices/uthernet2/uthernet2.cpp
+        src/devices/uthernet2/w5100_chip.cpp
+        src/devices/uthernet2/net_worker.cpp
+        src/devices/uthernet2/slirp_backend.cpp
+        src/devices/uthernet2/slirp_netpick.cpp
+    )
+    target_link_libraries(gs2_devices_uthernet2 PUBLIC gs2_libslirp gs2_mmu gs2_cpu)
+    target_include_directories(gs2_devices_uthernet2 PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/devices/uthernet2
+        ${CMAKE_SOURCE_DIR}/src/devices/uthernet2/glib_compat
+    )
+else()
+    add_library(gs2_devices_uthernet2 src/devices/uthernet2/uthernet2.cpp)
+    target_compile_definitions(gs2_devices_uthernet2 PRIVATE GS2_UTHERNET2_STUB=1)
+    target_link_libraries(gs2_devices_uthernet2 PUBLIC gs2_mmu gs2_cpu)
+endif()
 
 add_library(gs2_trace src/debugger/trace.cpp src/debugger/trace_opcodes.cpp)
 
-add_library(gs2_debugger  src/debugger/debugwindow.cpp src/debugger/MonitorCommand.cpp 
-    src/debugger/ExecuteCommand.cpp src/debugger/MemoryWatch.cpp src/debugger/disasm.cpp)
+add_library(gs2_debugger  src/debugger/debugwindow.cpp src/debugger/Monitor.cpp
+    src/debugger/MemoryWatch.cpp src/debugger/disasm.cpp
+    src/debugger/DebugProtocolServer.cpp src/debugger/BreakpointTable.cpp)
 
 add_library(gs2_mmu src/mmus/mmu.cpp src/mmus/mmu_ii.cpp src/mmus/mmu_iie.cpp src/mmus/mmu_iigs.cpp)
 
@@ -385,24 +509,34 @@ add_library(gs2_event_dispatcher src/util/EventDispatcher.cpp )
 
 add_library(gs2_serial_devices src/serial_devices/SerialDevice.cpp
 )
-add_library(gs2_util src/util/media.cpp src/util/ResourceFile.cpp src/util/dialog.cpp src/util/mount.cpp 
+add_library(gs2_util src/util/media.cpp src/util/ResourceFile.cpp src/util/dialog.cpp src/util/mount.cpp
+    src/util/Connections.cpp
     #src/util/soundeffects.cpp 
     src/util/SoundEffect.cpp
     src/util/EventQueue.cpp src/util/Event.cpp src/util/EventTimer.cpp src/util/TextRenderer.cpp
     src/util/HexDecode.cpp src/util/DeviceFrameDispatcher.cpp src/util/Metrics.cpp
     src/util/MenuInterface.cpp)
 
-add_library(gs2_ui src/ui/AssetAtlas.cpp src/ui/Container.cpp src/ui/DiskII_Button.cpp src/ui/AppleDisk_525_Button.cpp src/ui/AppleDisk_35_Button.cpp src/ui/Unidisk_Button.cpp 
+add_library(gs2_ui src/ui/AssetAtlas.cpp src/ui/Container.cpp src/ui/DiskII_Button.cpp src/ui/AppleDisk_525_Button.cpp src/ui/AppleDisk_35_Button.cpp src/ui/Unidisk_Button.cpp
     src/ui/MousePositionTile.cpp src/ui/OSD.cpp src/ui/Tile.cpp src/ui/Button.cpp src/ui/MainAtlas.cpp src/ui/ModalContainer.cpp
-    src/ui/FadeButton.cpp src/ui/Clipboard.cpp src/ui/TextInput.cpp src/ui/SelectSystem.cpp src/ui/SystemButton.cpp
+    src/ui/FadeButton.cpp src/ui/Clipboard.cpp src/ui/ScreenshotWriter.cpp src/ui/TextInput.cpp src/ui/SelectSystem.cpp src/ui/SystemButton.cpp
     src/ui/LabeledButton.cpp src/ui/FadeContainer.cpp src/ui/SlotButton.cpp src/ui/StatusMessage.cpp src/ui/DrivesHUD.cpp
     src/ui/SpeedSelect.cpp src/ui/HoverControls.cpp src/ui/DisplaySelect.cpp src/ui/DrivesOSD.cpp src/ui/HD20SC_Button.cpp
-    src/ui/DirtyDiskSave.cpp src/ui/QuitModal.cpp
+    src/ui/DirtyDiskSave.cpp src/ui/QuitModal.cpp src/ui/ScrollBar.cpp src/ui/WrapContainer.cpp
+    src/ui/StorageButtonFactory.cpp src/ui/SlotsPanel.cpp src/ui/SystemBadge.cpp src/ui/ConfigSelectors.cpp
+    src/ui/EditSystem.cpp
+    src/ui/SerialPortButton.cpp src/ui/SerialPortsOSD.cpp
 )
 
 add_library(gs2_displaypp src/devices/displaypp/frame/frame_bit.cpp src/devices/displaypp/frame/frame_byte.cpp src/devices/displaypp/CharRom.cpp src/devices/displaypp/AppleIIgsColors.cpp)
 
-add_library(gs2_ntsc src/display/ntsc.cpp src/display/Matrix3x3.cpp src/display/OEVector.cpp src/display/filters.cpp )
+add_library(gs2_ntsc
+    src/display/ntsc.cpp
+    src/display/Matrix3x3.cpp
+    src/display/OEVector.cpp
+    src/display/filters.cpp
+    src/display/shaders/GpuShaderLoader.cpp
+)
 
 #add_library(gs2_diskii src/devices/diskii/ndiskii.cpp)
 
@@ -428,6 +562,61 @@ add_library(gs2_message_bus src/mbus/MessageBus.cpp)
 
 add_library(gs2_paths src/paths.cpp)
 
+set(GS2_DEVICE_REGISTRY_LIBS
+    gs2_devices_tcp
+    gs2_devices_keyboard
+    gs2_devices_languagecard
+    gs2_devices_prodos_clock
+    gs2_devices_speaker
+    gs2_devices_cassette
+    gs2_devices_vidhd
+    gs2_devices_game
+    gs2_devices_memexp
+    gs2_devices_parallel
+    gs2_devices_videx
+    gs2_devices_pdblock2
+    gs2_devices_pdblock3
+    gs2_devices_mockingboard
+    gs2_devices_iiememory
+    gs2_devices_ensoniq
+    gs2_devices_scc8530
+    gs2_devices_ssc
+    gs2_devices_secondsight
+    gs2_devices_iwm
+    gs2_devices_mouse
+    gs2_devices_rtc_pram
+    gs2_devices_adb
+    gs2_devices_diskii_woz
+    gs2_devices_hostfst
+    gs2_devices_uthernet2
+    gs2_devices_a2gspu
+    gs2_displaypp
+    gs2_video_scanner
+    gs2_computer
+)
+
+add_library(gs2_device_info src/device_info.cpp)
+
+add_library(gs2_device_registry
+    src/devices.cpp
+    src/display/display.cpp
+)
+target_link_libraries(gs2_device_registry PUBLIC ${GS2_DEVICE_REGISTRY_LIBS} gs2_ntsc gs2_device_info)
+
+add_library(gs2_toml src/util/toml_impl.cpp)
+target_compile_definitions(gs2_toml PUBLIC TOML_HEADER_ONLY=0)
+target_compile_definitions(gs2_toml PRIVATE TOML_IMPLEMENTATION)
+target_include_directories(gs2_toml PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
+add_library(gs2_systemconfig
+    src/util/SystemConfig.cpp
+    src/util/SettingsConfig.cpp
+    src/util/ConfigDraft.cpp
+    src/util/SystemSettings.cpp
+    src/util/uuid.cpp
+)
+target_link_libraries(gs2_systemconfig PUBLIC gs2_paths gs2_device_info gs2_toml)
+
 add_library(gs2_video_scanner 
     src/devices/displaypp/ScanBuffer.cpp
     src/devices/displaypp/VideoScannerII.cpp 
@@ -441,34 +630,40 @@ add_library(gs2_video_scanner
 target_link_libraries(gs2_video_scanner PUBLIC gs2_displaypp)
 
 add_library(gs2_devices_rtc_pram src/devices/rtc/rtc_pram.cpp)
+target_link_libraries(gs2_devices_rtc_pram PUBLIC gs2_paths)
 
-target_link_libraries(gs2_ui SDL3_image::SDL3_image-shared SDL3_ttf::SDL3_ttf-shared)
-target_link_libraries(gs2_debugger gs2_trace gs2_util SDL3_ttf::SDL3_ttf-shared)
-target_link_libraries(gs2_util SDL3_ttf::SDL3_ttf-shared)
-target_link_libraries(gs2_computer SDL3_ttf::SDL3_ttf-shared)
+target_link_libraries(gs2_ui ${GS2_SDL3_IMAGE} ${GS2_SDL3_TTF} gs2_systemconfig gs2_devices_hostfst)
+target_link_libraries(gs2_debugger gs2_trace gs2_util ${GS2_SDL3} ${GS2_SDL3_TTF})
+# Connections.cpp constructs SerialDevice subclasses; link after gs2_util for GNU ld.
+target_link_libraries(gs2_util PUBLIC gs2_serial_devices ${GS2_SDL3_TTF})
+target_link_libraries(gs2_computer ${GS2_SDL3_TTF})
 target_link_libraries(gs2_cpu gs2_trace)
 target_link_libraries(gs2_mmu gs2_trace gs2_cpu)
 target_link_libraries(gs2_devices_adb gs2_util)
 target_link_libraries(gs2_devices_iwm gs2_devices_floppy_woz)
 target_link_libraries(gs2_devices_diskii_woz gs2_devices_floppy_woz gs2_util)
 
-# Add the executable
+# Add the executable. The .icns is only meaningful as a macOS bundle resource;
+# leave it out on other targets (Emscripten would try to compile it).
+set(GS2_PLATFORM_SOURCES "")
+if(APPLE)
+    list(APPEND GS2_PLATFORM_SOURCES ${CMAKE_SOURCE_DIR}/assets/img/gs2.icns)
+endif()
 add_executable(GSSquared src/gs2.cpp src/debug.cpp  src/opcodes.cpp 
     src/a2gspu_snapshot.cpp src/a2gspu_selftests.cpp src/a2gspu_ctrl.cpp src/a2gspu_ctrl_cmds.cpp src/a2gspu_spike.cpp
     src/a2gspu_rail_setters.cpp
-    src/display/display.cpp
     src/platforms.cpp
-    src/devices.cpp src/slots.cpp src/systemconfig.cpp
+    src/slots.cpp src/systemconfig.cpp
     src/videosystem.cpp
     src/util/AudioSystem.cpp
-    ${CMAKE_SOURCE_DIR}/assets/img/gs2.icns
+    ${GS2_PLATFORM_SOURCES}
     )
 
 # Link SDL3 and required frameworks
 target_link_libraries(GSSquared PRIVATE 
-    SDL3::SDL3-shared
-    SDL3_image::SDL3_image-shared
-    SDL3_net::SDL3_net-shared
+    ${GS2_SDL3}
+    ${GS2_SDL3_IMAGE}
+    ${GS2_SDL3_NET}
 )
 if(WIN32)
     # We'll bundle the MinGW runtime DLLs instead of static linking
@@ -500,6 +695,7 @@ target_link_libraries(GSSquared
     gs2_devices_iiememory
     gs2_devices_ensoniq
     gs2_devices_scc8530
+    gs2_devices_ssc
     gs2_devices_secondsight
     gs2_devices_iwm
     gs2_serial_devices
@@ -517,86 +713,129 @@ target_link_libraries(GSSquared
     gs2_devices_adb
     #gs2_diskii
     gs2_devices_diskii_woz
+    gs2_device_registry
+    gs2_systemconfig
     platform_specific
 )
 
 # Ensure building just GSSquared still triggers the resource assembly step.
 add_dependencies(GSSquared assemble_resources)
 
-add_subdirectory(apps/adbtest)
+# The auxiliary apps are developer tools and are not part of the web build.
+if(NOT EMSCRIPTEN)
+    enable_testing()
 
-add_subdirectory(apps/mbtest)
+    add_subdirectory(apps/adbtest)
 
-#add_subdirectory(apps/nibblizer)
-#add_subdirectory(apps/denibblizer)
-add_subdirectory(apps/vgatext)
+    add_subdirectory(apps/mbtest)
 
-add_subdirectory(apps/diskid)
+    #add_subdirectory(apps/nibblizer)
+    #add_subdirectory(apps/denibblizer)
+    add_subdirectory(apps/vgatext)
 
-# Temporary disabled, need to refactor it to match new nibblizer API.
-add_subdirectory(apps/wozutil)
+    add_subdirectory(apps/ssppu)
 
-#add_subdirectory(apps/speaker) # Temporarily remove until I make a "fake computer" interface.
+    add_subdirectory(apps/diskid)
 
-add_subdirectory(apps/gstrace)
+    # Temporary disabled, need to refactor it to match new nibblizer API.
+    add_subdirectory(apps/wozutil)
 
-add_subdirectory(apps/iigsmmutest)
+    #add_subdirectory(apps/speaker) # Temporarily remove until I make a "fake computer" interface.
 
-add_subdirectory(apps/mmutest)
+    add_subdirectory(apps/gstrace)
 
-add_subdirectory(apps/cputest)
+    add_subdirectory(apps/iigsmmutest)
 
-add_subdirectory(apps/montest)
+    add_subdirectory(apps/mmutest)
 
-add_subdirectory(apps/cycletest)
+    add_subdirectory(apps/cputest)
 
-# Owned semantic conformance test. cycletest proves TIMING; this proves the
-# instruction actually computes the right answer and sets the right flags --
-# distinct properties, and the CPU had no owned check of the second one because
-# cputest's Klaus Dormann fixture is third-party and not vendored here.
-add_subdirectory(apps/conformtest)
-add_subdirectory(apps/coveragetest)
+    add_subdirectory(apps/montest)
 
-#add_subdirectory(apps/dpp)
-add_subdirectory(apps/vpp)
+    add_subdirectory(apps/cycletest)
 
-add_subdirectory(apps/iieromcsum)
+    # Owned semantic conformance test. cycletest proves TIMING; this proves the
+    # instruction actually computes the right answer and sets the right flags --
+    # distinct properties, and the CPU had no owned check of the second one because
+    # cputest's Klaus Dormann fixture is third-party and not vendored here.
+    add_subdirectory(apps/conformtest)
+    add_subdirectory(apps/coveragetest)
 
-add_subdirectory(apps/binprint)
+    #add_subdirectory(apps/dpp)
+    add_subdirectory(apps/vpp)
 
-add_subdirectory(apps/cpu816test)
+    add_subdirectory(apps/iieromcsum)
 
-add_subdirectory(apps/ui)
+    add_subdirectory(apps/binprint)
 
-add_subdirectory(apps/rtctest)
+    add_subdirectory(apps/cpu816test)
 
-add_subdirectory(apps/doc)
+    add_subdirectory(apps/ui)
 
-add_subdirectory(apps/mousebugtest)
+    add_subdirectory(apps/rtctest)
+
+    add_subdirectory(apps/doc)
+
+    add_subdirectory(apps/mousebugtest)
+
+    add_subdirectory(apps/systemconfigtest)
+endif()
 
 ################################################################################
 #### Platform Specific Code
 ################################################################################
 if(APPLE)
-    add_library(platform_specific src/platform-specific/macos/menu.mm)
+    add_library(platform_specific
+        src/platform-specific/macos/menu.mm
+        src/platform-specific/macos/gs2_save_dialog.mm
+    )
+
+    target_include_directories(platform_specific PUBLIC
+        ${CMAKE_SOURCE_DIR}/src
+    )
 
     target_link_libraries(platform_specific PRIVATE
+        ${GS2_SDL3}
         "-framework Cocoa"
     )
+
+    # Bare (PROGRAM_FILES) builds still need the UTI from Info.plist so Launch
+    # Services / NSSavePanel recognize .gs2 as our declared type.
+    if(GS2_PROGRAM_FILES)
+        target_link_options(GSSquared PRIVATE
+            "LINKER:-sectcreate,__TEXT,__info_plist,${PROJECT_BINARY_DIR}/generated/Info.plist"
+        )
+        # Keep a stub .app Info.plist current for Finder / lsregister (optional).
+        add_custom_command(TARGET GSSquared POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${PROJECT_BINARY_DIR}/GSSquared.app/Contents"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PROJECT_BINARY_DIR}/generated/Info.plist"
+                "${PROJECT_BINARY_DIR}/GSSquared.app/Contents/Info.plist"
+            COMMENT "Updating GSSquared.app Info.plist (.gs2 UTI)"
+        )
+    endif()
 endif()
 
-if(UNIX AND NOT APPLE)
+# Linux and Emscripten both use the portable Dear ImGui menu (linux/menu.cpp is
+# pure ImGui + the SDL3 renderer backend, with no GTK/X11 dependency).
+if((UNIX AND NOT APPLE) OR EMSCRIPTEN)
     set(GS2_USE_IMGUI ON)
 
-    add_library(platform_specific
-        src/platform-specific/linux/menu.cpp
-    )
+    set(GS2_PLATFORM_SPECIFIC_SOURCES src/platform-specific/linux/menu.cpp)
+    if(EMSCRIPTEN)
+        # Browser file picker used in place of SDL_ShowOpenFileDialog.
+        list(APPEND GS2_PLATFORM_SPECIFIC_SOURCES
+            src/platform-specific/emscripten/web_file_dialog.cpp)
+    endif()
+
+    add_library(platform_specific ${GS2_PLATFORM_SPECIFIC_SOURCES})
 
     target_include_directories(platform_specific PRIVATE
         src/imgui
     )
     target_link_libraries(platform_specific PRIVATE
-        SDL3::SDL3-shared
+        ${GS2_SDL3}
         gs2_imgui
     )
 endif()
@@ -605,7 +844,7 @@ if(WIN32)
     add_library(platform_specific src/platform-specific/windows/menu.cpp)
 
     target_link_libraries(platform_specific PRIVATE
-        SDL3::SDL3-shared
+        ${GS2_SDL3}
     )
 endif()
 
@@ -619,7 +858,7 @@ if(GS2_USE_IMGUI)
         src/imgui/backends/imgui_impl_sdlrenderer3.cpp
     )
     target_include_directories(gs2_imgui PUBLIC src/imgui)
-    target_link_libraries(gs2_imgui PRIVATE SDL3::SDL3-shared)
+    target_link_libraries(gs2_imgui PRIVATE ${GS2_SDL3})
     # imgui is vendored source that happens to live under src/, so it is created
     # after the link_libraries() line that applies the first-party warning policy,
     # and inherited it -- which the comment on that line says nothing vendored does.
@@ -709,6 +948,26 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         install(DIRECTORY "${CMAKE_BINARY_DIR}/resources/"
             DESTINATION "${CPACK_BUNDLE_NAME}.app/Contents/Resources"
             COMPONENT Runtime)
+
+        # Linker ad-hoc signing leaves Info.plist unbound. Re-sign so the bundle
+        # identifier / exported UTIs in Info.plist are properly associated with
+        # this app for Launch Services (Finder Open). Does not affect NSSavePanel
+        # file enablement — save panels always show existing files gray on macOS.
+        add_custom_command(TARGET GSSquared POST_BUILD
+            COMMAND codesign --force --deep -s - "$<TARGET_BUNDLE_DIR:GSSquared>"
+            COMMENT "Ad-hoc codesign GSSquared.app (bind Info.plist)"
+        )
+        # cmake --install copies Frameworks after the build-tree bundle exists;
+        # re-sign the installed app so Info.plist stays bound there too.
+        install(CODE [[
+            execute_process(
+                COMMAND codesign --force --deep -s - "${CMAKE_INSTALL_PREFIX}/GSSquared.app"
+                RESULT_VARIABLE _gs2_codesign_rc
+            )
+            if(NOT _gs2_codesign_rc EQUAL 0)
+                message(WARNING "codesign of installed GSSquared.app failed (rc=${_gs2_codesign_rc})")
+            endif()
+        ]] COMPONENT Runtime)
 
         # Optional: Configure DMG creation
         set(CPACK_DMG_VOLUME_NAME "GSSquared")
@@ -808,7 +1067,7 @@ if(WIN32)
 endif()
 
 # Non-Apple UNIX-specific configuration here
-if((UNIX) AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+if((UNIX) AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND NOT EMSCRIPTEN)
     if(GS2_PROGRAM_FILES)
         # TODO: Make this work for MSYS; no more hard-coded Linux stuff
         # PROGRAM FILES: Build bare executable, everything goes to build/ directory
@@ -924,6 +1183,14 @@ if((UNIX) AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         # this per-directory list had left them out, so a Linux install named no
         # toolbox entry point.
         install(DIRECTORY "${CMAKE_BINARY_DIR}/resources/symbols"
+            DESTINATION "${GS2_INSTALL_DATADIR}"
+            COMPONENT Runtime
+        )
+        install(DIRECTORY "${CMAKE_BINARY_DIR}/resources/gs2"
+            DESTINATION "${GS2_INSTALL_DATADIR}"
+            COMPONENT Runtime
+        )
+        install(DIRECTORY "${CMAKE_BINARY_DIR}/resources/vdisk"
             DESTINATION "${GS2_INSTALL_DATADIR}"
             COMPONENT Runtime
         )
@@ -1071,6 +1338,48 @@ if((UNIX) AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 
 configure_file(src/build_config.hpp.in "${CMAKE_BINARY_DIR}/cfg/build_config.hpp" @ONLY)
+
+################################################################################
+#### Emscripten (WebAssembly) build configuration
+################################################################################
+if(EMSCRIPTEN)
+    message(STATUS "Configuring Emscripten web build")
+
+    # Note: -pthread (compile + link) is applied globally above so SDL and the
+    # gs2_* libraries are built with atomics/shared-memory. COOP/COEP headers
+    # are required when serving (SharedArrayBuffer).
+
+    # Resources are assembled into ${CMAKE_BINARY_DIR}/resources by the
+    # assemble_resources target; preload them into the WASM filesystem at
+    # /resources so SDL_GetBasePath()-relative loads (see src/paths.cpp) work.
+    set(GS2_WEB_PRELOAD "${CMAKE_BINARY_DIR}/resources@/resources")
+
+    target_link_options(GSSquared PRIVATE
+        -pthread
+        -sPTHREAD_POOL_SIZE=8
+        -sALLOW_MEMORY_GROWTH=1
+        -sMAXIMUM_MEMORY=1gb
+        -sINITIAL_MEMORY=268435456          # 256 MB headroom for IIgs RAM + textures
+        -sSTACK_SIZE=4mb
+        -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS,stringToNewUTF8,UTF8ToString
+        -sFORCE_FILESYSTEM=1
+        --preload-file ${GS2_WEB_PRELOAD}
+        --shell-file ${CMAKE_SOURCE_DIR}/assets/web/shell.html
+    )
+
+    # Optional: keep symbol names + runtime assertions for debugging the web
+    # build (readable JS/wasm stack traces, clearer FS/abort messages).
+    option(GS2_WEB_DEBUG "Build the web target with symbols and assertions" ON)
+    if(GS2_WEB_DEBUG)
+        target_link_options(GSSquared PRIVATE -g2 -sASSERTIONS=1)
+    endif()
+
+    # Emit GSSquared.html (+ .js/.wasm/.data) instead of a bare executable.
+    set_target_properties(GSSquared PROPERTIES SUFFIX ".html")
+
+    # The preload step must run after resources are assembled.
+    add_dependencies(GSSquared assemble_resources)
+endif()
 
 # ---------------------------------------------------------------------------
 # ctest registration.

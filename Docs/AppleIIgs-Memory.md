@@ -8,6 +8,17 @@ https://comp.sys.apple2.narkive.com/o1R6slX2/apple-iigs-bank-latching
 Also this:
 http://umich.edu/~archive/apple2/technotes/tn/iigs/TN.IIGS.032
 
+## Installed fast RAM size
+
+GSSquared sizes contiguous FPI RAM as **motherboard + expansion card** (KEGS-compatible),
+implemented in `src/mmus/iigs_memory.hpp`:
+
+- **ROM01** (128KB ROM file): 128KB motherboard + default 8MB card → **8.125MB** (banks `$00`–`$81`)
+- **ROM03** (256KB ROM file): 1MB motherboard + default 8MB card → **9MB** (banks `$00`–`$8F`)
+
+The expansion argument is card size, not total system RAM. Total is clamped to `$DF0000`.
+Mega II banks `$E0`/`$E1` are separate and not included. A flat 8MB map (banks `$00`–`$7F` only)
+is wrong for real ROM01+8MB / ROM03+8MB machines and leaves `$80+` floating.
 
 ## Shadow Register - $C035
 
@@ -191,7 +202,7 @@ The State Register duplicates in the FPI certain memory management bits that can
 | 4 | RAMWRT | 1 = aux RAM is write-enabled |
 | 3 | RDROM | 1 = ROM is read enabled in LC area; 0 = RAM read enabled in LC area |
 | 2 | LCBNK2 | 1 = LC Bank 2 Selected |
-| 1 | ROMBANK | Must always be 0 |
+| 1 | ROMBANK | Must always be 0 (unused on ROM01; removed on ROM03 — see [Unimplemented.md](Unimplemented.md)) |
 | 0 | INTCXROM | 1 = internal ROM at $Cx00 is selected; 0 = peripheral-card ROM |
 
 This is a read-write register - intention being to dramatically speed up interrupt handling.

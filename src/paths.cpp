@@ -17,7 +17,9 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_filesystem.h>
+#include <cctype>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <iostream>
 #include <string_view>
@@ -31,7 +33,45 @@ std::string Paths::base_path;
 std::string Paths::pref_path;
 std::string Paths::home_folder;
 std::string Paths::docs_folder;
-std::string Paths::last_file_dialog_dir;
+std::string Paths::desktop_folder;
+
+namespace {
+
+/** Directory portion of a stored path (file → parent; directory → itself). */
+std::string path_as_directory(const std::string& stored) {
+    if (stored.empty()) {
+        return {};
+    }
+    std::error_code ec;
+    std::filesystem::path p(stored);
+    if (std::filesystem::is_directory(p, ec)) {
+        return p.lexically_normal().string();
+    }
+    std::filesystem::path dir = p.parent_path();
+    if (dir.empty()) {
+        p = std::filesystem::weakly_canonical(std::filesystem::absolute(p, ec), ec);
+        dir = p.parent_path();
+    }
+    if (dir.empty()) {
+        return {};
+    }
+    return dir.lexically_normal().string();
+}
+
+#if defined(_WIN32)
+std::string ensure_trailing_sep(std::string dir) {
+    if (dir.empty()) {
+        return dir;
+    }
+    const char last = dir.back();
+    if (last != '\\' && last != '/') {
+        dir.push_back('\\');
+    }
+    return dir;
+}
+#endif
+
+}  // namespace
 
 /**
  * On a Mac, running as a bundle, the base path is BundlePath/Resources. 
@@ -47,7 +87,11 @@ const std::string& get_base_path(bool console_mode) {
         return base_path;
     }
 
-#if defined(GS2_GNU_INSTALL_DIRS)
+#if defined(__EMSCRIPTEN__)
+    // Resources are preloaded into the WASM filesystem at /resources
+    // (see the --preload-file flag in CMakeLists.txt).
+    base_path = "/resources/";
+#elif defined(GS2_GNU_INSTALL_DIRS)
     base_path = SDL_GetBasePath();
     base_path += "../share/GSSquared/";
 #elif defined(__APPLE__)
@@ -70,9 +114,11 @@ const std::string& get_base_path(bool console_mode) {
 }
 
 /**
- * For GNU install directories or Mac bundle builds, we can't expect to be able
- * to write files into the working directory, though that is a fair expectation
- * for program files builds.
+ * User-writable prefs directory. Always SDL_GetPrefPath except on Emscripten
+ * (MEMFS). Typical locations:
+ *   macOS:   ~/Library/Application Support/jawaidbazyar2/GSSquared/
+ *   Windows: %APPDATA%\\jawaidbazyar2\\GSSquared\\
+ *   Linux:   ~/.local/share/jawaidbazyar2/GSSquared/
  */
 
 const std::string& get_pref_path(void) {
@@ -81,8 +127,9 @@ const std::string& get_pref_path(void) {
         return pref_path;
     }
 
-#if defined(GS2_PROGRAM_FILES)
-    pref_path = "./";
+#if defined(__EMSCRIPTEN__)
+    // MEMFS root; not persisted across reloads (could mount IDBFS later).
+    pref_path = "/";
 #else
     pref_path = SDL_GetPrefPath("jawaidbazyar2", "GSSquared");
 #endif
@@ -108,6 +155,13 @@ void Paths::initialize(bool console_mode) {
     } else {
         docs_folder = home_folder;
     }
+
+    const char *desktop = SDL_GetUserFolder(SDL_FOLDER_DESKTOP);
+    if (desktop && desktop[0]) {
+        desktop_folder = desktop;
+    } else {
+        desktop_folder = home_folder;
+    }
 }
 
 void Paths::calc_base(std::string& return_path, std::string file) {
@@ -126,32 +180,55 @@ void Paths::calc_docs(std::string& return_path, std::string file) {
     return_path = docs_folder + file;
 }
 
-const std::string& Paths::get_last_file_dialog_dir() {
-    // If never set, return documents folder as a reasonable default
-#if defined(__linux__)
-    if (last_file_dialog_dir.empty()) {
-        return docs_folder;
-    }
-#endif
-    return last_file_dialog_dir;
+void Paths::calc_desktop(std::string& return_path, std::string file) {
+    return_path = desktop_folder + file;
 }
 
-void Paths::set_last_file_dialog_dir(const std::string& selected_path) {
-    if (selected_path.empty()) {
-        return;
+std::string Paths::make_screenshot_path() {
+    std::time_t t = std::time(nullptr);
+    std::tm tm_local{};
+#if defined(_WIN32)
+    localtime_s(&tm_local, &t);
+#else
+    localtime_r(&t, &tm_local);
+#endif
+    char name[128];
+    std::strftime(name, sizeof(name), "GS2 Screenshot %Y-%m-%d %H.%M.%S.png", &tm_local);
+    std::string path;
+    calc_desktop(path, name);
+    return path;
+}
+
+std::string Paths::adapt_open_dialog_location(const std::string& stored_path) {
+    if (stored_path.empty()) {
+        return {};
     }
-    // SDL_ShowOpenFileDialog default_location is a folder; store directory only, not the file name.
-    std::filesystem::path p(selected_path);
-    std::filesystem::path dir = p.parent_path();
+
+#if defined(_WIN32)
+    // Windows: full file path pre-fills the name; directory-only needs a trailing sep.
+    std::error_code ec;
+    if (std::filesystem::is_directory(std::filesystem::path(stored_path), ec) ||
+        stored_path.back() == '\\' || stored_path.back() == '/') {
+        return ensure_trailing_sep(path_as_directory(stored_path));
+    }
+    return stored_path;
+#else
+    // macOS / Linux open dialogs take a folder.
+    return path_as_directory(stored_path);
+#endif
+}
+
+std::string Paths::make_save_dialog_location(const std::string& last_config_path,
+                                            const std::string& suggested_filename) {
+    std::string dir = path_as_directory(last_config_path);
     if (dir.empty()) {
-        std::error_code ec;
-        p = std::filesystem::weakly_canonical(std::filesystem::absolute(p), ec);
-        dir = p.parent_path();
+        dir = ".";
     }
-    if (dir.empty()) {
-        return;
+    std::string name = suggested_filename;
+    if (name.empty()) {
+        name = "system.gs2";
     }
-    last_file_dialog_dir = dir.lexically_normal().string();
+    return (std::filesystem::path(dir) / name).lexically_normal().string();
 }
 
 bool Paths::is_directory(const std::string& filename) {
@@ -172,6 +249,21 @@ bool Paths::is_directory(const std::string& filename) {
 bool Paths::ends_with(std::string_view s, std::string_view suffix) noexcept {
     return s.size() >= suffix.size() &&
            s.compare(s.size() - suffix.size(), std::string_view::npos, suffix) == 0;
+}
+
+bool Paths::ends_with_icase(std::string_view s, std::string_view suffix) noexcept {
+    if (s.size() < suffix.size()) {
+        return false;
+    }
+    const size_t offset = s.size() - suffix.size();
+    for (size_t i = 0; i < suffix.size(); ++i) {
+        const unsigned char a = static_cast<unsigned char>(s[offset + i]);
+        const unsigned char b = static_cast<unsigned char>(suffix[i]);
+        if (std::tolower(a) != std::tolower(b)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string Paths::get_directory(const std::string& filename) {

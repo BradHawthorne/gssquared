@@ -1,4 +1,4 @@
-//#include "gs2.hpp"
+#include "gs2.hpp"
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL_mouse.h"
 #ifdef _WIN32
@@ -8,8 +8,12 @@
 #include "videosystem.hpp"
 #include "display/display.hpp"
 #include "ui/Clipboard.hpp"
+#include "ui/ScreenshotWriter.hpp"
+#include "paths.hpp"
+#include "util/Event.hpp"
 #include <cmath>
 #include "util/dialog.hpp"
+#include "display/shaders/GpuShaderLoader.hpp"
 
 video_system_t::video_system_t(computer_t *computer) {
 
@@ -18,6 +22,7 @@ video_system_t::video_system_t(computer_t *computer) {
     }
 
     clip = new ClipboardImage();
+    screenshot_writer = new ScreenshotWriter();
 
     display_color_engine = DM_ENGINE_NTSC;
     display_mono_color = DM_MONO_GREEN;
@@ -49,10 +54,21 @@ video_system_t::video_system_t(computer_t *computer) {
      * no CTRL) and that window took focus in the middle of a suite run -- the
      * exact interruption the paragraph above exists to prevent. A person using
      * the co-pilot rail interactively does not set it.
+     *
+     * The headless spike (A2GSPU_SPIKE_FRAMES) and a no-input launch (-n) get it
+     * too. Every scripted boot is one of those -- unarmedhash, the personality
+     * sweep, a trace A/B -- and a harness clears the caller's A2GSPU_* variables
+     * before it starts one, so a BACKGROUND_WINDOW set by the operator never
+     * reached them: each boot pulled the operator's keyboard and z-order to a
+     * window nobody was going to type into. A launch with none of these is a
+     * person's, and still comes to the front as a normal application does.
      */
-    const bool rail_driven = (SDL_getenv("A2GSPU_CTRL") != nullptr) ||
-                             (SDL_getenv("A2GSPU_BACKGROUND_WINDOW") != nullptr);
-    SDL_WindowFlags win_flags = SDL_WINDOW_RESIZABLE;
+    background_window = (SDL_getenv("A2GSPU_CTRL") != nullptr) ||
+                        (SDL_getenv("A2GSPU_BACKGROUND_WINDOW") != nullptr) ||
+                        (SDL_getenv("A2GSPU_SPIKE_FRAMES") != nullptr) ||
+                        gs2_app_values.no_input;
+    const bool rail_driven = background_window;
+    SDL_WindowFlags win_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (rail_driven) {
         SDL_SetHint(SDL_HINT_WINDOW_ACTIVATE_WHEN_SHOWN,  "0");
         SDL_SetHint(SDL_HINT_WINDOW_ACTIVATE_WHEN_RAISED, "0");
@@ -99,15 +115,27 @@ video_system_t::video_system_t(computer_t *computer) {
         printf("Render driver %d: %s\n", i, name);
     } */
 
-    // Create renderer with nearest-neighbor scaling (sharp pixels)
-    renderer = SDL_CreateRenderer(window, NULL );
-    
+    // Prefer the SDL GPU-backed renderer so we can attach custom fragment
+    // shaders (CRT post-processing). On macOS this maps to Metal/MSL. If it
+    // is unavailable, fall back to the classic renderer; gpu_device stays null
+    // and CRT shader effects are disabled.
+    renderer = SDL_CreateGPURenderer(window, SDL_GPU_SHADERFORMAT_MSL, &gpu_device);
+    if (!renderer) {
+        printf("GPU renderer unavailable (%s); falling back to classic renderer\n", SDL_GetError());
+        gpu_device = nullptr;
+    }
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, NULL);
+    }
+
     if (!renderer) {
         fprintf(stderr, "Error creating renderer: %s\n", SDL_GetError());
     }
 
     const char *rname = SDL_GetRendererName(renderer);
-    printf("Renderer: %s\n", rname);
+    printf("Renderer: %s (GPU device: %s)\n", rname, gpu_device ? "yes" : "no");
+
+    init_crt_shader();
 
     screencap_texture = SDL_CreateTexture(renderer, PIXEL_FORMAT, SDL_TEXTUREACCESS_TARGET, 910, 263);
     if (!screencap_texture) {
@@ -124,11 +152,26 @@ video_system_t::video_system_t(computer_t *computer) {
     clear();
     present();
 
-    SDL_RaiseWindow(window);
+    raise();   // a no-op for a background window (see raise())
 
-    calculate_target_rect(window_width, window_height);
+    {
+        int point_w = 0, point_h = 0;
+        int pixel_w = 0, pixel_h = 0;
+        SDL_GetWindowSize(window, &point_w, &point_h);
+        SDL_GetWindowSizeInPixels(window, &pixel_w, &pixel_h);
+        float display_scale = SDL_GetWindowDisplayScale(window);
+        float pixel_density = SDL_GetWindowPixelDensity(window);
+        printf("Display: %dx%d points, %dx%d pixels, display_scale=%.3f, pixel_density=%.3f\n",
+            point_w, point_h, pixel_w, pixel_h, display_scale, pixel_density);
+    }
+
+    update_target_from_output();
 
     computer->dispatch->registerHandler(SDL_EVENT_WINDOW_RESIZED, [this](const SDL_Event &event) {
+        window_resize(event);
+        return true;
+    });
+    computer->dispatch->registerHandler(SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, [this](const SDL_Event &event) {
         window_resize(event);
         return true;
     });
@@ -150,8 +193,16 @@ video_system_t::video_system_t(computer_t *computer) {
             toggle_display_engine();
             return true;
         }
+        if (key == SDLK_F7) {
+            toggle_crt_shader();
+            return true;
+        }
         if (key == SDLK_PRINTSCREEN) {
-            copy_screen();
+            if (event.key.mod & SDL_KMOD_SHIFT) {
+                save_screenshot();
+            } else {
+                copy_screen();
+            }
         }
         return false;
     });
@@ -162,9 +213,15 @@ video_system_t::video_system_t(computer_t *computer) {
             case SDLK_F1:
             case SDLK_F5:
             case SDLK_F2:
+            case SDLK_F6:
+            case SDLK_F7:
                 return true; // eat the keydown
             case SDLK_PRINTSCREEN:
-                copy_screen();
+                if (event.key.mod & SDL_KMOD_SHIFT) {
+                    save_screenshot();
+                } else {
+                    copy_screen();
+                }
                 return true;
             default:
                 return false;
@@ -179,13 +236,68 @@ video_system_t::video_system_t(computer_t *computer) {
 }
 
 video_system_t::~video_system_t() {
+    if (screenshot_writer) {
+        delete screenshot_writer;
+        screenshot_writer = nullptr;
+    }
+    if (scene_target) SDL_DestroyTexture(scene_target);
+    if (crt_state) SDL_DestroyGPURenderState(crt_state);
+    if (crt_shader && gpu_device) SDL_ReleaseGPUShader(gpu_device, crt_shader);
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
     if (clip) delete clip;
     SDL_Quit();
 }
 
+// Fragment-shader uniform block for the CRT effect (matches the shader's
+// cbuffer: float2 resolution).
+struct crt_uniforms_t {
+    float texture_width;
+    float texture_height;
+};
+
+bool video_system_t::init_crt_shader() {
+    if (!gpu_device) {
+        return false; // classic renderer: no shader support.
+    }
+
+    SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats(gpu_device);
+    if (!(formats & SDL_GPU_SHADERFORMAT_MSL)) {
+        printf("CRT shader: MSL format not supported by GPU device; shader disabled\n");
+        return false;
+    }
+
+    crt_shader = create_gpu_shader_from_resource(
+        gpu_device,
+        "shaders/crt.frag.metal",
+        SDL_GPU_SHADERSTAGE_FRAGMENT,
+        1,
+        1,
+        nullptr);
+    if (!crt_shader) {
+        return false;
+    }
+
+    SDL_GPURenderStateDesc desc;
+    SDL_INIT_INTERFACE(&desc);
+    desc.fragment_shader = crt_shader;
+    crt_state = SDL_CreateGPURenderState(renderer, &desc);
+    if (!crt_state) {
+        printf("CRT shader: SDL_CreateGPURenderState failed: %s\n", SDL_GetError());
+        SDL_ReleaseGPUShader(gpu_device, crt_shader);
+        crt_shader = nullptr;
+        return false;
+    }
+
+    printf("CRT shader: initialized\n");
+    return true;
+}
+
 void video_system_t::present() {
+    // Drain screenshot worker status on the main thread (SPSC ring → EventQueue).
+    if (screenshot_writer) {
+        screenshot_writer->poll(event_queue);
+    }
     SDL_RenderPresent(renderer);
 }
 
@@ -193,7 +305,8 @@ void video_system_t::set_window_title(const char *title) {
     SDL_SetWindowTitle(window, title);
 }
 
-void video_system_t::render_frame(SDL_Texture *texture, SDL_FRect *srcrect, SDL_FRect *dstadj, bool respect_mode) {
+void video_system_t::render_frame(SDL_Texture *texture, SDL_FRect *srcrect, SDL_FRect *dstadj, bool respect_mode,
+        const SDL_FRect *content_inset_src) {
 
     SDL_FRect adj_target;
     if (dstadj) {
@@ -208,6 +321,17 @@ void video_system_t::render_frame(SDL_Texture *texture, SDL_FRect *srcrect, SDL_
         adj_target.h = target.h - yadj*2;
     } else {
         adj_target = target;
+    }
+
+    if (content_inset_src && srcrect->w > 0.0f && srcrect->h > 0.0f) {
+        const float scale_x = adj_target.w / srcrect->w;
+        const float scale_y = adj_target.h / srcrect->h;
+        content.x = adj_target.x + content_inset_src->x * scale_x;
+        content.y = adj_target.y + content_inset_src->y * scale_y;
+        content.w = content_inset_src->w * scale_x;
+        content.h = content_inset_src->h * scale_y;
+    } else {
+        content = adj_target;
     }
 
     if (respect_mode) {
@@ -227,10 +351,16 @@ void video_system_t::clear() {
     SDL_RenderClear(renderer);
 }
 
+// A background window (see the constructor) is never raised: SDL_RaiseWindow is
+// how a window takes the front, and on some platforms the keyboard with it, and
+// no path an automated session reaches -- start-up, an auto-launched config, a
+// refocus event -- has a person at the keyboard asking for that.
 void video_system_t::raise() {
+    if (background_window) return;
     SDL_RaiseWindow(window);
 }
 void video_system_t::raise(SDL_Window *windowp) {
+    if (background_window) return;
     SDL_RaiseWindow(windowp);
 }
 
@@ -271,11 +401,45 @@ void video_system_t::calculate_target_rect(int new_w, int new_h) {
     printf("calculate_target_rect: (%f, %f) [%f x %f] @ %f\n", target.x, target.y, target.w, target.h, (float)target.w/target.h);
 }
 
+void video_system_t::update_target_from_output() {
+    int pixel_w = 0, pixel_h = 0;
+    SDL_GetCurrentRenderOutputSize(renderer, &pixel_w, &pixel_h);
+    calculate_target_rect(pixel_w, pixel_h);
+    ensure_scene_target(pixel_w, pixel_h);
+}
+
+void video_system_t::ensure_scene_target(int w, int h) {
+    if (!crt_state) {
+        return; // shader unavailable: scene_target is never used.
+    }
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    if (scene_target && scene_target_w == w && scene_target_h == h) {
+        return; // already the right size.
+    }
+    if (scene_target) {
+        SDL_DestroyTexture(scene_target);
+        scene_target = nullptr;
+    }
+    scene_target = SDL_CreateTexture(renderer, PIXEL_FORMAT, SDL_TEXTUREACCESS_TARGET, w, h);
+    if (!scene_target) {
+        printf("CRT shader: failed to create scene_target %dx%d: %s\n", w, h, SDL_GetError());
+        scene_target_w = scene_target_h = 0;
+        return;
+    }
+    SDL_SetTextureBlendMode(scene_target, SDL_BLENDMODE_NONE);
+    scene_target_w = w;
+    scene_target_h = h;
+}
+
 void video_system_t::window_resize(const SDL_Event &event) {
     if (event.window.windowID != SDL_GetWindowID(window)) {
         return;
     }
-    calculate_target_rect(event.window.data1, event.window.data2);
+    // The emulator renders in real output pixels, so size the target from the
+    // renderer's pixel output rather than the event's point dimensions.
+    update_target_from_output();
 }
 
 display_fullscreen_mode_t video_system_t::get_window_fullscreen() {
@@ -284,24 +448,17 @@ display_fullscreen_mode_t video_system_t::get_window_fullscreen() {
 
 void video_system_t::set_window_fullscreen(display_fullscreen_mode_t mode) {
     if (mode == DISPLAY_FULLSCREEN_MODE) {
-        SDL_DisplayMode *selected_mode;
-
-        SDL_DisplayID did = SDL_GetDisplayForWindow(window);
-        int num_modes;
-        SDL_DisplayMode **modes = SDL_GetFullscreenDisplayModes(did, &num_modes);
-        for (int i = 0; i < num_modes; i++) {
-            printf("Mode %d: %dx%d\n", i, modes[i]->w, modes[i]->h);
-        }
-        selected_mode = modes[0];
-
+        // Borderless "fullscreen desktop": a NULL fullscreen mode tells SDL not to
+        // change the display's video mode, so the window simply covers the desktop
+        // at its current resolution. This avoids the slow monitor re-sync / macOS
+        // Space transition that an exclusive mode switch incurs.
         SDL_SetWindowAspectRatio(window, 0.0f, 0.0f);
-        SDL_SetWindowFullscreenMode(window, selected_mode);
+        SDL_SetWindowFullscreenMode(window, NULL);
         SDL_SetWindowBordered(window, false);
-        SDL_SetWindowFullscreen(window, display_fullscreen_mode);
-        SDL_free(modes);
+        SDL_SetWindowFullscreen(window, true);
     } else {
         // Reapply window size and aspect ratio constraints in reverse order from above.
-        SDL_SetWindowFullscreen(window, display_fullscreen_mode);
+        SDL_SetWindowFullscreen(window, false);
         SDL_SetWindowBordered(window, true);
         sync_window();
         SDL_SetWindowAspectRatio(window, aspect_ratio, aspect_ratio);
@@ -388,20 +545,67 @@ void video_system_t::flip_display_scale_mode() {
     }
 }
 
-void video_system_t::copy_screen() {
+void video_system_t::set_crt_shader_enabled(bool enabled, bool show_message) {
+    if (!crt_shader_available()) {
+        if (show_message) {
+            show_crt_shader_unavailable();
+        }
+        return;
+    }
+    crt_shader_enabled = enabled;
+    if (show_message) {
+        event_queue->addEvent(new Event(EVENT_SHOW_MESSAGE, 0,
+            crt_shader_enabled ? "CRT Shader On" : "CRT Shader Off"));
+    }
+}
+
+void video_system_t::show_crt_shader_unavailable() {
+    const char *message;
+    if (!gpu_device) {
+        message = "CRT Shader unavailable (GPU renderer could not be initialized)";
+    } else if (!crt_shader) {
+        message = "CRT Shader unavailable (failed to load shader source)";
+    } else {
+        message = "CRT Shader unavailable (failed to create shader render state)";
+    }
+    event_queue->addEvent(new Event(EVENT_SHOW_MESSAGE, 0, message));
+}
+
+void video_system_t::toggle_crt_shader() {
+    if (!crt_shader_available()) {
+        show_crt_shader_unavailable();
+        return;
+    }
+    set_crt_shader_enabled(!crt_shader_enabled, true);
+}
+
+SDL_Surface *video_system_t::capture_screen_surface() {
+    if (!last_texture || !screencap_texture) {
+        return nullptr;
+    }
     SDL_Rect srect = { (int)last_srcrect.x, (int)last_srcrect.y, (int)last_srcrect.w, (int)last_srcrect.h };
     SDL_FRect trect = { last_srcrect.x, last_srcrect.y, last_srcrect.w, last_srcrect.h };
-    //SDL_SetTextureBlendMode(screencap_texture, SDL_BLENDMODE_NONE);
     SDL_SetRenderTarget(renderer, screencap_texture);
     SDL_SetTextureBlendMode(last_texture, SDL_BLENDMODE_NONE);
-    // oops, this is scaling the image.
     SDL_RenderTexture(renderer, last_texture, &trect, &trect); // ensure no scaling.
     SDL_Surface *surface = SDL_RenderReadPixels(renderer, &srect);
     SDL_SetRenderTarget(renderer, nullptr);
+    return surface;
+}
+
+void video_system_t::copy_screen() {
+    SDL_Surface *surface = capture_screen_surface();
+    if (!surface) {
+        return;
+    }
     clip->Clip(surface);
     SDL_DestroySurface(surface);
 }
 
+// FORK: the rails' synchronous screenshot -- a named path, written before the
+// call returns, so a headless spike or a CTRL `shot` can read the file straight
+// after. The no-argument form below is upstream's UI screenshot (async writer,
+// generated path, toasts).
 void video_system_t::save_screenshot(const char *path) {
     SDL_Surface *surface = SDL_RenderReadPixels(renderer, nullptr);
     if (surface) {
@@ -411,16 +615,72 @@ void video_system_t::save_screenshot(const char *path) {
     }
 }
 
+void video_system_t::save_screenshot() {
+    if (!screenshot_writer) {
+        return;
+    }
+    if (screenshot_writer->is_pending()) {
+        event_queue->addEvent(new Event(EVENT_SHOW_MESSAGE, 0, "Screenshot busy"));
+        return;
+    }
+    SDL_Surface *surface = capture_screen_surface();
+    if (!surface) {
+        event_queue->addEvent(new Event(EVENT_SHOW_MESSAGE, 0, "Screenshot capture failed"));
+        return;
+    }
+    const std::string path = Paths::make_screenshot_path();
+    if (!screenshot_writer->try_submit(surface, path)) {
+        event_queue->addEvent(new Event(EVENT_SHOW_MESSAGE, 0, "Screenshot busy"));
+    }
+    SDL_DestroySurface(surface);
+}
+
 void video_system_t::register_frame_processor(int weight, FrameHandler handler) {
     frame_handlers.insert({weight, handler});
 }
 
 void video_system_t::update_display(bool force_full_frame) {
-    clear(); // clear the backbuffer.
+    // When the CRT shader is active, draw the emulator frame into the offscreen
+    // scene_target so it can be post-processed during present_scene(). Otherwise
+    // draw straight to the swapchain exactly as before.
+    bool use_scene = crt_shader_enabled && crt_state && scene_target;
+    if (use_scene) {
+        SDL_SetRenderTarget(renderer, scene_target);
+    }
+
+    clear(); // clear the current render target (scene_target or swapchain).
 
     for (const auto& pair : frame_handlers) {
         if (pair.second(force_full_frame)) {
             break; // Stop processing if handler returns true
         }
     }
+
+    if (use_scene) {
+        SDL_SetRenderTarget(renderer, nullptr);
+    }
+}
+
+void video_system_t::present_scene() {
+    if (!(crt_shader_enabled && crt_state && scene_target)) {
+        return; // shader disabled/unavailable: update_display drew to the swapchain.
+    }
+    // Feed the CRT shader a resolution that matches the emulated source texture
+    // mapped into scene_target. The shader tiles resolution.y/2 bands across the
+    // full texture; scale Y by the content-to-source ratio so each band aligns
+    // with one source scanline (last_srcrect.h lines in target.h pixels).
+    // Scale X similarly so the RGB grille tracks source pixels.
+    const float content_w = target.w > 0.0f ? target.w : (float)scene_target_w;
+    const float content_h = target.h > 0.0f ? target.h : (float)scene_target_h;
+    const float src_w = last_srcrect.w > 0.0f ? last_srcrect.w : content_w;
+    const float src_h = last_srcrect.h > 0.0f ? last_srcrect.h : content_h;
+    crt_uniforms_t uniforms;
+    uniforms.texture_width = (float)scene_target_w * src_w / content_w;
+    uniforms.texture_height = 2.0f * (float)scene_target_h * src_h / content_h;
+    SDL_SetGPURenderStateFragmentUniforms(crt_state, 0, &uniforms, sizeof(uniforms));
+
+    // Blit the offscreen scene onto the swapchain 1:1 through the CRT shader.
+    SDL_SetRenderGPUState(renderer, crt_state);
+    SDL_RenderTexture(renderer, scene_target, nullptr, nullptr);
+    SDL_SetRenderGPUState(renderer, nullptr);
 }

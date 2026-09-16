@@ -20,6 +20,21 @@ ledger below and change the affected dispositions in the table.
 | 2026-06-13 | fork point `c4b1fa69` (upstream 2026-06-07) | the fork's customisations forward-ported onto upstream as one commit | `3fbb454d` |
 | 2026-08-02 – 08-04 | about 23 upstream commits, chosen by subject and file | **12 ported** (`6b91d9c1`, `9420cac6`, `f6a9a5c6`, `e0729c93`, `be5c869e`, `a359889a`, `cf946618`, `6f296ee6`, `160721cc`, `d2a0e056`, `5bd804a2`, half of `605a2c3f`); **5 judged present** (`94c1f2de`, `a9c7d1c6`, `282f8973`, `ad5f436b`, `ba91cf63`); **6 deferred** (`3d4efff1`, `0d95d93c`, `829bd5ea`, `d79be3c0`, `0e606364`, `cba9c847`) | `f646760c`, `3999d40e`, `486fb60e`, `0c601905`, `49822387`, `8d6f6cb5`, `05c2a46b`, `5814d86c`, `c7ae46e9` |
 | 2026-09-16 | **all of** `c4b1fa69..d380e055` (258 commits, to upstream 2026-09-14) | triage only — nothing ported. Dispositions: 30 PORT, 89 PORT-LATER, 12 PORTED, 12 HAVE, 6 DEFERRED, 83 SKIP, 26 MERGE. The fork removed its ungated mouse-coordinate writes into guest memory (`a820c356`), leaving upstream's closed-loop ADB mouse sync (`d03c9783`, `b299b98d`, `19fe1f67`, `1f95ff78`, `533d8763`, `d380e055`) as the faithful replacement to port | this file |
+| 2026-09-16 | stage 1: `c4b1fa69..29dadbbb` (upstream first-parent 1-133, to 2026-08-05; every commit in that range) | **ported by hand** as one fork commit with a single parent (no upstream parent, see "How syncs land"). Conflicts resolved per component (section 7); fork hooks carried; boot baseline re-blessed with attribution | this row's commit |
+
+### How syncs land
+
+Upstream is pulled in **by hand**, and each sync lands on `a2gspu` as ordinary commits with a
+single parent: never a merge commit with upstream as a parent. A true merge would make `a2gspu` a
+clean superset of upstream `main`, so a merge or pull request from this branch would carry all of
+the fork's instrumentation into upstream with no conflicts: the easy path the README's one-way
+rule forbids. Git's merge machinery may be used to compute and resolve conflicts, but the
+recorded commit has one parent, and this ledger names the upstream range it covers. The next sync
+starts from the last range's end commit, not from a git merge-base.
+
+Where the fork and upstream both implement something, neither side wins by default: each
+component takes the shape closest to real Apple IIgs hardware and is instrumented to the fork's
+standard (no black boxes). The per-component choices are in section 7.
 
 ### Fork edits to upstream files after the triage
 
@@ -535,3 +550,33 @@ Each item was checked by reading `upstream/main` source.
 | aa6fa477 | 2026-09-11 | move file | docs | SKIP | Moves XY.md. |
 | d4db2e50 | 2026-09-13 | implement version, and getcapabilities | secondsight/voc | PORT-LATER | SecondSight version and getcapabilities commands. |
 | d380e055 | 2026-09-14 | also gate mouse-tracking on shr active | adb/mouse/kbd | PORT | Mouse sync is active only while SHR is on. It reads `$C029` through `mmu->read()`, a bus read that fork observers and I/O logs can see; prefer a direct NEWVIDEO accessor. |
+
+## 7. Port of `c4b1fa69..29dadbbb` (stage 1, 2026-09-16)
+
+Resolved component by component. "Upstream" or "fork" below names where each part of the result
+came from; items marked OPEN are recorded to be re-decided on hardware evidence.
+
+| Component | Result |
+|---|---|
+| Device IDs | Upstream's order (`HOST_FST`, `UTHERNET2`, `SUPER_SERIAL`), fork's `A2GSPU` last; `device_info.cpp` gains the `A2GSPU` row. The Apple Mouse card is also allowed on the IIgs, for the fork's `-c 15` machine. |
+| Built-in machines | The fork's `-c N` indices are kept, including the five configs upstream moved to `.gs2` files; each has a machine UUID, reusing the `.gs2` counterpart's where one exists. Upstream's device maps are taken for configs 0-3 and 8 (the IIe Enhanced now has a clock in slot 1, the mouse card in 5 and the block device in 7). Upstream's ROM 03 platform machine is appended as `-c 16` (`-p 6`); the fork's ROM 03 personality is renamed "Apple IIgs (ROM 3 Tenspeed)". |
+| ROM generation | The fork's size-derived `is_rom03` stays authoritative; `MMU_IIgs::rom03()` is the accessor, and upstream's mouse sync uses it instead of the platform ID. |
+| IWM | Upstream `3d4efff1` drive-enable model, empty-drive sense and LSS clocking (previously DEFERRED) are taken. The fork snapshot now saves the derived /ENBL level and the holdover time left, and resyncs the drives on restore (block version 2). |
+| Video scanner | Upstream's soft-switch latency queues (`0d95d93c`, `829bd5ea`, previously DEFERRED) are taken. The fork snapshot saves the switches as they will be once the queue drains. |
+| Game port | Upstream's structure is taken, plus the fork's injection-first readers. **OPEN:** the fork keeps "absent pad reads not pressed"; upstream floats SW0/SW1 on the II/II+ and SW2 everywhere. |
+| ADB | Upstream's closed-loop mouse sync (injection only) and its KeyGloo changes are taken, with the fork's key interceptor, taps, unemulated-command reports, SRQ and transmit commands, and snapshot. The Event Manager probe reads through `probe_peek`, not the CPU bus. |
+| Apple Mouse card | Upstream's PIA + 6805-protocol card replaces the fork's high-level card. The fork's file-injection rail moves onto it (`applemouseiii_inject`), and the card registers `MODULE_MOUSECARD`. Snapshot support is owed. |
+| Ensoniq / GLU | Upstream's DOC register, IRQ and pipeline fixes are taken, along with its host staging and resampler. The fork's audio probe observes at emulated time, before host staging. The snapshot adds the pipeline's latched address (block version 2). |
+| Uthernet II | Upstream's slirp card is taken for this stage. It will be replaced by a fused card (upstream register model and slirp, plus the fork's interrupt, state-machine, listen and reporting behaviour, plus new fixes and instrumentation) once stage 2 lands. |
+| Trace / disassembler | Upstream's shared trace formatter and M/X-aware disassembler are taken. The fork adds the `A2GSPU_TRACE_EXT` columns (after the label column), side-effect-free disassembly reads, `<unreadable>` lines, and the conservative XCE width reset. |
+| 2MG | Upstream's parsing is taken, which accepts real images with zeroed length fields. The fork's bounds-checked comment and creator blobs stay. |
+| Parallel card | Upstream's connection-based file device is taken. The fork adds a flush after each pass that wrote. |
+| Host preferences | A headless or rail-driven run (`A2GSPU_SPIKE_FRAMES`, `A2GSPU_CTRL`) neither loads nor saves `system_settings.toml`, and seeds no `.gs2` files: a preference can change guest-visible input (the gamepad-disconnect setting). |
+| Windows | Automated launches (`A2GSPU_CTRL`, `A2GSPU_BACKGROUND_WINDOW`, `A2GSPU_SPIKE_FRAMES`, `-n`) create a window that cannot take focus and is never raised. |
+| Upstream tests | `systemconfigtest` failed on upstream's own tree. Two tests were corrected to upstream's current rules (the `aliases` and `parallel_output` tests; new fixture `aliases_smartport.gs2`). |
+| Docs | The profile-pack documentation is carried without naming third parties. |
+
+**Baseline shift, attributed** (`tools/a2rail/unarmed.baseline.json`; SHR hashes unchanged):
+
+- `iigs-rom`: cycles 7,892,937 to 6,043,351; `iigs-gsos601`: cycles 10,635,389 to 10,635,192. Both runs first diverge at the ROM's IWM status poll (`FF/65DE`, `$C0EE`): bit 7 reads 1 for an empty drive under upstream `3d4efff1`. Found with `tools/gdiff/itracediff.py` against the pre-port build.
+- `iie-rom`: run witness only. The ROM's slot scan reads `$C705` = `$03` (the block device now in slot 7) instead of `$38` (the mouse card), from upstream's IIe Enhanced device map.

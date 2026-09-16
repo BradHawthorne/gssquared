@@ -571,7 +571,7 @@ uint8_t bank_shadow_read(void *context, uint32_t address) {
             // rom
             mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // even though it's in "LC" area it's ROM. 
             if (DEBUG(DEBUG_MMUGS)) printf("Read: ROM Effective address: %06X\n", address);
-            return mmu_iigs->get_lc_rom_base()[address & 0xFFFF]; // bank $FF (LC / $D000-$FFFF ROM); size-agnostic for ROM01/ROM03/ROM04
+            return mmu_iigs->get_rom_base()[mmu_iigs->rom_bank_ff_offset() + (address & 0xFFFF)];
         }
     }
     // we know at this point we were not originally C0 IO space. so.. 
@@ -720,8 +720,6 @@ void MMU_IIgs::init_map() {
 
     // use new routine.
     for (int i = 1; i < 16; i++) {
-        // Same value the hand-rolled (rom_banks * BANK_SIZE - 0x4000) produced,
-        // now expressed as "bank $FF, offset $C000" so there is one convention.
         megaii->map_c1cf_internal_rom(0xC0 + i, main_rom + rom_bank_ff_offset() + 0xC000 + i * GS2_PAGE_SIZE, "GS INT");
     }
 

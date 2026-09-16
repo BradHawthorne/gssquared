@@ -1,11 +1,14 @@
 CMakeFiles/
+.emcache/
+.emcache/*
+build-web/
+build-web/*
 .cache/
 .cache/*
 build/
 build/*
 gs2.dSYM/
 hw.dSYM/
-gs2
 testdev/
 CMakeCache.txt
 **/cmake_install.cmake
@@ -97,3 +100,12 @@ test.asm
 # what belongs here IS tracked.
 /corpus/*
 !/corpus/README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+.pytest_cache/

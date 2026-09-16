@@ -367,11 +367,11 @@ protected:
                 
                 video_scanner->video_cycle();
                 video_cycles++;
-
+                
                 for (auto &cycle_handler : cycle_handlers) {
                     cycle_handler();
                 }
-
+                
                 vidlinecycles++;
             }
             if (vidlinecycles >= 65) {  // end of scanline
@@ -405,6 +405,7 @@ class NClockFactory {
             case PLATFORM_APPLE_IIE_65816:
                 return new NClockII(clock_set);
             case PLATFORM_APPLE_IIGS:
+            case PLATFORM_APPLE_IIGS_ROM3:
                 return new NClockIIgs(clock_set);
             default:
                 assert(false && "Unknown platform in NClockFactory::create_clock");

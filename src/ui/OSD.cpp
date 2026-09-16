@@ -23,13 +23,8 @@
 
 #include "SDL3/SDL_events.h"
 #include "computer.hpp"
-#include "DiskII_Button.hpp"
-//#include "Unidisk_Button.hpp"
-#include "HD20SC_Button.hpp"
-#include "AppleDisk_525_Button.hpp"
-#include "AppleDisk_35_Button.hpp"
+#include "gs2.hpp"
 #include "LabeledButton.hpp"
-#include "SlotButton.hpp"
 #include "Container.hpp"
 #include "AssetAtlas.hpp"
 #include "Style.hpp"
@@ -42,16 +37,28 @@
 #include "ModalContainer.hpp"
 #include "UIContext.hpp"
 #include "util/printf_helper.hpp"
-#include "paths.hpp"
 #include "util/MenuInterface.h"
+#include "util/SystemConfig.hpp"
+#include "util/SystemSettings.hpp"
 #include "platform-specific/menu.h"
+#if defined(__EMSCRIPTEN__)
+#include "platform-specific/emscripten/web_file_dialog.hpp"
+#endif
 #include "systemconfig.hpp"
 #include "SelectButton.hpp"
 #include "DrivesHUD.hpp"
 #include "SpeedSelect.hpp"
+#include "devices/hostfst/hostfst.hpp"
+#include "PlatformIDs.hpp"
+#include "paths.hpp"
 #include "HoverControls.hpp"
 #include "DirtyDiskSave.hpp"
 #include "QuitModal.hpp"
+#include "ConfigSelectors.hpp"
+#include "SerialPortsOSD.hpp"
+#include "util/Connections.hpp"
+#include "StorageButtonFactory.hpp"
+#include "version.h"
 
 // we need to use data passed to us, and pass it to the ShowOpenFileDialog, so when the file select event
 // comes back later, we know which drive this was for.
@@ -83,7 +90,7 @@ static void /* SDLCALL */ file_dialog_callback(void* userdata, const char* const
     // a disk image file.
     printf("file_dialog_callback: %s\n", filelist[0]);
 
-    Paths::set_last_file_dialog_dir(filelist[0]);
+    SystemSettings::instance().remember_file_dialog_selection(FileDialogKind::Disk, filelist[0]);
     
     // 1. unmount current image (if present).
     // 2. mount new image.
@@ -116,7 +123,12 @@ void OSD::open_file_dialog(storage_key_t key) {
     data->osd = this;
     data->key = key;
 
-    const std::string& last_path = Paths::get_last_file_dialog_dir();
+#if defined(__EMSCRIPTEN__)
+    web_open_file_dialog(menu_file_dialog_callback, data,
+        ".do,.po,.woz,.dsk,.hdv,.2mg,.img");
+#else
+    const std::string last_path =
+        SystemSettings::instance().get_file_dialog_default_location(FileDialogKind::Disk);
     SDL_ShowOpenFileDialog(menu_file_dialog_callback,
         data,
         get_window(),
@@ -124,6 +136,59 @@ void OSD::open_file_dialog(storage_key_t key) {
         sizeof(filters)/sizeof(SDL_DialogFileFilter),
         last_path.empty() ? nullptr : last_path.c_str(),
         false);
+#endif
+}
+
+namespace {
+
+struct host_fst_dialog_data_t {
+    OSD *osd = nullptr;
+};
+
+void host_fst_folder_dialog_callback(void *userdata, const char *const *filelist, int /*filter*/) {
+    auto *data = static_cast<host_fst_dialog_data_t *>(userdata);
+    OSD *osd = data ? data->osd : nullptr;
+    delete data;
+
+    if (osd == nullptr) {
+        return;
+    }
+    osd->set_raise_window();
+
+    if (filelist == nullptr || filelist[0] == nullptr) {
+        return;
+    }
+
+    hostfst_apply_dir(filelist[0]);
+    osd->refresh_host_fst_button();
+    osd->set_heads_up_message("Host FST folder updated", 120);
+}
+
+}  // namespace
+
+void OSD::refresh_host_fst_button() {
+    if (status_message == nullptr) {
+        return;
+    }
+    const std::string dir = hostfst_resolved_dir();
+    if (!dir.empty()) {
+        set_heads_up_message(std::string("Host: ") + dir, 180);
+    }
+}
+
+void OSD::open_host_fst_folder_dialog() {
+#if defined(__EMSCRIPTEN__)
+    set_heads_up_message("Host FST folder picker unavailable", 120);
+#else
+    auto *data = new host_fst_dialog_data_t{this};
+    const std::string current = hostfst_resolved_dir();
+    const std::string loc = Paths::adapt_open_dialog_location(current);
+    SDL_ShowOpenFolderDialog(host_fst_folder_dialog_callback,
+                             data,
+                             get_window(),
+                             loc.empty() ? nullptr : loc.c_str(),
+                             false);
+#endif
 }
 
 void handle_disk_toggle(computer_t *computer, OSD *osd, storage_key_t key) {
@@ -161,7 +226,12 @@ void bazfast_button_click(void *userdata) {
     };
 
     printf("unidisk button clicked\n");
-    const std::string& last_path = Paths::get_last_file_dialog_dir();
+#if defined(__EMSCRIPTEN__)
+    web_open_file_dialog(file_dialog_callback, userdata,
+        ".po,.dsk,.hdv,.2mg,.img,.pmap");
+#else
+    const std::string last_path =
+        SystemSettings::instance().get_file_dialog_default_location(FileDialogKind::Disk);
     SDL_ShowOpenFileDialog(file_dialog_callback, 
         userdata, 
         osd->get_window(),
@@ -169,6 +239,7 @@ void bazfast_button_click(void *userdata) {
         sizeof(filters)/sizeof(SDL_DialogFileFilter),
         last_path.empty() ? nullptr : last_path.c_str(),
         false);
+#endif
 }
 
 /** -------------------------------------------------------------------------------------------------- */
@@ -232,7 +303,7 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
         .border_color = 0xFFFFFFFF,
         .hover_color = 0x008080FF,
         .padding = 4,
-        .border_width = 2,
+        .border_width = 0,
     };
     Style_t HUD = {
         .background_color = 0x00000000,
@@ -241,65 +312,51 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
     };
 
     // Create a container for our drive buttons
-    //drive_container = new Container_t(&ui_ctx, DC);
-    drive_container = new DrivesOSD_t(&ui_ctx, DC); // just container with special layout logic.
-    drive_container->set_position(600, 70);
-    drive_container->size(415, 600);
+    drive_container = new DrivesOSD_t(&ui_ctx, DC);
+    drive_container->set_position(600, 140);
+    drive_container->size(400, 575);
+    drive_container->set_button_style(DS);
+    drive_container->set_click_handler([this](StorageButton *button, const SDL_Event&) {
+        const storage_key_t key = button->get_key();
+        void (*click_fn)(void*) = (button->get_drive_type() == DRIVE_TYPE_PRODOS_BLOCK)
+            ? bazfast_button_click
+            : diskii_button_click;
+        click_fn(new diskii_callback_data_t{this, key});
+    });
+
+    std::vector<drive_spec_t> drive_specs;
+    for (const auto& drive : computer->mounts->get_all_drives()) {
+        drive_specs.push_back({drive.key, drive.drive_type, drive.status});
+    }
+    drive_container->rebuild(drive_specs);
     containers.push_back(drive_container);
 
-    // New Mounts-based button creation
-    // Get all registered drives from the Mounts system
-    const std::vector<drive_info_t>& drives = computer->mounts->get_all_drives();
-    
-    bool has_hud_drives = false;
-    
-    // Create buttons for each registered drive
-    for (const auto& drive : drives) {
-        uint8_t slot = drive.key.slot;
-        uint8_t drive_num = drive.key.drive;
-        StorageButton *button;
-
-        // Create the appropriate button type based on drive_type
-        switch (drive.drive_type) {
-
-            case DRIVE_TYPE_DISKII:
-                button = new DiskII_Button_t(&ui_ctx, DiskII_Open, DS);
-                button->on_click([this, drive](const SDL_Event& event) -> bool {
-                    diskii_button_click(new diskii_callback_data_t{this, drive.key});
-                    return true;
-                });
-                break;
-            case DRIVE_TYPE_APPLEDISK_525:
-                button = new AppleDisk_525_Button_t(&ui_ctx, AppleDisk_525_Open, DS);
-                button->on_click([this, drive](const SDL_Event& event) -> bool {
-                    diskii_button_click(new diskii_callback_data_t{this, drive.key});
-                    return true;
-                });
-                break;
-            case DRIVE_TYPE_APPLEDISK_35:
-                // Phase 1: reuse the 5.25 AppleDisk button asset for 3.5 drives.
-                // A distinct 3.5 button asset is a follow-up.
-                button = new AppleDisk_35_Button_t(&ui_ctx, AppleDisk_Face, DS);
-                button->on_click([this, drive](const SDL_Event& event) -> bool {
-                    diskii_button_click(new diskii_callback_data_t{this, drive.key});
-                    return true;
-                });
-                break;
-            case DRIVE_TYPE_PRODOS_BLOCK:
-                button = new HD20SC_Button_t(&ui_ctx, Apple_HD20SC, DS);
-                button->on_click([this, drive](const SDL_Event& event) -> bool {
-                    bazfast_button_click(new diskii_callback_data_t{this, drive.key});
-                    return true;
-                });
-                break;
-            default:
-                throw std::runtime_error(std::string("Unknown drive type: ") + std::to_string(drive.drive_type));
-        }
-        button->set_key(drive.key);
-        drive_container->add(button);
-    }
-    // Initial layout for drive container
-    drive_container->layout();
+    // Serial / parallel ports between slots and storage.
+    Style_t SP = {
+        .background_color = 0x00000040,
+        .border_color = 0xFFFFFF80,
+        .hover_color = 0x008080FF,
+        .padding = 4,
+        .border_width = 2,
+    };
+    // Match SlotButton readability: mid blue fill, white text.
+    Style_t SPB = {
+        .background_color = 0x2E86ABFF,
+        .border_color = 0xF0F7FAFF,
+        .hover_color = 0x3D9BC4FF,
+        .padding = 4,
+        .border_width = 1,
+        .text_color = 0xFFFFFFFF,
+    };
+    serial_ports_container = new SerialPortsOSD_t(&ui_ctx, SP);
+    serial_ports_container->set_position(360, 140);
+    serial_ports_container->size(220, 304);
+    serial_ports_container->set_button_style(SPB);
+    serial_ports_container->set_click_handler([this](SerialPortButton *button, const SDL_Event&) {
+        show_connection_picker(button->get_key(), button->get_kind());
+    });
+    refresh_serial_ports();
+    containers.push_back(serial_ports_container);
 
     /*
      instead of creating whole new buttons, we insert the same buttons into this container.
@@ -310,104 +367,81 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
     hud_drive_container->size(420, 120);
     ncontainers.push_back(hud_drive_container);
 
-    // Create another container, this one for slots.
-    Container_t *slot_container = new Container_t(&ui_ctx, SC);
+    slot_container = new SlotsPanel_t(&ui_ctx, SC, slot_manager_name_resolver(slot_manager));
     slot_container->set_position(30, 140);
     slot_container->size(320, 304);
-
-    for (int i = 7; i >= 0; i--) {
-        char slot_text[128];
-        snprintf(slot_text, sizeof(slot_text), "Slot %d: %s", i, slot_manager->get_device(static_cast<SlotType_t>(i))->name);
-        SlotButton *slot = new SlotButton(&ui_ctx, 0, 0, i, slot_manager);
-        slot->size(300, 30);
-        slot_container->add(slot);    // Add in reverse order (7 to 0)
-    }
     slot_container->layout();
     containers.push_back(slot_container);
 
+    Style_t CB = config_selector_button_style();
+
     mon_color_con = new Container_t(&ui_ctx, SC);
-    mon_color_con->set_position(100, 510);
+    mon_color_con->set_position(30, 550);
     mon_color_con->size(320, 65);
     containers.push_back(mon_color_con);
-
-    Style_t CB = {
-        .background_color = 0x00000000,
-        .border_color = 0x000000FF,
-        .hover_color = 0x00C0C0FF,
-        .padding = 2,
-        .border_width = 1,        
-    };
-
-    SelectButton_t *mc1 = new SelectButton_t(&ui_ctx, ColorDisplayButton, CB, MONITOR_COMPOSITE);
-    SelectButton_t *mc2 = new SelectButton_t(&ui_ctx, RGBDisplayButton, CB, MONITOR_GS_RGB);
-    SelectButton_t *mc3 = new SelectButton_t(&ui_ctx, GreenDisplayButton, CB, MONITOR_MONO_GREEN);
-    SelectButton_t *mc4 = new SelectButton_t(&ui_ctx, AmberDisplayButton, CB, MONITOR_MONO_AMBER);
-    SelectButton_t *mc5 = new SelectButton_t(&ui_ctx, WhiteDisplayButton, CB, MONITOR_MONO_WHITE);
-    display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
-    mc1->on_click([ds](const SDL_Event& event) -> bool {
-        getMenuInterface()->setMonitor(MONITOR_COMPOSITE);
-        return true;
-    });
-    mc2->on_click([ds](const SDL_Event& event) -> bool {
-        getMenuInterface()->setMonitor(MONITOR_GS_RGB);
-        return true;
-    });
-    mc3->on_click([ds](const SDL_Event& event) -> bool {
-        getMenuInterface()->setMonitor(MONITOR_MONO_GREEN);
-        return true;
-    });
-    mc4->on_click([ds](const SDL_Event& event) -> bool {
-        getMenuInterface()->setMonitor(MONITOR_MONO_AMBER);
-        return true;
-    });
-    mc5->on_click([ds](const SDL_Event& event) -> bool {
-        getMenuInterface()->setMonitor(MONITOR_MONO_WHITE);
-        return true;
-    });
-    mon_color_con->add(mc1);
-    mon_color_con->add(mc2);
-    mon_color_con->add(mc3);
-    mon_color_con->add(mc4);
-    mon_color_con->add(mc5);
-    mon_color_con->layout();
+    populate_display_selector(mon_color_con, &ui_ctx, CB);
+    for (size_t i = 0; i < mon_color_con->count(); i++) {
+        Tile_t *tile = mon_color_con->get_tile(i);
+        tile->on_click([tile](const SDL_Event&) -> bool {
+            getMenuInterface()->setMonitor(static_cast<int>(tile->value()));
+            return true;
+        });
+    }
 
     speed_con = new Container_t(&ui_ctx, SC);
-    speed_con->set_position(100, 450);
+    speed_con->set_position(30, 475);
     speed_con->size(320, 65);
     containers.push_back(speed_con);
-
-    speed_btn_10 = new SelectButton_t(&ui_ctx, MHz1_0Button, CB, CLOCK_1_024MHZ);
-    speed_btn_28 = new SelectButton_t(&ui_ctx, MHz2_8Button, CB, CLOCK_2_8MHZ);
-    speed_btn_71 = new SelectButton_t(&ui_ctx, MHz7_159Button, CB, CLOCK_7_159MHZ);
-    speed_btn_14 = new SelectButton_t(&ui_ctx, MHz14_318Button, CB, CLOCK_14_3MHZ);
-    speed_btn_8 = new SelectButton_t(&ui_ctx, MHzInfinityButton, CB, CLOCK_FREE_RUN);
-    
-    speed_btn_10->on_click([this](const SDL_Event& event) -> bool {
+    SelectButton_t *speed_btns[5] = {};
+    populate_speed_selector(speed_con, &ui_ctx, CB, speed_btns);
+    speed_btn_10 = speed_btns[0];
+    speed_btn_28 = speed_btns[1];
+    speed_btn_71 = speed_btns[2];
+    speed_btn_14 = speed_btns[3];
+    speed_btn_8 = speed_btns[4];
+    speed_btn_10->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_1_024MHZ);
         return true;
     });
-    speed_btn_28->on_click([this](const SDL_Event& event) -> bool {
+    speed_btn_28->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_2_8MHZ);
         return true;
     });
-    speed_btn_71->on_click([this](const SDL_Event& event) -> bool {
+    speed_btn_71->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_7_159MHZ);
         return true;
     });
-    speed_btn_14->on_click([this](const SDL_Event& event) -> bool {
+    speed_btn_14->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_14_3MHZ);
         return true;
     });
-    speed_btn_8->on_click([this](const SDL_Event& event) -> bool {
+    speed_btn_8->on_click([this](const SDL_Event&) -> bool {
         this->clock->set_clock_mode(CLOCK_FREE_RUN);
         return true;
     });
-    speed_con->add(speed_btn_10);
-    speed_con->add(speed_btn_28);
-    speed_con->add(speed_btn_71);
-    speed_con->add(speed_btn_14);
-    speed_con->add(speed_btn_8);
-    speed_con->layout();
+
+    if (computer->platform && platform_is_iigs(computer->platform->id)) {
+        Style_t hostFstBtnStyle;
+        hostFstBtnStyle.background_color = 0xE0E0FFFF;
+        hostFstBtnStyle.text_color = 0x000000FF;
+        hostFstBtnStyle.border_width = 1;
+        hostFstBtnStyle.border_color = 0x000000FF;
+        hostFstBtnStyle.padding = 2;
+
+        host_fst_con = new Container_t(&ui_ctx, SC);
+        host_fst_con->set_position(30, 630);
+        host_fst_con->size(320, 50);
+        containers.push_back(host_fst_con);
+
+        host_fst_btn = new Button_t(&ui_ctx, "Host Folder…", hostFstBtnStyle);
+        host_fst_btn->size(300, 36);
+        host_fst_btn->on_click([this](const SDL_Event&) -> bool {
+            open_host_fst_folder_dialog();
+            return true;
+        });
+        host_fst_con->add(host_fst_btn);
+        host_fst_con->layout();
+    }
 
     // Create text buttons for the disk save dialog
     Style_t TextButtonCfg;
@@ -444,7 +478,9 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
     ncontainers.push_back(hover_controls_con);
 
     system_config = computer->get_system();
-    system_badge = new Button_t(&ui_ctx, computer->platform->image_id, SB);
+    system_badge = new SystemBadge_t(&ui_ctx, computer->platform->image_id, SB,
+        system_config->name ? system_config->name : "",
+        system_config->description ? system_config->description : "");
     system_badge->set_position(30, 65);
 
     status_message = new StatusMessage_t(&ui_ctx);
@@ -460,6 +496,13 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
     });
     computer->sys_event->registerHandler(SDL_EVENT_DROP_FILE, [this,computer](const SDL_Event &event) {
         printf("SDL_EVENT_DROP_FILE: %s\n", event.drop.data);
+        if (event.drop.data) {
+            const ConfigFileKind kind = detect_config_file_kind(event.drop.data);
+            if (kind == ConfigFileKind::Gs2 || kind == ConfigFileKind::Settings) {
+                computer->event_queue->addEvent(new Event(EVENT_SHOW_MESSAGE, 0, "Quit emulation first"));
+                return true;
+            }
+        }
 #if 0
         // Identify the media type to help control what buttons we allow to highlight.
         // TODO: there's little point in doing this here, the intention was to filter based on drive type but SDL can't do that yet.
@@ -495,21 +538,41 @@ OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, Slo
         }
         // Raise our window to the top. After a DD I would expect to be able to just go back to doing stuff in the app.
         SDL_RaiseWindow(window);
+#if defined(__EMSCRIPTEN__)
+        // On the web, DROP_FILE arrives asynchronously *after* DROP_COMPLETE,
+        // so we do the deferred panel close here (the COMPLETE handler is a
+        // no-op on web). slideStatusBeforeDrop holds the pre-drag state.
+        if (web_drag_active) {
+            if (slideStatusBeforeDrop == SLIDE_OUT) {
+                close_panel();
+            }
+            web_drag_active = false;
+        }
+#endif
         return true;
     });
 
     computer->sys_event->registerHandler(SDL_EVENT_DROP_COMPLETE, [this](const SDL_Event &event) {
+#if defined(__EMSCRIPTEN__)
+        // The synchronous DROP_COMPLETE fires before the async DROP_FILE on the
+        // web; closing the panel now would collapse the hover target before the
+        // file lands. The DROP_FILE handler performs the close instead.
+        return true;
+#else
         if (slideStatusBeforeDrop == SLIDE_OUT) {
             close_panel();
         }
         return true;
+#endif
     });
 }
 
 OSD::~OSD() {
+    dismiss_connection_picker();
     SDL_DestroyTexture(cpTexture);
     delete text_render;
     delete title_trender;
+    delete system_badge;
     for (Container_t* container : containers) {
         delete container;
     }
@@ -519,6 +582,81 @@ OSD::~OSD() {
     //delete diskii_save_con;
     delete close_btn;
     delete open_btn;
+}
+
+void OSD::refresh_serial_ports() {
+    if (!serial_ports_container || !computer || !computer->connections) return;
+    std::vector<connection_port_spec_t> specs;
+    for (const auto &info : computer->connections->get_all_ports()) {
+        connection_port_spec_t spec;
+        spec.key = info.key;
+        spec.display_name = info.display_name;
+        spec.kind = info.kind;
+        spec.device = info.device;
+        specs.push_back(std::move(spec));
+    }
+    serial_ports_container->rebuild(specs);
+}
+
+void OSD::dismiss_connection_picker() {
+    delete connection_picker;
+    connection_picker = nullptr;
+}
+
+void OSD::show_connection_picker(connection_key_t key, connection_port_kind_t kind) {
+    dismiss_connection_picker();
+    picking_connection_key_ = key;
+
+    // Dark slate panel; choice buttons use white text on ocean blue (not black-on-purple).
+    Style_t MS{
+        .background_color = 0x1A2332FF,
+        .border_color = 0x7EB8D8FF,
+        .hover_color = 0x243044FF,
+        .padding = 8,
+        .border_width = 3,
+    };
+    Style_t btn_style{
+        .background_color = 0x2E86ABFF,
+        .border_color = 0xF0F7FAFF,
+        .hover_color = 0xE36414FF,
+        .padding = 4,
+        .border_width = 1,
+        .text_color = 0xFFFFFFFF,
+    };
+    connection_picker = new Container_t(&ui_ctx, MS);
+    connection_picker->set_position(380, 160);
+
+    constexpr float kBtnW = 180.0f;
+    constexpr float kBtnH = 28.0f;
+    constexpr float kPanelW = 220.0f;
+
+    auto add_choice = [this, btn_style](connection_device_type_t type, const char *label) {
+        Button_t *b = new Button_t(&ui_ctx, label, btn_style);
+        b->size(kBtnW, kBtnH);
+        b->on_click([this, type](const SDL_Event&) -> bool {
+            if (computer && computer->connections) {
+                computer->connections->attach(picking_connection_key_, type);
+                refresh_serial_ports();
+            }
+            dismiss_connection_picker();
+            return true;
+        });
+        connection_picker->add(b);
+    };
+
+    for (connection_device_type_t type : connection_allowed_devices(kind)) {
+        const char *label = "Nothing";
+        if (type == connection_device_type_t::FILE) label = "File";
+        else if (type == connection_device_type_t::MODEM) label = "Modem";
+        add_choice(type, label);
+    }
+
+    const size_t n = connection_picker->count();
+    const float pad = static_cast<float>(MS.padding);
+    const float cell_h = kBtnH + pad * 2;
+    const float panel_h = pad * 2 + n * cell_h + static_cast<float>(MS.border_width) * 2;
+    connection_picker->size(kPanelW, panel_h);
+    connection_picker->layout();
 }
 
 void OSD::update() {
@@ -576,7 +714,8 @@ void OSD::update() {
         }
     }
 
-    hud_drive_container->set_visible((currentSlideStatus == SLIDE_OUT) ? true : false);
+    hud_drive_container->set_visible(
+        currentSlideStatus == SLIDE_OUT && getMenuInterface()->getHudDrives());
 
     speed_con->selected_value(getMenuInterface()->getCurrentSpeed());
     //hov_speed->set_assetID(speed_asset.at(getMenuInterface()->getCurrentSpeed()));
@@ -593,9 +732,14 @@ void OSD::update() {
     for (Container_t* container : ncontainers) {
         container->update();
     }
+
+    computer->video_system->osd_control_panel_open = requires_host_cursor();
 }
 
-void OSD::set_heads_up_message(const std::string &text, int count) {
+void OSD::set_heads_up_message(const std::string &text, int /*count*/) {
+    if (status_message == nullptr) {
+        return;
+    }
     status_message->trigger(text);
 }
 
@@ -624,14 +768,14 @@ void OSD::render() {
 
         // make the background opaque and black.
         ui_ctx.fill_rect({0, 0, (float)window_w, (float)window_h}, 0x00000000);
-        /* SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0x00);
-        SDL_RenderFillRect(renderer, NULL); */
-
+ 
         // Draw CP background with some opacity
         SDL_FRect rect = {0, 50, (float)(window_w-100), (float)(window_h-100)};
         //ui_ctx.fill_rect(rect, 0xFFFFFFE0);
         ui_ctx.fill_rect(rect, computer->platform->case_color & 0xFFFFFF00 | 0xE0);
       
+        ui_ctx.fill_rect({0, 130, (float)(window_w-100), 3}, 0x000000FF);
+
         /* ----- */
 
         SDL_FRect cpTargetRect = {
@@ -644,9 +788,6 @@ void OSD::render() {
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
         system_badge->render();
-        text_render->set_color(0, 0, 0, 0xFF);
-        text_render->render(system_config->name, 220, 70, TEXT_ALIGN_LEFT);
-        text_render->render(system_config->description, 220, 90, TEXT_ALIGN_LEFT);
 
         close_btn->render();
 
@@ -657,6 +798,18 @@ void OSD::render() {
         SDL_SetRenderTarget(renderer, cpTexture);
         for (Container_t* container : containers) {
             container->render();
+        }
+
+        if (connection_picker) {
+            connection_picker->render();
+        }
+
+        // Build version near bottom-left of the control panel slide-out
+        {
+            const int version_x = 20;
+            const int version_y = window_h - 50 - text_render->get_font_line_height() - 8;
+            text_render->set_color(0x00, 0x00, 0x00, 0xC0);
+            text_render->render(VERSION_STRING, version_x, version_y, TEXT_ALIGN_LEFT);
         }
 
         if (!mstack.stack.empty()) {
@@ -693,7 +846,7 @@ void OSD::render() {
         //hover_controls_con->render();
 
         // display the MHz at the bottom of the screen.
-        {
+        if (getMenuInterface()->getHudStats()) {
             char hud_str[150];
             snprintf(hud_str, sizeof(hud_str), "MHz: %8.4f / FPS %8.4f / Idle: %5.1f%%", computer->e_mhz, computer->fps, computer->get_idle_percent());
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
@@ -728,7 +881,13 @@ bool OSD::is_mouse_captured() {
 
 bool OSD::event(const SDL_Event &event) {
     if (event.type == SDL_EVENT_QUIT) {
+        if (gs2_app_values.no_quit_confirm) {
+            // Tests / automation: exit without confirmation or dirty-disk prompts.
+            event_queue->addEvent(new Event(EVENT_QUIT, 0u, (uint64_t)0));
+            return true;
+        }
         mstack.stack.push(new QuitModal_t(&ui_ctx, "Are you sure you want to quit?", ModalStyle, event_queue, computer->mounts, mstack));
+        computer->video_system->osd_control_panel_open = true;
         return true;
     }
 
@@ -753,14 +912,16 @@ bool OSD::event(const SDL_Event &event) {
         } */
         return true;
     }
-    /* if (activeModal) {
-        activeModal->handle_mouse_event(event);
-        if (activeModal->is_completed()) {
-            delete activeModal;
-            activeModal = nullptr;
+
+    if (connection_picker) {
+        if (connection_picker->handle_mouse_event(event)) {
+            return true;
         }
-        return true;
-    } */
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            dismiss_connection_picker();
+            return true;
+        }
+    }
 
     if (active) {
         close_btn->handle_mouse_event(event);
@@ -807,6 +968,19 @@ bool OSD::event(const SDL_Event &event) {
             }
             break;
         case SDL_EVENT_DROP_POSITION: {
+#if defined(__EMSCRIPTEN__)
+                // The web backend never sends DROP_BEGIN, so synthesize it on
+                // the first position event of a drag: snapshot the panel state
+                // and slide it out so a drive button can be hovered.
+                if (!web_drag_active) {
+                    web_drag_active = true;
+                    SDL_RaiseWindow(window);
+                    slideStatusBeforeDrop = currentSlideStatus;
+                    if (currentSlideStatus == SLIDE_OUT) {
+                        open_panel();
+                    }
+                }
+#endif
                 // the specific buttons that can drag/drop need to handle this event.
                 for (Container_t* container : containers) {
                     container->handle_mouse_event(event);
@@ -830,6 +1004,7 @@ void OSD::open_panel() {
     slideStatus = SLIDE_IN; // slide it in right to the top
     slidePosition = -slidePositionMax;
     slidePositionDelta = slidePositionDeltaMax;
+    computer->video_system->osd_control_panel_open = true;
     computer->video_system->push_mouse_capture(false);
 }
 
@@ -844,6 +1019,7 @@ void OSD::close_panel() {
 void OSD::show_diskii_modal(storage_key_t key, uint64_t data) {
     ModalContainer_t *diskii_save_con = new DirtyDiskSave_t(&ui_ctx, nullptr, ModalStyle, key, computer->mounts, mstack);
     mstack.stack.push(diskii_save_con);
+    computer->video_system->osd_control_panel_open = true;
     diskii_save_con->set_key(key);
     diskii_save_con->set_data(data);
 }

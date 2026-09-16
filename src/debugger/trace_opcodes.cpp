@@ -27,9 +27,9 @@ const address_mode_entry address_mode_formats[] = {
     // A-group immediates are two operand bytes when M is clear and the index
     // group two when X is clear, and a static table has no M or X. The row
     // stays the 8-bit form (right for the 6502/65C02 and for 65816 emulation
-    // mode); Disassembler::imm_size overrides the size and the format when the
-    // caller has seeded the widths. trace.cpp:246 handles the same case its own
-    // way, from the live CPU's f_op_sz, which is why tbuf never desynchronised.
+    // mode); Disassembler::resolve_insn_size widens it from the DISASM_IMM_M /
+    // DISASM_IMM_X flags when the caller has seeded the widths, and the trace
+    // decoder does the same from the live CPU's recorded f_op_sz.
     { "#$%02X", 2 },    // IMM
     { "", 1 },           // IMP
     { "($%04X)", 3 },    // INDIR
@@ -63,7 +63,7 @@ const disasm_entry disasm_table[256] = {
     { "ASL", ZP, MIN_6502 }, /* 06 */
     { "ORA", IND_LONG, MIN_65816 }, /* 07 */
     { "PHP", IMP, MIN_6502 }, /* 08 */
-    { "ORA", IMM, MIN_6502 }, /* 09 */
+    { "ORA", IMM, MIN_6502, DISASM_IMM_M }, /* 09 */
     { "ASL", ACC, MIN_6502 }, /* 0a */
     { "PHD",  IMP, MIN_65816 }, /* 0b */
     { "TSB", ABS, MIN_65C02 }, /* 0c */
@@ -95,7 +95,7 @@ const disasm_entry disasm_table[256] = {
     { "ROL", ZP , MIN_6502}, /* 26 */
     { "AND", IND_LONG, MIN_65816 }, /* 27 */
     { "PLP", IMP, MIN_6502 }, /* 28 */
-    { "AND", IMM , MIN_6502}, /* 29 */
+    { "AND", IMM, MIN_6502, DISASM_IMM_M }, /* 29 */
     { "ROL", ACC, MIN_6502 }, /* 2a */
     { "PLD",  IMP, MIN_65816 }, /* 2b */
     { "BIT", ABS, MIN_6502 }, /* 2c */
@@ -127,7 +127,7 @@ const disasm_entry disasm_table[256] = {
     { "LSR", ZP, MIN_6502 }, /* 46 */
     { "EOR", IND_LONG, MIN_65816 }, /* 47 */
     { "PHA", IMP, MIN_6502 }, /* 48 */
-    { "EOR", IMM, MIN_6502 }, /* 49 */
+    { "EOR", IMM, MIN_6502, DISASM_IMM_M }, /* 49 */
     { "LSR", ACC, MIN_6502 }, /* 4a */
     { "PHK",  IMP, MIN_65816 }, /* 4b */
     { "JMP", ABS, MIN_6502 }, /* 4c */
@@ -159,7 +159,7 @@ const disasm_entry disasm_table[256] = {
     { "ROR", ZP, MIN_6502 }, /* 66 */
     { "ADC", IND_LONG, MIN_65816 }, /* 67 */
     { "PLA", IMP, MIN_6502 }, /* 68 */
-    { "ADC", IMM, MIN_6502 }, /* 69 */
+    { "ADC", IMM, MIN_6502, DISASM_IMM_M }, /* 69 */
     { "ROR", ACC, MIN_6502 }, /* 6a */
     { "RTL",  IMP, MIN_65816 }, /* 6b */
     { "JMP", INDIR, MIN_6502 }, /* 6c */
@@ -191,7 +191,7 @@ const disasm_entry disasm_table[256] = {
     { "STX", ZP, MIN_6502 }, /* 86 */
     { "STA", IND_LONG, MIN_65816 }, /* 87 */
     { "DEY", IMP, MIN_6502 }, /* 88 */
-    { "BIT", IMM, MIN_65C02 }, /* 89 */
+    { "BIT", IMM, MIN_65C02, DISASM_IMM_M }, /* 89 */
     { "TXA", IMP, MIN_6502 }, /* 8a */
     { "PHB", IMP, MIN_65816 }, /* 8b */
     { "STY", ABS, MIN_6502 }, /* 8c */
@@ -214,16 +214,16 @@ const disasm_entry disasm_table[256] = {
     { "STA", ABS_X, MIN_6502 }, /* 9d */
     { "STZ", ABS_X, MIN_65C02 }, /* 9e */
     { "STA", ABSL_X, MIN_65816 }, /* 9f */
-    { "LDY", IMM, MIN_6502 }, /* a0 */
+    { "LDY", IMM, MIN_6502, DISASM_IMM_X }, /* a0 */
     { "LDA", INDEX_INDIR, MIN_6502 }, /* a1 */
-    { "LDX", IMM, MIN_6502 }, /* a2 */
+    { "LDX", IMM, MIN_6502, DISASM_IMM_X }, /* a2 */
     { "LDA",  REL_S, MIN_65816 }, /* a3 */
     { "LDY", ZP, MIN_6502 }, /* a4 */
     { "LDA", ZP, MIN_6502 }, /* a5 */
     { "LDX", ZP, MIN_6502 }, /* a6 */
     { "LDA", IND_LONG, MIN_65816 }, /* a7 */
     { "TAY", IMP, MIN_6502 }, /* a8 */
-    { "LDA", IMM, MIN_6502 }, /* a9 */
+    { "LDA", IMM, MIN_6502, DISASM_IMM_M }, /* a9 */
     { "TAX", IMP, MIN_6502 }, /* aa */
     { "PLB", IMP, MIN_65816 }, /* ab */
     { "LDY", ABS, MIN_6502 }, /* ac */
@@ -246,16 +246,16 @@ const disasm_entry disasm_table[256] = {
     { "LDA", ABS_X, MIN_6502 }, /* bd */
     { "LDX", ABS_Y, MIN_6502 }, /* be */
     { "LDA", ABSL_X, MIN_65816 }, /* bf */
-    { "CPY", IMM, MIN_6502 }, /* c0 */
+    { "CPY", IMM, MIN_6502, DISASM_IMM_X }, /* c0 */
     { "CMP", INDEX_INDIR, MIN_6502 }, /* c1 */
-    { "REP", IMM, MIN_65816 }, /* c2 */
+    { "REP", IMM, MIN_65816, DISASM_REP }, /* c2 */
     { "CMP",  REL_S, MIN_65816 }, /* c3 */
     { "CPY", ZP, MIN_6502 }, /* c4 */
     { "CMP", ZP, MIN_6502 }, /* c5 */
     { "DEC", ZP, MIN_6502 }, /* c6 */
     { "CMP", IND_LONG, MIN_65816 }, /* c7 */
     { "INY", IMP, MIN_6502 }, /* c8 */
-    { "CMP", IMM, MIN_6502 }, /* c9 */
+    { "CMP", IMM, MIN_6502, DISASM_IMM_M }, /* c9 */
     { "DEX", IMP, MIN_6502 }, /* ca */
     { "WAI", IMP, MIN_65816 }, /* cb */
     { "CPY", ABS, MIN_6502 }, /* cc */
@@ -278,16 +278,16 @@ const disasm_entry disasm_table[256] = {
     { "CMP", ABS_X, MIN_6502 }, /* dd */
     { "DEC", ABS_X, MIN_6502 }, /* de */
     { "CMP", ABSL_X, MIN_65816 }, /* df */
-    { "CPX", IMM, MIN_6502 }, /* e0 */
+    { "CPX", IMM, MIN_6502, DISASM_IMM_X }, /* e0 */
     { "SBC", INDEX_INDIR, MIN_6502 }, /* e1 */
-    { "SEP", IMM, MIN_65816 }, /* e2 */
+    { "SEP", IMM, MIN_65816, DISASM_SEP }, /* e2 */
     { "SBC", REL_S, MIN_65816 }, /* e3 */
     { "CPX", ZP, MIN_6502 }, /* e4 */
     { "SBC", ZP, MIN_6502 }, /* e5 */
     { "INC", ZP, MIN_6502 }, /* e6 */
     { "SBC", IND_LONG, MIN_65816 }, /* e7 */
     { "INX", IMP, MIN_6502 }, /* e8 */
-    { "SBC", IMM, MIN_6502 }, /* e9 */
+    { "SBC", IMM, MIN_6502, DISASM_IMM_M }, /* e9 */
     { "NOP", IMP, MIN_6502 }, /* ea */
     { "XBA", IMP, MIN_65816 }, /* eb */
     { "CPX", ABS, MIN_6502 }, /* ec */

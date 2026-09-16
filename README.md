@@ -98,6 +98,13 @@ on `PATH` to run the emulator (ctest carries it itself). Test inputs — disk im
 are not redistributed — go in `corpus/`; see `corpus/README.md`. What has been ported from upstream, and
 what is owed, is `Docs/UPSTREAM_SYNC.md`.
 
+Code merged from upstream carries its own attributions, repeated here because this README replaces
+upstream's: the Host FST is Kelvin Sherlock's GSPlus code (GPL 2.0); the Apple Mouse II Interface
+Card emulation (PIA + 6805 protocol) is adapted from the
+[A2Pico mouse-interface](https://github.com/oliverschmidt/mouse-interface) firmware by Thorsten Brehm
+and Oliver Schmidt (MIT License); the ADB mouse tracking technique is based in part on the one used in
+KEGS (GPL 2.0).
+
 The emulator core, models, and UI are **Jawaid Bazyar's** work. This fork inherits upstream's license;
 our additions are offered under the same terms. Thanks to the upstream project for a clean, hackable
 IIgs emulator to build on.

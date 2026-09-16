@@ -73,7 +73,7 @@ $gotPlatforms=[int]$Matches[1];$gotConfigs=[int]$Matches[2]
 if($gotPlatforms -ne $wantPlatforms){throw "systems says platforms=$gotPlatforms; src/platforms.cpp holds $wantPlatforms platform entries"}
 if($gotConfigs   -ne $wantConfigs)  {throw "systems says configs=$gotConfigs; src/systemconfig.cpp holds $wantConfigs builtin configs"}
 
-$j=Q 'json cpu';$last=(Get-ChildItem $Dir -Filter 'ack.*'|Sort-Object {[int]($_.Name-replace'ack\.','')}|Select-Object -Last 1);$ack=Get-Content $last.FullName -Raw|ConvertFrom-Json;if(-not$ack.ok-or$ack.schema-ne'a2ctrl-reply-v2'){throw $j}
+$j=Q 'json cpu';$last=(Get-ChildItem $Dir -Filter 'ack.*'|Sort-Object {[int]($_.Name-replace'ack\.','')}|Select-Object -Last 1);$ack=Read-AckText $last.FullName|ConvertFrom-Json;if(-not$ack.ok-or$ack.schema-ne'a2ctrl-reply-v2'){throw $j}
 
 # ---- shr-golden as a DIFFERENTIAL, not a self-comparison -------------------
 # bless-then-compare proves only that the hash is deterministic. The question

@@ -74,22 +74,14 @@ typedef enum joystick_mode {
 
 typedef struct gamec_state_t {
     joystick_mode_t joystick_mode = JOYSTICK_APPLE_GAMEPAD;
-    // How long after a reset the Joyport mux stays suspended. A real Joyport
-    // holds PB0/PB1 active out of reset, which trips the ROM's button
-    // self-test, so the emulation has to stay quiet for the same window. It is
-    // a CYCLE count and machines run at different speeds, which is why it
-    // cannot be one constant: see init_mb_game_controller.
+
+    int game_switch[3];
+
+    uint64_t game_input_trigger[4];
+
+    // CPU cycles after last_reset before Joyport polarity/mux is enabled.
+    // ~100ms @ 1MHz on II/IIe; ~200ms @ 2.8MHz on IIgs (ROM self-test is slower).
     uint64_t joyport_suspend_cycles = 100000;
-    //uint64_t joyport_activate = 0;
-
-    int game_switch_0;
-    int game_switch_1;
-    int game_switch_2;
-
-    uint64_t game_input_trigger_0;
-    uint64_t game_input_trigger_1;
-    uint64_t game_input_trigger_2;
-    uint64_t game_input_trigger_3;
 
     int mouse_wheel_pos_0; // only one wheel per mouse.
     int paddle_flip_01;
@@ -97,6 +89,9 @@ typedef struct gamec_state_t {
     gamepad_state gps[MAX_GAMEPAD_COUNT];   
 
     uint8_t annunciators[4] = {0, 0, 0, 0};
+
+    int is_ii_or_iiplus = 0;
+    int is_ii_or_iiplus_or_iie = 0;
 
     EventQueue *event_queue;
     MMU_II *mmu;
@@ -122,8 +117,6 @@ typedef struct gamec_state_t {
 } gamec_state_t;
 
 void init_mb_game_controller(computer_t *computer, SlotType_t slot);
-bool add_gamepad(cpu_state *cpu, const SDL_Event &event);
-bool remove_gamepad(cpu_state *cpu, const SDL_Event &event);
 
 void set_joystick_mode(gamec_state_t *gp_d, joystick_mode_t mode);
 joystick_mode_t get_joystick_mode(gamec_state_t *gp_d);

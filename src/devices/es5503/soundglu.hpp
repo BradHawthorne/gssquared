@@ -2,6 +2,9 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <string>
+#include <vector>
+
 #include "util/AudioSystem.hpp"
 #include "ensoniq.hpp"
 #include "util/InterruptController.hpp"
@@ -16,13 +19,17 @@ struct ensoniq_state_t {
     uint8_t sounddata = 0;
     uint8_t soundadrl = 0;  // DOC register address (only low byte used)
     uint8_t soundadrh = 0;  // High byte (stored but not used for DOC addressing)
-    int16_t *audio_buffer = nullptr;   // interleaved [L,R,L,R,...]
-    // The IIgs DOC drives a 4-bit channel address (CA0-CA3) out to the sound
-    // expansion connector. A stereo card decodes CA0 only; the convention the
-    // cards settled on is odd -> left, even -> right. Two host channels is
-    // therefore the shape a IIgs with a stereo card actually presents, and the
-    // buffers below carry frames, not samples: one frame is CHANNELS int16.
-    static constexpr int CHANNELS = 2;
+    int16_t *audio_buffer = nullptr;
+    // Interleaved DOC frames (L,R,...) accumulate here; flushed to SDL once per
+    // video frame after resampling to the device rate (avoids SDL chunk-
+    // resampling 27117→48k).
+    int16_t *sdl_staging = nullptr;
+    uint32_t sdl_staging_count = 0;  // staged DOC frames (not int16 samples)
+    static constexpr int CHANNELS = 2; // TN #19 stereo card (odd=L, even=R)
+    static constexpr uint32_t SDL_STAGING_CAP = 16384; // frames; >1 frame even at max DOC rate
+    int16_t *sdl_resample_buf = nullptr;
+    uint32_t sdl_device_rate = 48000;
+    double resample_pos = 0.0;       // fractional DOC-frame index carried across frames
     AudioSystem *audio_system = nullptr;
     SDL_AudioStream *stream = nullptr;
     double frame_rate = 59.9227;  // Apple II frame rate
@@ -32,12 +39,22 @@ struct ensoniq_state_t {
     InterruptController *irq_control = nullptr;
     NClockII *clock = nullptr;
     uint64_t doc_read_complete_time = 0;
+    // Address latched when a deferred DOC/RAM read is started. Completion must
+    // use this, not the live pointer — callers (e.g. NinjaTrackerPlus) change
+    // $C03E between the pipeline priming read and the data read.
+    uint16_t doc_read_latched_addr = 0;
 
     // Fast-forward / catch-up state. Samples and oscillator IRQs are advanced to
     // the current 14M-clock time on every register/RAM access and on the periodic
     // cycle handler, rather than only once per video frame.
     uint64_t last_catchup_c14m = 0;  // 14M timestamp of the last generated sample boundary
     uint64_t c14m_accum = 0;         // fractional-c14m remainder carried between catch-ups
+
+    // Smoothed $C03C volume nibble (0..15), slewed with ~20ms time constant.
+    // Firmware/demos flip the nibble 15→5→15 for 0.6–7.7ms around DOC accesses;
+    // applying that instantly chops the waveform (audible LF distortion), while
+    // the real analog volume path smooths such transients. <0 = uninitialized.
+    float vol_smooth = -1.0f;
 };
 
 void init_ensoniq_slot(computer_t *computer, SlotType_t slot);
@@ -48,3 +65,6 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot);
 inline ensoniq_state_t *g_a2gspu_ensoniq = nullptr;   // the one instance, for the snapshot code
 void ensoniq_A2GSPU_snapshot(ensoniq_state_t *st, FILE *f);
 bool ensoniq_A2GSPU_restore(ensoniq_state_t *st, FILE *f);
+
+/** Pack Ensoniq STATE_GET v1 blob (784 bytes). Returns false on error. */
+bool pack_ensoniq_state(ensoniq_state_t *st, std::vector<uint8_t> &out, std::string &err);

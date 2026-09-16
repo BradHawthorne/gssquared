@@ -60,3 +60,19 @@ function Get-CArrayCount([string]$file, [string]$open, [string]$entry, [string]$
     }
     return $n
 }
+
+# Read a CTRL reply file through a transient sharing violation. The emulator
+# renames ack.N into place already closed, but another process on the host can
+# hold a freshly created file open for an instant; a gate run failed on exactly
+# that and was green on rerun. ctl.ps1 carries the same function (it does not
+# load this file). Any other error, or a lock that outlasts ~3 s, still throws.
+function Read-AckText([string]$path) {
+    for ($i = 0; ; $i++) {
+        try {
+            return [IO.File]::ReadAllText($path)
+        } catch [IO.IOException] {
+            if ($i -ge 30) { throw }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}

@@ -20,7 +20,9 @@ enum MenuEventCode {
 	MENU_MONITOR_MONO_WHITE,
 
 	MENU_DISPLAY_FULLSCREEN = 300,
-	
+	MENU_HUD_STATS,
+	MENU_HUD_DRIVES,
+
 	MENU_EDIT_COPY_SCREEN = 400,
 	MENU_EDIT_PASTE_TEXT,
 
@@ -28,9 +30,14 @@ enum MenuEventCode {
 
 	MENU_DISK_TOGGLE = 600,  // user.data1 = storage_key_t cast to void*
 
+	MENU_OPEN_CONFIG = 650,
+	MENU_FILE_SAVE_SCREENSHOT,
+	MENU_FILE_MOUNT_DRIVERS,
+
 	MENU_CONTROLLER_GAMEPAD = 700,
 	MENU_CONTROLLER_MOUSE,
 	MENU_CONTROLLER_JOYPORT,
+	MENU_CONTROLLER_ABSENT_DISCONNECTED,
 
 };
 
@@ -40,13 +47,17 @@ void initMenu(SDL_Window* window);
 void setMenuTrackingCallback(MenuIterateCallback callback, void *appstate);
 
 // Called from SDL_AppEvent; returns true if the event was consumed by the menu.
-// On non-Linux platforms this is a no-op returning false.
-#if defined(__linux__)
+// Linux and Emscripten use the Dear ImGui menu (real implementations below);
+// other platforms get no-ops.
+#if defined(__linux__) || defined(__EMSCRIPTEN__)
 bool handleMenuEvent(const SDL_Event *event);
 void renderMenuOverlay(SDL_Renderer *renderer, int win_w, int win_h);
 void pumpMenuEvents();
+/** True when ImGui is capturing input (menu bar hover / open menu) and needs another frame. */
+bool menuNeedsFrame();
 #else
 inline bool handleMenuEvent(const SDL_Event * /*event*/) { return false; }
 inline void renderMenuOverlay(SDL_Renderer * /*renderer*/, int /*win_w*/, int /*win_h*/) {}
 inline void pumpMenuEvents() {}
+inline bool menuNeedsFrame() { return false; }
 #endif

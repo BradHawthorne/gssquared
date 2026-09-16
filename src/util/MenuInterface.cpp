@@ -7,6 +7,7 @@
 #include "computer.hpp"
 #include "util/AudioSystem.hpp"
 #include "util/mount.hpp"
+#include "util/SystemSettings.hpp"
 #include "devices/game/gamecontroller.hpp"
 #include "Module_ID.hpp"
 
@@ -45,9 +46,13 @@ void MenuInterface::diskToggle(storage_key_t key) {
 	SDL_PushEvent(&event);
 }
 
+void MenuInterface::openSystemConfig() { pushMenuEvent(MENU_OPEN_CONFIG); }
+
 void MenuInterface::displayFullScreen() { pushMenuEvent(MENU_DISPLAY_FULLSCREEN); }
 void MenuInterface::editCopyScreen()   { pushMenuEvent(MENU_EDIT_COPY_SCREEN); }
 void MenuInterface::editPasteText()    { pushMenuEvent(MENU_EDIT_PASTE_TEXT); }
+void MenuInterface::fileSaveScreenshot() { pushMenuEvent(MENU_FILE_SAVE_SCREENSHOT); }
+void MenuInterface::toggleMountDrivers() { pushMenuEvent(MENU_FILE_MOUNT_DRIVERS); }
 
 void MenuInterface::toggleSleepMode() {
 	gs2_app_values.sleep_mode = !gs2_app_values.sleep_mode;
@@ -59,6 +64,22 @@ void MenuInterface::toggleAudioDecorrelation() {
 
 void MenuInterface::toggleRightMouseAccel() {
 	gs2_app_values.right_mouse_accelerate = !gs2_app_values.right_mouse_accelerate;
+}
+
+void MenuInterface::toggleCrtShader() {
+	if (computer_ && computer_->video_system) computer_->video_system->toggle_crt_shader();
+}
+
+void MenuInterface::toggleHudStats() {
+	SystemSettings::instance().toggle_hud_stats();
+}
+
+void MenuInterface::toggleHudDrives() {
+	SystemSettings::instance().toggle_hud_drives();
+}
+
+void MenuInterface::toggleDisconnectedWhenNoGamepad() {
+	SystemSettings::instance().toggle_disconnected_when_no_gamepad();
 }
 
 int MenuInterface::getCurrentSpeed() {
@@ -93,8 +114,36 @@ bool MenuInterface::getRightMouseAccel() {
 	return gs2_app_values.right_mouse_accelerate;
 }
 
+bool MenuInterface::getCrtShader() {
+	return computer_ && computer_->video_system ? computer_->video_system->get_crt_shader_enabled() : false;
+}
+
+bool MenuInterface::getCrtShaderAvailable() {
+	return computer_ && computer_->video_system ? computer_->video_system->crt_shader_available() : false;
+}
+
+bool MenuInterface::getHudStats() {
+	return SystemSettings::instance().hud_stats();
+}
+
+bool MenuInterface::getHudDrives() {
+	return SystemSettings::instance().hud_drives();
+}
+
+bool MenuInterface::getDisconnectedWhenNoGamepad() {
+	return SystemSettings::instance().disconnected_when_no_gamepad();
+}
+
 bool MenuInterface::isEmulationRunning() {
 	return computer_ != nullptr;
+}
+
+bool MenuInterface::hasBazFast() {
+	return computer_ && computer_->has_bazfast();
+}
+
+bool MenuInterface::getMountDrivers() {
+	return computer_ && computer_->is_drivers_mounted();
 }
 
 bool MenuInterface::isPaused() {
