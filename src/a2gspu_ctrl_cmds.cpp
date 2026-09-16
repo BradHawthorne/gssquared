@@ -1040,11 +1040,27 @@ bool try_meta(const char *line, char *result, size_t rsz) {
             memvu_format_store(result, rsz);
         } else if (!strncmp(rest, "load", 4)) {
             memvu_format_load(result, rsz);
+        } else if (!strncmp(rest, "report", 6)) {
+            // Every armed MEMVU report, now, into a file: the spike prints these at
+            // its end, which a CTRL session never reaches.
+            const char *path = rest + 6;
+            while (*path == ' ') path++;
+            if (!*path) {
+                snprintf(result, rsz, "status=FAIL memvu-need: report <file>");
+            } else if (!memvu_sv_on && !memvu_lv_on && !memvu_op_on && !memvu_ir_on && !memvu_ws_on && !memvu_seam_on && g_memvu_blame_topn <= 0) {
+                snprintf(result, rsz, "status=FAIL memvu-not-armed -- no MEMVU rail is armed; `rail set MEMVU_STOREVIS 1` (or BLAME, OPMIX, SEAM...) first");
+            } else if (FILE *rf = fopen(path, "wb")) {
+                const std::string sections = memvu_report_all(rf);
+                fclose(rf);
+                snprintf(result, rsz, "status=OK memvu report sections=%s wrote %s", sections.empty() ? "-" : sections.c_str(), path);
+            } else {
+                snprintf(result, rsz, "status=FAIL memvu-report-open-fail %s", path);
+            }
         } else if (!strncmp(rest, "reset", 5)) {
             if (!memvu_sv_on && !memvu_lv_on) {
                 snprintf(result, rsz,
                          "status=FAIL memvu-not-armed -- nothing to reset; set "
-                         "MEMVU_STOREVIS and/or MEMVU_LOADVIS before launch");
+                         "MEMVU_STOREVIS and/or MEMVU_LOADVIS (at launch or with rail set)");
             } else {
                 memvu_reset();
                 snprintf(result, rsz,
@@ -1053,7 +1069,7 @@ bool try_meta(const char *line, char *result, size_t rsz) {
             }
         } else {
             snprintf(result, rsz,
-                     "status=FAIL memvu-need: status|store|load|reset");
+                     "status=FAIL memvu-need: status|store|load|report <file>|reset");
         }
         return true;
     }

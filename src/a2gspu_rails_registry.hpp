@@ -315,7 +315,8 @@ inline const Reach *reach(int &n) {
     {"A2GSPU_ITRACE_REARM",        "rail",          ""},
     {"A2GSPU_KEYSCHED_DELAY",      "rail",          ""},
     {"A2GSPU_LCTRACE",             "rail",          ""},
-    {"A2GSPU_LIVENESS",            "",              "fn"},
+    {"A2GSPU_LIVENESS",            "rail",          "fn"},
+    {"A2GSPU_LIVENESS_OUT",        "rail",          ""},
     {"A2GSPU_LIVENESS_STALL",      "rail",          ""},
     {"A2GSPU_LOAD",                "load",          ""},
     {"A2GSPU_LOADMAP",             "rail",          "fn"},
@@ -367,8 +368,14 @@ inline const Reach *reach(int &n) {
     {"A2GSPU_WATCH_MAX",           "rail",          ""},
     {"A2GSPU_WATCH_OUT",           "rail",          ""},
     {"A2GSPU_WATCH_READ",          "watch",         ""},
-    {"MEMVU_LOADVIS",              "",              "fn"},
-    {"MEMVU_STOREVIS",             "",              "fn"},
+    {"MEMVU_BLAME",                "rail",          ""},
+    {"MEMVU_IREUSE",               "rail",          ""},
+    {"MEMVU_LOADVIS",              "rail",          "fn"},
+    {"MEMVU_OPMIX",                "rail",          ""},
+    {"MEMVU_SEAM",                 "rail",          ""},
+    {"MEMVU_STOREVIS",             "rail",          "fn"},
+    {"MEMVU_STOREVIS_BANKS",       "rail",          ""},
+    {"MEMVU_WORKSET",              "rail",          ""},
     };
     n = (int)(sizeof(r) / sizeof(r[0]));
     return r;

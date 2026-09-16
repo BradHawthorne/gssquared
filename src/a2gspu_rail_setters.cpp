@@ -206,6 +206,119 @@ int set_loadmap(const char *v, char *m, size_t n) {
              g_iigs_loadmap_out ? v : (a2record::g_global ? "A2GSPU_RECORDS" : "stdout"), (unsigned)g_iigs_loads.size());
     return SET_OK;
 }
+// ---- progress proof and memory visibility ----------------------------------------------
+// The platform comes from the CPU the names use: only a IIgs MMU can read the Mega II
+// image at $E1 (the liveness rail's own test). Both launch paths name it first.
+int open_sink(FILE *&sink, const char *v, const char *rail, char *m, size_t n);   // below, with the other sinks
+bool rail_platform_iigs() {
+    return g_a2gspu_cpu_for_names && g_a2gspu_cpu_for_names->mmu && g_a2gspu_cpu_for_names->mmu->probe_readable(0xE12000);
+}
+int set_liveness(const char *v, char *m, size_t n) {
+    if (!v) {
+        const bool was = g_liveness_armed;
+        a2gspu_liveness_stop();
+        snprintf(m, n, "A2GSPU_LIVENESS: %s", was ? "disarmed (its close-out is printed)" : "not armed");
+        return SET_OK;
+    }
+    int x = 0;
+    if (!parse_int(v, x) || x <= 0) { snprintf(m, n, "A2GSPU_LIVENESS: want a frame interval > 0, got '%s'", v); return SET_INVALID; }
+    a2gspu_liveness_start(x, rail_platform_iigs());
+    snprintf(m, n, "A2GSPU_LIVENESS: every %d frame(s), counted from now; out=%s", x, g_liveness_out ? "ndjson" : "stdout");
+    return SET_OK;
+}
+int set_livenessout(const char *v, char *m, size_t n) { return open_sink(g_liveness_out, v, "A2GSPU_LIVENESS_OUT (NDJSON)", m, n); }
+
+// STOREVIS and LOADVIS share the classifier and the per-granule table that names
+// their top writers and readers; either one arms both of those.
+void memvu_vis_common() {
+    memvu_sv_have_shadow = rail_platform_iigs();
+    if (!memvu_blame_on && memvu_blame_init()) {
+        memvu_blame_reset(); memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word;
+    }
+}
+int set_memvu_storevis(const char *v, char *m, size_t n) {
+    if (!v) { memvu_sv_on = false; snprintf(m, n, "MEMVU_STOREVIS: disarmed"); return SET_OK; }
+    memvu_reset();
+    memvu_sv_on = true;
+    memvu_vis_common();
+    snprintf(m, n, "MEMVU: armed (STOREVIS, model=%s) -- store and load counters zeroed", memvu_sv_have_shadow ? "iigs-shadow-v1" : "iie-basic-v1");
+    return SET_OK;
+}
+int set_memvu_loadvis(const char *v, char *m, size_t n) {
+    if (!v) { memvu_lv_on = false; snprintf(m, n, "MEMVU_LOADVIS: disarmed"); return SET_OK; }
+    memvu_reset();
+    memvu_lv_on = true;
+    memvu_vis_common();
+    snprintf(m, n, "MEMVU: armed (LOADVIS, model=%s) -- store and load counters zeroed", memvu_sv_have_shadow ? "iigs-shadow-v1" : "iie-basic-v1");
+    return SET_OK;
+}
+int set_memvu_banks(const char *v, char *m, size_t n) { return flag(g_memvu_sv_banks, v, "MEMVU_STOREVIS_BANKS (per-bank lines in the STOREVIS report)", m, n); }
+int set_memvu_opmix(const char *v, char *m, size_t n) {
+    if (!v) { memvu_op_on = false; snprintf(m, n, "MEMVU_OPMIX: disarmed"); return SET_OK; }
+    memvu_istream_reset();
+    memvu_op_on = true;
+    snprintf(m, n, "MEMVU ISTREAM: armed (OPMIX) -- instruction-stream counters zeroed");
+    return SET_OK;
+}
+int set_memvu_ireuse(const char *v, char *m, size_t n) {
+    if (!v) { memvu_ir_on = false; snprintf(m, n, "MEMVU_IREUSE: disarmed"); return SET_OK; }
+    if (!memvu_ir_init(v)) {
+        memvu_ir_on = false;
+        snprintf(m, n, "MEMVU_IREUSE: ** REFUSED ** '%s' -- want <lines>,<linesize>, both powers of two (e.g. 512,64)", v);
+        return SET_REFUSED;
+    }
+    memvu_istream_reset();
+    memvu_ir_on = true;
+    snprintf(m, n, "MEMVU ISTREAM: armed (IREUSE %s) -- instruction-stream counters zeroed", v);
+    return SET_OK;
+}
+int set_memvu_workset(const char *v, char *m, size_t n) {
+    if (!v) { memvu_ws_on = false; snprintf(m, n, "MEMVU_WORKSET: disarmed"); return SET_OK; }
+    if (!memvu_ws_init()) { memvu_ws_on = false; snprintf(m, n, "MEMVU_WORKSET: ** REFUSED ** allocation failed"); return SET_REFUSED; }
+    memvu_istream_reset();
+    memvu_ws_on = true;
+    snprintf(m, n, "MEMVU ISTREAM: armed (WORKSET) -- instruction-stream counters zeroed");
+    return SET_OK;
+}
+// MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads> -- the seam model. No
+// defaults: a model whose parameters are implicit invites its output to be quoted
+// as a property of the software rather than of software-plus-parameters.
+int set_memvu_seam(const char *v, char *m, size_t n) {
+    if (!v) { memvu_seam_on = false; snprintf(m, n, "MEMVU_SEAM: disarmed"); return SET_OK; }
+    if (!memvu_seam_init(v)) {
+        snprintf(m, n, "MEMVU_SEAM: ** REFUSED ** '%s' -- want <ratio>,<slowmul>,<bufdepth>,<shadowreads 0|1> (e.g. 36,3,8,1)", v);
+        return SET_REFUSED;
+    }
+    // Stall attribution (M2) needs the per-instruction code address, which the
+    // blame tracker keeps; arm both before the model starts charging.
+    const bool attr = memvu_seam_attr_init();
+    if (memvu_blame_init()) { if (!memvu_blame_on) memvu_blame_reset(); memvu_blame_on = true; }
+    memvu_seam_reset();
+    memvu_seam_on = true;
+    memvu_sv_on = true;   // the model rides the store/load taps
+    memvu_lv_on = true;
+    memvu_sv_have_shadow = rail_platform_iigs();
+    snprintf(m, n, "MEMVU SEAM: armed ratio=%u slowmul=%u bufdepth=%u shadowreads=%s%s",
+             memvu_seam_ratio, memvu_seam_slowmul, memvu_seam_bufdepth,
+             memvu_seam_shadowreads_local ? "local" : "routed",
+             attr ? "" : " -- stall attribution tables could not be allocated: totals only");
+    return SET_OK;
+}
+// MEMVU_BLAME[=<topN>] -- which code generates the externally-visible traffic.
+int set_memvu_blame(const char *v, char *m, size_t n) {
+    if (!v) { g_memvu_blame_topn = 0; snprintf(m, n, "MEMVU_BLAME: report off (the table stays while STOREVIS/LOADVIS use it)"); return SET_OK; }
+    if (!memvu_blame_init()) { snprintf(m, n, "MEMVU_BLAME: ** REFUSED ** allocation failed"); return SET_REFUSED; }
+    memvu_blame_reset();
+    memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word;
+    memvu_sv_on = true;   // blame rides the store/load classification
+    memvu_lv_on = true;
+    memvu_sv_have_shadow = rail_platform_iigs();
+    int x = atoi(v); if (x <= 0) x = 20;
+    g_memvu_blame_topn = x;
+    snprintf(m, n, "MEMVU BLAME: armed (top %d code granules) -- blame table zeroed", x);
+    return SET_OK;
+}
+
 int set_keydelay(const char *v, char *m, size_t n) {
     int x = 0;
     if (v && (!parse_int(v, x) || x < 0)) { snprintf(m, n, "A2GSPU_KEYSCHED_DELAY: want frames >= 0, got '%s'", v); return SET_INVALID; }
@@ -535,6 +648,16 @@ a2rails::SetterRegistrar r_snapout      {"A2GSPU_SNAP_OUT",        set_snapout};
 a2rails::SetterRegistrar r_snapzp       {"A2GSPU_SNAP_ZP",         set_snapzp};
 a2rails::SetterRegistrar r_livestall    {"A2GSPU_LIVENESS_STALL",  set_livenessstall};
 a2rails::SetterRegistrar r_loadmap      {"A2GSPU_LOADMAP",         set_loadmap};
+a2rails::SetterRegistrar r_liveness     {"A2GSPU_LIVENESS",        set_liveness};
+a2rails::SetterRegistrar r_livenessout  {"A2GSPU_LIVENESS_OUT",    set_livenessout};
+a2rails::SetterRegistrar r_mv_storevis  {"MEMVU_STOREVIS",         set_memvu_storevis};
+a2rails::SetterRegistrar r_mv_loadvis   {"MEMVU_LOADVIS",          set_memvu_loadvis};
+a2rails::SetterRegistrar r_mv_banks     {"MEMVU_STOREVIS_BANKS",   set_memvu_banks};
+a2rails::SetterRegistrar r_mv_opmix     {"MEMVU_OPMIX",            set_memvu_opmix};
+a2rails::SetterRegistrar r_mv_ireuse    {"MEMVU_IREUSE",           set_memvu_ireuse};
+a2rails::SetterRegistrar r_mv_workset   {"MEMVU_WORKSET",          set_memvu_workset};
+a2rails::SetterRegistrar r_mv_seam      {"MEMVU_SEAM",             set_memvu_seam};
+a2rails::SetterRegistrar r_mv_blame     {"MEMVU_BLAME",            set_memvu_blame};
 a2rails::SetterRegistrar r_keydelay     {"A2GSPU_KEYSCHED_DELAY",  set_keydelay};
 }  // namespace
 

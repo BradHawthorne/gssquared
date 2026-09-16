@@ -125,8 +125,8 @@ void run_headless_spike(GS2AppState *state) {
     // M9: count instructions and stores from here, for GSDIAG's run= (and any
     // A2GSPU_EXPECT_RUN gate). Before liveness, which shares the taps.
     a2gspu_progress_taps_arm(state->mmu_iigs != nullptr);
+    g_a2gspu_cpu_for_names = computer->cpu;   // names by default check bank-0 ROM mapping live; setters ask its MMU the platform
     a2gspu_liveness_arm(state->mmu_iigs != nullptr);
-    g_a2gspu_cpu_for_names = computer->cpu;   // names by default check bank-0 ROM mapping live
     iigs_names_ready();         // at arm, so its one line prints whole and never inside a report
     g_iigs_tbtrace_enabled = (SDL_getenv("A2GSPU_TBTRACE") != nullptr);
     // RAILS THAT CAN ALSO BE ARMED LIVE. Each used to be an inline getenv block
@@ -240,92 +240,17 @@ void run_headless_spike(GS2AppState *state) {
         g_save_at_fn = a2gspu_save_at_cb;
         printf("A2GSPU SAVE_AT: snapshot+halt at first PC=$%06X -> '%s'\n", g_save_at_addr, g_saveat_path);
     }
-    // MEMVU_STOREVIS=1 — store-visibility accounting (see src/memvu_storevis.hpp).
-    // The observation model depends on the platform: only a IIgs MMU can shadow, so
-    // the rail is told which model it is running under rather than inferring a zero.
-    if (SDL_getenv("MEMVU_STOREVIS") || SDL_getenv("MEMVU_LOADVIS")) {
-        memvu_reset();
-        memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
-        memvu_sv_on = (SDL_getenv("MEMVU_STOREVIS") != nullptr);
-        memvu_lv_on = (SDL_getenv("MEMVU_LOADVIS")  != nullptr);
-        // STOREVIS names its top writers in its own summary, which needs the
-        // per-granule write table BLAME keeps. Arm it; BLAME's full report still
-        // prints only when MEMVU_BLAME is set.
-        // LOADVIS names its top readers the same way (M2), from the read side of that table.
-        if ((memvu_sv_on || memvu_lv_on) && memvu_blame_init()) { memvu_blame_reset(); memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word; }
-        printf("MEMVU: armed (%s%s%s, model=%s)\n",
-               memvu_sv_on ? "STOREVIS" : "",
-               (memvu_sv_on && memvu_lv_on) ? "+" : "",
-               memvu_lv_on ? "LOADVIS" : "",
-               memvu_sv_have_shadow ? "iigs-shadow-v1" : "iie-basic-v1");
-    }
-
-    // MEMVU_OPMIX / MEMVU_IREUSE=<lines>,<linesize> — instruction-stream shape.
-    if (SDL_getenv("MEMVU_OPMIX") || SDL_getenv("MEMVU_IREUSE") || SDL_getenv("MEMVU_WORKSET")) {
-        const char *ir = SDL_getenv("MEMVU_IREUSE");
-        memvu_op_on = (SDL_getenv("MEMVU_OPMIX") != nullptr);
-        if (ir) {
-            if (!memvu_ir_init(ir)) {
-                fprintf(stderr, "MEMVU_IREUSE: ** REFUSED ** '%s' -- want <lines>,<linesize>, both powers of two (e.g. 512,64)\n", ir);
-                memvu_ir_on = false;
-            } else {
-                memvu_ir_on = true;
-            }
-        }
-        if (SDL_getenv("MEMVU_WORKSET")) {
-            if (!memvu_ws_init()) {
-                fprintf(stderr, "MEMVU_WORKSET: ** REFUSED ** allocation failed\n");
-                memvu_ws_on = false;
-            } else {
-                memvu_ws_on = true;
-            }
-        }
-        memvu_istream_reset();
-        printf("MEMVU ISTREAM: armed (%s%s%s%s%s)\n",
-               memvu_op_on ? "OPMIX" : "",
-               (memvu_op_on && memvu_ir_on) ? "+" : "",
-               memvu_ir_on ? "IREUSE" : "",
-               ((memvu_op_on || memvu_ir_on) && memvu_ws_on) ? "+" : "",
-               memvu_ws_on ? "WORKSET" : "");
-    }
-
-    // MEMVU_SEAM=<ratio>,<slowmul>,<bufdepth>,<shadowreads> -- the seam model.
-    // No defaults: a model whose parameters are implicit invites its output to be
-    // quoted as a property of the software rather than of software-plus-parameters.
-    if (const char *sm = SDL_getenv("MEMVU_SEAM")) {
-        if (!memvu_seam_init(sm)) {
-            fprintf(stderr, "MEMVU_SEAM: ** REFUSED ** '%s' -- want <ratio>,<slowmul>,<bufdepth>,<shadowreads 0|1> (e.g. 36,3,8,1)\n", sm);
-        } else {
-            // Stall attribution (M2) needs the per-instruction code address, which the
-            // blame tracker keeps; arm both before the model starts charging.
-            if (!memvu_seam_attr_init())
-                fprintf(stderr, "MEMVU_SEAM: stall attribution tables could not be allocated -- totals only\n");
-            if (memvu_blame_init()) { if (!memvu_blame_on) memvu_blame_reset(); memvu_blame_on = true; }
-            memvu_seam_reset();
-            memvu_seam_on = true;
-            memvu_sv_on = true;   // the model rides the store/load taps
-            memvu_lv_on = true;
-            memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
-            printf("MEMVU SEAM: armed ratio=%u slowmul=%u bufdepth=%u shadowreads=%s\n",
-                   memvu_seam_ratio, memvu_seam_slowmul, memvu_seam_bufdepth,
-                   memvu_seam_shadowreads_local ? "local" : "routed");
-        }
-    }
-
-    // MEMVU_BLAME[=<topN>] -- which code generates the externally-visible traffic.
-    if (const char *bl = SDL_getenv("MEMVU_BLAME")) {
-        if (!memvu_blame_init()) {
-            fprintf(stderr, "MEMVU_BLAME: ** REFUSED ** allocation failed\n");
-        } else {
-            memvu_blame_reset();
-            memvu_blame_on = true; iigs_callctx_arm(); memvu_callctx_fn = iigs_call_context_word;
-            memvu_sv_on = true;   // blame rides the store/load classification
-            memvu_lv_on = true;
-            memvu_sv_have_shadow = (state->mmu_iigs != nullptr);
-            int n = atoi(bl); if (n <= 0) n = 20;
-            printf("MEMVU BLAME: armed (top %d code granules)\n", n);
-        }
-    }
+    // MEMVU: store/load visibility, the instruction stream, the seam model and
+    // blame. Each rail is one setter (a2gspu_rail_setters.cpp), applied here in the
+    // order the old blocks ran, and live by `rail set`.
+    a2gspu_rail_arm_env("MEMVU_STOREVIS");
+    a2gspu_rail_arm_env("MEMVU_LOADVIS");
+    a2gspu_rail_arm_env("MEMVU_OPMIX");
+    a2gspu_rail_arm_env("MEMVU_IREUSE");
+    a2gspu_rail_arm_env("MEMVU_WORKSET");
+    a2gspu_rail_arm_env("MEMVU_SEAM");
+    a2gspu_rail_arm_env("MEMVU_BLAME");
+    a2gspu_rail_arm_env("MEMVU_STOREVIS_BANKS");
 
     // (2) A2GSPU_POKE="<hexPC>:<act>[;<act>...]": one-shot DELIBERATE state injection.
     //     acts: A/X/Y/S/D/P/DBR/PB=<hex> reg/flag; PC=<hex> force-branch;
@@ -824,15 +749,7 @@ void run_headless_spike(GS2AppState *state) {
     // ---- (1.65) MEMVU_STOREVIS: store-visibility accounting ----
     // What fraction of this workload's stores land where a non-CPU agent can see
     // them? A property of the software, so it is answerable here exactly.
-    memvu_sv_report(stdout);
-    if (SDL_getenv("MEMVU_STOREVIS_BANKS")) memvu_sv_report_banks(stdout);
-    memvu_lv_report(stdout);
-    memvu_istream_report(stdout);
-    memvu_seam_report(stdout);
-    if (const char *bl = SDL_getenv("MEMVU_BLAME")) {
-        int n = atoi(bl); if (n <= 0) n = 20;
-        memvu_blame_report(stdout, n);
-    }
+    memvu_report_all(stdout);
 
     // ---- (1.7) ground-truth MMU-state stream (the bus-snoop comparator's authoritative reference) ----
     {

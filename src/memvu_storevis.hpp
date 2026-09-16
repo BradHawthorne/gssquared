@@ -120,6 +120,8 @@ inline void iigs_syms_flush_note();                                             
 #include "memvu_seam.hpp"   // MEMVU_SEAM feeds off these same taps rather than adding its own
 
 // ---- arm bits + observation model -------------------------------------------
+inline int  g_memvu_blame_topn = 0;       // MEMVU_BLAME's report size; 0 = no BLAME report
+inline bool g_memvu_sv_banks = false;     // MEMVU_STOREVIS_BANKS
 inline bool memvu_sv_on = false;          // MEMVU_STOREVIS
 inline bool memvu_lv_on = false;          // MEMVU_LOADVIS
 inline bool memvu_sv_have_shadow = false; // platform can shadow (IIgs MMU present)

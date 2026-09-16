@@ -153,7 +153,7 @@ inline const Verb *verbs(int *count) {
         {"load", "manipulate", "load <addr> <file> — splice binary into RAM via mmu->write", "inject-ram"},
         {"limitations", "meta", "limitations [file] — machine-readable known fidelity gaps and status", "discover"},
         {"manifest", "meta", "manifest <file> — full capability dump for agents", "discover"},
-        {"memvu", "observe", "memvu [status]|store|load|reset — live memory-visibility counters (MEMVU_STOREVIS / MEMVU_LOADVIS). Refuses rather than reporting zeros when a rail is unarmed", "memory-visibility"},
+        {"memvu", "observe", "memvu [status]|store|load|report <file>|reset — live memory-visibility counters (MEMVU_STOREVIS / MEMVU_LOADVIS); report writes every armed MEMVU report (BLAME, OPMIX, SEAM...) now. Refuses rather than reporting zeros when a rail is unarmed", "memory-visibility"},
         {"mount", "manipulate", "mount sXdY <path> — runtime media swap", "inject-media"},
         {"oracle", "meta", "oracle — north-star contracts (cycles/colour/snapshot)", "discover"},
         {"paddle", "manipulate", "paddle <0-3> <0-255> | paddle off — analogue paddle; seeds the 558 decay so PREAD counts the value back", "force-control"},

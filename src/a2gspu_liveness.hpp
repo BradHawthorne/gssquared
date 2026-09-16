@@ -63,6 +63,7 @@
 #include "iigs_diag.hpp"               // g_gsdiag_extra
 #include "devices/adb/keygloo.hpp"     // a2gspu_keygloo_read_counts
 #include "a2gspu_progress_taps.hpp"    // insns, last screen/text store, last keyboard poll
+#include "a2gspu_rail_setters.hpp"      // the launch arms the rails through their setters
 
 inline int      g_liveness_every = 0;              // 0 = off (the CPU/frame loop gate)
 inline int      g_liveness_stall = 3;
@@ -118,6 +119,7 @@ inline const char *a2gspu_liveness_gsdiag_extra() {
 
 inline void a2gspu_liveness_close() {
     if (!g_liveness_armed) return;
+    g_liveness_armed = false;   // once per window: stop() and atexit both come here
     char a[16], b[16], c[16], ss[24], ts[24], kp[24];
     a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
     a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
@@ -135,7 +137,7 @@ inline void a2gspu_liveness_close() {
 
 // ---- readback: `rail read A2GSPU_LIVENESS` ----------------------------------
 inline void a2gspu_liveness_format(char *buf, size_t n) {
-    if (!g_liveness_armed) { snprintf(buf, n, "status=FAIL liveness-not-armed -- set A2GSPU_LIVENESS=N before launch"); return; }
+    if (!g_liveness_armed) { snprintf(buf, n, "status=FAIL liveness-not-armed -- set A2GSPU_LIVENESS=N at launch, or `rail set A2GSPU_LIVENESS N`"); return; }
     char a[16], b[16], c[16], ss[24], ts[24], kp[24];
     a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
     a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
@@ -150,23 +152,24 @@ inline void a2gspu_liveness_format(char *buf, size_t n) {
              (unsigned long long)g_progress_insns, c, ss, ts, kp);
 }
 
-// Called once, with the platform known. Idempotent.
-inline void a2gspu_liveness_arm(bool is_iigs) {
-    if (g_liveness_armed) return;
-    const char *e = getenv("A2GSPU_LIVENESS");
-    if (!e) return;
-    int n = atoi(e);
-    if (n <= 0) { fprintf(stderr, "A2GSPU_LIVENESS: FAIL want a frame interval > 0, got '%s'\n", e); exit(2); }
-    g_liveness_armed = true;
-    g_liveness_every = n;
+// Start sampling every `every` frames, from a fresh count. `rail set` and the
+// launch both come here through the rail's one setter (a2gspu_rail_setters.cpp);
+// a re-arm prints nothing for the arm it replaces and starts its own window.
+inline void a2gspu_liveness_start(int every, bool is_iigs) {
+    g_liveness_every = every;
     g_liveness_is_iigs = is_iigs;
-    if (const char *k = getenv("A2GSPU_LIVENESS_STALL")) { int v = atoi(k); if (v > 0) g_liveness_stall = v; }
-    if (const char *o = getenv("A2GSPU_LIVENESS_OUT")) {
-        g_liveness_out = fopen(o, "wb");
-        if (!g_liveness_out) { fprintf(stderr, "A2GSPU_LIVENESS_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", o); exit(2); }
-    }
+    g_liveness_frame = 0; g_liveness_samples = 0;
+    g_liveness_prev_screen = g_liveness_prev_text = 0;
+    g_liveness_prev_kbd = 0;
+    g_liveness_screen_last = g_liveness_text_last = 0;
+    g_liveness_screen_run = g_liveness_text_run = 0;
+    g_liveness_screen_since = g_liveness_text_since = -1;
+    g_liveness_cpu_last = g_liveness_cpu_run = 0; g_liveness_cpu_since = -1;
+    g_liveness_prev_insns = g_progress_insns;
     g_gsdiag_extra = a2gspu_liveness_gsdiag_extra;
-    atexit(a2gspu_liveness_close);
+    static bool s_atexit = false;
+    if (!s_atexit) { s_atexit = true; atexit(a2gspu_liveness_close); }
+    g_liveness_armed = true;
     // The taps: clock from the record contract, which both arm sites register
     // first (a2record_register), so a stamp and a record's cycles= agree.
     g_progress_taps_iigs = is_iigs;
@@ -177,6 +180,27 @@ inline void a2gspu_liveness_arm(bool is_iigs) {
            is_iigs ? "$E1:2000-9FFF" : "$2000-3FFF", is_iigs ? "$E0:0400-07FF" : "$0400-07FF",
            is_iigs ? "KeyGloo C000+C010 reads" : "keyboard C000+C010 reads",
            g_liveness_out ? "ndjson" : "stdout");
+}
+// Stop: the close-out for the window that ran, and GSDIAG loses the fields.
+// The taps stay on -- the run hash may be counting with them.
+inline void a2gspu_liveness_stop() {
+    a2gspu_liveness_close();
+    g_liveness_every = 0;
+    g_liveness_armed = false;
+    if (g_gsdiag_extra == a2gspu_liveness_gsdiag_extra) g_gsdiag_extra = nullptr;
+}
+
+// The launch. Both arm sites call it (the spike, then run_one_frame's lazy arm),
+// so it runs once; the rails go through their setters, a bad value is fatal
+// (exit 2) as before, and the sink is not opened for a rail that is not armed.
+inline void a2gspu_liveness_arm(bool /*is_iigs: the setter asks the live MMU*/) {
+    static bool s_once = false;
+    if (s_once) return;
+    s_once = true;
+    if (!getenv("A2GSPU_LIVENESS")) return;
+    a2gspu_rail_arm_env("A2GSPU_LIVENESS_OUT");
+    a2gspu_rail_arm_env("A2GSPU_LIVENESS_STALL");
+    a2gspu_rail_arm_env("A2GSPU_LIVENESS");
 }
 
 // Called at the end of every frame (run_one_frame), gated by g_liveness_every.

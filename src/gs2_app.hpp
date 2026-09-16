@@ -67,6 +67,7 @@
 #include "bus_trace.hpp"
 #include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting
 #include "memvu_istream.hpp"   // MEMVU_OPMIX / MEMVU_IREUSE
+#include "memvu_report.hpp"    // memvu_report_all: the spike end and `memvu report`
 #include "io_trace.hpp"
 #include "mmu_state_trace.hpp"
 #include "obs_signal.hpp"    // the Observatory spine (default-OFF; wired in later seams)
