@@ -323,7 +323,16 @@ function Test-Platform([int]$p) {
 Write-Host "=== RAIL SELF-TEST ".PadRight(64,'=') -ForegroundColor Cyan
 Write-Host "  every verb challenged by an observation the verb does not control" -ForegroundColor DarkGray
 
-foreach ($p in @(if ($All) { 3; 4; 5 } else { $Platform })) { Test-Platform $p }
+# THE SESSION THIS SUITE STARTS, IT ENDS. Each platform quits the one before it,
+# but nothing quit the last: run on its own, railcheck left a headless emulator
+# waiting on $Dir for commands that would never come -- found when two of them
+# held build\GSSquared.exe open and the next link failed "Permission denied".
+# Under dualsmoke the gate's own cleanup hid it.
+try {
+    foreach ($p in @(if ($All) { 3; 4; 5 } else { $Platform })) { Test-Platform $p }
+} finally {
+    if ((Get-LiveSessionPid $Dir) -ne 0) { Say "quit" | Out-Null }
+}
 
 Write-Host ""
 if ($script:fail -eq 0) {
