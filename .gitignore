@@ -90,3 +90,10 @@ test.asm
 # publish a fixture that silently stops matching the emulator.
 /*.snap
 /*.2mg
+
+# Local test inputs: disk images, snapshots and injected binaries that gates and
+# consumer harnesses load. Not redistributed (Apple system software, third-party
+# titles; a snapshot is tied to the build that wrote it). The README that says
+# what belongs here IS tracked.
+/corpus/*
+!/corpus/README.md
