@@ -169,10 +169,14 @@ bool voc_frame(voc_data *d, bool /*force_full_frame*/) {
     return true;
 }
 
+// FORK: the machine's VOC, for the snapshot block. Cleared at shutdown.
+voc_data *g_voc = nullptr;
+
 } // namespace
 
 void init_voc(computer_t *computer, SlotType_t slot) {
     voc_data *d = new voc_data();
+    g_voc = d;
     d->computer = computer;
     d->_slot = slot;
     d->view = std::make_unique<AppleII_View>(nullptr);
@@ -204,6 +208,7 @@ void init_voc(computer_t *computer, SlotType_t slot) {
     });
 
     computer->register_shutdown_handler([d]() {
+        if (g_voc == d) g_voc = nullptr;
         delete d;
         return true;
     });
@@ -226,4 +231,21 @@ void init_voc(computer_t *computer, SlotType_t slot) {
                     d->field_parity ? 1 : 0);
         return df;
     });
+}
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+bool voc_A2GSPU_present() { return g_voc != nullptr; }
+
+void voc_A2GSPU_snapshot(FILE *f) {
+    fwrite(g_voc->reg, 1, VOC_REG_COUNT, f);
+    const uint8_t fp = g_voc->field_parity ? 1 : 0;
+    fwrite(&fp, 1, 1, f);
+}
+
+bool voc_A2GSPU_restore(FILE *f) {
+    uint8_t reg[VOC_REG_COUNT], fp = 0;
+    if (fread(reg, 1, VOC_REG_COUNT, f) != VOC_REG_COUNT || fread(&fp, 1, 1, f) != 1) return false;
+    for (uint8_t i = 0; i < VOC_REG_COUNT; i++) g_voc->reg[i] = reg[i];
+    g_voc->field_parity = fp != 0;
+    return true;
 }

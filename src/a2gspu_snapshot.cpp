@@ -95,7 +95,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2", "tclock" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2", "tclock", "mousecd", "voc", "ssc" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -231,6 +231,23 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "tclock", 1); thunderclock_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "tclock" : ",tclock";
     }
+    // The Apple Mouse card: its PIA, command state, position, buttons and clamps.
+    if (auto *mc = (applemouseiii_state_t *)computer->get_module_state(MODULE_MOUSECARD)) {
+        long at = a2gspu_snap_dev_begin(f, "mousecd", 1);
+        uint8_t sl = (uint8_t)mc->_slot; fwrite(&sl, 1, 1, f);
+        mc->controller.A2GSPU_snapshot(f);
+        a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "mousecd" : ",mousecd";
+    }
+    if (voc_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "voc", 1); voc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "voc" : ",voc";
+    }
+    // Every Super Serial Card: the switches and the 6551, characters in flight included.
+    if (ssc_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "ssc", 1); ssc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "ssc" : ",ssc";
+    }
     return names;
 }
 // Reads device blocks up to the sentinel, which it leaves for the caller. A block
@@ -351,6 +368,22 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 r = thunderclock_A2GSPU_restore(f, &absent) ? RESTORED : FAILED;
                 if (r == RESTORED && absent)
                     a2gspu_warn("A2GSPU SNAP", "tclock: a saved ThunderClock's slot has no ThunderClock in this machine; that card was not applied");
+            }
+        } else if (!strcmp(nm, "mousecd") && ver == 1) {
+            if (auto *mc = (applemouseiii_state_t *)computer->get_module_state(MODULE_MOUSECARD)) {
+                uint8_t sl = 0;
+                r = (fread(&sl, 1, 1, f) == 1 && mc->controller.A2GSPU_restore(f)) ? RESTORED : FAILED;
+                if (r == RESTORED && sl != (uint8_t)mc->_slot)
+                    a2gspu_warn("A2GSPU SNAP", "mousecd: the saved mouse card was in another slot; its state was applied to this machine's card");
+            }
+        } else if (!strcmp(nm, "voc") && ver == 1) {
+            if (voc_A2GSPU_present()) r = voc_A2GSPU_restore(f) ? RESTORED : FAILED;
+        } else if (!strcmp(nm, "ssc") && ver == 1) {
+            if (ssc_A2GSPU_present()) {
+                int absent = 0;
+                r = ssc_A2GSPU_restore(f, &absent) ? RESTORED : FAILED;
+                if (r == RESTORED && absent)
+                    a2gspu_warn("A2GSPU SNAP", "ssc: a saved Super Serial Card's slot has none in this machine; that card was not applied");
             }
         }
         if (r == FAILED) return false;

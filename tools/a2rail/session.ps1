@@ -32,6 +32,9 @@ param(
     # -p alone can never reach any of them but the first. -1 keeps the old
     # behaviour exactly.
     [int]   $Config   = -1,
+    # A .gs2 system configuration file (any card set the builtins lack). Passed as
+    # the positional argument, after -p/-c; the file's platform wins.
+    [string]$ConfigFile = "",
     [string]$Owner    = ([guid]::NewGuid().ToString('N')),
     # Reproducible pin: fail if gssquared sources look newer than the exe.
     [switch]$StrictTools
@@ -94,6 +97,10 @@ $log = Join-Path $Dir "session.log"
                              # code image at $0800.
 $launchArgs = @("-p", "$Platform")
 if ($Config -ge 0) { $launchArgs += @("-c", "$Config") }
+if ($ConfigFile) {
+    if (-not (Test-Path $ConfigFile)) { throw "config file not found: $ConfigFile" }
+    $launchArgs += @('"' + (Resolve-Path $ConfigFile).Path + '"')
+}
 # WORKING DIRECTORY, set explicitly. Files the emulator writes relative to its
 # own CWD -- parallel.out from the printer card, speaker_event_log.txt,
 # iigsmmutest's test.asm -- otherwise land wherever the launching shell happened
@@ -119,6 +126,7 @@ $env:A2GSPU_CTRL_ATOMIC  = $a2railOldCtrlAtomic
     exe = $Exe
     platform = $Platform
     config = $Config
+    config_file = $ConfigFile
     ctrl = $Dir
     started_utc = [DateTime]::UtcNow.ToString('o')
 } | ConvertTo-Json | Set-Content (Join-Path $Dir 'session.json') -Encoding utf8

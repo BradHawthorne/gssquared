@@ -466,3 +466,49 @@ bool MouseController::apply_state_set(const uint8_t *blob, size_t len) {
     }
     return true;
 }
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+void MouseController::A2GSPU_snapshot(FILE *f) const {
+    const uint8_t pia[8] = { pia_.DDRA, pia_.DDRB, pia_.ORA, pia_.ORB, pia_.CRA, pia_.CRB, pia_.IA, pia_.IB };
+    fwrite(pia, 1, 8, f);
+    const uint8_t b[10] = {
+        command_, read_pos_, write_pos_, last_port_b_, old_int_, operating_mode_, int_state_,
+        static_cast<uint8_t>(irq_asserted_ ? 1 : 0), static_cast<uint8_t>(vbl_pending_ ? 1 : 0),
+        static_cast<uint8_t>((button0_ ? 1 : 0) | (button1_ ? 2 : 0) | (last_button0_ ? 4 : 0) | (last_button1_ ? 8 : 0)),
+    };
+    fwrite(b, 1, 10, f);
+    fwrite(read_buffer_, 1, sizeof read_buffer_, f);
+    fwrite(write_buffer_, 1, sizeof write_buffer_, f);
+    const int16_t w[8] = { current_x_, current_y_, last_x_, last_y_, clamp_min_x_, clamp_min_y_, clamp_max_x_, clamp_max_y_ };
+    fwrite(w, 2, 8, f);
+    fwrite(&intervbl_cycles_, 2, 1, f);
+}
+
+bool MouseController::A2GSPU_restore(FILE *f) {
+    uint8_t pia[8], b[10], rb[8], wb[8];
+    int16_t w[8];
+    uint16_t iv = 0;
+    if (fread(pia, 1, 8, f) != 8 || fread(b, 1, 10, f) != 10 || fread(rb, 1, 8, f) != 8 ||
+        fread(wb, 1, 8, f) != 8 || fread(w, 2, 8, f) != 8 || fread(&iv, 2, 1, f) != 1) {
+        return false;
+    }
+    pia_.DDRA = pia[0]; pia_.DDRB = pia[1]; pia_.ORA = pia[2]; pia_.ORB = pia[3];
+    pia_.CRA = pia[4]; pia_.CRB = pia[5]; pia_.IA = pia[6]; pia_.IB = pia[7];
+    command_ = b[0]; read_pos_ = b[1]; write_pos_ = b[2]; last_port_b_ = b[3]; old_int_ = b[4];
+    operating_mode_ = b[5]; int_state_ = b[6]; vbl_pending_ = b[8] != 0;
+    button0_ = (b[9] & 1) != 0; button1_ = (b[9] & 2) != 0;
+    last_button0_ = (b[9] & 4) != 0; last_button1_ = (b[9] & 8) != 0;
+    std::memcpy(read_buffer_, rb, 8);
+    std::memcpy(write_buffer_, wb, 8);
+    current_x_ = w[0]; current_y_ = w[1]; last_x_ = w[2]; last_y_ = w[3];
+    clamp_min_x_ = w[4]; clamp_min_y_ = w[5]; clamp_max_x_ = w[6]; clamp_max_y_ = w[7];
+    intervbl_cycles_ = iv;
+    // The line follows the saved state even if this machine's differs.
+    const bool want_irq = b[7] != 0;
+    irq_asserted_ = !want_irq;
+    if (want_irq) irq_assert(); else irq_deassert();
+    last_rom_bank_ = 0xFF;
+    notify_bank_if_changed();
+    if (vbl_irq_enabled() && vbl_cb_) vbl_cb_(true);
+    return true;
+}

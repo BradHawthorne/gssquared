@@ -48,6 +48,9 @@ class MOS6551 {
     bool tx_in_progress = false;
     bool rx_in_progress = false;
     bool tx_irq_condition = false;
+    // FORK: when the character in each shift register completes (14M), for the snapshot.
+    uint64_t tx_due_14m = 0;
+    uint64_t rx_due_14m = 0;
 
     float baud_rate = 9600.0f;
 
@@ -211,6 +214,53 @@ public:
         push_line_params();
     }
 
+    // FORK: snapshot (M5). The registers, both shift registers, the holding byte and
+    // how far each character in flight is from completing. Bytes still queued in the
+    // host serial device are not part of the chip and are not saved.
+    void A2GSPU_snapshot(FILE *f) const {
+        const uint8_t b[10] = { status, command, control, rx_data, tx_data, tx_holding,
+                                static_cast<uint8_t>(tx_holding_full ? 1 : 0), static_cast<uint8_t>(tx_in_progress ? 1 : 0),
+                                static_cast<uint8_t>(rx_in_progress ? 1 : 0), static_cast<uint8_t>(tx_irq_condition ? 1 : 0) };
+        fwrite(b, 1, 10, f);
+        const uint64_t now = clock ? clock->get_c14m() : 0;
+        const uint64_t q[2] = { tx_in_progress && tx_due_14m > now ? tx_due_14m - now : 0,
+                                rx_in_progress && rx_due_14m > now ? rx_due_14m - now : 0 };
+        fwrite(q, 8, 2, f);
+    }
+
+    bool A2GSPU_restore(FILE *f) {
+        uint8_t b[10];
+        uint64_t q[2];
+        if (fread(b, 1, 10, f) != 10 || fread(q, 8, 2, f) != 2) return false;
+        if (event_timer) {
+            event_timer->cancelEvents(timer_base_id + 0);
+            event_timer->cancelEvents(timer_base_id + 1);
+        }
+        status = b[0]; command = b[1]; control = b[2]; rx_data = b[3]; tx_data = b[4]; tx_holding = b[5];
+        tx_holding_full = b[6] != 0; tx_in_progress = b[7] != 0; rx_in_progress = b[8] != 0; tx_irq_condition = b[9] != 0;
+        update_baud();
+        push_line_params();
+        const uint64_t now = clock ? clock->get_c14m() : 0;
+        if (tx_in_progress) {
+            if (q[0] && event_timer && clock) {
+                tx_due_14m = now + q[0];
+                event_timer->scheduleEvent(tx_due_14m, tx_complete_callback, timer_base_id + 0, this);
+            } else {
+                tx_complete();
+            }
+        }
+        if (rx_in_progress) {
+            if (q[1] && event_timer && clock) {
+                rx_due_14m = now + q[1];
+                event_timer->scheduleEvent(rx_due_14m, rx_complete_callback, timer_base_id + 1, this);
+            } else {
+                rx_complete();
+            }
+        }
+        update_interrupts();
+        return true;
+    }
+
     void debug_output(DebugFormatter *df) {
         df->addLine("6551 Status:  %02X  Command: %02X  Control: %02X", status, command, control);
         df->addLine("6551 RX: %02X  TX: %02X  baud: %.2f", rx_data, tx_data, baud_rate);
@@ -332,6 +382,7 @@ private:
         uint64_t cycles = get_cycles_per_char();
         if (cycles > 0 && event_timer && clock) {
             uint64_t when = clock->get_c14m() + cycles;
+            rx_due_14m = when;
             event_timer->scheduleEvent(when, rx_complete_callback, timer_base_id + 1, this);
         } else {
             rx_complete();
@@ -344,6 +395,7 @@ private:
         uint64_t cycles = get_cycles_per_char();
         if (cycles > 0 && event_timer && clock) {
             uint64_t when = clock->get_c14m() + cycles;
+            tx_due_14m = when;
             event_timer->scheduleEvent(when, tx_complete_callback, timer_base_id + 0, this);
         } else {
             tx_complete();

@@ -600,7 +600,7 @@ Merged against an explicit base of `29dadbbb`, straight into `a2gspu`. The next 
 
 **Owed after this port** (the per-component study of real-hardware behaviour, 2026-09-16, is the input):
 - **Fused Uthernet II:** done, see section 9.
-- **Snapshot blocks** for the new cards (Apple Mouse, SecondSight, VOC, Super Serial; Uthernet II and ThunderClock are done). ThunderClock time through `A2GSPU_FAKETIME` is done (section 10).
+- **Snapshot blocks** for the new cards: SecondSight is still owed. Uthernet II, ThunderClock, Apple Mouse, VOC and Super Serial are done (sections 9-11), and so is ThunderClock time through `A2GSPU_FAKETIME` (section 10).
 - **Side-effect-free reads** for the debug protocol's `READMEM`/`FINDMEM`, which today read through the CPU's bus path.
 - **Hardware-evidence decisions still open:**
   - game switches with nothing attached (the IIe manual's pull-downs are in the hand controller, which favours upstream's floating reads);
@@ -664,3 +664,18 @@ so a pinned run did not repeat if a clock card was installed or the one-second i
 `5428202640`, a `tclock` block round-trips, and the ProDOS clock card's GETLN line reads
 `05,04,28,20,26`. Two IIgs sessions put the next one-second edge at the same 14M count, a whole
 number of seconds after power-on, and a restore keeps the ticks to the edge.
+
+## 11. Snapshot blocks for the Apple Mouse card, VOC and Super Serial Card (2026-09-16)
+
+| Block | Holds | Restore |
+|---|---|---|
+| `mousecd` | The PIA's eight registers, the command and its read/write buffers, the mode and interrupt state, position, both buttons with their previous states, clamps, and the VBL interval. | Drives the IRQ line and the ROM bank through the card's own callbacks, and re-arms the VBL source when VBL interrupts are on. The saved slot is recorded; a different slot is applied and warned. |
+| `voc` | All sixteen registers and the field parity. | Direct. |
+| `ssc` | Per card: both switch banks, CTS and the IRQ switch; the 6551's status, command and control registers, receive, transmit and holding bytes, and how far each character in flight is from completing. | The line parameters go to the host device again. A character in flight completes on the same schedule it was saved with. Bytes still queued in the host serial device are not the chip's and are not saved (limitation row `ssc-host-queue-snapshot`). |
+
+`tools/a2rail/session.ps1` gains `-ConfigFile <file.gs2>`, so a CTRL session can start any card set.
+
+**Verified:** a scratch run (12 checks) on a IIgs with all three cards. A guest program selected
+mouse ROM bank 3, wrote VOC `$C0B1`/`$C0B5` and programmed the 6551 at 9600 baud. The run saved,
+restored into a fresh machine (`skipped=-`), and compared bank, PIA, VOC registers, 6551 registers
+and baud.

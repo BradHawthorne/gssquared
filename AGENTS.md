@@ -93,7 +93,8 @@ with "Filename too long". Verified 2026-09-16: a clean clone configures, builds 
 target and passes ctest 8/8.
 
 Drive the emulator headless with env rails, or with the CTRL rail through
-`tools/a2rail/session.ps1` + `ctl.ps1`, one command at a time.
+`tools/a2rail/session.ps1` + `ctl.ps1`, one command at a time. `session.ps1 -Config N` picks a
+built-in machine; `-ConfigFile <file.gs2>` starts any card set the built-ins lack.
 
 ---
 

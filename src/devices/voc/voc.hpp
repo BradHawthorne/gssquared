@@ -20,3 +20,8 @@
 #include "computer.hpp"
 
 void init_voc(computer_t *computer, SlotType_t slot);
+
+// FORK: snapshot block "voc" (M5): the registers and the field parity.
+bool voc_A2GSPU_present();
+void voc_A2GSPU_snapshot(FILE *f);
+bool voc_A2GSPU_restore(FILE *f);

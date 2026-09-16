@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 
 #include "PIA6520.hpp"
@@ -38,6 +39,13 @@ public:
     void run();
 
     bool pack_state_get(uint8_t *out, size_t out_len, uint8_t slot) const;
+
+    // FORK: snapshot (M5). Everything the controller holds -- the PIA, the command
+    // and its buffers, the mode, interrupt state, position, buttons and clamps.
+    // Restore drives the IRQ line and the ROM bank through the card's callbacks,
+    // and re-arms the VBL source when VBL interrupts are on.
+    void A2GSPU_snapshot(FILE *f) const;
+    bool A2GSPU_restore(FILE *f);
     bool apply_state_set(const uint8_t *blob, size_t len);
 
     const PIA6520 &pia() const { return pia_; }

@@ -122,6 +122,9 @@ void ssc_write_c0xx(void *context, uint32_t address, uint8_t data) {
     }
 }
 
+// FORK: every Super Serial Card, by slot, for the snapshot block. Cleared at shutdown.
+ssc_state_t *g_ssc_cards[16] = {};
+
 } // namespace
 
 void init_slot_ssc(computer_t *computer, SlotType_t slot) {
@@ -169,6 +172,7 @@ void init_slot_ssc(computer_t *computer, SlotType_t slot) {
     }
 
     snprintf(st->port_id, sizeof(st->port_id), "SSC%d", static_cast<int>(slot));
+    g_ssc_cards[slot & 0x0F] = st;
 
 #if defined(__EMSCRIPTEN__)
     const connection_device_type_t ssc_default = connection_device_type_t::FILE;
@@ -211,6 +215,7 @@ void init_slot_ssc(computer_t *computer, SlotType_t slot) {
     });
 
     computer->register_shutdown_handler([st]() {
+        if (g_ssc_cards[st->_slot & 0x0F] == st) g_ssc_cards[st->_slot & 0x0F] = nullptr;
         // SerialDevice owned by Connections.
         st->serial_device = nullptr;
         delete st->acia;
@@ -224,4 +229,49 @@ void init_slot_ssc(computer_t *computer, SlotType_t slot) {
 
     fprintf(stdout, "SSC: init slot %d (6551 @ $C0%X8)\n", static_cast<int>(slot),
             8 + static_cast<int>(slot));
+}
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+bool ssc_A2GSPU_present() {
+    for (auto *st : g_ssc_cards) if (st && st->acia) return true;
+    return false;
+}
+
+void ssc_A2GSPU_snapshot(FILE *f) {
+    uint8_t cnt = 0;
+    for (auto *st : g_ssc_cards) if (st && st->acia) cnt++;
+    fwrite(&cnt, 1, 1, f);
+    for (int s = 0; s < 16; s++) {
+        const ssc_state_t *st = g_ssc_cards[s];
+        if (!st || !st->acia) continue;
+        const uint8_t b[5] = { static_cast<uint8_t>(s), st->dipsw1, st->dipsw2,
+                               static_cast<uint8_t>(st->cts_ready ? 1 : 0), static_cast<uint8_t>(st->dip_irq_enabled ? 1 : 0) };
+        fwrite(b, 1, 5, f);
+        st->acia->A2GSPU_snapshot(f);
+    }
+}
+
+bool ssc_A2GSPU_restore(FILE *f, int *absent) {
+    *absent = 0;
+    uint8_t cnt = 0;
+    if (fread(&cnt, 1, 1, f) != 1) return false;
+    for (int i = 0; i < cnt; i++) {
+        uint8_t b[5];
+        if (fread(b, 1, 5, f) != 5) return false;
+        ssc_state_t *st = b[0] < 16 ? g_ssc_cards[b[0]] : nullptr;
+        if (!st || !st->acia) {
+            // Same layout either way: read into a scratch chip-less record and drop it.
+            uint8_t skip[10 + 16];
+            if (fread(skip, 1, sizeof skip, f) != sizeof skip) return false;
+            (*absent)++;
+            continue;
+        }
+        st->dipsw1 = b[1];
+        st->dipsw2 = b[2];
+        st->cts_ready = b[3] != 0;
+        st->dip_irq_enabled = b[4] != 0;
+        st->acia->set_dip_irq_enabled(st->dip_irq_enabled);
+        if (!st->acia->A2GSPU_restore(f)) return false;
+    }
+    return true;
 }
