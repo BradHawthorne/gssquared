@@ -783,3 +783,33 @@ behaviour the port replaced with the hardware's.
 CPU. `$80` clears NEWVIDEO bit 0, the bank latch, so `$E1` addressed `$E0`, as the Hardware
 Reference says; the ROM keeps bit 0 set. One real gap: the rail's `E1:` peek ignores the bank
 latch (open, small).
+
+## 16. Acting on the fidelity study, second pass (2026-09-16)
+
+Each change was verified with a scratch test against the behaviour the study describes, and all 9
+gates were green on the build it was committed from. The Rosetta pinned Finder boot is unchanged
+(`2E304BF0147B220A`, 84 of 1269 toolbox returns failing, twice).
+
+| Commit | Change | Before | Verified |
+|---|---|---|---|
+| `ea674b6b` | **Slot bus format 2**, opt-in (`A2GSPU_SLOT_BUS_FORMAT=2`, `~BS2`) | the stream emitted every bank-`$00/$01` `$C0xx` access including fast-RAM banks, never `$E0` writes, Mega II reads or `$C100-$CFFF`, decoded for a fixed slot and set `/INH` | bank `$02` `$C005` absent, `$C0B0` `/DEVSEL`, `$C301` `/IOSEL` with SLOTC3ROM on, `$C302` absent with it off, an `$E0` write with M2B0 0, no `/INH` (9/9); format 1 unchanged in a2engine buscheck 14/14 |
+| `e5524f13` | **`E0:`/`E1:` probes resolve as the CPU does** | raw Mega II RAM: the bank latch, LC ROM, LC bank 1 and RAMRD were ignored, and a poke into write-protected `$E1` LC space was accepted | a bank-`$02` program compares CPU reads with rail reads and pokes across latch off, LC ROM, LC bank 1 and 2 and RAMRD (23/23) |
+| `e483676c` | **Host device threads and rings** (H1-H3), lossless parallel capture | plain-integer rings shared by two threads; the thread started in the base constructor; drops silent; one SHUTDOWN send that could be dropped; the parallel card lost bytes past a 10 ms drain; capture files in text mode | a 10240-byte guest burst arrives complete and in order (before: 1657 bytes and 40 inserted `$0D`); drops are counted and reported per port; a2engine pluscheck 10/10, scccheck 5/5 |
+| `cfb84ce5` | **SCC receiver and transmitter** (S6-S8) | a 1-byte buffer filled only at a guest access; overrun impossible from the host and immediate in loopback; All Sent a copy of TBE; Tx IP after the whole character | host bytes arrive with no guest access, the FIFO holds three and the fourth overwrites the newest and latches overrun until Error Reset, TBE returns at once while All Sent waits for the shift register, loopback holds three (14/14); scccheck 5/5 |
+| `10b82f97` | **Abortable modem dial** (H4) | resolve (10 s) and connect (30 s) blocked the worker, which detach and shutdown join | a guest character brings NO CARRIER within 0.9 s; quit mid-dial exits in 0.3 s (4/4) |
+| `ef506b39` | **Ticking time pin**, opt-in (`A2GSPU_FAKETIME_TICK=1`); guest-set time sticks | the pin overwrote the RTC on every command, so WriteTime could not verify; no ticking origin | frozen reads the pin before and after 600 frames and keeps a WriteTimeHex; ticking advances +6 s after 400 frames and +10 s after 600 more, the one-second edge is a whole 14M second, a set time sticks and keeps ticking, and two runs agree (9/9) |
+| `aa30b820` | **Snapshot media identity by content hash** (`util/media_identity.hpp`; blocks `iwm` 3, `diskii` 2, `media` 2, `pdblock` 2) | the file name alone: the same image under another path would not restore, and a different image at the same path took another disk's head and tracks | the same bytes under another name restore; changed bytes at the same path are refused with the mismatch warning (3/3); a snapshot with version-1 blocks still reads and realigns |
+
+**Found on the way:** the rail's `setreg` has no `pb` register (`setreg pc` takes 24 bits), so
+the `setreg pb` lines in scratch tests did nothing.
+
+**Not done, and why:**
+- **Slot bus step 2 (`$C02D` gating).** Whether "Your Card" in slot 6 deselects the IWM, and with
+  it the slot 5 3.5 drives, is not in the documents at hand. The fidelity README's hardware list
+  carries the question.
+- **Control-plane unification.** The study's first step would be one op registry that the CTRL
+  rail, the debug protocol and the copilot rail all dispatch through, with each verb's observation
+  class declared once. It touches every verb and all three front ends, so it gets its own pass with
+  the gates re-read, not a tail end of this one.
+- **Frozen or ticking by default, and slot bus format 1 or 2 by default.** Both are opt-in; both
+  defaults are the owner's call.

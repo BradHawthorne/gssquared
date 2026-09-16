@@ -39,10 +39,16 @@ below records what has been done since.
 | SecondSight `ClearScreen`/`ScrollScreen` host heap overrun; `GetVGAReg` stale remainder; later upload chunks unchecked | video_cards | **Done**: clipped to the card's 1 MB and reported; whole upload checked; `GetVGAReg` completes (`UPSTREAM_SYNC.md` §15) |
 | ADB `$08` writes past the 96-byte RAM; `$09` underflows the ROM index; repeat tables unclamped | input | **Done**: stage 2 took upstream's bounded `read_uc_memory`/`write_uc_memory` and clamps (the fork's 3-bit response count kept) |
 | IRQ-line recomputation | memory_video | **Done**: `$C023`/`$C041` writes recompute the line; Mega II VBL and quarter-second flags latch only while enabled (§15) |
-| SCC interrupt block (S1-S4, WR0 commands, IUS, software INTACK) | serial_hostio | **Done** (§15). Receiver FIFO, special conditions in the data path, modem lines, host queue drops and the shutdown hang are still open |
-| Host-file safety: `.nib` overwrite, zeroed sectors on export, truncating saves, writeback without `modified` | storage | **Done**: no write unless modified; atomic saves; no lossy export (a `.written.woz` sidecar instead) (§15). Content-hash media identity is still open |
-| Slot bus: `$C02D` gating, per-card `$C800` flip-flop, stream defects, card-driven pins | slot_bus | Open |
-| Sound: host and debugger state gating DOC IRQs | sound_time | **Done**: the DOC runs on emulated time with or without a host stream, and while stepping (§15). A ticking FAKETIME origin is still open |
+| SCC interrupt block (S1-S4, WR0 commands, IUS, software INTACK) | serial_hostio | **Done** (§15) |
+| SCC receiver and transmitter (S6-S8): 1-byte buffer pulled only on a guest access; All Sent = TBE | serial_hostio | **Done**: `cfb84ce5` continuous receiver, 3-byte FIFO with overrun, two-stage transmitter (§16). Modem lines, break and parity/framing errors are still open |
+| Host framework H1-H4: racy rings, thread started in the base constructor, silent drops, shutdown hang, 40 s blocking dial | serial_hostio | **Done**: `e483676c` (atomic rings, `start()`, counted drops, retrying `stop()`), `10b82f97` (abortable dial) (§16). The emulated-time HostLink boundary (H6) is still open |
+| Parallel card: bytes lost when the guest outruns the file device; CRLF inserted on Windows | serial_hostio | **Done** for capture: `e483676c` waits for room and writes binary (§16). STROBE/ACK/FF2 in emulated time is still open |
+| Host-file safety: `.nib` overwrite, zeroed sectors on export, truncating saves, writeback without `modified` | storage | **Done**: no write unless modified; atomic saves; no lossy export (a `.written.woz` sidecar instead) (§15); snapshot media identity by content hash, `aa30b820` (§16) |
+| Slot bus stream defects (step 1): M2B0, `$E0` writes and Mega II reads never emitted, `$C100-$CFFF` never emitted, decode for a fixed slot, `/INH` misused | slot_bus | **Done, opt-in**: `ea674b6b` `A2GSPU_SLOT_BUS_FORMAT=2`; format 1 stays the default until the card's firmware decodes format 2 (§16) |
+| Slot bus: `$C02D` gating of `$C0nX` and the C8 handler, per-card `$C800` flip-flop, card-driven pins | slot_bus | Open. Gating waits on a hardware fact (below) |
+| Sound: host and debugger state gating DOC IRQs | sound_time | **Done**: the DOC runs on emulated time with or without a host stream, and while stepping (§15) |
+| Time pin frozen and guest-visible: RTC writes overwritten, no ticking origin | sound_time | **Done, opt-in**: `ef506b39` `A2GSPU_FAKETIME_TICK=1` ticks in emulated time on the one-second IRQ's edges; guest-set time sticks under either form (§16). Frozen stays the default: the owner decides |
+| Probes answer `$E0`/`$E1` from raw Mega II RAM (structural defect 3) | memory_video | **Done** for `$E0`/`$E1`: `e5524f13` (bank latch, LC ROM and bank 1, RAMRD) (§16). Shadow-all handler pages in banks `$02-$7F` are still open |
 | Control plane: one op registry, one trigger engine, one record stream, hermetic configuration | control_plane | Open |
 | SecondSight: the host setting `ss_text_mode` rewrites card state; handshakes advance on polls, not time | video_cards | Open (recorded in `UPSTREAM_SYNC.md` §12) |
 
@@ -62,3 +68,8 @@ machine (or card) before either tree's behaviour is kept.
 **Also from the study's hardware list:** whether the Mega II VBL and quarter-second flags latch
 while disabled. The fork now follows MAME and KEGS (they do not), from recollection of those
 sources. A hardware test belongs with the other decisions above.
+
+**Added by the second pass (§16):**
+- Whether `$C02D` bit 6 set to "Your Card" deselects the IWM at `$C0E0-$C0EF` (which would also take the slot 5 3.5 drives away), and whether bit 5 does anything to it. `$C0nX` gating (slot bus step 2) waits on this, because a Disk II card in slot 6 (config 9) and the ROM's slot scan both depend on the answer.
+- Whether bank `$E0` honours RAMRD, RAMWRT, ALTZP and 80STORE. The fork's CPU path sends `$E0` through the Mega II page table, so it does; the probe now mirrors that. The Hardware Reference is recalled as saying the auxiliary switches affect only banks `$00`/`$01`.
+- The parallel card's ACK and FF2 timing, and the PROM's "Printer-Not-Available" alteration.
