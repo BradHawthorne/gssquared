@@ -277,6 +277,29 @@ class Z85C30 {
         bool ext_ip_latch[SCC_CHANNEL_COUNT] = { false, false };  // set by an enabled External/Status change
         bool rx_first_armed[SCC_CHANNEL_COUNT] = { true, true };  // Rx mode 01: first character re-armed by WR0 cmd 100
 
+        // FORK: THE RECEIVER AND TRANSMITTER, as the datasheet lays them out (fidelity study,
+        // serial step 2).
+        //   Receive: wire -> shift register (rx_in_progress, char_rx) -> 3-byte FIFO. A host
+        //   byte is taken whenever the shift register is idle -- at a register access, when
+        //   the previous character completes, and on a 1 ms emulated-time poll -- instead of
+        //   only at the guest's next access with the buffer empty, which stalled a guest
+        //   waiting for its Rx interrupt and made arrival time equal access time. A fourth
+        //   character with the FIFO full overwrites the newest entry and sets Rx Overrun
+        //   (latched until Error Reset; the datasheet flags the overwritten character itself,
+        //   which reaches RR1 when it is read -- not modelled). The loopback path used to
+        //   overrun after one byte.
+        //   Transmit: transmit buffer (char_tx) -> shift register (tx_in_progress, tx_shift)
+        //   -> wire. A write into an idle transmitter moves straight to the shift register, so
+        //   Tx Buffer Empty (RR0 D2) and Tx IP return at once and a second character can wait
+        //   in the buffer; All Sent (RR1 D0) follows the shift register. All Sent used to be a
+        //   copy of Tx Buffer Empty, and Tx IP waited for the whole character time.
+        struct rx_fifo_t { uint8_t data[3]; uint8_t count; };
+        rx_fifo_t rx_fifo[SCC_CHANNEL_COUNT] = {};
+        uint8_t tx_shift[SCC_CHANNEL_COUNT] = { 0, 0 };
+        uint64_t rx_poll_id[SCC_CHANNEL_COUNT];
+        bool rx_poll_scheduled[SCC_CHANNEL_COUNT] = { false, false };
+        static constexpr uint64_t RX_POLL_14M = MASTER_CLOCK / 1000;   // 1 ms of 14M time
+
         inline uint8_t get_bits_per_char(scc_channel_t channel, bool is_tx) {
             // Start bit (always 1)
             uint8_t bits = 1;
@@ -587,7 +610,8 @@ class Z85C30 {
         }
 
         inline uint8_t read_register_1(scc_channel_t channel) {
-            registers[channel].r1_all_sent = registers[channel].r0_tx_buffer_empty; // this is basically always the case since our transmits are instant
+            // FORK: All Sent is the shift register, not a copy of Tx Buffer Empty.
+            registers[channel].r1_all_sent = !registers[channel].tx_in_progress && registers[channel].r0_tx_buffer_empty;
             uint8_t retval = registers[channel].r_reg_1;
             print_read_register(channel, RR1, retval);
             return retval; // TODO: this is reasonable, we won't have errors.. what is residue code?
@@ -650,6 +674,8 @@ class Z85C30 {
             tx_timer_id[SCC_CHANNEL_B] = base_instance_id + 1;
             rx_timer_id[SCC_CHANNEL_A] = base_instance_id + 2;
             rx_timer_id[SCC_CHANNEL_B] = base_instance_id + 3;
+            rx_poll_id[SCC_CHANNEL_A] = base_instance_id + 4;
+            rx_poll_id[SCC_CHANNEL_B] = base_instance_id + 5;
 
             // clear the data structures on boot.
             memset(reg_select, 0, sizeof(reg_select));
@@ -686,6 +712,7 @@ class Z85C30 {
 
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
+            rx_fifo[channel].count = 0;   // FORK: RR0 D0 resets to 0 -- nothing is available
             set_bits_by_mask(registers[channel].w_regs[WR0], 0b1111'1111, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR1], 0b1101'1011, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR3], 0b0000'0001, 0b0000'0000);
@@ -722,6 +749,7 @@ class Z85C30 {
 
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
+            rx_fifo[channel].count = 0;   // FORK: RR0 D0 resets to 0 -- nothing is available
             set_bits_by_mask(registers[channel].w_regs[WR0], 0b1111'1111, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR1], 0b1101'1011, 0b0000'0000);
             set_bits_by_mask(registers[channel].w_regs[WR3], 0b0000'0001, 0b0000'0000);
@@ -803,35 +831,37 @@ class Z85C30 {
             // Writing a character resets the Tx IP (datasheet).
             tx_ip_latch[channel] = false;
 
-            // Store the byte to transmit
+            // FORK: into the transmit buffer. A character already waiting there (the shift
+            // register busy) is overwritten, as a write to a full buffer is on the chip.
+            if (!registers[channel].r0_tx_buffer_empty && SCDEBUG)
+                printf("SCC: Ch %c TX buffer overwritten - %02X lost\n", ch_name(channel), registers[channel].char_tx);
             registers[channel].char_tx = data;
+            registers[channel].r0_tx_buffer_empty = false;
 
-            // If TX buffer was empty, accept the character and mark buffer full
-            if (registers[channel].r0_tx_buffer_empty) {
-                registers[channel].r0_tx_buffer_empty = false;
-                registers[channel].tx_in_progress = true;
-
-                // Calculate timing and schedule TX completion
-                uint64_t cycles_per_char = get_cycles_per_char(channel, true);
-
-                if (cycles_per_char > 0 && event_timer && clock) {
-                    // Schedule the TX completion event
-                    uint64_t trigger_cycle = clock->get_c14m() + cycles_per_char;
-                    event_timer->scheduleEvent(trigger_cycle, tx_complete_callback, tx_timer_id[channel], this);
-
-                    if (SCDEBUG) printf("SCC: Ch %c TX scheduled for %llu cycles (baud: %.2f)\n",
-                        ch_name(channel), (unsigned long long)cycles_per_char, baud_rate[channel]);
-                } else {
-                    // High baud rate or no timer - complete immediately
-                    tx_complete(channel);
-                }
-            } else {
-                // TX buffer full - this is an overrun error in real hardware
-                // For now, just drop the character
-                if (SCDEBUG) printf("SCC: Ch %c TX overrun - buffer not empty\n", ch_name(channel));
-            }
+            // An idle transmitter takes it straight into the shift register.
+            if (!registers[channel].tx_in_progress) tx_load_shift(channel);
 
             update_interrupts(channel);
+        }
+
+        // FORK: transmit buffer -> shift register. The buffer is empty again, so Tx IP sets
+        // (when enabled) and the guest may load the next character while this one is sent.
+        void tx_load_shift(scc_channel_t channel) {
+            auto &r = registers[channel];
+            tx_shift[channel] = r.char_tx;
+            r.r0_tx_buffer_empty = true;
+            r.tx_in_progress = true;
+            if (r.r1_tx_int_enable) tx_ip_latch[channel] = true;
+
+            uint64_t cycles_per_char = get_cycles_per_char(channel, true);
+            if (cycles_per_char > 0 && event_timer && clock) {
+                event_timer->scheduleEvent(clock->get_c14m() + cycles_per_char, tx_complete_callback, tx_timer_id[channel], this);
+                if (SCDEBUG) printf("SCC: Ch %c TX scheduled for %llu cycles (baud: %.2f)\n",
+                    ch_name(channel), (unsigned long long)cycles_per_char, baud_rate[channel]);
+            } else {
+                // High baud rate or no timer - complete immediately
+                tx_complete(channel);
+            }
         }
 
         uint8_t readCmd(scc_channel_t channel) {
@@ -863,18 +893,52 @@ class Z85C30 {
         // this used to rely on the IP flag but that's not right! now uses rx_char_available
         void update_queues() {
             for (int channel = 0; channel < SCC_CHANNEL_COUNT; channel++) {
-                if (serial_devices[channel] != nullptr) {
-                    // Only check for new data if RX buffer is empty and no RX in progress
-                    if (registers[channel].r0_rx_char_available == 0 && !registers[channel].rx_in_progress) {
-                        SerialMessage msg = serial_devices[channel]->q_dev.get();
-                        if (msg.type == MESSAGE_DATA) {
-                            schedule_rx_char((scc_channel_t)channel, (uint8_t)msg.data);
-                        } else {
-                            if (msg.type != MESSAGE_NONE && SCDEBUG) printf("SCC: READ %c: got unexpected message type: %d\n", ch_name(channel), msg.type);
-                        }
-                    }
-                }
+                rx_try_start((scc_channel_t)channel);
             }
+        }
+
+        // FORK: start receiving the next host byte if the receive shift register is idle.
+        // Not in local loopback: RxD is disconnected from the pin there, and the host's
+        // bytes wait instead of landing in the FIFO beside the looped-back ones. Untimed
+        // (no event timer, or a rate above MAX_TIMED_BAUD) a byte waits for FIFO room, since
+        // nothing paces it.
+        void rx_try_start(scc_channel_t channel) {
+            if (serial_devices[channel] == nullptr) return;
+            if (registers[channel].rx_in_progress || registers[channel].r14_local_loopback) return;
+            const bool timed = get_cycles_per_char(channel, false) > 0 && event_timer && clock;
+            if (!timed && rx_fifo[channel].count >= 3) return;
+            SerialMessage msg = serial_devices[channel]->q_dev.get();
+            if (msg.type == MESSAGE_DATA) {
+                schedule_rx_char(channel, (uint8_t)msg.data);
+            } else if (msg.type != MESSAGE_NONE && SCDEBUG) {
+                printf("SCC: READ %c: got unexpected message type: %d\n", ch_name(channel), msg.type);
+            }
+        }
+
+        // FORK: a character leaves the receive shift register for the FIFO.
+        void rx_push(scc_channel_t channel, uint8_t data) {
+            auto &f = rx_fifo[channel];
+            if (f.count < 3) {
+                f.data[f.count++] = data;
+            } else {
+                f.data[2] = data;
+                registers[channel].r1_rx_overrun_err = 1;
+                if (SCDEBUG) printf("SCC: Ch %c RX overrun - FIFO full\n", ch_name(channel));
+            }
+            registers[channel].r0_rx_char_available = 1;
+        }
+
+        void rx_poll_arm(scc_channel_t channel) {
+            if (!event_timer || !clock || serial_devices[channel] == nullptr || rx_poll_scheduled[channel]) return;
+            rx_poll_scheduled[channel] = true;
+            event_timer->scheduleEvent(clock->get_c14m() + RX_POLL_14M, rx_poll_callback, rx_poll_id[channel], this);
+        }
+
+        void rx_poll(scc_channel_t channel) {
+            rx_poll_scheduled[channel] = false;
+            if (serial_devices[channel] == nullptr) return;
+            rx_try_start(channel);
+            rx_poll_arm(channel);
         }
 
         uint8_t readData(scc_channel_t channel) {
@@ -882,11 +946,15 @@ class Z85C30 {
 
             update_queues();
 
-            if (registers[channel].r0_rx_char_available) {
-                retval = registers[channel].char_rx;
-
-                // signal the rx buffer is empty
-                registers[channel].r0_rx_char_available = 0;
+            auto &f = rx_fifo[channel];
+            if (f.count > 0) {
+                // FORK: the oldest FIFO character; Rx Character Available stays set while
+                // more are waiting.
+                retval = f.data[0];
+                f.data[0] = f.data[1];
+                f.data[1] = f.data[2];
+                f.count--;
+                registers[channel].r0_rx_char_available = f.count > 0;
                 if (registers[channel].r1_rx_int_mode == 0b01) rx_first_armed[channel] = false;
 
                 // do this instead in update_interrupts()
@@ -906,6 +974,7 @@ class Z85C30 {
         void set_device_channel(scc_channel_t channel, SerialDevice *device) {
             serial_devices[channel] = device;
             push_line_params(channel);
+            rx_poll_arm(channel);   // FORK: the receiver takes host bytes without a guest access
         }
 
         void debug_output(DebugFormatter *df) {
@@ -913,6 +982,14 @@ class Z85C30 {
             df->addLine("Clock Mode A: %dX   B: %dX", clock_mode[SCC_CHANNEL_A], clock_mode[SCC_CHANNEL_B]);
             df->addLine("Rx Data A: %02X  B: %02X", registers[SCC_CHANNEL_A].char_rx, registers[SCC_CHANNEL_B].char_rx);
             df->addLine("Tx Data A: %02X  B: %02X", registers[SCC_CHANNEL_A].char_tx, registers[SCC_CHANNEL_B].char_tx);
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                const rx_fifo_t &f = rx_fifo[c];
+                df->addLine("%c Rx FIFO %d: %02X %02X %02X  shift %s  | Tx buffer %s  shift %s %02X",
+                    ch_name(c), f.count, f.data[0], f.data[1], f.data[2],
+                    registers[c].rx_in_progress ? "busy" : "idle",
+                    registers[c].r0_tx_buffer_empty ? "empty" : "full",
+                    registers[c].tx_in_progress ? "busy" : "idle", tx_shift[c]);
+            }
             df->addLine("r_reg_0 A: %02X  B: %02X", registers[SCC_CHANNEL_A].r_reg_0, registers[SCC_CHANNEL_B].r_reg_0);
             df->addLine("r_reg_1 A: %02X  B: %02X", registers[SCC_CHANNEL_A].r_reg_1, registers[SCC_CHANNEL_B].r_reg_1);
             //df->addLine("r_reg_2 A: %02X  B: %02X", registers[SCC_CHANNEL_A].r_reg_2, registers[SCC_CHANNEL_B].r_reg_2);
@@ -930,11 +1007,10 @@ class Z85C30 {
                 ch_name(channel), registers[channel].char_tx, registers[channel].r14_local_loopback);
 
             registers[channel].tx_in_progress = false;
-            registers[channel].r0_tx_buffer_empty = true;
-            if (registers[channel].r1_tx_int_enable) tx_ip_latch[channel] = true;
 
-            // Now actually send the byte to the device
-            uint8_t data = registers[channel].char_tx;
+            // Now actually send the byte to the device (FORK: the shift register's byte; the
+            // buffer and Tx IP were settled when it was loaded)
+            uint8_t data = tx_shift[channel];
 
             if (registers[channel].r14_local_loopback) {
                 // Local loopback - in loopback mode, RX happens instantaneously
@@ -943,22 +1019,19 @@ class Z85C30 {
 
                 // Check if RX is enabled
                 if (registers[channel].r3_rx_enable) {
-                    if (registers[channel].r0_rx_char_available) {
-                        // RX buffer full - overrun error
-                        registers[channel].r1_rx_overrun_err = 1;
-                        if (SCDEBUG) printf("SCC: Ch %c RX overrun in loopback\n", ch_name(channel));
-                    } else {
-                        // Instantaneous loopback - character appears immediately in RX buffer
-                        registers[channel].char_rx = data;
-                        registers[channel].r0_rx_char_available = 1;
-                        if (SCDEBUG) printf("SCC: Ch %c loopback RX complete (instant): %02X\n", ch_name(channel), data);
-                    }
+                    // The character has already taken its time on the wire; into the FIFO.
+                    registers[channel].char_rx = data;
+                    rx_push(channel, data);
+                    if (SCDEBUG) printf("SCC: Ch %c loopback RX complete (instant): %02X\n", ch_name(channel), data);
                 } else {
                     if (SCDEBUG) printf("SCC: Ch %c RX disabled, dropping loopback char\n", ch_name(channel));
                 }
             } else if (serial_devices[channel] != nullptr) {
                 serial_devices[channel]->q_host.send(SerialMessage{MESSAGE_DATA, data});
             }
+
+            // FORK: a character waiting in the buffer moves into the now-idle shift register.
+            if (!registers[channel].r0_tx_buffer_empty) tx_load_shift(channel);
 
             update_interrupts(channel);
         }
@@ -968,9 +1041,10 @@ class Z85C30 {
             if (SCDEBUG) printf("SCC: Ch %c RX complete: %02X\n", ch_name(channel), registers[channel].char_rx);
 
             registers[channel].rx_in_progress = false;
-            registers[channel].r0_rx_char_available = 1;
+            rx_push(channel, registers[channel].char_rx);   // FORK: into the FIFO
 
             update_interrupts(channel);
+            rx_try_start(channel);   // FORK: back to back, at the line rate
         }
 
         // Schedule reception of a character
@@ -981,12 +1055,7 @@ class Z85C30 {
                 return;
             }
 
-            if (registers[channel].r0_rx_char_available) {
-                // RX buffer full - overrun error
-                registers[channel].r1_rx_overrun_err = 1;
-                if (SCDEBUG) printf("SCC: Ch %c RX overrun\n", ch_name(channel));
-                return;
-            }
+            // FORK: an overrun is decided when the character reaches the FIFO (rx_push).
 
             if (SCDEBUG) printf("SCC: Ch %c scheduling RX of %02X\n", ch_name(channel), data);
 
@@ -1017,6 +1086,12 @@ class Z85C30 {
             } else if (instanceID == scc->tx_timer_id[SCC_CHANNEL_B]) {
                 scc->tx_complete(SCC_CHANNEL_B);
             }
+        }
+
+        static void rx_poll_callback(uint64_t instanceID, void* userData) {
+            Z85C30* scc = static_cast<Z85C30*>(userData);
+            if (instanceID == scc->rx_poll_id[SCC_CHANNEL_A]) scc->rx_poll(SCC_CHANNEL_A);
+            else if (instanceID == scc->rx_poll_id[SCC_CHANNEL_B]) scc->rx_poll(SCC_CHANNEL_B);
         }
 
         static void rx_complete_callback(uint64_t instanceID, void* userData) {
