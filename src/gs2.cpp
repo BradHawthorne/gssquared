@@ -382,7 +382,7 @@ bool run_one_frame(computer_t *computer) {
         computer->set_frame_start_cycle();
 
         if (computer->debug_window->window_open) {
-            while (clock->get_c14m() < clock->get_frame_end_c14M()) { // 1/60th second.
+            while (clock->get_c14m() < clock->get_frame_end_c14M() && !cpu->halt) { // 1/60th second. (halt: see the fast loop below)
                 if (computer->event_timer->isEventPassed(clock->get_c14m())) {
                     computer->event_timer->processEvents(clock->get_c14m());
                 }
@@ -414,8 +414,12 @@ bool run_one_frame(computer_t *computer) {
                 }
             
             }
-        } else { // skip all debug checks if debug window is not open - this may seem repetitious but it saves all kinds of cycles where every cycle counts 
-            while (clock->get_c14m() < clock->get_frame_end_c14M()) {
+        } else { // skip all debug checks if debug window is not open - this may seem repetitious but it saves all kinds of cycles where every cycle counts
+            // `&& !cpu->halt`: a halt raised INSIDE the frame (a rail breakpoint,
+            // STOP_ON_FAULT) stops here, at its instruction, instead of running the
+            // rest of the frame first. Stock code only halts between frames (quit
+            // events), so without a rail this never changes where a frame ends.
+            while (clock->get_c14m() < clock->get_frame_end_c14M() && !cpu->halt) {
                 if (computer->event_timer->isEventPassed(clock->get_c14m())) {
                     computer->event_timer->processEvents(clock->get_c14m());
                 }
@@ -439,7 +443,16 @@ bool run_one_frame(computer_t *computer) {
         MEASURE(computer->device_times, computer->device_frame_dispatcher->dispatch());
 
         /* Emit Video Frame */
-        if (computer->execution_mode != EXEC_STEP_INTO) {
+        // Only for a frame that ran to its end. The cycle-based update consumes a
+        // whole frame's scanner data; called on a frame a halt stopped part way
+        // (a rail breakpoint), it corrupted the heap within a handful of hits
+        // (measured: STATUS_HEAP_CORRUPTION after 7). Upstream's debugger never
+        // reaches this with a partial frame -- its breakpoint switches to
+        // EXEC_STEP_INTO -- so the guard keeps stock behaviour exactly: stock
+        // frames always complete. The halted frame's pixels are emitted when a
+        // later run finishes it.
+        if (computer->execution_mode != EXEC_STEP_INTO &&
+            clock->get_c14m() >= clock->get_frame_end_c14M()) {
             MEASURE(computer->display_times, frame_video_update(computer));
         }
         
@@ -472,7 +485,7 @@ bool run_one_frame(computer_t *computer) {
         computer->last_start_frame_c14m = clock->get_frame_start_c14M();
         
         if (computer->debug_window->window_open) {
-            while (SDL_GetTicksNS() < next_frame_time) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast.
+            while (SDL_GetTicksNS() < next_frame_time && !cpu->halt) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast. (halt: see above)
                 if (computer->event_timer->isEventPassed(clock->get_c14m())) {
                     computer->event_timer->processEvents(clock->get_c14m());
                 }
@@ -503,7 +516,7 @@ bool run_one_frame(computer_t *computer) {
             
             }
         } else { // skip all debug checks if debug window is not open - this may seem repetitious but it saves all kinds of cycles where every cycle counts (GO FAST MODE)
-            while (SDL_GetTicksNS() < next_frame_time) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast.
+            while (SDL_GetTicksNS() < next_frame_time && !cpu->halt) { // run emulated frame, but of course we don't sleep in this loop so we'll Go Fast. (halt: see above)
                 if (computer->event_timer->isEventPassed(clock->get_c14m())) {
                     computer->event_timer->processEvents(clock->get_c14m());
                 }

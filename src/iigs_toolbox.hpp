@@ -28,6 +28,22 @@ inline bool g_iigs_brkdump_enabled = false;   // dump CPU state on BRK (crash)
 inline bool g_iigs_stop_on_fault   = false;   // halt the spike on BRK/COP/SysFail
 inline bool g_iigs_break_enabled   = false;   // headless breakpoint
 inline uint32_t g_iigs_break_addr  = 0;       // 24-bit full-PC breakpoint
+// A BREAKPOINT STOPS BEFORE ITS INSTRUCTION, AND ONLY THERE. It used to set halt
+// and let the instruction run, and the frame loop only looked at halt at the top
+// of the NEXT frame -- so a `bp` "halted" up to a frame's worth of instructions
+// past its address (and re-dumped registers on every one of them). The landing
+// hook now reports the hit, execute_next returns without fetching, the frame
+// loops stop on halt, and the machine sits AT the breakpoint with its
+// instruction unexecuted. Continuing (run/step/run-until/resume) arms a one-shot
+// skip so that instruction executes once instead of re-breaking forever.
+inline bool g_iigs_break_parked    = false;   // the last landing stopped before its instruction
+inline bool g_iigs_break_skip      = false;   // one-shot: resume past the bp we are parked on
+inline void iigs_break_resume_note(cpu_state *cpu) {
+    if (g_iigs_break_enabled && g_iigs_break_parked &&
+        (cpu->full_pc & 0xFFFFFF) == (g_iigs_break_addr & 0xFFFFFF))
+        g_iigs_break_skip = true;
+    g_iigs_break_parked = false;
+}
 inline int  g_iigs_tbtrace_bank    = -1;      // only trace calls from this bank (-1 = all)
 inline uint32_t g_iigs_trace_from  = 0;       // start tracing when PC first hits this (0 = always)
 inline bool g_iigs_trace_armed     = false;   // trace_from has fired
@@ -1142,16 +1158,25 @@ inline void iigs_intlog_nmi_abort_stub(cpu_state *cpu, const char *reason, uint1
 // ============================================================================
 inline bool g_modetrace_on = false;
 
-inline void iigs_tb_on_landing(cpu_state *cpu) {
+// Returns true when the instruction about to execute must NOT execute: a
+// breakpoint stopped the machine in front of it (see g_iigs_break_parked).
+inline bool iigs_tb_on_landing(cpu_state *cpu) {
     uint32_t lpc = cpu->full_pc;
 
     // Headless breakpoint + the instant-stop substrate (#10/#3): a full 24-bit
-    // PC compare (not the GUI's 16-bit-only matcher). Set halt -> the in-flight
-    // frame finishes, then run_one_frame's top-of-frame guard exits the spike.
+    // PC compare (not the GUI's 16-bit-only matcher). Stop BEFORE the
+    // instruction: dump once, set halt, and tell execute_next not to fetch.
     if (g_iigs_break_enabled && lpc == g_iigs_break_addr) {
-        iigs_cpu_state_dump_regs(cpu, "BREAK");
-        cpu->halt = 2 /* HLT_USER */;
+        if (g_iigs_break_skip) {
+            g_iigs_break_skip = false;              // continuing past it: execute once
+        } else {
+            iigs_cpu_state_dump_regs(cpu, "BREAK");
+            cpu->halt = 2 /* HLT_USER */;
+            g_iigs_break_parked = true;
+            return true;
+        }
     }
+    g_iigs_break_parked = false;
 
     // A2GSPU_SAVE_AT: snapshot the machine at the EXACT instruction the first time
     // PC reaches the target, then halt (the arbitrary-breakpoint checkpoint). The
@@ -1171,7 +1196,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
         }
     }
 
-    if (!g_iigs_tbtrace_enabled && !g_callstream_on && !g_iigs_callctx_on) return;
+    if (!g_iigs_tbtrace_enabled && !g_callstream_on && !g_iigs_callctx_on) return false;
 
     // trace_from: begin logging only once PC first reaches the trigger address.
     if (g_iigs_trace_from && !g_iigs_trace_armed && lpc == g_iigs_trace_from)
@@ -1211,7 +1236,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
     if (lpc == 0xE10000) kind = 0;
     else if (lpc == 0xE100A8) kind = 1;
     else if (lpc == 0xE100B0) kind = 2;
-    if (kind == 0xFF) return;
+    if (kind == 0xFF) return false;
 
     uint16_t sp = cpu->sp;
     uint32_t pcl = cpu->mmu->read((sp + 1) & 0xFFFF);
@@ -1291,6 +1316,7 @@ inline void iigs_tb_on_landing(cpu_state *cpu) {
             .write(g_callstream_out, false);
     g_iigs_pending.push_back({ret, callword, kind, caller_bank});
     if (g_iigs_pending.size() > 128) g_iigs_pending.erase(g_iigs_pending.begin());
+    return false;
 }
 
 // Regs-only CPU-state dump (no MMU/disassembler dependency) — safe from the

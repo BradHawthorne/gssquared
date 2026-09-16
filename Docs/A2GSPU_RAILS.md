@@ -521,8 +521,8 @@ protocol authority.
 | `oracle` | north-star contracts (cycles/colour/snapshot/dual-mode) | CTRL-verb (meta) |
 | `help` / `help <file>` | list CTRL verbs; optional full catalog to file | CTRL-verb (meta) |
 | `manifest <file>` | machine-oriented capability dump (verbs+env groups+models) | CTRL-verb (meta) |
-| `step [n]` | execute N instructions; `cycles=` **in-command** | CTRL-verb (run) |
-| `run-until <addr> [max]` | stop at PC; `cycles=` **in-command** | CTRL-verb (run) |
+| `step [n]` | execute N instructions; `cycles=` **in-command**. `stepped=` counts instructions that executed: a step that reached a breakpoint stopped in front of it and is not counted | CTRL-verb (run) |
+| `run-until <addr> [max]` | stop at PC; `cycles=` **in-command**; `instr=` counts the instructions executed, including the one that arrived | CTRL-verb (run) |
 | `vid` | softswitch decode TEXT…DHIRES | CTRL-verb (observe) |
 | `stack [n]` | stack contents above SP | CTRL-verb (observe) |
 | `png` / `pngc` | mono (`profile=bits-mono`) / named-colour (`profile=4dot`, `profile=mono`) DHGR from RAM | CTRL-verb (observe) |
@@ -555,7 +555,7 @@ protocol authority.
 | `shr-golden <file> [bless]` | live IIgs SHR-window golden without relaunch | CTRL-verb (calibrate) |
 | `audio [status]\|doc\|sfx\|on\|off\|reset` | generated sample streams per SOURCE (`doc`=Ensoniq, `sfx`=drive sounds; never summed): count, non-silent, min/max, average, and the same per channel so a dropped side is visible. Register round-trips pass on a chip emitting silence; this does not | CTRL-verb (observe) |
 | `boot <slot>` | enter slot firmware at `$Cs00` (1–7) the way autoboot would — for a block device the ROM's own autoboot cannot reach | CTRL-verb (run) |
-| `bp [addr\|off]` | interactive breakpoint; bare reports state. A hit **halts** — pair with `resume` or `run`/`step` | CTRL-verb (manipulate) |
+| `bp [addr\|off]` | interactive breakpoint; bare reports state. A hit **halts in front of the instruction**: the machine stops with PC at the address and that instruction not yet executed (`run` acks `status=HALT … pc=$BB:AAAA at=bp`), under `run`, `step` and `run-until` alike. `run`/`step`/`run-until`/`resume` continue by executing it once, so the next pass through the address breaks again. (It used to let the instruction run and stop only at the end of the frame, up to a frame of instructions past the address, re-dumping registers on each) | CTRL-verb (manipulate) |
 | `copilot` | the windowed agent rail's contract (`A2GSPU_COPILOT`): observe + pause/key/mount/quit with human input still live | CTRL-verb (meta) |
 | `cov [status]\|on <LO-HI>\|map <A2MAP1>\|off\|reset\|write <file>` | execution coverage: raw `A2COV1`, or source-bound `A2COV2` once a plan is mapped. The write ack carries `format=` and `hash=`; read either with `tools/a2rail/artifacts.py cov`. Mismatched executed bytes refuse the write rather than blessing stale evidence | CTRL-verb (observe) |
 | `devstate [name\|all <file>]` | per-device state the emulator already computes (ADB regs, disk head, mouse clamp, DOC, memory map); bare lists handlers. Read before assuming a slot is populated | CTRL-verb (observe) |

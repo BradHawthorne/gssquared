@@ -1550,6 +1550,7 @@ void format_cpu_line(computer_t *computer, char *out, size_t outsz) {
 // able to see rather than have papered over.
 inline bool rail_clear_user_halt(computer_t *computer) {
     if (!computer->cpu || computer->cpu->halt != HLT_USER) return false;
+    iigs_break_resume_note(computer->cpu);   // parked on a bp: execute it once, not re-break
     computer->cpu->halt = 0;
     return true;
 }
@@ -1579,15 +1580,20 @@ bool try_exec(const char *line, char *result, size_t rsz,
             if (ctrl_frame) iigs_itrace_frame_tick((*ctrl_frame)++);
             if (!run_one_frame(computer)) { halted = true; break; }
             ran++;
+            // A halt raised inside the frame stops the frame at its instruction;
+            // `run 1` must say HALT, not OK, when that happened.
+            if (computer->cpu->halt == HLT_USER) { halted = true; break; }
         }
         uint64_t dc = computer->clock->get_cycles() - cyc0;
         uint32_t pc1 = computer->cpu->full_pc & 0xFFFFFF;
         if (halted) {
             snprintf(result, rsz,
-                     "status=HALT ran=%d cycles=%llu (in-command)%s%s halt=%d "
+                     "status=HALT ran=%d cycles=%llu (in-command)%s%s halt=%d pc=$%02X:%04X%s "
                      "-- `resume` (or the next run/step) continues past a breakpoint",
                      ran, (unsigned long long)dc, armed ? armed : "", rsm,
-                     (int)computer->cpu->halt);
+                     (int)computer->cpu->halt,
+                     (unsigned)((pc1 >> 16) & 0xFF), (unsigned)(pc1 & 0xFFFF),
+                     g_iigs_break_parked ? " at=bp (its instruction not yet executed)" : "");
         } else if (dc == 0) {
             snprintf(result, rsz,
                      "status=FAIL RAN NOTHING: %d frame(s), 0 cycles, PC still $%02X:%04X "
@@ -1629,7 +1635,10 @@ bool try_exec(const char *line, char *result, size_t rsz,
             for (; i < budget; i++) {
                 if (computer->cpu->halt) break;
                 step_one(computer);
-                if ((computer->cpu->full_pc & 0xFFFFFF) == target) { hit = true; break; }
+                if (g_iigs_break_parked) break;      // stopped in front of a bp: not an instruction
+                // i+1: the instruction that reached the target WAS executed. Breaking
+                // before the loop's i++ reported instr=0 for a one-instruction hit.
+                if ((computer->cpu->full_pc & 0xFFFFFF) == target) { hit = true; i++; break; }
             }
             uint64_t dcyc = (computer->clock ? computer->clock->get_cycles() : 0) - cyc0;
             char st[192];
@@ -1657,6 +1666,7 @@ bool try_exec(const char *line, char *result, size_t rsz,
         for (; done < n; done++) {
             if (computer->cpu->halt) break;
             step_one(computer);
+            if (g_iigs_break_parked) break;          // stopped in front of a bp: not a step
         }
         uint64_t dcyc = (computer->clock ? computer->clock->get_cycles() : 0) - cyc0;
         char st[192];
@@ -1690,6 +1700,7 @@ bool try_exec(const char *line, char *result, size_t rsz,
         if (was_paused) computer->execution_mode = EXEC_NORMAL;
         const int h = computer->cpu ? computer->cpu->halt : 0;
         if (h == HLT_USER) {
+            iigs_break_resume_note(computer->cpu);   // parked on a bp: execute it once
             computer->cpu->halt = 0;
             char st[192];
             format_cpu_line(computer, st, sizeof st);
