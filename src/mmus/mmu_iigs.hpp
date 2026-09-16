@@ -254,6 +254,7 @@ class MMU_IIgs : public MMU {
             if (is_read) ctl |= SLOT_CTL_READ;
             if (m2b0)    ctl |= SLOT_CTL_M2B0;
             if (!v2 && !is_iolc_shadowed()) ctl |= SLOT_CTL_INH;   // format 2: /INH is a card output
+            if (v2 && (reg_speed & 0x80)) ctl |= SLOT_CTL_FAST;       // format 2: an isolated slow cycle in a fast machine
             if (a >= 0xC000 && a <= 0xCFFF) {                   // slot I/O strobes (this card's slot)
                 // FORMAT 2: /DEVSEL only when the slot register gives this slot's I/O to the card.
                 if ((a & 0xFFF0) == (uint16_t)(0xC080 + slot * 0x10) && (!v2 || !megaii || megaii->c0xx_gate((uint8_t)a) != 0))
@@ -286,6 +287,11 @@ class MMU_IIgs : public MMU {
             const bool io_bank = ((bank == 0x00 || bank == 0x01) && is_iolc_shadowed()) || bank == 0xE0 || bank == 0xE1;
             if (!io_bank) return;
             if (a >= 0xC100 && !cxxx_card_visible(a)) return;   // internal ROM: no /M2SEL, no strobe
+            // Fast cycles assert no /M2SEL, so a card never sees them: the FPI's own registers
+            // $C035-$C037, reads of $C02D and $C068 (writes to them are slow), and the
+            // interrupt ROM at $C071-$C07F [TN68 p2; HW Ref ch.2 "Speed"].
+            if (a >= 0xC035 && a <= 0xC037) return;
+            if (is_read && (a == 0xC02D || a == 0xC068 || (a >= 0xC071 && a <= 0xC07F))) return;
             slot_emit(a, value, is_read, (bank & 1) != 0);
         }
         inline void slot_emit(uint16_t a, uint8_t data, bool is_read, bool m2b0) {

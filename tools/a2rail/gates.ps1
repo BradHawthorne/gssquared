@@ -12,6 +12,7 @@
       offline   railparity           registry <-> code <-> catalogue <-> dispatcher
                 artifacts selftest   the one artifact reader refuses what it should
                 gdiff selftest       the differential tools against real captures
+                buscompare selftest  the slot-bus comparator finds gaps, extras and field mismatches
       emulator  dualsmoke            ctest + railcheck/execcheck/altzpcheck on IIe AND IIgs
                 personalitycheck     every built-in machine configuration cold-starts
                 protocolcheck        protocol v2, discovery, JSON replies, ownership, SHR golden
@@ -27,7 +28,7 @@
     seven minutes on the development machine.
 
       .\tools\a2rail\gates.ps1                  # everything
-      .\tools\a2rail\gates.ps1 -Offline         # the three offline gates only (seconds)
+      .\tools\a2rail\gates.ps1 -Offline         # the four offline gates only (seconds)
       .\tools\a2rail\gates.ps1 -Skip copilot    # name suites to leave out; they are REPORTED as skipped
       .\tools\a2rail\gates.ps1 -SkipCorpus      # unarmedhash without the GS/OS image (PARTIAL)
 
@@ -60,13 +61,14 @@ $suites = [ordered]@{
     'railparity'   = @{ offline = $true;  run = { & (Join-Path $here 'railparity.ps1') } }
     'artifacts'    = @{ offline = $true;  run = { python (Join-Path $here 'artifacts.py') selftest } }
     'gdiff'        = @{ offline = $true;  run = { python (Join-Path $root 'tools\gdiff\selftest.py') } }
+    'buscompare'   = @{ offline = $true;  run = { python (Join-Path $here 'buscompare.py') selftest } }
     'dualsmoke'    = @{ offline = $false; run = { & (Join-Path $here 'dualsmoke.ps1') } }
     'personality'  = @{ offline = $false; run = { & (Join-Path $here 'personalitycheck.ps1') } }
     'protocol'     = @{ offline = $false; run = { & (Join-Path $here 'protocolcheck.ps1') } }
     'copilot'      = @{ offline = $false; run = { & (Join-Path $here 'copilotcheck.ps1') } }
     'assertparity' = @{ offline = $false; run = { & (Join-Path $here 'gs816\assertparity.ps1') } }
     'unarmedhash'  = @{ offline = $false; run = { if ($SkipCorpus) { & (Join-Path $here 'unarmedhash.ps1') -SkipCorpus } else { & (Join-Path $here 'unarmedhash.ps1') } } }
-'hwtruth'      = @{ offline = $false; run = { & (Join-Path $root 'tools\hwtruth\gate.ps1') } }
+    'hwtruth'      = @{ offline = $false; run = { & (Join-Path $root 'tools\hwtruth\gate.ps1') } }
 }
 
 $matrix = @()

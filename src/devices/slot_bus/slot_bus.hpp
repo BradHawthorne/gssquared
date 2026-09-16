@@ -37,8 +37,11 @@ enum {
     SLOT_CTL_DEVSEL = 1u << 3, // /DEVSEL: CPU addressing this slot's $C0n0-$C0nF
     SLOT_CTL_IOSEL  = 1u << 4, // /IOSEL : $Cn00-$CnFF (this slot's I/O ROM)
     SLOT_CTL_IOSTRB = 1u << 5, // /IOSTRB: $C800-$CFFF (expansion ROM strobe)
-    SLOT_CTL_INH    = 1u << 6, // /INH asserted (IOLC shadow disabled)
-    // bit 7 reserved for a future PHI0-phase / DMA field
+    SLOT_CTL_INH    = 1u << 6, // /INH asserted (IOLC shadow disabled) -- format 1 only
+    // Format 2 only: the machine was running fast ($C036 bit 7) when this slow cycle ran, so
+    // it was an isolated, synchronised Mega II cycle (about 1.5 us on average) rather than
+    // one of a run at 1.024 MHz (980 ns) [TN68 Table 1]. Format 1 leaves bit 7 clear.
+    SLOT_CTL_FAST   = 1u << 7,
 };
 
 // Slot 3 on ROM 0/1 — the IIgs slot wired for the Mega-II video bus (M2B0, per TN#68),
@@ -61,6 +64,10 @@ inline bool                          g_slot_bus_enabled = false;
 //     (TN68), not the aux-resolved bank;
 //   - $E0 writes and $E0/$E1 RAM reads are emitted (a card sees them with /M2SEL);
 //   - bit 6 (/INH) is never set: /INH is driven BY a card, and IOLC state is not it;
+//   - fast cycles, which assert no /M2SEL, are not emitted: $C035-$C037, reads of
+//     $C02D and $C068, reads of $C071-$C07F;
+//   - bit 7 (SLOT_CTL_FAST) says the machine was in fast mode, so the cycle was an
+//     isolated synchronised one;
 //   - frames carry the magic "~BS2" instead of "~BUS".
 inline int  g_slot_bus_format = 0;   // 0 = not probed yet
 inline int  g_slot_bus_slot   = SLOT_BUS_SLOT;
