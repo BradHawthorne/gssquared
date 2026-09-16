@@ -396,8 +396,23 @@ class MMU_IIgs : public MMU {
                     if ((addr24 & 0xFF00) != 0xC000 && megaii) return megaii->probe_peek(addr24 & 0xFFFF);
                     return floating_bus_read();
                 }
-                uint8_t *mb = get_megaii_memory_base();
-                if (mb) return mb[megaii_cpu_index(((bank & 1) << 16) | (addr24 & 0xFFFF))];
+                // FORK: the rest of $E0/$E1 is resolved the way bank_e0_read and
+                // bank_e1_read resolve it, not as raw Mega II RAM. $E0 -- and $E1 with
+                // the bank latch (NEWVIDEO bit 0) off, which bank_e1_read serves as
+                // $E0 -- goes through the Mega II page table: RAMRD, ALTZP, 80STORE
+                // and the language card's ROM/bank-1 state all apply there, so with
+                // ROM selected `E0:D000` is ROM to the CPU. $E1 with the latch on is
+                // aux RAM at e1_aux_index (bank 1 slides $D000-$DFFF down $1000) with
+                // the $FF ROM over $D000-$FFFF while LC reads are disabled.
+                const uint16_t a16 = (uint16_t)addr24;
+                if (bank == 0xE0 || !is_bank_latch()) {
+                    if (megaii) return megaii->probe_peek(a16);
+                } else {
+                    if (a16 >= 0xD000 && !is_lc_read_enable()) return get_rom_base()[rom_bank_ff_offset() + a16];
+                    uint8_t *mb = get_megaii_memory_base();
+                    if (mb) return mb[e1_aux_index(a16)];
+                }
+                return floating_bus_read();
             }
             // BANKS $00/$01 ARE HANDLER PAGES. set_ram_shadow_banks() installs
             // bank_shadow_read/write over them, so read_raw sees no read pointer
@@ -469,8 +484,13 @@ class MMU_IIgs : public MMU {
                 // switches and firmware there, so a byte stored in the RAM beneath
                 // is a byte nothing will read.
                 if ((addr24 & 0xF000) == 0xC000) return false;
+                // FORK: as bank_e0_write and bank_e1_write -- see probe_peek.
+                const uint16_t a16 = (uint16_t)addr24;
+                if (bank == 0xE0 || !is_bank_latch()) return megaii && megaii->probe_poke(a16, value);
+                if (a16 >= 0xD000 && !is_lc_write_enable()) return false;   // LC write-protected
                 uint8_t *mb = get_megaii_memory_base();
-                if (mb) { mb[megaii_cpu_index(((bank & 1) << 16) | (addr24 & 0xFFFF))] = value; return true; }
+                if (mb) { mb[e1_aux_index(a16)] = value; return true; }
+                return false;
             }
             if (bank <= 0x01) {
                 uint32_t page = (addr24 & 0xFF00) >> 8;
@@ -522,6 +542,8 @@ class MMU_IIgs : public MMU {
             if ((bank | 1) == 0xE1) {
                 if ((addr24 & 0xF000) == 0xC000)                    // tracks probe_peek above
                     return (addr24 & 0xFF00) != 0xC000 && megaii != nullptr;
+                if (bank == 0xE0 || !is_bank_latch())                // tracks probe_peek above
+                    return megaii != nullptr && megaii->probe_readable(addr24 & 0xFFFF);
                 return get_megaii_memory_base() != nullptr;
             }
             if (bank <= 0x01) {
