@@ -20,7 +20,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M4 liveness | done | — |
 | M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, scanner (Class B), iwm and pdblock are saved; floppy media and the clock are not |
 | M6 artifact discipline | done | — |
-| M7 names by default | partial | ROM and RAM tool sets and the GS/OS kernel's segments are named; drivers and FSTs loaded at boot are not |
+| M7 names by default | done | segments loaded later by `LoadSegNum`, and loads that happen before the call tracker runs, are not named |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table; 42 are also armable live (`rail set`) |
 | M9 determinism asserted | done | — |
 | M10 configuration over code | done, one standing exception | the WIZ5 title traps stand until their readers move (AGENTS.md rule 2) |
@@ -416,8 +416,37 @@ The System Loader's calls are tool set 17 (`LoaderInitialization` …
 over the segment name. `unarmedhash.ps1` now traps one landing in the Loader,
 the dispatch table and the Dispatcher during the pinned GS/OS boot and fails
 unless their records carry those names; removing `gsos.segs` turns it red.
-Still open: the drivers and file system translators the Loader places at
-boot, which have no fixed address and need a load record.
+
+The rest of what GS/OS brings in has no fixed address, so it is named from the
+load itself (`A2GSPU_LOADMAP`, `src/iigs_loadmap.hpp`). The call tracker
+already saw every Tool Locator call; at `InitialLoad2`/`InitialLoad` it now
+reads the pathname the caller passed, notes each `NewHandle` inside the load,
+and at the return keeps the handles the load's userID still owns. A PC in one
+of those blocks is `Load.<file>+$off` while the block's master pointer record
+still says the same owner and size — the Memory Manager's own bookkeeping,
+read live, so a purged block goes unnamed and a moved one is named where it
+now is. On the pinned boot to the Finder that is 26 loads: the three drivers,
+`Char.FST`, the `SYSTEM.SETUP` files, the Control Panel, `START`, the Finder
+and ten RAM tool sets, and every load's start address lies in a block it owns
+(the check that the handle record layout was read right).
+
+Building it found the call tracker broken for GS/OS. A call through the
+inline entry `$E100A8` returns six bytes past its `JSL` (the call number and
+parameter pointer follow it), and the tracker waited at the `JSL`'s own
+return address: 664 of 664 inline calls on that boot never matched, and each
+stale entry hid the return of whatever call lay beneath it — 40 toolbox
+returns, among them every `InitialLoad2` after the first driver's. Returns
+match now, and records carry the GS/OS call number (`gsos`, and `incall`
+`GSOS.$202D`); the number, not the entry, says the class — both entries take
+both. What the fix deliberately did not change: inline errors are routine (49
+on that boot), so they are not fed to `GSDIAG`'s `gsos_err`, its `GSOS_ERROR`
+status or the `SYSTEM/LOADER ERROR` banner, which the stack-entry returns
+alone always drove and which harnesses — Rosetta v3's among them — read as a
+fault. An A/B build with the old return address gives the same `GSDIAG` line
+and the same three banner lines on that boot. (That a normal boot to the
+Finder reports `GSOS_ERROR $0046` at all, from three stack-entry returns — an
+`Open` of a missing file among them — predates this and is left as it is.) `unarmedhash.ps1` arms the load map on the GS/OS
+boot and requires the three drivers and the FST, each with a start block.
 
 ### M8 — Reachability and readback as a registration  (P7) — M
 

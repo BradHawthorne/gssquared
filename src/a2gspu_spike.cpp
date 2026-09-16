@@ -215,6 +215,7 @@ void run_headless_spike(GS2AppState *state) {
         printf("A2GSPU_CALLSTREAM: %s -> '%s'\n", g_callstream_on ? "NDJSON" : "OPEN-FAILED", cs);
         if (!g_callstream_on) { fprintf(stderr, "A2GSPU_CALLSTREAM: FAIL cannot open '%s' -- aborting (exit 2)\n", cs); exit(2); }
     }
+    a2gspu_rail_arm_env("A2GSPU_LOADMAP");
     a2gspu_rail_arm_env("A2GSPU_CONDTRAP_MAX");
     a2gspu_rail_arm_env("A2GSPU_CONDTRAP");
     a2gspu_rail_arm_env("A2GSPU_LOADTRACE_MIN");

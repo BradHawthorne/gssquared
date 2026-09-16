@@ -181,6 +181,31 @@ int set_livenessstall(const char *v, char *m, size_t n) {
     snprintf(m, n, "A2GSPU_LIVENESS_STALL: %d samples%s", x, v ? "" : " (default)");
     return SET_OK;
 }
+// A2GSPU_LOADMAP=<file>|1 -- what the System Loader placed where. Arms the call
+// tracker so loads are seen from now on, and gives each load a record: <file>,
+// or with 1 the global sink / stdout. Unset closes the sink and stops the
+// records; the map already built keeps naming PCs.
+int set_loadmap(const char *v, char *m, size_t n) {
+    if (g_iigs_loadmap_out) { fclose(g_iigs_loadmap_out); g_iigs_loadmap_out = nullptr; }
+    g_iigs_loadmap_path.clear();
+    if (!v) {
+        g_iigs_loadmap_armed = false;
+        snprintf(m, n, "A2GSPU_LOADMAP: records off (%u load(s) kept for names)", (unsigned)g_iigs_loads.size());
+        return SET_OK;
+    }
+    if (!*v) { snprintf(m, n, "A2GSPU_LOADMAP: want a file or 1, got ''"); return SET_INVALID; }
+    if (strcmp(v, "1")) {
+        g_iigs_loadmap_out = fopen(v, "wb");
+        if (!g_iigs_loadmap_out) { snprintf(m, n, "A2GSPU_LOADMAP: cannot open '%s'", v); return SET_INVALID; }
+        g_iigs_loadmap_path = v;
+    }
+    g_iigs_loadmap_armed = true;
+    g_iigs_loadmap_armed_frame = a2record::frame_now();
+    iigs_callctx_arm();
+    snprintf(m, n, "A2GSPU_LOADMAP: System Loader loads -> %s (%u already known)",
+             g_iigs_loadmap_out ? v : (a2record::g_global ? "A2GSPU_RECORDS" : "stdout"), (unsigned)g_iigs_loads.size());
+    return SET_OK;
+}
 int set_keydelay(const char *v, char *m, size_t n) {
     int x = 0;
     if (v && (!parse_int(v, x) || x < 0)) { snprintf(m, n, "A2GSPU_KEYSCHED_DELAY: want frames >= 0, got '%s'", v); return SET_INVALID; }
@@ -509,6 +534,7 @@ a2rails::SetterRegistrar r_snapmax      {"A2GSPU_SNAP_MAX",        set_snapmax};
 a2rails::SetterRegistrar r_snapout      {"A2GSPU_SNAP_OUT",        set_snapout};
 a2rails::SetterRegistrar r_snapzp       {"A2GSPU_SNAP_ZP",         set_snapzp};
 a2rails::SetterRegistrar r_livestall    {"A2GSPU_LIVENESS_STALL",  set_livenessstall};
+a2rails::SetterRegistrar r_loadmap      {"A2GSPU_LOADMAP",         set_loadmap};
 a2rails::SetterRegistrar r_keydelay     {"A2GSPU_KEYSCHED_DELAY",  set_keydelay};
 }  // namespace
 

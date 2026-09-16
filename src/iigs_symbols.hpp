@@ -198,7 +198,7 @@ inline void iigs_rom_symbols_seed() {
     static const struct { uint32_t a; const char *n; } seed[] = {
         { 0xE10000, "ToolDisp"      },   // Tool Locator dispatch
         { 0xE10004, "UserToolDisp"  },   // user Tool Locator dispatch
-        { 0xE100A8, "GSOS_ProDOS16" },   // GS/OS class-1 (ProDOS 16) dispatch
+        { 0xE100A8, "GSOS_ProDOS16" },   // GS/OS inline-call entry (class 0 and class 1 calls)
         { 0xE100B0, "GSOS_Disp"     },   // GS/OS class-0 dispatch
         { 0x00BF00, "MLI"           },   // ProDOS 8 Machine Language Interface
     };
@@ -411,6 +411,16 @@ inline bool iigs_live_toolsets_refresh() {
     return true;
 }
 
+// The address of the live tool entry at or below pc (0 when there is none).
+inline uint32_t iigs_live_entry_below(uint32_t pc) {
+    int lo = 0, hi = (int)g_iigs_live_syms.size() - 1, best = -1;
+    while (lo <= hi) {
+        int m = (lo + hi) / 2;
+        if (g_iigs_live_syms[m].addr <= pc) { best = m; lo = m + 1; } else hi = m - 1;
+    }
+    return best < 0 ? 0 : g_iigs_live_syms[best].addr;
+}
+
 // The live table's answer for a RAM address, or empty. Same window as the ROM
 // table: an entry names the function it begins, not the next 8 KB.
 inline const char *iigs_live_name_pc(uint32_t pc, char *buf, size_t n) {
@@ -446,6 +456,7 @@ inline void iigs_names_ready() {
 }
 
 #include "iigs_gsos_names.hpp"   // GSOS.<segment>+off, verified against the live page
+#include "iigs_loadmap.hpp"      // Load.<file>+off, while the Memory Manager says the block is the load's
 
 inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     buf[0] = 0;
@@ -454,11 +465,21 @@ inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n) {
     // RAM first, from the live tool pointer table: a patched ROM function or a
     // RAM-only tool set lives here, and no static table can know where.
     if ((full_pc & 0xFFFFFF) < 0xFE0000) {
-        if (iigs_live_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
-        if (iigs_live_toolsets_refresh() && iigs_live_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
+        const uint32_t rpc = full_pc & 0xFFFFFF;
+        if (iigs_live_name_pc(rpc, buf, n)[0] || (iigs_live_toolsets_refresh() && iigs_live_name_pc(rpc, buf, n)[0])) {
+            // A tool entry names up to $800 bytes after it, which can run past
+            // the end of its tool set into whatever the Loader put next. When
+            // the load map knows the block this PC is in, the entry must be in
+            // that block too.
+            uint32_t blo = 0, bhi = 0;
+            if (!iigs_loadmap_block_of(rpc, blo, bhi) || iigs_live_entry_below(rpc) >= blo) return buf;
+            buf[0] = 0;
+        }
         // Then GS/OS's own kernel (the System Loader's entry points already named
         // above, as tool set 17, win over its segment name).
         if (iigs_gsos_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
+        // Then what the System Loader placed: drivers, FSTs, setup files, the application.
+        if (iigs_loadmap_name_pc(full_pc & 0xFFFFFF, buf, n)[0]) return buf;
     }
     // Same search as iigs_rom_sym_resolve, without the loaded-flag gate, and with
     // a tighter window: an entry point names the routine it begins, not the

@@ -29,6 +29,8 @@
     3. NAMES. The armed boots' trap records must carry names: RESET on both ROMs, and on
        the GS/OS boot a System Loader call, the System Dispatch Table and the Dispatcher.
        A symbol table that stopped loading leaves every sym null and nothing else notices.
+       And the GS/OS boot's load map must hold the three drivers and the FST the Loader
+       placed, each with a block that contains its start address.
 
     What it does NOT check: the windowed, no-environment emulator. Every run here is a spike,
     and a spike is itself an environment variable. The interactive dual-mode check is still
@@ -110,6 +112,7 @@ function Get-ArmedEnv([string]$runDir, [int]$platform) {
     }
     if ($platform -eq 5) {
         $e.A2GSPU_TBTRACE = '1'; $e.A2GSPU_DUMP += ',E1/0000-003F,FF/4100-41FF'
+        $e.A2GSPU_LOADMAP = (Join-Path $runDir 'loadmap.ndjson')
         # One landing in each GS/OS kernel region, for the names check below.
         $e.A2GSPU_TRAP += ';name=ldr at=01:A600-FBFF first=1 cap=1 do=regs' +
                           ';name=sdt at=01:FC00-FCFF first=1 cap=1 do=regs' +
@@ -126,6 +129,11 @@ $expectNames = @{
     'iie-rom'      = @('"sym":"RESET"')
     'iigs-rom'     = @('"sym":"RESET"')
     'iigs-gsos601' = @('"sym":"RESET"', '"sym":"SystemLoader.', '"sym":"GSOS.SystemDispatchTable+', '"sym":"GSOS.Dispatcher+')
+}
+# The load map (A2GSPU_LOADMAP) on the GS/OS boot: the drivers and the FST the
+# Loader placed by frame 300, each with a block that holds its start address.
+$expectLoads = @{
+    'iigs-gsos601' = @('Load.AppleDisk3.5', 'Load.AppleDisk5.25', 'Load.Console.Driver', 'Load.Char.FST')
 }
 
 # The files the armed rails write; each must be non-empty after an armed run.
@@ -222,6 +230,15 @@ foreach ($r in $rows) {
         $tt = if (Test-Path $tf) { [IO.File]::ReadAllText($tf) } else { '' }
         $missing = @($expectNames[$r.name] | Where-Object { -not $tt.Contains($_) })
         Check ("{0}: trap records carry names" -f $r.name) ($missing.Count -eq 0) $(if ($missing.Count) { "no record with " + ($missing -join ', ') } else { ($expectNames[$r.name] | ForEach-Object { $_.Substring(7).TrimEnd('"') }) -join ' ' })
+    }
+    if ($expectLoads.ContainsKey($r.name)) {
+        $lf = Join-Path $a.dir 'loadmap.ndjson'
+        $loads = @(if (Test-Path $lf) { Get-Content $lf | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } })
+        $bad = @($expectLoads[$r.name] | Where-Object {
+            $n = $_
+            -not ($loads | Where-Object { $_.event -eq 'loadmap.load' -and $_.name -eq $n -and $_.start_block -ge 0 })
+        })
+        Check ("{0}: load map names the drivers" -f $r.name) ($bad.Count -eq 0) $(if ($bad.Count) { "no load record (with a start block) for " + ($bad -join ', ') } else { "{0} loads, {1}" -f $loads.Count, (($expectLoads[$r.name] | ForEach-Object { $_.Substring(5) }) -join ' ') })
     }
     if (-not $Bless) {
         $b = $baseline[$r.name]

@@ -1005,8 +1005,12 @@ inline void iigs_itrace_frame_tick(int frame) {
 struct IigsPendingCall {
     uint32_t ret_addr;    // full 24-bit address the matching RTL returns to
     uint16_t callword;    // tool word (func<<8 | toolset); 0 for a GS/OS call
-    uint8_t  kind;        // 0 = toolbox, 1 = GS/OS class-1, 2 = GS/OS class-0
+    uint8_t  kind;        // 0 = toolbox, 1 = GS/OS inline entry $E100A8, 2 = GS/OS stack entry $E100B0
+                          // (each carries class-0 $00xx and class-1 $20xx calls: see gsos)
     uint8_t  caller_bank; // bank of the caller (for trace scoping)
+    uint16_t gsos = 0;    // a GS/OS call's own number (kind 1 and 2)
+    uint8_t  loadtag = 0; // iigs_loadmap.hpp: a load, or a NewHandle inside one
+    int      load_id = 0;
 };
 inline std::vector<IigsPendingCall> g_iigs_pending;
 
@@ -1025,7 +1029,7 @@ inline const char *iigs_call_context(char *buf, size_t n) {
     buf[0] = 0;
     if (g_iigs_pending.empty()) return buf;
     const IigsPendingCall &pc = g_iigs_pending.back();
-    if (pc.kind != 0 || pc.callword == 0) { snprintf(buf, n, "GSOS.class%d", pc.kind == 1 ? 1 : 0); return buf; }
+    if (pc.kind != 0 || pc.callword == 0) { snprintf(buf, n, "GSOS.$%04X", pc.gsos); return buf; }
     iigs_toolnames_load_once();
     snprintf(buf, n, "%s", iigs_tool_func_name(pc.callword & 0xFF, pc.callword >> 8).c_str());
     return buf;
@@ -1213,22 +1217,36 @@ inline bool iigs_tb_on_landing(cpu_state *cpu) {
         bool m8 = cpu->E || (cpu->p & 0x20);
         uint16_t aval = m8 ? (uint16_t)(cpu->a & 0xFF) : cpu->a;
         bool carry = (cpu->p & FLAG_C) != 0;
-        if (g_callstream_on)
-            a2record::Record("callstream", "ret", g_iigs_cur_frame, a2record::cycles_now())
-                .str("ev", "r").u("word", pend.callword).u("kind", pend.kind).u("carry", carry ? 1 : 0).u("err", aval)
-                .write(g_callstream_out, false);
+        if (g_callstream_on) {
+            a2record::Record rec("callstream", "ret", g_iigs_cur_frame, a2record::cycles_now());
+            rec.str("ev", "r").u("word", pend.callword).u("kind", pend.kind);
+            if (pend.kind != 0) rec.u("gsos", pend.gsos);
+            rec.u("carry", carry ? 1 : 0).u("err", aval).write(g_callstream_out, false);
+        }
+        if (pend.loadtag) iigs_loadmap_ret(cpu, pend.loadtag, pend.load_id, carry, aval);
         bool bank_ok = (g_iigs_tbtrace_bank < 0) || (pend.caller_bank == g_iigs_tbtrace_bank);
         if (pend.kind == 0) {
             g_iigs_last_result[pend.callword] = {carry, aval};   // for the assert gate
             if (g_iigs_tbtrace_enabled && log_window && bank_ok)
                 printf("IIGS TOOLBOX: ret %s ($%04X) carry=%d err=$%04X\n",
                        iigs_tool_name(pend.callword), pend.callword, carry ? 1 : 0, aval);
-        } else {
+        } else if (pend.kind == 2) {
             if (carry) g_iigs_last_gsos_err = aval;
             if (g_iigs_tbtrace_enabled && log_window && bank_ok && (g_iigs_errhook_enabled || carry))
                 printf("IIGS GSOS: ret (class-%d) carry=%d err=$%04X%s\n",
                        pend.kind == 1 ? 1 : 0, carry ? 1 : 0, aval,
                        carry ? "  <-- SYSTEM/LOADER ERROR" : "");
+        } else {
+            // Inline-entry returns match only since the tracker learned where
+            // an inline call returns, and they carry routine errors: a GS/OS
+            // boot to the Finder returns 49 (GetDirEntry's end of directory
+            // $61, ExpandPath's buffer too small $4F). They are reported where
+            // a program reads them -- CALLSTREAM's gsos/carry/err, and under
+            // ERRHOOK a trace line -- and not as gsos_err, GSDIAG's GSOS_ERROR
+            // or the SYSTEM/LOADER ERROR banner, which the stack-entry returns
+            // alone have always driven and which harnesses read as a fault.
+            if (g_iigs_tbtrace_enabled && log_window && bank_ok && g_iigs_errhook_enabled)
+                printf("IIGS GSOS: ret inline $%04X carry=%d err=$%04X\n", pend.gsos, carry ? 1 : 0, aval);
         }
     }
 
@@ -1246,6 +1264,22 @@ inline bool iigs_tb_on_landing(cpu_state *cpu) {
     uint32_t pbr = a2obs_peek(cpu->mmu, (sp + 3) & 0xFFFF);
     uint32_t ret = (pbr << 16) | ((((pch << 8) | pcl) + 1) & 0xFFFF);
     uint8_t caller_bank = (uint8_t)pbr;
+    // A GS/OS call's number ($00xx class 0, $20xx class 1; either entry takes
+    // either). At the inline entry the JSL is followed by the call number and
+    // a 4-byte parameter pointer, and the call returns past both -- 6 bytes
+    // after the JSL's own return address. This tracker waited at the JSL's,
+    // which an inline call never reaches: 664 of 664 went unmatched on a GS/OS
+    // boot, and each stale entry then hid the return of the call beneath it
+    // (every InitialLoad2 after the first driver's). The stack entry takes the
+    // number last-pushed, at S+4, and returns to the JSL's return address.
+    uint16_t gsos = 0;
+    uint32_t ret_match = ret;
+    if (kind == 1) {
+        gsos = (uint16_t)(a2obs_peek(cpu->mmu, ret) | (a2obs_peek(cpu->mmu, (pbr << 16) | ((ret + 1) & 0xFFFF)) << 8));
+        ret_match = (pbr << 16) | ((ret + 6) & 0xFFFF);
+    } else if (kind == 2) {
+        gsos = (uint16_t)(a2obs_peek(cpu->mmu, (sp + 4) & 0xFFFF) | (a2obs_peek(cpu->mmu, (sp + 5) & 0xFFFF) << 8));
+    }
     bool bank_ok = (g_iigs_tbtrace_bank < 0) || (caller_bank == g_iigs_tbtrace_bank);
 
     // Auto-bridge the symbolizer load base (best-effort): a GS/OS-loaded app's
@@ -1311,12 +1345,16 @@ inline bool iigs_tb_on_landing(cpu_state *cpu) {
     } else if (log_window && bank_ok && g_iigs_errhook_enabled) {
         printf("IIGS GSOS: call class-%d dispatch @ $%06X\n", kind == 1 ? 1 : 0, lpc);
     }
-    if (g_callstream_on)
-        a2record::Record("callstream", "call", g_iigs_cur_frame, a2record::cycles_now())
-            .str("ev", "c").i("seq", g_callstream_seq++).u("word", callword).u("kind", kind)
-            .u("caller", (ret - 1) & 0xFFFFFF).u("s", cpu->sp).u("d", cpu->d).u("dbr", caller_bank)
-            .write(g_callstream_out, false);
-    g_iigs_pending.push_back({ret, callword, kind, caller_bank});
+    if (g_callstream_on) {
+        a2record::Record rec("callstream", "call", g_iigs_cur_frame, a2record::cycles_now());
+        rec.str("ev", "c").i("seq", g_callstream_seq++).u("word", callword).u("kind", kind);
+        if (kind != 0) rec.u("gsos", gsos);
+        rec.u("caller", (ret - 1) & 0xFFFFFF).u("s", cpu->sp).u("d", cpu->d).u("dbr", caller_bank)
+           .write(g_callstream_out, false);
+    }
+    uint8_t loadtag = kind == 0 ? iigs_loadmap_call(cpu, callword, ret - 1) : 0;
+    g_iigs_pending.push_back({ret_match, callword, kind, caller_bank, gsos, loadtag,
+                              loadtag == IIGS_LOADTAG_LOAD ? g_iigs_load_seq : 0});
     if (g_iigs_pending.size() > 128) g_iigs_pending.erase(g_iigs_pending.begin());
     return false;
 }

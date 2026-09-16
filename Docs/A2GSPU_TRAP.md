@@ -115,9 +115,11 @@ One JSON object per line:
 exit that pairs with it carries the same `n`. `frame` is the headless frame
 counter and `cycles` the clock's cycle count at the trap. `sym` names the trap
 PC — an application symbol when `A2GSPU_SYMBOLS` is loaded, else a documented
-firmware entry point (`COUT`, `RDKEY`, `MLI`, `ToolDisp`…), else `null`. `incall`
-names the toolbox call in progress when the trap fired (`WindowMgr.fn15`), or
-`null` outside any call.
+firmware entry point (`COUT`, `RDKEY`, `MLI`, `ToolDisp`…), a GS/OS kernel
+segment (`GSOS.Dispatcher+$1FD`), code the System Loader placed
+(`Load.AppleDisk3.5+$4E7`), else `null`. `incall` names the toolbox call in
+progress when the trap fired (`WindowMgr.fn15`), a GS/OS call with its number
+(`GSOS.$202D`), or `null` outside any call.
 
 ## Guarantees
 
