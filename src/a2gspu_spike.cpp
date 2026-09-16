@@ -115,6 +115,9 @@ void run_headless_spike(GS2AppState *state) {
     // Idempotent; the run_one_frame lazy arm covers the CTRL and windowed paths.
     // A malformed spec is fatal here, before a single frame runs.
     a2gspu_trap_arm();
+    // M9: count instructions and stores from here, for GSDIAG's run= (and any
+    // A2GSPU_EXPECT_RUN gate). Before liveness, which shares the taps.
+    a2gspu_progress_taps_arm(state->mmu_iigs != nullptr);
     a2gspu_liveness_arm(state->mmu_iigs != nullptr);
     g_a2gspu_cpu_for_names = computer->cpu;   // names by default check bank-0 ROM mapping live
     iigs_names_ready();         // at arm, so its one line prints whole and never inside a report
@@ -1060,6 +1063,15 @@ void run_headless_spike(GS2AppState *state) {
                        match ? "MATCH" : "MISMATCH", (unsigned long long)h, (unsigned long long)want);
                 if (!match) gate_rc = 1;
             }
+            {
+                // M9: the run-hash twin of EXPECT_HASH -- the same screen, the
+                // same clock AND the same work (insns, stores).
+                bool run_fail = false;
+                if (a2gspu_expect_run_gate(h, computer->clock->get_cycles(), &run_fail)) {
+                    any_gate = true;
+                    if (run_fail) gate_rc = 1;
+                }
+            }
             if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
                 // ARMED BY A NON-EMPTY SPEC, NOT BY THE VARIABLE'S PRESENCE.
                 // Arming on presence alone made A2GSPU_ASSERT="" report
@@ -1226,6 +1238,15 @@ void run_headless_spike(GS2AppState *state) {
                 printf("A2GSPU EXPECT_HASH: %s (cur=%016llX want=%016llX)\n",
                        match ? "MATCH" : "MISMATCH", (unsigned long long)h, (unsigned long long)want);
                 if (!match) gate_rc = 1;
+            }
+            {
+                // M9: the run-hash twin of EXPECT_HASH -- the same screen, the
+                // same clock AND the same work (insns, stores).
+                bool run_fail = false;
+                if (a2gspu_expect_run_gate(h, computer->clock->get_cycles(), &run_fail)) {
+                    any_gate = true;
+                    if (run_fail) gate_rc = 1;
+                }
             }
             if (const char *as = SDL_getenv("A2GSPU_ASSERT")) {
                 // Same arm rule as the IIgs block above: an empty spec arms no

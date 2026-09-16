@@ -29,7 +29,7 @@
 // Sample: frame (since arm), cycles, screen hash, text hash, keyboard reads
 // since the previous sample (IIgs: KeyGloo $C000/$C010 reads; II family: the
 // keyboard device's $C000/$C010 reads), what changed, and -- from the taps in
-// a2gspu_liveness_taps.hpp -- why a hash that did not change did not:
+// a2gspu_progress_taps.hpp -- why a hash that did not change did not:
 //   insns         instructions executed since arm
 //   screen_store  cycle of the last store onto the screen range (null: none yet)
 //   text_store    cycle of the last store onto the text page (null: none yet)
@@ -62,7 +62,7 @@
 #include "house_fnv.hpp"
 #include "iigs_diag.hpp"               // g_gsdiag_extra
 #include "devices/adb/keygloo.hpp"     // a2gspu_keygloo_read_counts
-#include "a2gspu_liveness_taps.hpp"    // insns, last screen/text store, last keyboard poll
+#include "a2gspu_progress_taps.hpp"    // insns, last screen/text store, last keyboard poll
 
 inline int      g_liveness_every = 0;              // 0 = off (the CPU/frame loop gate)
 inline int      g_liveness_stall = 3;
@@ -122,13 +122,13 @@ inline void a2gspu_liveness_close() {
     a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
     a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
     a2gspu_liveness_since_str(g_liveness_cpu_since, c, sizeof c);
-    a2gspu_liveness_cycle_str(g_liveness_screen_seen, g_liveness_screen_store, ss, sizeof ss);
-    a2gspu_liveness_cycle_str(g_liveness_text_seen, g_liveness_text_store, ts, sizeof ts);
-    a2gspu_liveness_cycle_str(g_liveness_kbd_seen, g_liveness_kbd_poll, kp, sizeof kp);
+    a2gspu_liveness_cycle_str(g_progress_screen_seen, g_progress_screen_store, ss, sizeof ss);
+    a2gspu_liveness_cycle_str(g_progress_text_seen, g_progress_text_store, ts, sizeof ts);
+    a2gspu_liveness_cycle_str(g_progress_kbd_seen, g_progress_kbd_poll, kp, sizeof kp);
     printf("A2GSPU LIVENESS: samples=%d frames=%d screen_last_changed=%d screen_unchanged_since=%s text_last_changed=%d text_unchanged_since=%s"
            " insns=%llu cpu_stopped_since=%s screen_store=%s text_store=%s kbd_poll=%s\n",
            g_liveness_samples, g_liveness_frame, g_liveness_screen_last, a, g_liveness_text_last, b,
-           (unsigned long long)g_liveness_insns, c, ss, ts, kp);
+           (unsigned long long)g_progress_insns, c, ss, ts, kp);
     if (g_liveness_out) { fclose(g_liveness_out); g_liveness_out = nullptr; }
     fflush(stdout);
 }
@@ -140,14 +140,14 @@ inline void a2gspu_liveness_format(char *buf, size_t n) {
     a2gspu_liveness_since_str(g_liveness_screen_since, a, sizeof a);
     a2gspu_liveness_since_str(g_liveness_text_since, b, sizeof b);
     a2gspu_liveness_since_str(g_liveness_cpu_since, c, sizeof c);
-    a2gspu_liveness_cycle_str(g_liveness_screen_seen, g_liveness_screen_store, ss, sizeof ss);
-    a2gspu_liveness_cycle_str(g_liveness_text_seen, g_liveness_text_store, ts, sizeof ts);
-    a2gspu_liveness_cycle_str(g_liveness_kbd_seen, g_liveness_kbd_poll, kp, sizeof kp);
+    a2gspu_liveness_cycle_str(g_progress_screen_seen, g_progress_screen_store, ss, sizeof ss);
+    a2gspu_liveness_cycle_str(g_progress_text_seen, g_progress_text_store, ts, sizeof ts);
+    a2gspu_liveness_cycle_str(g_progress_kbd_seen, g_progress_kbd_poll, kp, sizeof kp);
     snprintf(buf, n, "status=OK every=%d stall=%d samples=%d frames=%d screen_last_changed=%d screen_unchanged_since=%s text_last_changed=%d text_unchanged_since=%s"
              " insns=%llu cpu_stopped_since=%s screen_store=%s text_store=%s kbd_poll=%s",
              g_liveness_every, g_liveness_stall, g_liveness_samples, g_liveness_frame,
              g_liveness_screen_last, a, g_liveness_text_last, b,
-             (unsigned long long)g_liveness_insns, c, ss, ts, kp);
+             (unsigned long long)g_progress_insns, c, ss, ts, kp);
 }
 
 // Called once, with the platform known. Idempotent.
@@ -169,9 +169,9 @@ inline void a2gspu_liveness_arm(bool is_iigs) {
     atexit(a2gspu_liveness_close);
     // The taps: clock from the record contract, which both arm sites register
     // first (a2record_register), so a stamp and a record's cycles= agree.
-    g_liveness_taps_iigs = is_iigs;
-    g_liveness_now = [] { return (uint64_t)a2record::cycles_now(); };
-    g_liveness_taps = true;
+    g_progress_taps_iigs = is_iigs;
+    g_progress_now = [] { return (uint64_t)a2record::cycles_now(); };
+    g_progress_taps = true;
     printf("A2GSPU LIVENESS: armed every=%d stall=%d screen=%s text=%s kbd=%s out=%s taps=insns,screen_store,text_store,kbd_poll\n",
            g_liveness_every, g_liveness_stall,
            is_iigs ? "$E1:2000-9FFF" : "$2000-3FFF", is_iigs ? "$E0:0400-07FF" : "$0400-07FF",
@@ -188,7 +188,7 @@ inline void a2gspu_liveness_tick(computer_t *computer) {
                                                : a2gspu_liveness_hash(mmu, 0x002000, 0x003FFF);
     const uint64_t text   = g_liveness_is_iigs ? a2gspu_liveness_hash(mmu, 0xE00400, 0xE007FF)
                                                : a2gspu_liveness_hash(mmu, 0x000400, 0x0007FF);
-    uint64_t kbd_total = g_liveness_kbd_reads;   // II family: the keyboard device's reads
+    uint64_t kbd_total = g_progress_kbd_reads;   // II family: the keyboard device's reads
     if (g_liveness_is_iigs) { uint64_t c[5]; a2gspu_keygloo_read_counts(c); kbd_total = c[0] + c[1]; }
     const uint64_t kbd = kbd_total - g_liveness_prev_kbd;
     g_liveness_prev_kbd = kbd_total;
@@ -200,29 +200,29 @@ inline void a2gspu_liveness_tick(computer_t *computer) {
     const char *changed = first ? "first" : (sch && tch) ? "both" : sch ? "screen" : tch ? "text" : "none";
     a2gspu_liveness_track(first, sch, g_liveness_screen_last, g_liveness_screen_run, g_liveness_screen_since);
     a2gspu_liveness_track(first, tch, g_liveness_text_last, g_liveness_text_run, g_liveness_text_since);
-    const bool ran = !first && g_liveness_insns != g_liveness_prev_insns;
+    const bool ran = !first && g_progress_insns != g_liveness_prev_insns;
     a2gspu_liveness_track(first, ran, g_liveness_cpu_last, g_liveness_cpu_run, g_liveness_cpu_since);
-    g_liveness_prev_insns = g_liveness_insns;
+    g_liveness_prev_insns = g_progress_insns;
     g_liveness_prev_screen = screen; g_liveness_prev_text = text; g_liveness_samples++;
     char ss[24], ts[24], kp[24];
-    a2gspu_liveness_cycle_str(g_liveness_screen_seen, g_liveness_screen_store, ss, sizeof ss);
-    a2gspu_liveness_cycle_str(g_liveness_text_seen, g_liveness_text_store, ts, sizeof ts);
-    a2gspu_liveness_cycle_str(g_liveness_kbd_seen, g_liveness_kbd_poll, kp, sizeof kp);
+    a2gspu_liveness_cycle_str(g_progress_screen_seen, g_progress_screen_store, ss, sizeof ss);
+    a2gspu_liveness_cycle_str(g_progress_text_seen, g_progress_text_store, ts, sizeof ts);
+    a2gspu_liveness_cycle_str(g_progress_kbd_seen, g_progress_kbd_poll, kp, sizeof kp);
 
     if (FILE *sink = a2record::sink(g_liveness_out)) {
         a2record::Record rec("liveness", "sample", g_liveness_frame, (unsigned long long)cycles);
         rec.hex16("screen", (unsigned long long)screen).hex16("text", (unsigned long long)text);
         rec.u("kbd", (unsigned long long)kbd);
         rec.str("changed", changed);
-        rec.u("insns", (unsigned long long)g_liveness_insns);
-        if (g_liveness_screen_seen) rec.u("screen_store", (unsigned long long)g_liveness_screen_store); else rec.null("screen_store");
-        if (g_liveness_text_seen)   rec.u("text_store", (unsigned long long)g_liveness_text_store);     else rec.null("text_store");
-        if (g_liveness_kbd_seen)    rec.u("kbd_poll", (unsigned long long)g_liveness_kbd_poll);         else rec.null("kbd_poll");
+        rec.u("insns", (unsigned long long)g_progress_insns);
+        if (g_progress_screen_seen) rec.u("screen_store", (unsigned long long)g_progress_screen_store); else rec.null("screen_store");
+        if (g_progress_text_seen)   rec.u("text_store", (unsigned long long)g_progress_text_store);     else rec.null("text_store");
+        if (g_progress_kbd_seen)    rec.u("kbd_poll", (unsigned long long)g_progress_kbd_poll);         else rec.null("kbd_poll");
         rec.write(sink, true);
     } else {
         printf("A2GSPU LIVENESS: frame=%d cycles=%llu screen=%016llX text=%016llX kbd=%llu changed=%s insns=%llu screen_store=%s text_store=%s kbd_poll=%s\n",
                g_liveness_frame, (unsigned long long)cycles, (unsigned long long)screen, (unsigned long long)text,
-               (unsigned long long)kbd, changed, (unsigned long long)g_liveness_insns, ss, ts, kp);
+               (unsigned long long)kbd, changed, (unsigned long long)g_progress_insns, ss, ts, kp);
     }
 }
 

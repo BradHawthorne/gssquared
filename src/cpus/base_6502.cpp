@@ -32,7 +32,7 @@
 #include "a2gspu_coverage.hpp" // A2GSPU_COVERAGE: consumed program-byte bitmap
 #include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting (off => 1 branch)
 #include "memvu_istream.hpp"   // MEMVU_OPMIX / MEMVU_IREUSE: instruction-stream shape
-#include "a2gspu_liveness_taps.hpp" // A2GSPU_LIVENESS: insns, last screen/text store (off => 1 branch)
+#include "a2gspu_progress_taps.hpp" // A2GSPU_LIVENESS: insns, last screen/text store (off => 1 branch)
 
 
 /**
@@ -138,7 +138,7 @@ inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     cpu->mmu->write(addr & 0xFFFFFF, data);
     if (memvu_sv_on) memvu_sv_note_store(addr & 0xFFFFFF, false);  // MEMVU_STOREVIS (off => 1 branch)
     if (g_trap_store_on) a2gspu_trap_store(cpu, addr & 0xFFFFFF, data);  // A2GSPU_TRAP store= (off => 1 branch)
-    if (g_liveness_taps) a2gspu_liveness_note_store(addr & 0xFFFFFF);  // A2GSPU_LIVENESS (off => 1 branch)
+    if (g_progress_taps) { g_progress_stores++; a2gspu_progress_note_store(addr & 0xFFFFFF); }  // run hash + A2GSPU_LIVENESS (off => 1 branch)
     if (g_watch_on) iigs_watch_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH (off => 1 branch)
     if (g_valtrap_on) iigs_valtrap_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_VALTRAP (off => 1 branch)
     if (g_loadtrace_on) iigs_loadtrace_write(cpu, addr & 0xFFFFFF, data);  // A2GSPU_LOADTRACE (off => 1 branch)
@@ -2453,7 +2453,7 @@ int execute_next(cpu_state *cpu) override {
         (CPUTraits::m_16?2:0) | (CPUTraits::x_16?1:0));
     opcode_t opcode = fetch_pc(cpu);
     tb->opcode = opcode;
-    if (g_liveness_taps) g_liveness_insns++;   // A2GSPU_LIVENESS insns (off => 1 branch)
+    if (g_progress_taps) g_progress_insns++;   // run hash + A2GSPU_LIVENESS insns (off => 1 branch)
     // MEMVU_OPMIX / MEMVU_IREUSE (off => 1 branch). The mode context is a
     // compile-time constant here: this emulator picks a CPU implementation per
     // (E, M-width, X-width), so recording it costs nothing.

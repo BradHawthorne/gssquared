@@ -22,7 +22,7 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M6 artifact discipline | partial | coverage (both formats) and snapshots are checked; other `spike_*.bin` artifacts and `vram-raw` have no reader |
 | M7 names by default | partial | ROM and RAM tool sets are named; GS/OS kernel and drivers are not |
 | M8 reachability + readback | done | launch-only rails are declared by absence from the reach table |
-| M9 determinism asserted | done, one gap | PINS, `cycles=`, `EXPECT_HASH` and the BRAM pin exist; the combined run hash was never built |
+| M9 determinism asserted | done | — |
 | M10 configuration over code | partial | `store=`/`sp=` triggers exist; read triggers, live arming and `KEYSCHED` conditions do not; WIZ5 traps stand until their readers move |
 | M11 a peek that works everywhere | done | — |
 | M12 record schemas in the manifest | done | — |
@@ -228,7 +228,7 @@ mirror does not) and of the last keyboard read (`kbd_poll`, on both families,
 so `kbd=` is a count on the II family too). The close-out and `GSDIAG:` gain
 `cpu_stopped_since=`. The three separate what two hashes could not: a program
 redrawing identical bytes, one that stopped drawing, and a CPU that stopped.
-The taps (`src/a2gspu_liveness_taps.hpp`) are one untaken branch each unarmed,
+The taps (`src/a2gspu_progress_taps.hpp`) are one untaken branch each unarmed,
 and the armed IIe and IIgs boots reproduce the unarmed hash and cycle count.
 
 ### M5 — Snapshot manifests, then snapshot classes  (P5) — S then L
@@ -413,9 +413,13 @@ produced it).
 frames, the ROM's size and hash, the configure-time build string (labelled)
 and the executable's own hash; `GSDIAG:` carries `cycles=`; `A2GSPU_EXPECT_HASH`
 is the inline gate. The build string still lags the tree between configures;
-the executable hash is the field to trust. **Not built:** the combined run hash
-over instruction count, store count and SHR hash that the mechanism above
-describes; `GSDIAG:`'s `hash=` and `cycles=` together are the witness in use.
+the executable hash is the field to trust. **The run hash, built 2026-09-16:**
+every headless run's `GSDIAG:` carries `insns= stores= run=`, where `run` is
+house FNV over instructions executed, CPU stores, the screen hash and cycles
+(`src/a2gspu_runhash.hpp`), and `A2GSPU_EXPECT_RUN=<hex>` gates on it. The
+counts come from the progress taps the liveness rail also uses, armed before
+the first frame; the armed boots in `unarmedhash.ps1` reproduce the unarmed hash
+and cycle count with them on.
 **Added later, because a pin was missing:** `bram=`. The stock RTC reads and
 rewrites `./gs2-bram.bin` in the working directory, so two runs with equal
 seed, faketime and ramdisk hashed differently depending on where they ran

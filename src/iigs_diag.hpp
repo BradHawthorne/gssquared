@@ -12,6 +12,7 @@
 // iigs_toolbox.hpp (iigs_cpu_state_dump_regs), shared with the BRK path.
 // ============================================================================
 #include "a2gspu_observe.hpp"   // a2obs_peek (M11)
+#include "a2gspu_runhash.hpp"   // insns= stores= run= on GSDIAG (M9)
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -319,11 +320,19 @@ inline const char *(*g_gsdiag_extra)(void) = nullptr;
 
 // cycles= is the run's other determinism witness beside hash=: two runs whose
 // A2GSPU PINS lines agree must agree on both, and a harness that differences
-// two runs should refuse to subtract when they do not.
+// two runs should refuse to subtract when they do not. insns= stores= run= (M9,
+// a2gspu_runhash.hpp) add the work the CPU did, and run= folds all four into
+// one value; they are present whenever the progress taps were armed, which a
+// headless run always does, so their absence says the taps were not.
 inline void iigs_emit_status(const char *status, int rc, const char *gate,
                              long gsos_err, int brk, long scb, uint64_t hash, uint64_t cycles) {
-    printf("GSDIAG: status=%s rc=%d gate=%s gsos_err=$%04lX brk=%d scb=%ld hash=%016llX warnings=%d cycles=%llu%s\n",
+    char run[96] = "";
+    if (g_progress_taps)
+        snprintf(run, sizeof run, " insns=%llu stores=%llu run=%016llX",
+                 (unsigned long long)g_progress_insns, (unsigned long long)g_progress_stores,
+                 (unsigned long long)a2gspu_run_hash(hash, cycles));
+    printf("GSDIAG: status=%s rc=%d gate=%s gsos_err=$%04lX brk=%d scb=%ld hash=%016llX warnings=%d cycles=%llu%s%s\n",
            status, rc, gate, (unsigned long)(gsos_err & 0xFFFF), brk, scb,
-           (unsigned long long)hash, g_a2gspu_warnings, (unsigned long long)cycles,
+           (unsigned long long)hash, g_a2gspu_warnings, (unsigned long long)cycles, run,
            g_gsdiag_extra ? g_gsdiag_extra() : "");
 }

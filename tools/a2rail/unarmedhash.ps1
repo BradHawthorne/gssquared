@@ -125,11 +125,16 @@ function Invoke-Spike([string]$name, [int]$platform, [int]$frames, [string]$disk
     $text = if (Test-Path $out) { [IO.File]::ReadAllText($out) } else { '' }
     $diag = [regex]::Match($text, 'GSDIAG: status=(\S+).*? hash=([0-9A-F]{16}).*? cycles=(\d+)')
     $rom  = [regex]::Match($text, 'A2GSPU PINS: .*? rom=\d+/([0-9A-F]{16})')
+    # M9: run= folds instructions and stores into the witness. An observer that
+    # left the screen and the clock alone but changed the work would pass the
+    # hash and cycles checks and fail this one.
+    $runh = [regex]::Match($text, 'GSDIAG: .*? run=([0-9A-F]{16})')
     return [pscustomobject]@{
         name = $name; rc = $rc
         status = if ($diag.Success) { $diag.Groups[1].Value } else { '' }
         hash   = if ($diag.Success) { $diag.Groups[2].Value } else { '' }
         cycles = if ($diag.Success) { [int64]$diag.Groups[3].Value } else { -1 }
+        run    = if ($runh.Success) { $runh.Groups[1].Value } else { '' }
         rom    = if ($rom.Success) { $rom.Groups[1].Value } else { '' }
         dir    = $runDir
     }
@@ -160,11 +165,12 @@ foreach ($r in $rows) {
     $a = Invoke-Spike ($r.name + '-armed') $r.platform $r.frames $r.disk (Get-ArmedEnv (Join-Path $Dir ($r.name + '-armed')) $r.platform)
     $results += [pscustomobject]@{ name = $r.name; platform = $r.platform; frames = $r.frames
                                    disk = if ($r.disk) { Split-Path $r.disk -Leaf } else { '' }
-                                   rom = $u.rom; hash = $u.hash; cycles = $u.cycles }
+                                   rom = $u.rom; hash = $u.hash; cycles = $u.cycles; run = $u.run }
     Check ("{0}: unarmed run completed" -f $r.name) ($u.rc -eq 0 -and $u.hash) ("rc={0} status={1}" -f $u.rc, $u.status)
     Check ("{0}: armed run completed" -f $r.name) ($a.rc -eq 0 -and $a.hash) ("rc={0} status={1}" -f $a.rc, $a.status)
     Check ("{0}: armed == unarmed (hash)" -f $r.name) ($u.hash -and $a.hash -eq $u.hash) ("unarmed={0} armed={1}" -f $u.hash, $a.hash)
     Check ("{0}: armed == unarmed (cycles)" -f $r.name) ($u.cycles -ge 0 -and $a.cycles -eq $u.cycles) ("unarmed={0} armed={1}" -f $u.cycles, $a.cycles)
+    Check ("{0}: armed == unarmed (run)" -f $r.name) ($u.run -and $a.run -eq $u.run) ("unarmed={0} armed={1}" -f $u.run, $a.run)
     if (-not $Bless) {
         $b = $baseline[$r.name]
         if (-not $b) {
@@ -174,6 +180,9 @@ foreach ($r in $rows) {
         } else {
             Check ("{0}: unarmed == baseline (hash)" -f $r.name) ($u.hash -eq $b.hash) ("baseline={0} now={1}" -f $b.hash, $u.hash)
             Check ("{0}: unarmed == baseline (cycles)" -f $r.name) ($u.cycles -eq [int64]$b.cycles) ("baseline={0} now={1}" -f $b.cycles, $u.cycles)
+            # A row blessed before run= existed has no run to compare: that is a
+            # baseline to re-bless, not a pass.
+            Check ("{0}: unarmed == baseline (run)" -f $r.name) ($b.run -and $u.run -eq $b.run) ("baseline={0} now={1}" -f $(if ($b.run) { $b.run } else { '(none: re-bless)' }), $u.run)
         }
     }
 }
