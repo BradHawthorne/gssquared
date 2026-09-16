@@ -95,7 +95,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -220,6 +220,12 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "pdblock", 1); pdblock3_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "pdblock" : ",pdblock";
     }
+    // Every Uthernet II: the W5100's registers, buffers and socket states. The host
+    // connections behind them cannot be saved; the restore says how many were lost.
+    if (uthernet2_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "u2", 1); uthernet2_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "u2" : ",u2";
+    }
     return names;
 }
 // Reads device blocks up to the sentinel, which it leaves for the caller. A block
@@ -320,6 +326,19 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 if (r == RESTORED && mismatch)
                     a2gspu_warn("A2GSPU SNAP", "pdblock: a unit's overlay was not applied -- a different image or size than the "
                                 "snapshot's, or the unit is not in RAM mode (A2GSPU_RAMDISK); the volume is what the file holds");
+            }
+        } else if (!strcmp(nm, "u2") && ver == 1) {
+            if (uthernet2_A2GSPU_present()) {
+                int lost = 0, absent = 0;
+                r = uthernet2_A2GSPU_restore(f, &lost, &absent) ? RESTORED : FAILED;
+                if (r == RESTORED && lost) {
+                    char w[240];
+                    snprintf(w, sizeof w, "u2: %d network connection(s) in the snapshot cannot be restored -- those sockets "
+                             "came back CLOSED with Sn_IR DISCON raised, as if the peer had gone", lost);
+                    a2gspu_warn("A2GSPU SNAP", w);
+                }
+                if (r == RESTORED && absent)
+                    a2gspu_warn("A2GSPU SNAP", "u2: a saved Uthernet II's slot has no Uthernet II in this machine; that card was not applied");
             }
         }
         if (r == FAILED) return false;

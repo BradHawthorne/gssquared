@@ -257,6 +257,9 @@ inline const RecordSchema *record_schemas(int &n) {
     {"A2GSPU_CARD_CMDLOG", "event=card.cmd|card.drop",
      "frame cycles + cmd: seq op len payload(hex) name(NOP|HELLO|'') gap dup overflow | drop: reason(presync|oversize) bytes len? seq? op?",
      "the A2GSPU card model's command register ($C0nF): one card.cmd per assembled frame, one card.drop per run of skipped bytes or oversize frame; an op other than NOP and HELLO is recorded by number, with no meaning given; sink: the A2GSPU_CARD_CMDLOG file, else A2GSPU_RECORDS, else stdout prefixed 'A2GSPU CARD:'"},
+    {"A2GSPU_U2_EVENTS",  "event=u2.cmd|u2.state|u2.drop",
+     "frame cycles slot sock + cmd: cmd name from to ir result(done|ignored-state|refused|not-emulated) | state: from to cause(connected|remote-closed|reset|failed) ir host_err | drop: kind(udp-no-room|ipraw-no-room|macraw-no-room|stale-event) bytes",
+     "the Uthernet II's W5100: one u2.cmd per socket command written to Sn_CR, one u2.state per status change the host network caused (applied only at the frame boundary), one u2.drop per datagram or frame the receive buffer had no room for or host event for a socket the guest had since closed; from/to are W5100 status names, ir the Sn_IR bits raised; sink: the A2GSPU_U2_EVENTS file, else A2GSPU_RECORDS, else stdout prefixed 'A2GSPU U2:'"},
     {"A2GSPU_SNAP_OUT",   "event=snap.hit",
      "frame cycles seq pc a x y s d dbr lo data(hex of lo..hi, $C0xx read as 00)",
      "one line per hit of an A2GSPU_SNAP_PCS address, capped by A2GSPU_SNAP_MAX; sink: the A2GSPU_SNAP_OUT file"},
@@ -482,6 +485,13 @@ inline void write_limitations(FILE *f) {
     fprintf(f,"limitation\tid=adb-receive-bytes\tcomponent=ADB\tcommand=$48\tstatus=unimplemented\treason=argument-and-response-contract-unverified\trisk=command-stream-desync\n");
     fprintf(f,"limitation\tid=w5100-pppoe\tcomponent=Uthernet-II\tstatus=unimplemented\tregisters=accepted-readable\tsession=none\n");
     fprintf(f,"capability\tid=w5100-listen\tcomponent=Uthernet-II\tstatus=implemented\tgate=listencheck\n");
+    fprintf(f,"limitation\tid=w5100-send-mac\tcomponent=Uthernet-II\tcommand=$21\tstatus=unimplemented\treport=stderr-once\trecord=u2.cmd-not-emulated\n");
+    fprintf(f,"limitation\tid=w5100-send-keep\tcomponent=Uthernet-II\tcommand=$22\tstatus=partial\tguest-visible=SEND_OK-on-ESTABLISHED\tpacket=none\tnat-binding=not-refreshed\n");
+    fprintf(f,"limitation\tid=w5100-retransmit-timers\tcomponent=Uthernet-II\tregisters=RTR,RCR\tstatus=stored-not-applied\ttiming=host-stack\n");
+    fprintf(f,"limitation\tid=w5100-event-latency\tcomponent=Uthernet-II\tstatus=by-design\tdelivery=video-frame-boundary\tlatency=up-to-one-frame\n");
+    fprintf(f,"limitation\tid=w5100-snapshot-connections\tcomponent=Uthernet-II\tstatus=unsaveable\trestore=CLOSED+DISCON\treport=warning-with-count\n");
+    fprintf(f,"limitation\tid=w5100-int-line\tcomponent=Uthernet-II\tstatus=not-modelled\treason=card-wiring-unverified\n");
+    fprintf(f,"limitation\tid=w5100-mr-ind\tcomponent=Uthernet-II\tstatus=open-decision\tbehaviour=IND-held-set\treason=card-evidence-owed\n");
     fprintf(f,"limitation\tid=vidhd\tcomponent=VidHD\tstatus=detection-only\tfunctionality=none\n");
     fprintf(f,"limitation\tid=prodos-block-dead\tcomponent=prodos_block\tstatus=not-in-any-build-config\n");
 }

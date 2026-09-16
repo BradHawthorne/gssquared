@@ -26,6 +26,8 @@
 #define W5100_RTR0 0x0017
 #define W5100_RTR1 0x0018
 #define W5100_RCR 0x0019
+#define W5100_IR 0x0015
+#define W5100_IMR 0x0016
 #define W5100_RMSR 0x001A
 #define W5100_TMSR 0x001B
 #define W5100_PTIMER 0x0028
@@ -50,6 +52,7 @@
 #define W5100_SN_MR_UDP 0x02
 #define W5100_SN_MR_IPRAW 0x03
 #define W5100_SN_MR_MACRAW 0x04
+#define W5100_SN_MR_PPPOE 0x05
 
 #define W5100_SN_CR_OPEN 0x01
 #define W5100_SN_CR_LISTEN 0x02
@@ -58,9 +61,20 @@
 #define W5100_SN_CR_CLOSE 0x10
 #define W5100_SN_CR_SEND 0x20
 #define W5100_SN_CR_RECV 0x40
+#define W5100_SN_CR_SEND_MAC 0x21
+#define W5100_SN_CR_SEND_KEEP 0x22
+
+// Sn_IR ($n02), write-1-to-clear. IR ($0015) bits 3-0 mirror "Sn_IR != 0" for
+// sockets 3-0; bits 7-5 are CONFLICT, UNREACH and PPPoE close.
+#define W5100_SN_IR_CON 0x01
+#define W5100_SN_IR_DISCON 0x02
+#define W5100_SN_IR_RECV 0x04
+#define W5100_SN_IR_TIMEOUT 0x08
+#define W5100_SN_IR_SEND_OK 0x10
 
 #define W5100_SN_MR 0x00
 #define W5100_SN_CR 0x01
+#define W5100_SN_IR 0x02
 #define W5100_SN_SR 0x03
 #define W5100_SN_PORT0 0x04
 #define W5100_SN_PORT1 0x05
@@ -91,6 +105,7 @@
 #define W5100_SN_SR_SOCK_LISTEN 0x14
 #define W5100_SN_SR_SOCK_SYNSENT 0x15
 #define W5100_SN_SR_ESTABLISHED 0x17
+#define W5100_SN_SR_CLOSE_WAIT 0x1C
 #define W5100_SN_SR_SOCK_UDP 0x22
 #define W5100_SN_SR_SOCK_IPRAW 0x32
 #define W5100_SN_SR_SOCK_MACRAW 0x42

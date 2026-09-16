@@ -30,6 +30,7 @@
 #include "gs2_app.hpp"
 #include "a2gspu_rail_setters.hpp"
 #include "devices/a2gspu/a2gspu_cmdreg.hpp"   // the card model's command log
+#include "devices/uthernet2/u2_rail.hpp"      // the Uthernet II's records
 
 namespace {
 
@@ -444,6 +445,24 @@ int set_card_cmdlog(const char *v, char *m, size_t n) {
     return SET_OK;
 }
 
+// A2GSPU_U2_EVENTS=<file>|1 -- the Uthernet II's socket commands, host-caused
+// status changes and drops, as records.
+int set_u2_events(const char *v, char *m, size_t n) {
+    if (g_u2_events_out) { fclose(g_u2_events_out); g_u2_events_out = nullptr; }
+    g_u2_events_path.clear();
+    if (!v) { g_u2_events_on = false; snprintf(m, n, "A2GSPU_U2_EVENTS: off"); return SET_OK; }
+    if (!*v) { snprintf(m, n, "A2GSPU_U2_EVENTS: want a file or 1, got ''"); return SET_INVALID; }
+    if (strcmp(v, "1")) {
+        g_u2_events_out = fopen(v, "wb");
+        if (!g_u2_events_out) { snprintf(m, n, "A2GSPU_U2_EVENTS: cannot open '%s'", v); return SET_INVALID; }
+        g_u2_events_path = v;
+    }
+    g_u2_events_on = true;
+    snprintf(m, n, "A2GSPU_U2_EVENTS: Uthernet II records -> %s%s", g_u2_events_out ? v : (a2record::g_global ? "A2GSPU_RECORDS" : "stdout"),
+             uthernet2_A2GSPU_present() ? "" : " (no Uthernet II in this machine yet)");
+    return SET_OK;
+}
+
 int set_keydelay(const char *v, char *m, size_t n) {
     int x = 0;
     if (v && (!parse_int(v, x) || x < 0)) { snprintf(m, n, "A2GSPU_KEYSCHED_DELAY: want frames >= 0, got '%s'", v); return SET_INVALID; }
@@ -800,6 +819,8 @@ a2rails::SetterRegistrar r_watchipc     {"A2GSPU_WATCH_IPC_ZP",    set_watch_ipc
 a2rails::SetterRegistrar r_keyram       {"A2GSPU_KEYRAM",          set_keyram};
 a2rails::SetterRegistrar r_cardcmdlog   {"A2GSPU_CARD_CMDLOG",     set_card_cmdlog};
 a2rails::Registrar       g_reader_cardcmdlog{"A2GSPU_CARD_CMDLOG", a2gspu_cmdreg_format};
+a2rails::SetterRegistrar r_u2events     {"A2GSPU_U2_EVENTS",       set_u2_events};
+a2rails::Registrar       g_reader_u2events{"A2GSPU_U2_EVENTS",   u2_format_counters};
 a2rails::SetterRegistrar r_keydelay     {"A2GSPU_KEYSCHED_DELAY",  set_keydelay};
 }  // namespace
 

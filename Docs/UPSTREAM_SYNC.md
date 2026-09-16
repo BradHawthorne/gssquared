@@ -287,7 +287,7 @@ Each item was checked by reading `upstream/main` source.
   - The authoritative list needs a per-site review.
 - **Whether the fork's 16-bit MVN/MVP rule matches silicon.** Upstream and the fork disagree, and this triage did not settle which is right.
 - **Whether `f1691706`'s acceptance of zero-length 2MG headers is safe** alongside the fork's comment/creator blob validation. This needs a merged implementation and the fork's 2MG gates.
-- **Whether `6fe61065`'s W5100 buffering defect exists in the fork's own `w5100.cpp`.** Not checked.
+- **Whether `6fe61065`'s W5100 buffering defect exists in the fork's own `w5100.cpp`.** Not checked. Moot now: that file was replaced by the fused card, which is built on `6fe61065` (section 9).
 
 ## 6. Triage table (upstream order)
 
@@ -599,8 +599,8 @@ Merged against an explicit base of `29dadbbb`, straight into `a2gspu`. The next 
 | Scanner | Upstream's `is_80store()` accessor replaces the fork's duplicate. |
 
 **Owed after this port** (the per-component study of real-hardware behaviour, 2026-09-16, is the input):
-- **Fused Uthernet II:** upstream register model and slirp, plus the fork's interrupt, state-machine, listen and reporting behaviour, plus new fixes and emulated-time delivery.
-- **Snapshot blocks** for the new cards (Apple Mouse, SecondSight, VOC, ThunderClock, Super Serial, Uthernet II), and ThunderClock time through `A2GSPU_FAKETIME`.
+- **Fused Uthernet II:** done, see section 9.
+- **Snapshot blocks** for the new cards (Apple Mouse, SecondSight, VOC, ThunderClock, Super Serial; Uthernet II is done), and ThunderClock time through `A2GSPU_FAKETIME`.
 - **Side-effect-free reads** for the debug protocol's `READMEM`/`FINDMEM`, which today read through the CPU's bus path.
 - **Hardware-evidence decisions still open:**
   - game switches with nothing attached (the IIe manual's pull-downs are in the hand controller, which favours upstream's floating reads);
@@ -612,3 +612,39 @@ Merged against an explicit base of `29dadbbb`, straight into `a2gspu`. The next 
 - `iigs-gsos601`: cycles 10,635,192 to 10,647,366; the frame-300 SHR hash changes (`5F78F7C15131F43F` to `D29F204D690D417F`).
 - Both runs first diverge in frame 0 right after `STA $C036`: the next `$C015` read samples the floating bus one beam position earlier because `$C036` is now a fast cycle (`7333660a`). With that one cycle type reverted, frame 0 matches the pre-port build.
 - The GS/OS boot converges: at frame 900 both builds show the identical desktop (`1691807AD9B30BAA`), which also confirms the CPU-order SHR hash reads the same picture through the new store layout.
+
+## 9. Fused Uthernet II (after stage 2, 2026-09-16)
+
+Neither side's card was taken whole. Upstream's register model (adapted from AppleWin), its libslirp
+network and its host-socket worker are the base. The fork's earlier card supplied the behaviour a
+guest written to the W5100 datasheet depends on. The rest is new.
+
+| Part | Result |
+|---|---|
+| Register model, buffers, auto-increment, MACRAW/IPRAW framing, slirp | Upstream. |
+| `Sn_IR` / `IR` | Fork. Every interrupt source is raised: CON, DISCON, RECV, TIMEOUT, SEND_OK. `Sn_IR` is write-1-to-clear. `IR` bits 3-0 are derived from "`Sn_IR` != 0" on every read, so clearing a socket clears the mirror; bits 7-5 are write-1-to-clear. Upstream raised no interrupt at all. |
+| Command states | Fork. LISTEN and CONNECT only from a TCP `SOCK_INIT`; DISCON only on a connection; SEND only on a socket that can send; SEND_KEEP only on `ESTABLISHED`. Anything else is ignored, as the chip ignores it, and recorded as `ignored-state`. Upstream acted on every command in every state. |
+| Remote close | Fork. The peer's FIN gives `CLOSE_WAIT` with DISCON, and the host socket is kept until the guest closes, so data can still be sent. Upstream went straight to `CLOSED`. A reset or receive error gives `CLOSED` with DISCON (upstream left the socket `ESTABLISHED` on a receive error); a refused connect or send gives TIMEOUT. |
+| LISTEN | Fork. Bound on the emulation thread, synchronously, with an exclusive address on Windows. A failure gives `CLOSED` with TIMEOUT in the same register write and is reported with the port and the reason. Upstream set `SOCK_LISTEN` whether or not the bind worked. |
+| MACRAW | Fork. Socket 0 only (datasheet); an OPEN on another socket stays `CLOSED` and is reported once. |
+| Unemulated behaviour | Fork. SEND_MAC, PPPoE (`Sn_MR` $05 and `MR` bit 3) and unknown command codes are reported once on stderr as NOT EMULATED, because `Sn_CR` self-clears either way and the guest cannot tell. |
+| Emulated time | New. Host network events enter the machine only once per video frame, from the frame dispatcher. Upstream applied them inside every card register access (the fork's earlier card did so only on `Sn_SR` and `Sn_RX_RSR` reads), so host timing changed the machine at whichever instruction touched the card next. A guest now sees host results at most one frame late, whatever register it polls. |
+| Stale events | New. Every OPEN, CLOSE, DISCON and reset starts a new socket generation, and requests and events carry it. A late "connected" or "closed" for a socket the guest has since replaced is discarded and counted. |
+| Sending | New. A short host `send` keeps the rest queued in the worker instead of dropping it, and SEND_OK is raised when everything has reached the host stack (TIMEOUT if the host refused it). UDP sends report the same way. |
+| Receiving | New. A UDP datagram stays in the host stack while the event ring is full; a datagram or frame larger than the free buffer is dropped and counted. A UDP bind failure is reported. |
+| Robustness | New. `RMSR`/`TMSR` values that exhaust the 8K pool give later sockets a zero-size buffer; every ring operation guards that case (upstream divided by zero). Read-only registers ignore writes. A zero `Sn_CR` write dispatches nothing. |
+| Instrumentation | New. `A2GSPU_U2_EVENTS` records (`u2.cmd`, `u2.state`, `u2.drop`) and counters through `rail read`; `devstate uthernet2` (MR, address latch, IR, addresses, the slirp network the run was given, host byte and ring counters, every socket's rings and generation); the slirp network printed once at startup; `W5100Chip::peek()` reads any register with no side effect. |
+| Snapshot | New. Block `u2` holds the 32K chip memory, mode, address latch and each socket's rings, pending data, status and generation. A connection cannot be saved: a socket that was connecting or connected comes back `CLOSED` with DISCON raised and the restore warns with the count. A listening socket is bound again, and an INIT or UDP socket is reopened. |
+
+**OPEN:** `MR` bit 0 (IND). The fork held it set as hardwired on the Uthernet II; upstream clears `MR` on
+reset. It stays set until card evidence settles it, and a2engine's `netcheck` asserts it.
+
+**Known limits:** SEND_MAC and PPPoE are not emulated. SEND_KEEP emits no packet, so a NAT binding is not
+refreshed. Retransmission timing (`RTR`/`RCR`) belongs to the host stack. Whether the card drives the
+slot's interrupt line is not modelled.
+
+**Verified:** a2engine `netcheck` (8), `listencheck` (11) and `multicheck` (10) all pass. A scratch run of
+a2engine's unharnessed probes also passed 21 checks: a refused connect gives TIMEOUT through `IR` alone,
+connect, SEND and RECV round-trip against a local echo peer, SEND_KEEP gives SEND_OK, SEND_MAC is
+reported, records are written, and a snapshot taken mid-connection restores with the socket `CLOSED`,
+DISCON raised and the loss reported.

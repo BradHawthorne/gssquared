@@ -25,6 +25,7 @@ enum class NetMsg : uint8_t {
     SendUdp,
     MacRawTx,
     IpRawTx,
+    AdoptListen, // FORK: take over a socket the chip bound and listened on synchronously
 };
 
 enum class NetEvt : uint8_t {
@@ -34,11 +35,25 @@ enum class NetEvt : uint8_t {
     RxUdp,
     MacRawRx,
     IpRawRx,
+    SendDone,    // FORK: everything posted for this socket has left for the host stack
+};
+
+// FORK: why a Status event moved a socket, so the chip raises the interrupt the
+// W5100 would: CON on a connection, DISCON on a remote close or reset, TIMEOUT
+// on a connect or send the host refused.
+enum class NetCause : uint8_t {
+    None = 0,
+    Connected,     // outbound connect completed, or an inbound one accepted
+    RemoteClosed,  // orderly FIN from the peer (-> CLOSE_WAIT)
+    Reset,         // connection lost (reset, receive error)
+    Failed,        // connect/open/send refused by the host
 };
 
 struct NetRequest {
     NetMsg msg = NetMsg::None;
     uint8_t sock = 0;
+    uint32_t gen = 0;       // FORK: the socket's generation when the chip posted this
+    intptr_t fd = -1;       // FORK: AdoptListen's already-listening host socket
     uint16_t local_port = 0;
     uint32_t dest_ip = 0;   // network byte order
     uint16_t dest_port = 0; // host order
@@ -50,6 +65,9 @@ struct NetEvent {
     NetEvt evt = NetEvt::None;
     uint8_t sock = 0;
     uint8_t status = 0;
+    uint32_t gen = 0;       // FORK: stale events (an older generation) are discarded
+    NetCause cause = NetCause::None;
+    int host_err = 0;       // FORK: the host socket error behind a Failed/Reset, for the record
     uint32_t src_ip = 0;   // network byte order
     uint16_t src_port = 0; // host order
     uint8_t ip_proto = 0;

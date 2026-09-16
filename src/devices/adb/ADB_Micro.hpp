@@ -256,7 +256,7 @@ class KeyGloo
         // before it reaches the ADB keyboard buffer (used for file-driven input).
         std::function<bool(uint8_t keycode, uint8_t keymods)> key_intercept;
 
-        KeyGloo(ResetController *reset_control, bool is_rom03 = false) : reset_control(reset_control), uc_rom03(is_rom03) {
+        KeyGloo(ResetController *reset_control, bool is_rom03 = false) : uc_rom03(is_rom03), reset_control(reset_control) {
             const char *rom_filename = is_rom03
                 ? "roms/cards/keyglu/rom03-adb-341s0632-2.bin"
                 : "roms/cards/keyglu/rom01-adb-341s0345.bin";
