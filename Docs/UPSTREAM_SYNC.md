@@ -21,6 +21,30 @@ ledger below and change the affected dispositions in the table.
 | 2026-08-02 – 08-04 | about 23 upstream commits, chosen by subject and file | **12 ported** (`6b91d9c1`, `9420cac6`, `f6a9a5c6`, `e0729c93`, `be5c869e`, `a359889a`, `cf946618`, `6f296ee6`, `160721cc`, `d2a0e056`, `5bd804a2`, half of `605a2c3f`); **5 judged present** (`94c1f2de`, `a9c7d1c6`, `282f8973`, `ad5f436b`, `ba91cf63`); **6 deferred** (`3d4efff1`, `0d95d93c`, `829bd5ea`, `d79be3c0`, `0e606364`, `cba9c847`) | `f646760c`, `3999d40e`, `486fb60e`, `0c601905`, `49822387`, `8d6f6cb5`, `05c2a46b`, `5814d86c`, `c7ae46e9` |
 | 2026-09-16 | **all of** `c4b1fa69..d380e055` (258 commits, to upstream 2026-09-14) | triage only — nothing ported. Dispositions: 30 PORT, 89 PORT-LATER, 12 PORTED, 12 HAVE, 6 DEFERRED, 83 SKIP, 26 MERGE. The fork removed its ungated mouse-coordinate writes into guest memory (`a820c356`), leaving upstream's closed-loop ADB mouse sync (`d03c9783`, `b299b98d`, `19fe1f67`, `1f95ff78`, `533d8763`, `d380e055`) as the faithful replacement to port | this file |
 
+### Fork edits to upstream files after the triage
+
+The triage below analysed the fork at `e35908d2`. These later commits changed
+upstream-owned files, so a port that takes an upstream version of one of them
+must carry the fork's lines across. Each is a thin, gated hook or a small
+accessor; the machinery lives in fork-owned files.
+
+| File | Fork lines | Commits |
+|------|-----------|---------|
+| `src/cpus/base_6502.cpp` | progress taps in `bus_write`/`execute_next` (M4, M9); the breakpoint park (`if (iigs_tb_on_landing(cpu)) return 0;`); the trap read trigger in `bus_read` | `f3d00823`, `31482937`, `bf77f99e`, `6ece2987` |
+| `src/gs2.cpp` | CPU loops stop on `cpu->halt`; `frame_video_update` only for a completed frame; `A2GSPU_PACE`; the windowed frame clock | `3be31a3a`, `bf77f99e`, `a1b68c4d`, `90a5791f` |
+| `src/mmus/mmu.hpp`, `src/mmus/mmu_iigs.hpp` | `probe_peek`/`probe_readable` for `$E0/$E1:C000-CFFF`; `probe_poke` returns whether it landed | `114bbd59` |
+| `src/mmus/mmu_iigs.cpp`, `src/devices/adb/keygloo.cpp` | progress taps (shadowed screen store, keyboard reads) | `f3d00823`, `31482937` |
+| `src/devices/keyboard/keyboard.cpp` | progress taps; `g_tap_key_event` in `kb_key_pressed` | `f3d00823`, `858c1cdb` |
+| `src/devices/adb/ADB_Micro.hpp` | `g_tap_key_event` at both key-latch sites (`load_key_from_buffer`, the unbuffered path of `store_key_to_buffer`) | `858c1cdb` |
+| `src/devices/diskii/diskii_controller.hpp` | `g_tap_disk_write_event` after `write_pulse` | `858c1cdb` |
+| `src/devices/floppy/Floppy_woz.hpp` | `a2gspu_is_mounted()` accessor | `858c1cdb` |
+| `src/devices/displaypp/VideoScannerII.{hpp,cpp}`, `VideoScannerIIgs.hpp`, `src/display/display.{hpp,cpp}` | Class B snapshot of the scanner and `new_video` | `bbff1818` |
+| `src/Device_ID.hpp`, `src/devices.cpp` | upstream ID order restored with a positional check | `3be31a3a` |
+| `src/debugger/ExecuteCommand.hpp`, `src/devices/scc8530/Z85C30.hpp`, `src/devices/speaker/{EventBuffer,NEventBuffer,SpeakerFX}.hpp` | Linux/Clang build fixes | `700f6d2c` |
+
+`git diff e35908d2..HEAD --stat -- src` regenerates the list; exclude the fork-owned prefixes
+(`a2gspu_`, `iigs_`, `memvu_`, `wiz5_`, `generic_tap`, `a2record`, `devices/a2gspu/`).
+
 ## Triage of `c4b1fa69..upstream/main` (2026-09-16)
 
 - **Fork side analysed:** `a2gspu` at `e35908d2`, with `3be31a3a` (the control plane moved out of
