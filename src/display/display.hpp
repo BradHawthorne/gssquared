@@ -147,6 +147,9 @@ public:
 
     uint16_t onesec_counter = 0;
     uint16_t quartersec_counter = 0;
+    // FORK: when the next one-second edge is due (14M ticks). The RTC's 1 Hz output
+    // is periodic, so each edge follows the last by exactly one second.
+    uint64_t onesec_next_14m = 0;
     
     uint8_t f_langsel = 0x00;
 
@@ -210,4 +213,4 @@ void update_megaii_interrupt(display_state_t *ds, bool assert_now);
 // with every interrupt source disabled: GS/OS's heartbeat (which is what polls
 // the keyboard) never runs again. The restore re-drives the IRQ lines.
 void display_A2GSPU_snapshot(display_state_t *ds, FILE *f);
-bool display_A2GSPU_restore(display_state_t *ds, FILE *f);
+bool display_A2GSPU_restore(display_state_t *ds, FILE *f, uint32_t version);

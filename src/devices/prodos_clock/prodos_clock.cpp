@@ -20,6 +20,7 @@
 #include <stdio.h>
 
 #include "debug.hpp"
+#include "a2gspu_faketime.hpp"
 
 #include "cpu.hpp"
 
@@ -78,8 +79,10 @@ foo:
 void prodos_clock_getln_handler(prodos_clock_state *prodosclock_d) {
     char *buf = prodosclock_d->buf;
 
-    time_t now = time(nullptr);
-    struct tm *tm = localtime(&now);
+    // FORK: A2GSPU_FAKETIME pins it, as it pins the IIgs RTC (a2gspu_faketime.hpp).
+    struct tm tmv{};
+    const struct tm *tm = &tmv;
+    if (!a2gspu_clock_fields(&tmv)) return;
 
     snprintf(buf, 255, "%02d,%02d,%02d,%02d,%02d\r", tm->tm_mon + 1, tm->tm_wday, tm->tm_mday, tm->tm_hour, tm->tm_min);
     for (int i = 0; buf[i] != '\0'; i++) {

@@ -39,6 +39,7 @@
 #include "mbus/MessageBus.hpp"
 #include "mbus/KeyboardMessage.hpp"
 #include "util/EventTimer.hpp"
+#include "a2gspu_faketime.hpp"
 
 #include "devices/displaypp/VideoScanGenerator.cpp"
 #include "devices/displaypp/VideoScannerIIgs.hpp"
@@ -667,20 +668,34 @@ bool display_A2GSPU_new_video_restore(display_state_t *ds, FILE *f) {
     set_new_video(ds, nv);
     return true;
 }
+void rtc_pram_1sec_interrupt(uint64_t instanceID, void *context);
 void display_A2GSPU_snapshot(display_state_t *ds, FILE *f) {
     uint8_t r[4] = { ds->f_INTEN, ds->f_VGCINT, ds->f_INTFLAG, ds->f_langsel };
     fwrite(r, 1, 4, f);
     fwrite(&ds->onesec_counter, 2, 1, f); fwrite(&ds->quartersec_counter, 2, 1, f);
     int32_t fc = (int32_t)ds->flash_counter; fwrite(&fc, 4, 1, f);
     uint8_t fs = ds->flash_state ? 1 : 0; fwrite(&fs, 1, 1, f);
+    // Version 2: 14M ticks to the next one-second edge, so a restored machine keeps
+    // the phase it was saved with instead of taking one from the host clock.
+    const uint64_t now = ds->clock ? ds->clock->get_c14m() : 0;
+    uint64_t to_edge = ds->onesec_next_14m > now ? ds->onesec_next_14m - now : 0;
+    fwrite(&to_edge, 8, 1, f);
 }
-bool display_A2GSPU_restore(display_state_t *ds, FILE *f) {
+bool display_A2GSPU_restore(display_state_t *ds, FILE *f, uint32_t version) {
     uint8_t r[4];
     if (fread(r, 1, 4, f) != 4) return false;
     ds->f_INTEN = r[0]; ds->f_VGCINT = r[1]; ds->f_INTFLAG = r[2]; ds->f_langsel = r[3];
     if (fread(&ds->onesec_counter, 2, 1, f) != 1 || fread(&ds->quartersec_counter, 2, 1, f) != 1) return false;
     int32_t fc = 0; if (fread(&fc, 4, 1, f) != 1) return false; ds->flash_counter = fc;
     uint8_t fs = 0; if (fread(&fs, 1, 1, f) != 1) return false; ds->flash_state = fs != 0;
+    if (version >= 2) {
+        uint64_t to_edge = 0;
+        if (fread(&to_edge, 8, 1, f) != 1) return false;
+        if (to_edge && ds->clock && ds->computer && ds->computer->event_timer) {
+            ds->onesec_next_14m = ds->clock->get_c14m() + to_edge;
+            ds->computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds);
+        }
+    }
     // The IRQ lines follow the registers, as they would after the writes that set them.
     update_vgc_interrupt(ds, true);
     update_megaii_interrupt(ds, true);
@@ -754,8 +769,14 @@ void rtc_pram_1sec_interrupt(uint64_t instanceID, void *context) {
     // throw interrupt
     ds->f_onesec_asserted = true;
     update_vgc_interrupt(ds, true);
-    // reschedule ourselves for 1 second.
-    uint64_t trigger_cycle = ds->clock->get_c14m() + ds->clock->get_c14m_per_second() /* 14318180 */;
+    // FORK: the next edge is one second after THIS edge was due, not after the
+    // instruction boundary that dispatched it -- rescheduling from "now" slipped by
+    // the dispatch delay every second, so the 1 Hz source drifted against the RTC.
+    const uint64_t period = ds->clock->get_c14m_per_second() /* 14318180 */;
+    const uint64_t now = ds->clock->get_c14m();
+    uint64_t trigger_cycle = ds->onesec_next_14m + period;
+    if (trigger_cycle <= now) trigger_cycle = now + period;   // fell behind (a long stop): no burst
+    ds->onesec_next_14m = trigger_cycle;
     ds->computer->event_timer->scheduleEvent(trigger_cycle, rtc_pram_1sec_interrupt, instanceID, ds);
 }
 
@@ -799,6 +820,12 @@ DebugFormatter *display_debug(display_state_t *ds) {
     df->addLine(" HCOUNTER %02X VCOUNTER %03X", ds->video_scanner->get_hcounter(), ds->video_scanner->get_vcounter());
     df->addLine(" INTEN C041: %02X VGCINT C023: %02X INTFLAG C046: %02X", ds->f_INTEN, ds->f_VGCINT, ds->f_INTFLAG);
     df->addLine("    sl en: %d as: %d - 1sec en: %d as: %d", ds->f_scanline_enable, ds->f_scanline_asserted, ds->f_onesec_enable, ds->f_onesec_asserted);
+    if (ds->video_scanner_type == Scanner_AppleIIgs && ds->clock) {
+        // FORK: the one-second source's phase -- which edge is next, and when.
+        const uint64_t now = ds->clock->get_c14m();
+        df->addLine("    1sec next edge: 14M %llu (+%llu ticks)", (unsigned long long)ds->onesec_next_14m,
+                    (unsigned long long)(ds->onesec_next_14m > now ? ds->onesec_next_14m - now : 0));
+    }
     return df;
 }
 
@@ -1057,8 +1084,14 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
         uint64_t ns_14m = 1000000000 / ds->clock->get_c14m_per_second() /* 14318180 */;
         // calculate number of 14M ticks (14318180hz) are in remain nanoseconds
         uint64_t ticks_14m = remain / ns_14m;
+        // FORK: under A2GSPU_FAKETIME the phase is pinned too -- the first edge one
+        // second after power-on -- or a pinned run with the interrupt enabled took
+        // its IRQ timing from the host clock and did not repeat.
+        long long pinned = 0;
+        if (a2gspu_faketime_unix(&pinned)) ticks_14m = ds->clock->get_c14m_per_second();
         // set the 14M timer to the number of ticks
-        computer->event_timer->scheduleEvent(ticks_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds);
+        ds->onesec_next_14m = ds->clock->get_c14m() + ticks_14m;
+        computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds);
     }
     computer->register_debug_display_handler(
         "display",

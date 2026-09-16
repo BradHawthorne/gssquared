@@ -485,7 +485,7 @@ none) and are the named exemption in `railparity.ps1`.
 |------|--------|-------|-------|
 | `A2GSPU_SEED=<n>` | seed the cold-boot SP entropy (`srand`) so a from-scratch spike is byte-reproducible (warm restores overwrite SP anyway) | determinism | env |
 | `A2GSPU_BRAM=default\|<file>` | pin the **battery RAM** a run starts from. Stock (unset) reads `./gs2-bram.bin` from the working directory when present and **writes it back at exit**, so a run's starting BRAM depends on where it ran and on every run before it there — measured: one pinned 300-frame IIgs boot hashed `5F78F7C15131F43F` from a fresh directory and `89FCD3DA7D947DFF` beside a rewritten BRAM file. `default` starts from the built-in contents and touches no file; `<file>` loads 256 bytes (missing or short is fatal, exit 2) and never writes back. `A2GSPU PINS:` and the snapshot manifest carry `bram=<cwd\|cwd-absent\|default\|file>/<house-FNV>` (or `none` on a machine with no RTC) | determinism | env |
-| `A2GSPU_FAKETIME=<epoch-s>` | freeze the RTC at that instant (bypasses `localtime`/timezone) so RTC-derived OS state is run-to-run stable | determinism | env |
+| `A2GSPU_FAKETIME=<epoch-s>` | freeze every clock the guest can read at that instant — the IIgs RTC, the ProDOS clock card and the ThunderClock Plus, with no host timezone applied — and pin the VGC one-second interrupt's phase (first edge one second after power-on), so clock-derived state is run-to-run stable | determinism | env |
 | `A2GSPU_RAMDISK=1` | serve a mounted image from a copy-on-write RAM buffer; writes never touch the host file | device | env |
 | `A2GSPU_SP_NDEV=<n>` | override the SmartPort device count (A/B faithfulness; `32` reproduces pre-fix enumeration) | device | env |
 | `A2GSPU_CARD_MODEL=card\|legacy` | which A2GSPU card a configuration with one gets. **`card`** (the default): the card watches the slot bus and never drives the data lines, so every read of its I/O block floats and there is no ident byte — software finds the card from its own configuration; the one host-writable address is the command register `$C0nF` (see `A2GSPU_CARD_CMDLOG`). **`legacy`**: the earlier register protocol at `$C0n0-$C0nF` (a status read and the `$A2` ident at `$C0nF`), its local UHR/TERM renderer and its video-state serial payload, kept for software written against it. Any other value is fatal (exit 2). Until 2026-09-16 the legacy model was the only one | device | env |
@@ -680,6 +680,13 @@ instant and bypasses `localtime`/timezone entirely (freezing `time()` alone is n
 `tm_gmtoff`/`_timezone` still vary by host). The guest reads it through the ordinary
 `$C033`/`$C034` path, exactly as it would read a real clock stopped at that instant:
 `A2GSPU_FAKETIME=1000000000` makes the seconds registers read `0xB7C07A80` on every run.
+The clock cards read the same instant's calendar fields (`1780000000` is 2026-05-28 20:26:40,
+a Thursday: the ProDOS clock card's GETLN line is `05,04,28,20,26`, the ThunderClock's counter
+`5428202640`), frozen like the RTC until the guest sets the ThunderClock, which then counts
+emulated seconds. Without the pin, the VGC one-second interrupt keeps its host-synced phase; with
+it, the first edge is exactly one second after power-on. Either way each edge follows the last by
+exactly one emulated second (`devstate display` shows the next one), and the `vgcint` snapshot
+block (version 2) saves how far away it is.
 
 ## For developers: the observer read
 

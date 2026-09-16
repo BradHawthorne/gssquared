@@ -47,6 +47,7 @@
 #include "devices/iwm/iwm_device.hpp"      // the disk controller's snapshot functions (M5)
 #include "devices/pdblock3/pdblock3.hpp"   // the block device's snapshot functions (M5)
 #include "devices/uthernet2/uthernet2.hpp" // the network card's snapshot functions (M5)
+#include "devices/thunderclock_plus/thunderclockplus.hpp" // the clock card's snapshot functions (M5)
 #include "devices/speaker/speaker.hpp"
 #include "platforms.hpp"
 #include "util/dialog.hpp"

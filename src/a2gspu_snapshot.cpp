@@ -95,7 +95,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "serial", "clock", "u2", "tclock" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -174,7 +174,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
     }
     display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
     if (ds && ds->video_scanner_type == Scanner_AppleIIgs) {
-        long at = a2gspu_snap_dev_begin(f, "vgcint", 1); display_A2GSPU_snapshot(ds, f); a2gspu_snap_dev_end(f, at);
+        long at = a2gspu_snap_dev_begin(f, "vgcint", 2); display_A2GSPU_snapshot(ds, f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "vgcint" : ",vgcint";
     }
     if (ds && ds->video_scanner) {
@@ -226,6 +226,11 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "u2", 1); uthernet2_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "u2" : ",u2";
     }
+    // Every ThunderClock Plus: its registers, time counter and tick phase.
+    if (thunderclock_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "tclock", 1); thunderclock_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "tclock" : ",tclock";
+    }
     return names;
 }
 // Reads device blocks up to the sentinel, which it leaves for the caller. A block
@@ -250,9 +255,9 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
             }
         } else if (!strcmp(nm, "ensoniq") && ver == 2) {
             if (g_a2gspu_ensoniq) r = ensoniq_A2GSPU_restore(g_a2gspu_ensoniq, f) ? RESTORED : FAILED;
-        } else if (!strcmp(nm, "vgcint") && ver == 1) {
+        } else if (!strcmp(nm, "vgcint") && (ver == 1 || ver == 2)) {
             display_state_t *ds = (display_state_t *)computer->get_module_state(MODULE_DISPLAY);
-            if (ds && ds->video_scanner_type == Scanner_AppleIIgs) r = display_A2GSPU_restore(ds, f) ? RESTORED : FAILED;
+            if (ds && ds->video_scanner_type == Scanner_AppleIIgs) r = display_A2GSPU_restore(ds, f, ver) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "scanner") && ver == 1) {
             // Class B (M5). A block from a different scanner type does not fit this
             // one's layout; the length check below realigns and the read fails loud.
@@ -339,6 +344,13 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 }
                 if (r == RESTORED && absent)
                     a2gspu_warn("A2GSPU SNAP", "u2: a saved Uthernet II's slot has no Uthernet II in this machine; that card was not applied");
+            }
+        } else if (!strcmp(nm, "tclock") && ver == 1) {
+            if (thunderclock_A2GSPU_present()) {
+                int absent = 0;
+                r = thunderclock_A2GSPU_restore(f, &absent) ? RESTORED : FAILED;
+                if (r == RESTORED && absent)
+                    a2gspu_warn("A2GSPU SNAP", "tclock: a saved ThunderClock's slot has no ThunderClock in this machine; that card was not applied");
             }
         }
         if (r == FAILED) return false;

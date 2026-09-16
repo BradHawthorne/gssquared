@@ -14,6 +14,7 @@
 #include <ctime>
 
 #include "Device_ID.hpp"
+#include "a2gspu_faketime.hpp"
 #include "debug.hpp"
 #include "device_irq_id.hpp"
 #include "util/DebugFormatter.hpp"
@@ -71,9 +72,10 @@ uint32_t tp_hz_for_cmd(uint8_t cmd) {
 }
 
 uint64_t snapshot_host_time() {
-    time_t now = time(nullptr);
-    struct tm *tm = localtime(&now);
-    if (tm == nullptr) {
+    // FORK: A2GSPU_FAKETIME pins it, as it pins the IIgs RTC (a2gspu_faketime.hpp).
+    struct tm tmv{};
+    const struct tm *tm = &tmv;
+    if (!a2gspu_clock_fields(&tmv)) {
         return 0;
     }
 
@@ -181,8 +183,8 @@ void cancel_1hz(thunderclock_state *st) {
     }
 }
 
-void schedule_tp(thunderclock_state *st);
-void schedule_1hz(thunderclock_state *st);
+void schedule_tp(thunderclock_state *st, bool from_due);
+void schedule_1hz(thunderclock_state *st, bool from_due);
 void start_tp(thunderclock_state *st, uint32_t hz);
 
 void thunderclock_tp_tick(uint64_t /*instanceID*/, void *user) {
@@ -192,17 +194,19 @@ void thunderclock_tp_tick(uint64_t /*instanceID*/, void *user) {
         update_irq(st);
     }
     if (st->tp_hz != 0) {
-        schedule_tp(st);
+        schedule_tp(st, true);
     }
 }
 
 void thunderclock_1hz_tick(uint64_t /*instanceID*/, void *user) {
     auto *st = static_cast<thunderclock_state *>(user);
     increment_time_counter(st);
-    schedule_1hz(st);
+    schedule_1hz(st, true);
 }
 
-void schedule_tp(thunderclock_state *st) {
+// from_due: the next edge follows the one just handled by exactly one period
+// (a periodic source); otherwise it is one period from now (a restart).
+void schedule_tp(thunderclock_state *st, bool from_due) {
     if (!st->event_timer || !st->clock || st->tp_hz == 0) {
         return;
     }
@@ -210,16 +214,27 @@ void schedule_tp(thunderclock_state *st) {
     if (period == 0) {
         period = 1;
     }
-    st->event_timer->scheduleEvent(st->clock->get_c14m() + period, thunderclock_tp_tick,
-                                   timer_id_tp(st->_slot), st);
+    const uint64_t now = st->clock->get_c14m();
+    uint64_t next = (from_due ? st->next_tp_14m : now) + period;
+    if (next <= now) {
+        next = now + period;   // fell behind (a long stop): resume the cadence, do not burst
+    }
+    st->next_tp_14m = next;
+    st->event_timer->scheduleEvent(next, thunderclock_tp_tick, timer_id_tp(st->_slot), st);
 }
 
-void schedule_1hz(thunderclock_state *st) {
+void schedule_1hz(thunderclock_state *st, bool from_due) {
     if (!st->event_timer || !st->clock) {
         return;
     }
-    st->event_timer->scheduleEvent(st->clock->get_c14m() + st->clock->get_c14m_per_second(),
-                                   thunderclock_1hz_tick, timer_id_1hz(st->_slot), st);
+    const uint64_t period = st->clock->get_c14m_per_second();
+    const uint64_t now = st->clock->get_c14m();
+    uint64_t next = (from_due ? st->next_1hz_14m : now) + period;
+    if (next <= now) {
+        next = now + period;
+    }
+    st->next_1hz_14m = next;
+    st->event_timer->scheduleEvent(next, thunderclock_1hz_tick, timer_id_1hz(st->_slot), st);
 }
 
 void start_tp(thunderclock_state *st, uint32_t hz) {
@@ -227,7 +242,7 @@ void start_tp(thunderclock_state *st, uint32_t hz) {
         st->event_timer->cancelEvents(timer_id_tp(st->_slot));
     }
     st->tp_hz = hz;
-    schedule_tp(st);
+    schedule_tp(st, false);
 }
 
 void do_shift(thunderclock_state *st, uint8_t value) {
@@ -244,7 +259,7 @@ void execute_command(thunderclock_state *st) {
             st->time_counter = st->shift_reg & TCP_40BIT;
             st->time_set_active = true;
             start_tp(st, 64);
-            schedule_1hz(st);
+            schedule_1hz(st, false);
             if (DEBUG(DEBUG_THUNDERCLOCK)) {
                 printf("TCP TIME SET %010llX\n", u64_t(st->time_counter));
             }
@@ -380,6 +395,9 @@ DebugFormatter *debug_thunderclock(thunderclock_state *st) {
     return df;
 }
 
+// FORK: every ThunderClock, by slot, for the snapshot block. Cleared at shutdown.
+thunderclock_state *g_tclock_cards[16] = {};
+
 } // namespace
 
 void init_slot_thunderclock(computer_t *computer, SlotType_t slot) {
@@ -419,6 +437,7 @@ void init_slot_thunderclock(computer_t *computer, SlotType_t slot) {
     }
 
     thunderclock_reset(st, true);
+    g_tclock_cards[slot & 0x0F] = st;
 
     computer->register_reset_handler([st](bool cold_start) {
         thunderclock_reset(st, cold_start);
@@ -426,6 +445,9 @@ void init_slot_thunderclock(computer_t *computer, SlotType_t slot) {
     });
 
     computer->register_shutdown_handler([st]() {
+        if (g_tclock_cards[st->_slot & 0x0F] == st) {
+            g_tclock_cards[st->_slot & 0x0F] = nullptr;
+        }
         cancel_tp(st);
         cancel_1hz(st);
         delete st->rom;
@@ -440,4 +462,71 @@ void init_slot_thunderclock(computer_t *computer, SlotType_t slot) {
 
     fprintf(stdout, "ThunderClock Plus init slot %d ($C0%02X)\n", static_cast<int>(slot),
             0x80 + (static_cast<int>(slot) * 0x10));
+}
+
+// ---- A2GSPU snapshot (M5) ---------------------------------------------------
+// Per card: the register latch, command, 40-bit shift register and time counter,
+// the interrupt state, the TP rate, and how far away the next 1 Hz count and TP
+// edge are, so a restored clock ticks with the same phase it was saved with.
+bool thunderclock_A2GSPU_present() {
+    for (auto *st : g_tclock_cards) {
+        if (st) return true;
+    }
+    return false;
+}
+
+void thunderclock_A2GSPU_snapshot(FILE *f) {
+    uint8_t cnt = 0;
+    for (auto *st : g_tclock_cards) if (st) cnt++;
+    fwrite(&cnt, 1, 1, f);
+    for (int s = 0; s < 16; s++) {
+        const thunderclock_state *st = g_tclock_cards[s];
+        if (!st) continue;
+        const uint64_t now = st->clock ? st->clock->get_c14m() : 0;
+        uint8_t b[6] = { static_cast<uint8_t>(s), st->last_write, st->latched_cmd,
+                         static_cast<uint8_t>(st->irqen ? 1 : 0), static_cast<uint8_t>(st->irq_status ? 1 : 0),
+                         static_cast<uint8_t>(st->time_set_active ? 1 : 0) };
+        fwrite(b, 1, 6, f);
+        uint64_t q[4] = { st->shift_reg, st->time_counter,
+                          st->time_set_active && st->next_1hz_14m > now ? st->next_1hz_14m - now : 0,
+                          st->tp_hz && st->next_tp_14m > now ? st->next_tp_14m - now : 0 };
+        fwrite(q, 8, 4, f);
+        uint32_t hz = st->tp_hz;
+        fwrite(&hz, 4, 1, f);
+    }
+}
+
+bool thunderclock_A2GSPU_restore(FILE *f, int *absent) {
+    *absent = 0;
+    uint8_t cnt = 0;
+    if (fread(&cnt, 1, 1, f) != 1) return false;
+    for (int i = 0; i < cnt; i++) {
+        uint8_t b[6];
+        uint64_t q[4];
+        uint32_t hz = 0;
+        if (fread(b, 1, 6, f) != 6 || fread(q, 8, 4, f) != 4 || fread(&hz, 4, 1, f) != 1) return false;
+        thunderclock_state *st = b[0] < 16 ? g_tclock_cards[b[0]] : nullptr;
+        if (!st) { (*absent)++; continue; }
+        st->last_write = b[1];
+        st->latched_cmd = b[2];
+        st->irqen = b[3] != 0;
+        st->irq_status = b[4] != 0;
+        st->time_set_active = b[5] != 0;
+        st->shift_reg = q[0] & TCP_40BIT;
+        st->time_counter = q[1] & TCP_40BIT;
+        cancel_1hz(st);
+        cancel_tp(st);
+        const uint64_t now = st->clock ? st->clock->get_c14m() : 0;
+        if (st->time_set_active && st->event_timer && st->clock) {
+            st->next_1hz_14m = now + (q[2] ? q[2] : st->clock->get_c14m_per_second());
+            st->event_timer->scheduleEvent(st->next_1hz_14m, thunderclock_1hz_tick, timer_id_1hz(st->_slot), st);
+        }
+        st->tp_hz = hz;
+        if (hz && st->event_timer && st->clock) {
+            st->next_tp_14m = now + (q[3] ? q[3] : st->clock->get_c14m_per_second() / hz);
+            st->event_timer->scheduleEvent(st->next_tp_14m, thunderclock_tp_tick, timer_id_tp(st->_slot), st);
+        }
+        update_irq(st);
+    }
+    return true;
 }

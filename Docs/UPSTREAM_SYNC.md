@@ -600,7 +600,7 @@ Merged against an explicit base of `29dadbbb`, straight into `a2gspu`. The next 
 
 **Owed after this port** (the per-component study of real-hardware behaviour, 2026-09-16, is the input):
 - **Fused Uthernet II:** done, see section 9.
-- **Snapshot blocks** for the new cards (Apple Mouse, SecondSight, VOC, ThunderClock, Super Serial; Uthernet II is done), and ThunderClock time through `A2GSPU_FAKETIME`.
+- **Snapshot blocks** for the new cards (Apple Mouse, SecondSight, VOC, Super Serial; Uthernet II and ThunderClock are done). ThunderClock time through `A2GSPU_FAKETIME` is done (section 10).
 - **Side-effect-free reads** for the debug protocol's `READMEM`/`FINDMEM`, which today read through the CPU's bus path.
 - **Hardware-evidence decisions still open:**
   - game switches with nothing attached (the IIe manual's pull-downs are in the hand controller, which favours upstream's floating reads);
@@ -648,3 +648,19 @@ a2engine's unharnessed probes also passed 21 checks: a refused connect gives TIM
 connect, SEND and RECV round-trip against a local echo peer, SEND_KEEP gives SEND_OK, SEND_MAC is
 reported, records are written, and a snapshot taken mid-connection restores with the socket `CLOSED`,
 DISCON raised and the loss reported.
+
+## 10. Clocks under the time pin (2026-09-16)
+
+`A2GSPU_FAKETIME` reached only the IIgs RTC. Two cards and one interrupt still read the host clock,
+so a pinned run did not repeat if a clock card was installed or the one-second interrupt was enabled.
+
+| Part | Result |
+|---|---|
+| ProDOS clock card | The GETLN line comes from the pinned instant's calendar fields (`a2gspu_faketime.hpp`). The helper applies no host timezone, the same as the RTC. |
+| ThunderClock Plus | Power-on and TIME_READ use the pinned fields, frozen until the guest's TIME_SET, then counted in emulated seconds. The 1 Hz count and the TP output were rescheduled from the handler's dispatch time; they now follow their own due times, so the counter keeps real time. Snapshot block `tclock` holds the registers, the 40-bit shift register and counter, the TP rate, and the distance to the next 1 Hz and TP edges. `devstate thunderclock` was already upstream's. |
+| VGC one-second interrupt | The first edge's phase came from the host clock even in a pinned run. Under the pin it is now exactly one second after power-on; without it, the host-synced phase stays, which matches the RTC's rollover. Each edge follows the last by exactly one second rather than one second after dispatch. The `vgcint` block is version 2 and saves the distance to the next edge; version 1 files still load. `devstate display` shows the next edge. |
+
+**Verified:** a scratch run (10 checks) under the pin. The ThunderClock counter and TIME_READ read
+`5428202640`, a `tclock` block round-trips, and the ProDOS clock card's GETLN line reads
+`05,04,28,20,26`. Two IIgs sessions put the next one-second edge at the same 14M count, a whole
+number of seconds after power-on, and a restore keeps the ticks to the edge.
