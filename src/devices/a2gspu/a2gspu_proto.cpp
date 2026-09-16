@@ -69,7 +69,12 @@ static void execute_with_data(a2gspu_data *ad, uint16_t data16) {
             break;
 
         case A2GSPU_CMD_WRITE_PAL:
-            if (ps->pal_idx < 256) {
+            // pal_idx is a uint8_t, so it is always < 256 and indexes the 256-entry
+            // palette safely; the auto-increment wraps 255 -> 0. The old
+            // `if (pal_idx < 256)` read as a bound but could never be false (Clang
+            // rejects it under -Werror=tautological-compare), so it is spelled as
+            // the unconditional block it always was.
+            {
                 ad->emu.palette[ps->pal_idx] = data16;
                 ps->pal_idx++;
                 ad->emu.frame_dirty = true;

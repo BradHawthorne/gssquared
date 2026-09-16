@@ -118,13 +118,13 @@ int main(int argc, char *argv[]) {
                 if (value != test_recs[recindex].value) {
                     mismatches++;
                     printf("MISMATCH cycle=%llu reg=%02X expected=%02X actual=%02X\n",
-                           system_cycles,
+                           (unsigned long long)system_cycles,
                            test_recs[recindex].reg,
                            test_recs[recindex].value,
                            value);
                 } else {
                     printf("MATCH    cycle=%llu reg=%02X value=%02X\n",
-                           system_cycles,
+                           (unsigned long long)system_cycles,
                            test_recs[recindex].reg,
                            value);
                 }
@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
             recindex++;
         }
 
-        printf("%8llu: ",system_cycles); chip.debug_one();
+        printf("%8llu: ",(unsigned long long)system_cycles); chip.debug_one();
         clock.incr_cycles(); // this should trigger the cycle_handler..
         //chip.incr_cycle();
         printf("after   : "); chip.debug_one();

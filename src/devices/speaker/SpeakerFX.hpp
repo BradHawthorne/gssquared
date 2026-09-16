@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cinttypes>   // SCNu64: the uint64_t scanf format on every ABI
 #include <SDL3/SDL.h>
 
 #include "devices/speaker/NEventBuffer.hpp"
@@ -293,7 +294,7 @@ class SpeakerFX {
 
             // skip any long silence, start playback / reconstruction at first event.
         
-            while (fscanf(recording, "%llu", &event) != EOF) {
+            while (fscanf(recording, "%" SCNu64, &event) != EOF) {
                 if (!event_buffer->add_event({event, 6})) {
                     std::cerr << "Error: Event buffer full\n";
                     fclose(recording);

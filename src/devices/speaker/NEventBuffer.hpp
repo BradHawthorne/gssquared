@@ -1,4 +1,5 @@
 #pragma once
+#include <cinttypes>   // SCNu64: the uint64_t scanf format on every ABI
 #include <stdint.h>
 #include <cstring>
 #include <cstdio>
@@ -41,7 +42,7 @@ class EventBufferBase {
             Data_T event = {0, 0};
             int i = 0;
 
-            while (fscanf(recording, "%llu", &event.cycle) != EOF) {
+            while (fscanf(recording, "%" SCNu64, &event.cycle) != EOF) {
                 if (!add_event(event)) {
                     printf("Event buffer full\n");
                     break;

@@ -742,7 +742,7 @@ class Z85C30 {
                     event_timer->scheduleEvent(trigger_cycle, tx_complete_callback, tx_timer_id[channel], this);
                     
                     if (SCDEBUG) printf("SCC: Ch %c TX scheduled for %llu cycles (baud: %.2f)\n", 
-                        ch_name(channel), cycles_per_char, baud_rate[channel]);
+                        ch_name(channel), (unsigned long long)cycles_per_char, baud_rate[channel]);
                 } else {
                     // High baud rate or no timer - complete immediately
                     tx_complete(channel);
@@ -920,7 +920,7 @@ class Z85C30 {
                 event_timer->scheduleEvent(trigger_cycle, rx_complete_callback, rx_timer_id[channel], this);
                 
                 if (SCDEBUG) printf("SCC: Ch %c RX scheduled for %llu cycles\n", 
-                    ch_name(channel), cycles_per_char);
+                    ch_name(channel), (unsigned long long)cycles_per_char);
             } else {
                 // High baud rate or no timer - complete immediately
                 if (SCDEBUG) printf("SCC: Ch %c RX completing immediately\n", ch_name(channel));
