@@ -1,4 +1,5 @@
 #pragma once
+#include "a2gspu_pace.hpp"   // pace= on the PINS line
 #include <string>
 #include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 // ============================================================================
@@ -84,8 +85,8 @@ inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames,
     else snprintf(exe, sizeof exe, "unreadable");
     if (platform_id >= 0 && frames >= 0) snprintf(pf, sizeof pf, " platform=%d frames=%d", platform_id, frames);
     else pf[0] = 0;
-    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s%s rom=%s build=%s(configure-time) exe=%s",
-             seed ? seed : "unset", ft ? ft : "unset", ram ? 1 : 0, bram, pf, rom,
+    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s pace=%s%s rom=%s build=%s(configure-time) exe=%s",
+             seed ? seed : "unset", ft ? ft : "unset", ram ? 1 : 0, bram, g_a2gspu_pace_name, pf, rom,
              build_version ? build_version : "unknown", exe);
 }
 

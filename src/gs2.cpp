@@ -472,7 +472,14 @@ bool run_one_frame(computer_t *computer) {
         uint64_t time_to_sleep = frame_length_ns - (SDL_GetTicksNS() - computer->last_cycle_time);
         computer->set_idle_percent(((float)time_to_sleep / (float)frame_length_ns) * 100.0f);
 
-        frame_sleep(computer, computer->last_cycle_time, frame_length_ns);
+        if (g_a2gspu_pace_fast) {
+            // A2GSPU_PACE=fast (a2gspu_pace.hpp; the headless default): no wait for
+            // the wall clock, and the audio this frame generated is dropped rather
+            // than left for a paused device to never drain.
+            if (computer->audio_system) computer->audio_system->clear_all_streams();
+        } else {
+            frame_sleep(computer, computer->last_cycle_time, frame_length_ns);
+        }
         computer->last_cycle_time = SDL_GetTicksNS(); 
 
     } else { // Ludicrous Speed!

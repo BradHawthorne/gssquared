@@ -71,6 +71,11 @@ void run_headless_spike(GS2AppState *state) {
         exit(rc);
     }
 
+    // A2GSPU_PACE: before PINS, which reports it. Headless defaults to fast, and a
+    // fast run's audio is generated and probed but never played.
+    a2gspu_pace_arm_headless();
+    if (g_a2gspu_pace_fast && computer->audio_system) computer->audio_system->pause();
+
     if (!a2gspu_ctrl_mode) {
         printf("\n=== A2GSPU HEADLESS SPIKE: running %d frames ===\n", state->spike_frames);
         a2gspu_pins_print(state->platform_id, state->spike_frames, BUILD_VERSION);

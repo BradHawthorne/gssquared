@@ -77,6 +77,7 @@
 #include "generic_tap.hpp"   // A2GSPU_TAP: generic title-agnostic tap (env-gated, off => no-op)
 #include "a2gspu_trap.hpp"   // A2GSPU_TRAP: configurable PC traps (env-gated, off => no-op)
 #include "a2gspu_liveness.hpp" // A2GSPU_LIVENESS: screen-hash progress proof every N frames (env-gated)
+#include "a2gspu_pace.hpp"     // A2GSPU_PACE: headless frames do not wait for the wall clock
 #include "a2record.hpp"        // the record contract: one writer, one shape, one global sink (A2GSPU_RECORDS)
 
 #include "a2gspu_pins.hpp"     // A2GSPU PINS: the identity of a headless run, printed before it starts
