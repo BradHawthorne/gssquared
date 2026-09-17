@@ -217,9 +217,15 @@ test_record test_records[] = {
         6
     },
     {
-        "ASL ABS,X", 
+        "ASL ABS,X",
         {0x1E, 0, 0},
         7
+    },
+    {
+        "ASL ABS,X page cross",
+        {0x1E, 0xFF, 0x10},
+        7,
+        0, 0x01, 0, 0
     },
 
     // BCC
@@ -1358,6 +1364,19 @@ int main(int argc, char **argv) {
 // set up page crossing test for (ZP),Y
     mmu->write(0x0002, 0xFF);
     mmu->write(0x0003, 0x10);
+
+    // FORK: where the 65C02 differs from the NMOS counts above [Clark, "65C02 Opcodes"]:
+    // JMP (abs) takes 6, and the abs,X shifts take 6 unless they cross a page.
+    struct c02_count { const char *description; uint64_t cycles; };
+    static const c02_count c02_counts[] = {
+        { "JMP Indirect", 6 },
+        { "ASL ABS,X", 6 }, { "LSR ABS,X", 6 }, { "ROL ABS,X", 6 }, { "ROR ABS,X", 6 },
+    };
+    if (cputype == PROCESSOR_65C02) {
+        for (const c02_count &cc : c02_counts)
+            for (int i = 0; i < test_records_count; i++)
+                if (test_records[i].description == cc.description) test_records[i].expected_cycles = cc.cycles;
+    }
 
     int failedtests = 0;
     for (int i = 0; i < test_records_count; i++) {

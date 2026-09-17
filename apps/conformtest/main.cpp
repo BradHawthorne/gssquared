@@ -316,6 +316,48 @@ static int decimal_exhaustive(MMU *mmu, NClock *clock) {
     return total_fail;
 }
 
+/* ---- 65816 EMULATION MODE: the (d,X) pointer's page wrap follows DL -------------
+ * [Clark, 65816 tutorial] E=1 wraps the pointer's high byte inside its page only when DL
+ * is $00. Two LDA (d,X) reads, each with the pointer straddling a page. */
+static int emulation_dx_wrap(MMU *mmu, NClock *clock) {
+    printf("\n--- 65816 emulation mode: (d,X) pointer wrap follows DL ---\n");
+    cpu_state *c = new cpu_state(PROCESSOR_65816);
+    c->cpun = createCPU(PROCESSOR_65816, clock);
+    c->core = c->cpun.get();
+    c->trace = false;
+    c->set_mmu(mmu);
+    c->reset();
+    struct Case { const char *why; uint16_t d; uint8_t operand; uint16_t lo_at, next_at, wrap_at; uint8_t want; };
+    static const Case cases[] = {
+        { "DL=$10: $00FF, high byte at $0100",  0x0010, 0xEF, 0x00FF, 0x0100, 0x0000, 0xAA },
+        { "DL=$00: $01FF, high byte at $0100",  0x0100, 0xFF, 0x01FF, 0x0200, 0x0100, 0xCC },
+    };
+    int fails = 0;
+    for (const Case &k : cases) {
+        memset(memory, 0, sizeof(memory));
+        mmu->write(k.lo_at, 0x34);
+        mmu->write(k.next_at, 0x12);    // no wrap: $1234
+        mmu->write(k.wrap_at, 0x78);    // wrap: $7834
+        mmu->write(0x1234, 0xAA);
+        mmu->write(0x7834, 0xCC);
+        mmu->write(0x1000, 0xA1);       // LDA (d,X)
+        mmu->write(0x1001, k.operand);
+        c->E = 1;
+        c->pc = 0x1000;
+        c->pb = 0x00;
+        c->d = k.d;
+        c->x = 0;
+        c->a = 0;
+        c->sp = 0x01FF;
+        c->p = 0x30;
+        (c->cpun->execute_next)(c);
+        const uint8_t got = (uint8_t)(c->a & 0xFF);
+        printf("%-40s %s (A=$%02X, want $%02X)\n", k.why, got == k.want ? "ok" : "FAILED", got, k.want);
+        if (got != k.want) fails++;
+    }
+    return fails;
+}
+
 int main(int argc, char **argv) {
     // Unbuffered: this harness can fault, and with buffering the captured output
     // stops wherever the buffer flushed rather than where execution stopped.
@@ -607,6 +649,7 @@ int main(int argc, char **argv) {
     failed += mfail;
     ran    += mran;
     failed += decimal_exhaustive(mmu, clock);
+    failed += emulation_dx_wrap(mmu, clock);
     printf("\nRan %d, skipped %d. Failed tests: %d\n", ran, skipped, failed);
     return failed ? 1 : 0;
 }

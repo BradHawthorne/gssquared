@@ -1467,6 +1467,11 @@ add_test(NAME cpu_cycles_65816 COMMAND cycletest816)
 set_tests_properties(cpu_cycles_65816 PROPERTIES
     FAIL_REGULAR_EXPRESSION "Failed tests: [1-9]")
 
+# FORK: the 65C02's own counts (cycletest applies them for this argument).
+add_test(NAME cpu_cycles_65c02 COMMAND cycletest 65c02)
+set_tests_properties(cpu_cycles_65c02 PROPERTIES
+    FAIL_REGULAR_EXPRESSION "Failed tests: [1-9]")
+
 # The 6522 VIA (Mockingboard). w6522 carries nine scenarios; only 6..9 contain
 # READ_EXPECT rows. Scenarios 1..5 are traces -- they drive the chip and print,
 # but assert nothing -- and `add_test(NAME via_6522 COMMAND w6522)` passed no

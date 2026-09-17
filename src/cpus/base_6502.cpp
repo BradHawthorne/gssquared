@@ -762,7 +762,16 @@ inline void rmw_abs_x(cpu_state *cpu, Operation operation) {
     alu_t reg;
 
     // I think it needs the phantom every time, not just on page cross
-    uint32_t eaddr = address_rmw_abs_x(cpu, _X(cpu)); // cycles 2,3,4
+    // FORK: not on the 65C02 for the shifts. ASL, LSR, ROL and ROR abs,X take 6 cycles
+    // there, 7 only across a page; INC and DEC abs,X always take 7, and the NMOS part always
+    // takes 7 [Clark, "65C02 Opcodes"].
+    uint32_t eaddr;
+    if constexpr (CPUTraits::has_65c02_ops && !CPUTraits::has_65816_ops &&
+                  !std::is_same_v<Operation, IncrementOp> && !std::is_same_v<Operation, DecrementOp>) {
+        eaddr = address_abs_x(cpu, _X(cpu));        // cycles 2,3 (+4 across a page)
+    } else {
+        eaddr = address_rmw_abs_x(cpu, _X(cpu));    // cycles 2,3,4
+    }
 
     read_data(cpu, eaddr, reg);
 
@@ -943,6 +952,17 @@ inline void rmw_direct_x(cpu_state *cpu, Operation operation) {
 
 /** 11. Direct Indexed Indirect (d,x) */
 
+// FORK: where (d,X) reads its pointer's high byte, outside native mode. The 6502 and 65C02
+// wrap inside zero page. The 65816 in emulation mode wraps inside the page only when DL is
+// $00, as address_direct_x and (d) already do; with DL nonzero the +1 crosses the page
+// [Clark, 65816 tutorial]. It used to wrap whatever DL held.
+inline uint16_t direct_x_ind_hi(cpu_state *cpu, uint16_t eaddr_16) {
+    if constexpr (CPUTraits::has_65816_ops) {
+        if ((cpu->d & 0x00FF) != 0) return (uint16_t)(eaddr_16 + 1);
+    }
+    return (uint16_t)(eaddr_16 & 0xFF00) | (uint8_t)((eaddr_16 & 0x00FF) + 1);
+}
+
 template<typename T, typename U>
 inline void read_direct_x_ind(cpu_state *cpu, T &reg, U &index ) {
     uint16_t eaddr_16 = address_direct_x(cpu, index);
@@ -953,10 +973,8 @@ inline void read_direct_x_ind(cpu_state *cpu, T &reg, U &index ) {
         read_data_direct(cpu, eaddr_16, temp);
         eaddr = temp;
     } else {
-    //    if constexpr (CPUTraits::e_mode) {
-        // in e mode the +1 needs to wrap inside its page.
         eaddr = bus_read(cpu, (uint16_t)(eaddr_16));
-        eaddr |= bus_read(cpu, (uint16_t)(eaddr_16 & 0xFF00) | (uint8_t)((eaddr_16 & 0x00FF) + 1)) << 8;
+        eaddr |= bus_read(cpu, direct_x_ind_hi(cpu, eaddr_16)) << 8;
     }
     if constexpr (CPUTraits::has_65816_ops) eaddr = (cpu->full_db | eaddr); // add data bank
 
@@ -980,9 +998,8 @@ inline void write_direct_x_ind(cpu_state *cpu, T &reg, U &index ) {
         read_data_direct(cpu, eaddr_16, temp);
         eaddr = temp;
     } else {
-        // in e mode the +1 needs to wrap inside its page.
         eaddr = bus_read(cpu, (uint16_t)(eaddr_16));
-        eaddr |= bus_read(cpu, (uint16_t)(eaddr_16 & 0xFF00) | (uint8_t)((eaddr_16 & 0x00FF) + 1)) << 8;
+        eaddr |= bus_read(cpu, direct_x_ind_hi(cpu, eaddr_16)) << 8;
     }    
     if constexpr (CPUTraits::has_65816_ops) eaddr = (cpu->full_db | eaddr); // add data bank
 
