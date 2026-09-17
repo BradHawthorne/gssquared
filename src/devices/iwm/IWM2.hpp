@@ -14,6 +14,13 @@
 static const uint32_t IWM_SWITCH_COUNT = 8;
 static const uint32_t IWM_ADDRESS_MAX = IWM_SWITCH_COUNT * 2;
 
+// FORK: IWM Device Specification timings, in 14M ticks. The IIgs clocks the IWM from
+// 7M, so one FCLK period is two 14M ticks.
+//   /ENBL holdover with the timer on (MODE.M == 0): 2^23 + 100 FCLK, about 1.17 s [p.6, p.8].
+//   Asynchronous mode: the data register clears 14 FCLK after a valid read [p.3-4].
+static const uint64_t IWM_HOLDOVER_C14M    = 2 * ((1ull << 23) + 100);
+static const uint64_t IWM_ASYNC_CLEAR_C14M = 2 * 14;
+
 enum iwm_switch_t {
     IWM_CA0_OFF = 0,
     IWM_CA0_ON = 1,
@@ -58,7 +65,7 @@ class IWM : public StorageDevice {
         //
         //   /ENBL is asserted  <=>  iwm_enable == 1
         //                           OR the MC14536 motor-off timer is still
-        //                           running (MODE.M == 0 arms a ~1 s holdover
+        //                           running (MODE.M == 0 arms a 1.17 s holdover
         //                           started when iwm_enable transitions 1->0;
         //                           MODE.M == 1 means no holdover)
         //
@@ -172,9 +179,26 @@ class IWM : public StorageDevice {
         // Mirrors OpenEmulator's `sequencerState` in the SEQUENCER_READSHIFT case.
         bool sequencer_state = false;
 
-        void update_handshake_ready(bool ready, bool no_underrun) {
-            hr_register_ready = ready ? 1 : 0;
-            hr_underrun         = no_underrun ? 1 : 0;
+        // FORK: the write state is L7 (Q7) set while /ENBL is low; /WRREQ follows it.
+        // Handshake bit 6 reads 1 in the write state until an underrun clears it, and
+        // after an asynchronous underrun /WRREQ stays off until L7 clears [spec p.2-3,
+        // p.9]. Outside the write state bit 6 reads 0, the reset value ($BF).
+        bool write_state = false;
+        bool underrun_latched = false;
+        // 14M time the asynchronous data register clears (0 = none pending).
+        uint64_t async_clear_at = 0;
+        // Diagnostics (devstate), not machine state: underruns seen, and bit cells
+        // clocked with L7 set but /WRREQ off.
+        uint64_t underrun_count = 0;
+        uint64_t wrreq_off_bits = 0;
+
+        void update_write_state() {
+            const bool ws = iwm_q7 && enbl_asserted();
+            if (ws == write_state) return;
+            write_state          = ws;
+            underrun_latched     = false;
+            async_bits_remaining = 0;   // the shift register starts at a byte boundary
+            hr_underrun          = ws ? 1 : 0;
         }
 
          /* Load our sound effects */
@@ -216,15 +240,14 @@ class IWM : public StorageDevice {
 
         // ENABLE softswitch edge handling (decode() calls this after
         // updating switches[]): a 1->0 transition with MODE.M == 0 arms the
-        // MC14536 ~1 s /ENBL holdover; any assertion cancels it. Repeated
+        // 2^23+100 FCLK /ENBL holdover; any assertion cancels it. Repeated
         // accesses at the same level are not transitions and leave a
         // running holdover untouched.
         void enable_switch_changed(uint8_t prev_enable) {
             if (iwm_enable) {
                 mark_cycles_turnoff = 0;  // asserted: cancel any holdover
             } else if (prev_enable && !mr_motorofftimer) {
-                mark_cycles_turnoff =
-                    clock->get_c14m() + clock->get_c14m_per_second();
+                mark_cycles_turnoff = clock->get_c14m() + IWM_HOLDOVER_C14M;
             } else if (prev_enable) {
                 mark_cycles_turnoff = 0;  // MODE.M=1: off immediately
             }
@@ -277,7 +300,11 @@ class IWM : public StorageDevice {
             // Reset must start ready; ready=0 is only set when the CPU loads
             // the buffer (see write() below). Starting at 0 made the LSS
             // believe a byte was queued and emit write_pulse during POST.
-            update_handshake_ready(true, true);
+            // FORK: $BF -- bits 0-5 read ones, bit 6 is 0 outside the write state.
+            reg_handshake            = 0xBF;
+            write_state              = false;
+            underrun_latched         = false;
+            async_clear_at           = 0;
             internal_data_register = 0;
             async_shift_reg          = 0;
             async_bits_remaining     = 0;
@@ -297,6 +324,7 @@ class IWM : public StorageDevice {
             if (mark_cycles_turnoff != 0 && (clock->get_c14m() > mark_cycles_turnoff)) {
                 mark_cycles_turnoff = 0;
                 sync_drive_enables();
+                update_write_state();
             }
         }
 
@@ -355,6 +383,13 @@ class IWM : public StorageDevice {
 
         void fast_forward() {
             Floppy_woz *drive = drives[dr_enable35][iwm_select];
+            // FORK: a due asynchronous clear lands before this access's bits shift in,
+            // and a holdover that ran out since the last access ends the write state.
+            if (async_clear_at != 0 && clock->get_c14m() >= async_clear_at) {
+                data_register  = 0;
+                async_clear_at = 0;
+            }
+            update_write_state();
             if (!lss_active()) {
                 // LSS state machine is stopped (5.25 ENABLE'-off / 3.5
                 // motor-off). The drive itself still needs to tick: 3.5
@@ -408,18 +443,21 @@ class IWM : public StorageDevice {
             // runtime trace (mr_hsprotocol=1, dr_enable35=0) while
             // gssquared spun on this loop under MCP control; see M0 boot
             // notes in system-settings-gs/docs/HARNESS.md.
-            const bool latch_read = mr_latch;
-            const bool async_wr   = mr_hsprotocol;
+            // FORK: asynchronous mode (MODE.H) is what latches the data register on the
+            // MSB and clears it after a read, and what feeds writes through the buffer
+            // register [IWM spec p.2-4; for the clear, MAME agrees]. MODE.L does not, and
+            // neither does $C031 EN35, which the chip cannot see.
+            const bool async_mode = mr_hsprotocol;
 
             for (uint64_t i = 0; i < bits_to_sim; i++) {
                 if (iwm_q7 == 0 && iwm_q6 == 0) {
                     // READSHIFT (mirrors OpenEmulator's SEQUENCER_READSHIFT):
                     // while QA (bit 7) is 0, shift incoming RP bits left.
-                    // 5.25 / sync: expose partial nibbles on data_register.
-                    // 3.5 latch (L=1): accumulate in internal_data_register;
+                    // Sync: expose partial nibbles on data_register.
+                    // Async: accumulate in internal_data_register;
                     // CPU-visible data_register hides MSB until valid byte.
                     uint8_t bit = drive->read_pulse();
-                    if (latch_read) {
+                    if (async_mode) {
                         internal_data_register = static_cast<uint8_t>((internal_data_register << 1) | bit);
                         if (internal_data_register & 0x80) {
                             data_register = internal_data_register;
@@ -443,32 +481,53 @@ class IWM : public StorageDevice {
                     // right into bit 7 of the shift register.
                     drive->read_pulse(); // advance but discard.
                     uint8_t wp = drive->read_sense(); // drive->get_write_protect() & 1;
-                    if (latch_read) {
+                    if (async_mode) {
                         internal_data_register = static_cast<uint8_t>((internal_data_register >> 1) | (wp << 7));
                     } else {
                         data_register = static_cast<uint8_t>((data_register >> 1) | (wp << 7));
                     }
                     sequencer_state = false;
                 } else if (iwm_q7 == 1) {
-                    if (async_wr) {
+                    if (!write_state) {
+                        // FORK: L7 without /ENBL (a 3.5 spindle still turning after
+                        // its enable went): /WRREQ is off, nothing reaches the surface.
+                        drive->tick_no_write();
+                        wrreq_off_bits++;
+                    } else if (async_mode) {
                         if (async_bits_remaining == 0) {
                             if (hr_register_ready == 0 && async_buffer_valid) {
                                 // CPU has queued a byte; transfer to shift reg.
                                 async_shift_reg = async_buffer_register;
                                 async_bits_remaining = 8;
                                 async_buffer_valid = false;
-                                update_handshake_ready(true, true);
+                                hr_register_ready = 1;
                             } else if (hr_register_ready == 0) {
                                 // Busy with no valid buffer (should not happen
                                 // after reset init); do not mutate the surface.
-                                update_handshake_ready(true, true);
-                            } else {
-                                update_handshake_ready(true, false); // there was no data, flag underrun
+                                hr_register_ready = 1;
+                            } else if (!underrun_latched) {
+                                // FORK: no byte arrived: underrun. The IWM specification names two
+                                // effects, both held until L7 clears: /WRREQ goes high
+                                // and /underrun (bit 6) reads 0. It does not say the
+                                // buffer stops feeding the shift register, so bytes
+                                // written afterwards are still taken (bit 7 keeps
+                                // answering) and clocked out with /WRREQ off. [Whether
+                                // the buffer keeps cycling is unverified on hardware;
+                                // a model that stops it hangs the IIgs ROM's SmartPort
+                                // probe whenever the fork's disk clock runs fast.]
+                                hr_underrun = 0;
+                                underrun_latched = true;
+                                underrun_count++;
                             }
                         }
                         // Async write: IWM clocks bits out at disk rate; CPU
-                        // loads bytes via write() when handshake says ready.                        
-                        if (async_bits_remaining > 0) {
+                        // loads bytes via write() when handshake says ready.
+                        if (async_bits_remaining > 0 && underrun_latched) {
+                            async_shift_reg = static_cast<uint8_t>(async_shift_reg << 1);
+                            async_bits_remaining--;
+                            drive->tick_no_write();
+                            wrreq_off_bits++;
+                        } else if (async_bits_remaining > 0) {
                             uint8_t out_bit =
                                 static_cast<uint8_t>((async_shift_reg >> 7) & 0x01);
                             drive->write_pulse(out_bit);
@@ -481,31 +540,21 @@ class IWM : public StorageDevice {
                             //drive->write_pulse(0);
                             drive->tick_no_write();
                         }
-                    } else if (!dr_enable35) {
-                        // 5.25 WRITESHIFT / WRITELOAD (sync): per OE both Q6
+                    } else {
+                        // WRITESHIFT / WRITELOAD (sync): per OE both Q6
                         // sub-modes behave identically — shift QA out to disk,
                         // then shift data_register left.
+                        // FORK: whichever drive family $C031 routes to. The
+                        // guard that kept a 3.5 surface from sync writes was
+                        // for L7 windows with /ENBL off (a spinning Sony keeps
+                        // clocking after its enable goes); the write state now
+                        // covers those, as /WRREQ does on the chip.
                         uint8_t out_bit =
                             static_cast<uint8_t>((data_register >> 7) & 0x01);
                         drive->write_pulse(out_bit);
                         data_register =
                             static_cast<uint8_t>(data_register << 1);
                         sequencer_state = false;
-                    } else {
-                        // 3.5 drive with Q7=1 but mr_hsprotocol=0: the firmware
-                        // has not set up async write mode (3.5 is async-only by
-                        // spec). On real hardware /WRREQ would be high but the
-                        // bits clocked through would be undefined; firmware
-                        // never writes in this configuration. Treat it as an
-                        // idle gap — keep angular timing aligned without
-                        // mutating the surface. Without this guard, any stray
-                        // Q7=1 window (IIgs ROM probes, GS/OS background
-                        // checks, the very first fast_forward() inside a
-                        // write() that turns Q7 off) shifts whatever happens
-                        // to be in data_register — usually the last byte
-                        // assembled by the latch reader (D5/AA/96/...) —
-                        // straight onto the disk surface.
-                        drive->tick_no_write();
                     }
                 }
             }
@@ -562,7 +611,9 @@ class IWM : public StorageDevice {
             }
         }
 
-        uint8_t read(uint16_t reg) {
+        // FORK: returns the byte the IWM drives, or -1 when it leaves the bus
+        // floating (the caller supplies the floating bus).
+        int read(uint16_t reg) {
             assert(reg < IWM_ADDRESS_MAX && "IWM: read address out of bounds");
 
             // Roll the LSS forward to "now" using whichever drive family is
@@ -571,32 +622,47 @@ class IWM : public StorageDevice {
             fast_forward();
 
             decode(reg);
+            update_write_state();
 
+            // FORK: register select per the IWM spec [p.7]. A0 is the chip's /read,
+            // so an odd address only sets its state bit and drives nothing.
+            if (address_odd(reg)) {
+                return -1;
+            }
             /* Read Status Register
             To access it, turn Q7 off and Q6 on, and read from any
             even-numbered address in the $C0E0...$C0EF range. */
-            if (address_even(reg) && iwm_q6 && !iwm_q7) {
+            if (iwm_q6 && !iwm_q7) {
                 return read_status_register();
             }
             /* The handshake register is a read-only register used when
             writing to the disk in asynchronous mode (when bit 1 of the
-            mode register is on). Q6 off, Q7 on, even address. */
-            if (address_even(reg) && !iwm_q6 && iwm_q7) {
-                return reg_handshake;
+            mode register is on). Q6 off, Q7 on, even address.
+            FORK: bits 0-5 read ones [p.9]. */
+            if (!iwm_q6 && iwm_q7) {
+                return reg_handshake | 0x3F;
             }
             /* Data register: Q6 off, Q7 off, even address. Same path for
             5.25 and 3.5 — the LSS above has already latched the result in
             data_register. */
-            if (address_even(reg) && !iwm_q6 && !iwm_q7) {
+            if (!iwm_q6 && !iwm_q7) {
+                // FORK: with Motor-On (/ENBL, holdover included) off, register
+                // select 000 reads all ones.
+                if (!enbl_asserted()) {
+                    return 0xFF;
+                }
                 uint8_t val = data_register;
-                // In Latch mode (L=1), reading the data register clears it so that
-                // subsequent polls will wait for the next full byte to assemble.
-                if (dr_enable35 && mr_latch) {
-                    data_register = 0;
+                // Asynchronous mode: a valid read (bit 7 out) clears the data
+                // register 14 FCLK later, so polls wait for the next byte and a
+                // read inside that window still sees this one.
+                if (mr_hsprotocol && (val & 0x80)) {
+                    async_clear_at = clock->get_c14m() + IWM_ASYNC_CLEAR_C14M;
                 }
                 return val;
             }
-            return 0;
+            // Q6 and Q7 on selects the write-only mode and data registers; the IWM specification
+            // lists no read register there. Answered $FF [unverified on hardware].
+            return 0xFF;
         }
 
         void write(uint16_t reg, uint8_t data) {
@@ -605,8 +671,8 @@ class IWM : public StorageDevice {
             fast_forward();
 
             decode(reg);
+            update_write_state();
 
-            
             /*
             Note that the drive may remain active for a second or two after
             the ENABLE access, and that the write to the mode register will
@@ -623,12 +689,12 @@ class IWM : public StorageDevice {
             clears until another byte is needed (Neil Parker write sequence). */
             else if (enbl_asserted() && address_odd(reg) && iwm_q6 && iwm_q7) {
                 data_register = data;
-                if (dr_enable35 && mr_hsprotocol) {
+                // FORK: asynchronous mode buffers the byte whichever drive family
+                // $C031 routes to. Bit 6 is the write state's business, not this.
+                if (mr_hsprotocol) {
                     async_buffer_register = data;
                     async_buffer_valid = true;
-                    /* async_shift_reg      = data;
-                    async_bits_remaining = 8; */
-                    update_handshake_ready(false, true); // mark busy (i.e. loaded)
+                    hr_register_ready = 0; // mark busy (i.e. loaded)
                 }
             }
         }
@@ -640,7 +706,16 @@ class IWM : public StorageDevice {
                 disk_register, dr_enable35, dr_hdsel);
             df->addLine("Mode: %02X  ClkSpd: %d  BitCell: %d  MotorOff: %d  HSProtocol: %d Ltch: %d",
                 reg_mode, mr_clockspeed, mr_bitcelltime, mr_motorofftimer, mr_hsprotocol, mr_latch);
-            df->addLine("Handshake: %02X  Status: %02X", reg_handshake, read_status_register());
+            df->addLine("Handshake: %02X  Status: %02X", reg_handshake | 0x3F, read_status_register());
+            {
+                const uint64_t now14 = clock->get_c14m();
+                df->addLine("Write state: %d  Underrun latch: %d  Async clear in: %lld  Holdover left: %lld (14M)",
+                    (int)write_state, (int)underrun_latched,
+                    async_clear_at ? (long long)(async_clear_at > now14 ? async_clear_at - now14 : 0) : -1LL,
+                    mark_cycles_turnoff ? (long long)(mark_cycles_turnoff > now14 ? mark_cycles_turnoff - now14 : 0) : -1LL);
+                df->addLine("Underruns: %llu  Bits clocked with /WRREQ off: %llu",
+                    (unsigned long long)underrun_count, (unsigned long long)wrreq_off_bits);
+            }
             df->addLine("Active: %s drive %d   LSS: %s",
                 dr_enable35 ? "3.5" : "5.25", iwm_select,
                 lss_active() ? "running" : "stopped");
@@ -831,8 +906,14 @@ public:
             uint8_t present = drives[k][d] ? 1 : 0; fwrite(&present, 1, 1, f);
             if (drives[k][d]) drives[k][d]->A2GSPU_snapshot(f);
         }
+        // Block version 4: the write state, the underrun latch, and the time left on
+        // an asynchronous clear (0 = none).
+        uint8_t w[2] = { (uint8_t)write_state, (uint8_t)underrun_latched };
+        fwrite(w, 1, 2, f);
+        uint64_t clr = (async_clear_at != 0 && async_clear_at >= now14) ? (async_clear_at - now14) + 1 : 0;
+        fwrite(&clr, 8, 1, f);
     }
-    bool A2GSPU_restore(FILE *f, int *media_mismatch) {
+    bool A2GSPU_restore(FILE *f, int *media_mismatch, int version) {
         if (fread(switches, 1, IWM_SWITCH_COUNT, f) != IWM_SWITCH_COUNT) return false;
         uint8_t r[8]; if (fread(r, 1, 8, f) != 8) return false;
         sense_input = r[0]; disk_register = r[1]; reg_mode = r[2]; reg_handshake = r[3];
@@ -848,6 +929,18 @@ public:
             uint8_t present = 0; if (fread(&present, 1, 1, f) != 1) return false;
             if (present && !drives[k][d]) return false;          // a different drive complement is a different machine
             if (present && !drives[k][d]->A2GSPU_restore(f, media_mismatch)) return false;
+        }
+        if (version >= 4) {
+            uint8_t w[2]; if (fread(w, 1, 2, f) != 2) return false;
+            uint64_t clr = 0; if (fread(&clr, 8, 1, f) != 1) return false;
+            write_state = w[0] != 0; underrun_latched = w[1] != 0;
+            async_clear_at = clr ? clock->get_c14m() + (clr - 1) : 0;
+        } else {
+            // Older blocks: the write state follows from the restored inputs; no
+            // underrun is latched and no clear is pending.
+            write_state = iwm_q7 && enbl_asserted();
+            underrun_latched = false;
+            async_clear_at = 0;
         }
         sync_drive_enables();
         return true;

@@ -25,4 +25,4 @@ inline iwm_state_t *g_a2gspu_iwm = nullptr;   // the one instance, for the snaps
 void iwm_A2GSPU_snapshot(iwm_state_t *st, FILE *f);
 void iwm_A2GSPU_media_snapshot(iwm_state_t *st, FILE *f);
 bool iwm_A2GSPU_media_restore(iwm_state_t *st, FILE *f, int *mismatch, int *applied);
-bool iwm_A2GSPU_restore(iwm_state_t *st, FILE *f, int *media_mismatch);
+bool iwm_A2GSPU_restore(iwm_state_t *st, FILE *f, int *media_mismatch, int version);   // block version 2-4

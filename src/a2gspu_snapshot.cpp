@@ -189,7 +189,7 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         names += names.empty() ? "scanner" : ",scanner";
     }
     if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
-        long at = a2gspu_snap_dev_begin(f, "iwm", 3); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);   // 3: media identity with a content hash
+        long at = a2gspu_snap_dev_begin(f, "iwm", 4); iwm_A2GSPU_snapshot(g_a2gspu_iwm, f); a2gspu_snap_dev_end(f, at);   // 3: media identity with a content hash; 4: write state, underrun latch, async clear
         names += names.empty() ? "iwm" : ",iwm";
     }
     // Every Disk II controller, by slot; each entry length-prefixed, so a machine
@@ -298,11 +298,11 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
                 r = (display_A2GSPU_new_video_restore(ds, f) && ds->video_scanner->A2GSPU_restore(f)) ? RESTORED : FAILED;
                 if (r == RESTORED && ftell(f) != payload + (long)len) r = FAILED;   // not this scanner's layout
             }
-        } else if (!strcmp(nm, "iwm") && (ver == 2 || ver == 3)) {
+        } else if (!strcmp(nm, "iwm") && ver >= 2 && ver <= 4) {
             g_a2gspu_media_id_version = ver >= 3 ? 2 : 1;   // a drive's image: name and hash, or the name alone
             if (g_a2gspu_iwm && g_a2gspu_iwm->iwm) {
                 int mismatch = 0;
-                r = iwm_A2GSPU_restore(g_a2gspu_iwm, f, &mismatch) ? RESTORED : FAILED;
+                r = iwm_A2GSPU_restore(g_a2gspu_iwm, f, &mismatch, (int)ver) ? RESTORED : FAILED;
                 if (r == RESTORED && mismatch)
                     a2gspu_warn("A2GSPU SNAP", "iwm: a drive holds a different image than the snapshot's; its head state was left alone "
                                 "(mount what the manifest's run mounted)");

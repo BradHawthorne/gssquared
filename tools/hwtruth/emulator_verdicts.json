@@ -5,7 +5,7 @@
   },
   {
     "question": "IWM data register reads all ones with the motor off",
-    "answer": "NO"
+    "answer": "YES"
   },
   {
     "question": "bank $E0 follows RAMWRT",

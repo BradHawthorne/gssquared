@@ -20,8 +20,8 @@
       "disk": "gsos601.po",
       "rom": "4E6B6EE5B32F63CF",
       "hash": "D29F204D690D417F",
-      "cycles": 10647366,
-      "run": "FEF5234F63151E9B"
+      "cycles": 10647413,
+      "run": "9CFCBEBB3B604B4E"
     },
     {
       "name": "iigs-rom",
@@ -30,8 +30,8 @@
       "disk": "",
       "rom": "4E6B6EE5B32F63CF",
       "hash": "6D9886E3B3EE0383",
-      "cycles": 6045727,
-      "run": "16483AADEFF4F8C1"
+      "cycles": 6045816,
+      "run": "3D9F4A17131D1E36"
     }
   ]
 }

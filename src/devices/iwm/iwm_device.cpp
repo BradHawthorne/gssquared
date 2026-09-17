@@ -11,8 +11,9 @@
 uint8_t iwm_read_C0xx(void *context, uint32_t address) {
     static uint8_t random = 0;
     iwm_state_t *st = (iwm_state_t *)context;
-    
-    return st->iwm->read(address & 0x0F);
+    // FORK: an odd address leaves the bus to whatever else is on it.
+    const int v = st->iwm->read(address & 0x0F);
+    return v < 0 ? st->computer->mmu->floating_bus_read() : (uint8_t)v;
 }
 
 void iwm_write_C0xx(void *context, uint32_t address, uint8_t data) {
@@ -112,9 +113,9 @@ void iwm_A2GSPU_media_snapshot(iwm_state_t *st, FILE *f) { st->iwm->A2GSPU_media
 bool iwm_A2GSPU_media_restore(iwm_state_t *st, FILE *f, int *mismatch, int *applied) {
     return st->iwm->A2GSPU_media_restore(f, mismatch, applied);
 }
-bool iwm_A2GSPU_restore(iwm_state_t *st, FILE *f, int *media_mismatch) {
+bool iwm_A2GSPU_restore(iwm_state_t *st, FILE *f, int *media_mismatch, int version) {
     uint8_t r[3];
     if (fread(r, 1, 3, f) != 3) return false;
     st->status = r[0]; st->control = r[1]; st->data = r[2];
-    return st->iwm->A2GSPU_restore(f, media_mismatch);
+    return st->iwm->A2GSPU_restore(f, media_mismatch, version);
 }
