@@ -549,10 +549,26 @@ static void a2gspu_write_observer(void *context, uint32_t address, uint8_t value
 }
 
 // ── Card model: the host's command register ───────────────────────
+// FORK: the machine's video frame, from its video cycles (the budget's clock).
+static uint64_t a2gspu_video_frame(a2gspu_data *ad) {
+    NClock *c = ad->computer ? ad->computer->clock : nullptr;
+    if (!c || !c->get_vid_cycles_per_frame()) return 0;
+    return c->get_vid_cycles() / c->get_vid_cycles_per_frame();
+}
+
+static a2gspu_data *g_a2gspu_card_ad = nullptr;   // FORK: the card model's device, for its snapshot block
+
+bool a2gspu_card_A2GSPU_present() { return g_a2gspu_card_ad && g_a2gspu_cmdreg == &g_a2gspu_card_ad->cmdreg; }
+void a2gspu_card_A2GSPU_snapshot(FILE *f) {
+    a2gspu_cmdreg_snapshot(g_a2gspu_card_ad->cmdreg, f, a2gspu_video_frame(g_a2gspu_card_ad));
+}
+bool a2gspu_card_A2GSPU_restore(FILE *f) {
+    return a2gspu_cmdreg_restore(g_a2gspu_card_ad->cmdreg, f, a2gspu_video_frame(g_a2gspu_card_ad));
+}
 static void a2gspu_card_cmd_write(void *context, uint32_t address, uint8_t value) {
     (void)address;
     a2gspu_data *ad = (a2gspu_data *)context;
-    a2gspu_cmdreg_write(ad->cmdreg, value);
+    a2gspu_cmdreg_write(ad->cmdreg, value, a2gspu_video_frame(ad));
 }
 
 // ── HW backend: frame callback (drains serial buffer) ──────────────
@@ -565,9 +581,9 @@ static void a2gspu_hw_frame_callback(a2gspu_data *ad) {
     inject_keys(ad);
     inject_mouse(ad);
 
-    // The card model's forwarding budget restarts each video frame, and the
-    // telemetry port, when one is named, is read whatever the stream is doing.
-    if (!ad->legacy) a2gspu_cmdreg_frame(ad->cmdreg);
+    // The telemetry port, when one is named, is read whatever the stream is doing.
+    // (FORK: the card model's forwarding budget follows the machine's video frames in
+    // a2gspu_cmdreg_write, not this host-side callback.)
     telemetry_poll(ad);
 
     // Serial hardware is opt-in. Any run of a configuration with this card used
@@ -1181,6 +1197,7 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
             MMU_II *megaii = (MMU_II *)ad->mmu_gs->megaii;
             megaii->set_C0XX_write_handler(slot_base + 0x0F, { a2gspu_card_cmd_write, ad });
             g_a2gspu_cmdreg = &ad->cmdreg;
+            g_a2gspu_card_ad = ad;
         }
     }
 
@@ -1266,6 +1283,7 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
             printf("A2GSPU: telemetry capture %llu bytes -> %s\n", (unsigned long long)ad->telemetry_bytes, ad->telemetry_path.c_str());
         }
         if (g_a2gspu_cmdreg == &ad->cmdreg) g_a2gspu_cmdreg = nullptr;
+        if (g_a2gspu_card_ad == ad) g_a2gspu_card_ad = nullptr;
         delete ad;
         return true;
     });

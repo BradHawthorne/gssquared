@@ -105,3 +105,8 @@ struct a2gspu_data : public SlotData {
 };
 
 void init_slot_a2gspu(computer_t *computer, SlotType_t slot);
+
+// FORK: snapshot block "a2gspu" (M5): the card model's command assembler (A2GSPU_CARD_MODEL=card).
+bool a2gspu_card_A2GSPU_present();
+void a2gspu_card_A2GSPU_snapshot(FILE *f);
+bool a2gspu_card_A2GSPU_restore(FILE *f);

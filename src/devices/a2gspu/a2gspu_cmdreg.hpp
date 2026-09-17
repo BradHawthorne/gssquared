@@ -18,7 +18,8 @@
  *     - seq is 16-bit and wraps: a forward jump of d adds d-1 to the gap count,
  *       and zero or backward counts as a duplicate;
  *     - at most 16 commands are forwarded per video frame; the rest count as
- *       overflow.
+ *       overflow. The frame is the machine's (its video cycles), not the host's,
+ *       so the overflow count is the same on every run of the same writes.
  *
  *   Op $00 is NOP and op $01 is HELLO (payload: the host's protocol version,
  *   u16). Every other op is recorded by number with its payload: the emulator
@@ -54,6 +55,7 @@ struct A2gspuCmdReg {
     bool have_last = false;
     uint16_t last_seq = 0;
     int frame_cmds = 0;                              // commands completed in this video frame
+    uint64_t budget_frame = 0;                       // FORK: the emulated video frame frame_cmds counts
 
     uint64_t writes = 0, frames = 0, presync = 0, oversize = 0, gaps = 0, dups = 0, overflow = 0;
     uint64_t nops = 0, hellos = 0, other_ops = 0;
@@ -73,8 +75,11 @@ inline void a2gspu_cmdreg_record_drop(const A2gspuCmdReg &r, const char *reason,
     else printf("A2GSPU CARD: %s\n", rec.done().c_str());
 }
 
-inline void a2gspu_cmdreg_complete(A2gspuCmdReg &r) {
+inline void a2gspu_cmdreg_complete(A2gspuCmdReg &r, uint64_t video_frame) {
     r.frames++;
+    // FORK: the budget restarts with each emulated video frame. It restarted in the host's
+    // device dispatcher, whose frames follow host time in a free run.
+    if (video_frame != r.budget_frame) { r.budget_frame = video_frame; r.frame_cmds = 0; }
     bool dup = false;
     unsigned gap = 0;
     if (r.have_last) {
@@ -107,8 +112,8 @@ inline void a2gspu_cmdreg_complete(A2gspuCmdReg &r) {
     r.st = A2gspuCmdReg::WAIT_SYNC;
 }
 
-// One host write to $C0nF.
-inline void a2gspu_cmdreg_write(A2gspuCmdReg &r, uint8_t b) {
+// One host write to $C0nF, in emulated video frame video_frame.
+inline void a2gspu_cmdreg_write(A2gspuCmdReg &r, uint8_t b, uint64_t video_frame) {
     r.writes++;
     switch (r.st) {
     case A2gspuCmdReg::WAIT_SYNC:
@@ -128,18 +133,54 @@ inline void a2gspu_cmdreg_write(A2gspuCmdReg &r, uint8_t b) {
             break;
         }
         r.len = b; r.got = 0;
-        if (b == 0) a2gspu_cmdreg_complete(r);
+        if (b == 0) a2gspu_cmdreg_complete(r, video_frame);
         else r.st = A2gspuCmdReg::PAYLOAD;
         break;
     case A2gspuCmdReg::PAYLOAD:
         r.payload[r.got++] = b;
-        if (r.got == r.len) a2gspu_cmdreg_complete(r);
+        if (r.got == r.len) a2gspu_cmdreg_complete(r, video_frame);
         break;
     }
 }
 
-// Once per video frame: the forwarding budget starts again.
-inline void a2gspu_cmdreg_frame(A2gspuCmdReg &r) { r.frame_cmds = 0; }
+// FORK: A2GSPU snapshot (block "a2gspu"): the assembler mid-frame (state, header, payload so
+// far, the skipped run), the sequence tracking, the budget and its frame (relative to the
+// machine's video frame at the save), and the counters a rail read reports.
+inline void a2gspu_cmdreg_snapshot(const A2gspuCmdReg &r, FILE *f, uint64_t video_frame) {
+    uint8_t h[12] = { (uint8_t)r.st, uint8_t(r.seq), uint8_t(r.seq >> 8), r.op, r.len, r.got,
+                      uint8_t(r.have_last ? 1 : 0), uint8_t(r.last_seq), uint8_t(r.last_seq >> 8),
+                      uint8_t(r.hello_seen ? 1 : 0), uint8_t(r.hello_version), uint8_t(r.hello_version >> 8) };
+    fwrite(h, 1, sizeof h, f);
+    fwrite(r.payload, 1, sizeof r.payload, f);
+    uint8_t l[5] = { uint8_t(r.last_valid ? 1 : 0), r.last_op, r.last_len, uint8_t(r.last_frame_seq), uint8_t(r.last_frame_seq >> 8) };
+    fwrite(l, 1, sizeof l, f);
+    const int32_t fc = r.frame_cmds;
+    const uint8_t same_frame = (r.budget_frame == video_frame) ? 1 : 0;
+    fwrite(&fc, 4, 1, f); fwrite(&same_frame, 1, 1, f);
+    const uint64_t u[11] = { r.skip_run, r.writes, r.frames, r.presync, r.oversize, r.gaps, r.dups, r.overflow,
+                             r.nops, r.hellos, r.other_ops };
+    fwrite(u, 8, 11, f);
+}
+inline bool a2gspu_cmdreg_restore(A2gspuCmdReg &r, FILE *f, uint64_t video_frame) {
+    uint8_t h[12]; if (fread(h, 1, sizeof h, f) != sizeof h) return false;
+    uint8_t p[sizeof r.payload]; if (fread(p, 1, sizeof p, f) != sizeof p) return false;
+    uint8_t l[5]; if (fread(l, 1, sizeof l, f) != sizeof l) return false;
+    int32_t fc = 0; uint8_t same_frame = 0;
+    if (fread(&fc, 4, 1, f) != 1 || fread(&same_frame, 1, 1, f) != 1) return false;
+    uint64_t u[11]; if (fread(u, 8, 11, f) != 11) return false;
+    if (h[0] > A2gspuCmdReg::PAYLOAD) return false;
+    r.st = (A2gspuCmdReg::St)h[0]; r.seq = uint16_t(h[1] | (h[2] << 8)); r.op = h[3]; r.len = h[4]; r.got = h[5];
+    r.have_last = h[6] != 0; r.last_seq = uint16_t(h[7] | (h[8] << 8));
+    r.hello_seen = h[9] != 0; r.hello_version = uint16_t(h[10] | (h[11] << 8));
+    memcpy(r.payload, p, sizeof p);
+    r.last_valid = l[0] != 0; r.last_op = l[1]; r.last_len = l[2]; r.last_frame_seq = uint16_t(l[3] | (l[4] << 8));
+    // the budget belongs to the frame the save was in: the restoring machine's current one if
+    // the save was mid-frame, else nothing counted yet
+    r.frame_cmds = same_frame ? fc : 0; r.budget_frame = video_frame;
+    r.skip_run = u[0]; r.writes = u[1]; r.frames = u[2]; r.presync = u[3]; r.oversize = u[4]; r.gaps = u[5];
+    r.dups = u[6]; r.overflow = u[7]; r.nops = u[8]; r.hellos = u[9]; r.other_ops = u[10];
+    return true;
+}
 
 inline const char *a2gspu_cmdreg_state_name(const A2gspuCmdReg &r) {
     switch (r.st) {
