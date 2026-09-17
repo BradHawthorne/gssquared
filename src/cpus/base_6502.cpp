@@ -762,16 +762,11 @@ inline void rmw_abs_x(cpu_state *cpu, Operation operation) {
     alu_t reg;
 
     // I think it needs the phantom every time, not just on page cross
-    // FORK: not on the 65C02 for the shifts. ASL, LSR, ROL and ROR abs,X take 6 cycles
-    // there, 7 only across a page; INC and DEC abs,X always take 7, and the NMOS part always
-    // takes 7 [Clark, "65C02 Opcodes"].
-    uint32_t eaddr;
-    if constexpr (CPUTraits::has_65c02_ops && !CPUTraits::has_65816_ops &&
-                  !std::is_same_v<Operation, IncrementOp> && !std::is_same_v<Operation, DecrementOp>) {
-        eaddr = address_abs_x(cpu, _X(cpu));        // cycles 2,3 (+4 across a page)
-    } else {
-        eaddr = address_rmw_abs_x(cpu, _X(cpu));    // cycles 2,3,4
-    }
+    // FORK: 7 cycles on every part, the 65C02's ASL/LSR/ROL/ROR included. The part
+    // datasheets disagree there: WDC documents 6 without a page cross, Rockwell lists 7
+    // flat, and the IIe/IIc parts are NCR, GTE or Rockwell. c93a9ea5 took WDC's number and
+    // was reverted; which the Apple part does is a hardware question.
+    uint32_t eaddr = address_rmw_abs_x(cpu, _X(cpu)); // cycles 2,3,4
 
     read_data(cpu, eaddr, reg);
 

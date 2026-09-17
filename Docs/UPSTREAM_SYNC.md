@@ -862,7 +862,7 @@ evidence. Each was tested on the rail, gated (11 gates) and committed on its own
 | `4978614e` | **RTC**: `z010ab01` reaches BRAM `$10-$13`; write-protect and test registers; block `rtc` | 11/11; unarmed hashes unchanged |
 | `7a00d873` | **hwtruth records IWMREG, RTC and VDA** | the gate holds 24 verdicts |
 | `fe7ffe13` | **Decimal-mode flags per Clark's Appendix A** (CPU step 7), with an exhaustive `conformtest` section written from the appendix | 136,104 failing cases before the fix, none after; unarmed hashes unchanged |
-| `c93a9ea5` | **65C02 abs,X shifts take 6 cycles; emulation-mode (d,X) wraps only with DL=0** (CPU steps 6 and 8, in part); a `cpu_cycles_65c02` ctest | ctest `cpu_*` 5/5; unarmed hashes unchanged |
+| `c93a9ea5` | **65C02 abs,X shifts take 6 cycles; emulation-mode (d,X) wraps only with DL=0** (CPU steps 6 and 8, in part); a `cpu_cycles_65c02` ctest | ctest `cpu_*` 5/5; unarmed hashes unchanged. The shift timing was later **reverted** (see Not done) |
 | `7bf8b405` | **`$C037` installed; `$C035` resets to `$00`** [HW Ref Table 2-1]. The DMA register's handlers came with the upstream port and were never installed | `$C037` reads back `$5A`/`$A5`; the shadow register is `$00` after reset and the ROM sets `$08` itself |
 | `9c4841f5` | **The motherboard's `$C800` ROM again** [Sather, UtA2E 5-28]. A `$C3xx` access with SLOTC3ROM reset maps the internal `$C800-$CFFF` ROM, apart from any card's flip-flop and whatever handler a card in slot 3 installed (owner reads 8). unarmedhash gains row `iigs-finder`, the 600-frame `_finder.po` boot, unarmed, which must end with status OK | the Finder boot is `2E304BF0147B220A`, 84 of 1,269, status OK again (Rosetta's driver agrees); `575e1703` rebuilt fails the new row under the gate's pins; INTC8ROM on the IIe and IIgs (3/3 each); the `$C800` flip-flop and `$C02D` tests (6/6, 6/6, 4/4) |
 
@@ -886,6 +886,7 @@ it.
 
 **Not done, and why:**
 - RTC busy timing: no document gives the transfer time, so hwtruth's RTC record measures it.
+- The 65C02 abs,X shifts: `c93a9ea5` took WDC's 6 cycles, but a2engine cpucheck failed on them. Its own notes record that Rockwell lists 7 flat, and the Apple parts are not WDC's. Reverted to 7, in the commit that adds this line, until the part itself is measured.
 - The 65C02 unused-NOP reads (Clark's text on `$5C` is not specific), COP's pushed B bit in emulation mode, and IRQ recognition timing all need the SingleStepTests vectors, which are fetched rather than vendored.
 - Storage steps 4, 7 and 8, the Mockingboard, input, the video cards, the op registry and SlotBus/SlotCardOps were not reached.
 

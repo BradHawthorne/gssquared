@@ -1365,12 +1365,12 @@ int main(int argc, char **argv) {
     mmu->write(0x0002, 0xFF);
     mmu->write(0x0003, 0x10);
 
-    // FORK: where the 65C02 differs from the NMOS counts above [Clark, "65C02 Opcodes"]:
-    // JMP (abs) takes 6, and the abs,X shifts take 6 unless they cross a page.
+    // FORK: where the 65C02 differs from the NMOS counts above: JMP (abs) takes 6. The abs,X
+    // shifts stay at 7 -- WDC documents 6 without a page cross, Rockwell 7 flat, and the
+    // Apple parts are not WDC's (a2engine cpucheck records the same dispute).
     struct c02_count { const char *description; uint64_t cycles; };
     static const c02_count c02_counts[] = {
         { "JMP Indirect", 6 },
-        { "ASL ABS,X", 6 }, { "LSR ABS,X", 6 }, { "ROL ABS,X", 6 }, { "ROR ABS,X", 6 },
     };
     if (cputype == PROCESSOR_65C02) {
         for (const c02_count &cc : c02_counts)
