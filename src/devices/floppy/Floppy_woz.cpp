@@ -221,9 +221,11 @@ void Floppy_woz::reset() {
 // ───────────────────────────── track / bit stream helpers ────────────────────
 
 void Floppy_woz::update_track_ptr() {
-    const uint64_t old_bits = cur_track_ptr ? cur_track_ptr->bit_count : 0;
+    // FORK: an empty quarter-track counts as empty_track_bits() long, so stepping across
+    // one keeps the disk's angle [WOZ 2 reference: 51,200 bits on a 5.25 disk].
+    const uint64_t old_bits = track_len();
     cur_track_ptr = woz.get_track_ptr(current_tmap_index());
-    const uint64_t new_bits = cur_track_ptr ? cur_track_ptr->bit_count : 0;
+    const uint64_t new_bits = track_len();
 
     // Preserve angular position across a track change. 5.25 tracks are all
     // near-equal length so the old/new ratio is ~1 and this degenerates to
@@ -282,11 +284,13 @@ uint64_t Floppy_woz::fast_forward(/* uint64_t now */) {
     // modulos head_position when a track later becomes available.
     head_position += (elapsed * advance_per_cycle);
 
-    if (!cur_track_ptr || cur_track_ptr->bit_count == 0) {
+    if (track_len() == 0) {
         // No track under the head: read_pulse() will synthesize random
         // bits for the LSS. read_position doesn't wrap in this state
         // (read_pulse skips the modulo when bit_count==0), so we just
         // measure raw lag and apply the same cap.
+        // FORK: only where an empty track's length is unknown (3.5); a 5.25 empty track
+        // wraps like any other (empty_track_bits).
         uint64_t bits_to_sim = (head_position >> POSITION_FP_SHIFT) - (read_position >> POSITION_FP_SHIFT);
         if (bits_to_sim > MAX_BITS_TO_SIM) {
             read_position = ((head_position >> POSITION_FP_SHIFT) - MAX_BITS_TO_SIM) * POSITION_FP_MUL;
@@ -295,7 +299,7 @@ uint64_t Floppy_woz::fast_forward(/* uint64_t now */) {
         return bits_to_sim;
     }
 
-    uint64_t track_bits = cur_track_ptr->bit_count;
+    uint64_t track_bits = track_len();
 
     // Derive the number of whole bit cells to simulate from the fractional
     // positions already accumulated. Using (head_fp >> 3) - (read_fp >> 3)
@@ -340,14 +344,10 @@ uint8_t Floppy_woz::read_pulse() {
         }
     }
 
-    windowBits = (windowBits << 1) | bit;
-    if ((windowBits & 0x0F) == 0) {
-        // Four consecutive zeros: hand the LSS a random fake bit.
-        bit = get_random_bit();
-    }
+    bit = read_amplifier(bit);
     read_position += POSITION_FP_MUL;
-    if (cur_track_ptr && cur_track_ptr->bit_count > 0) {
-        read_position %= cur_track_ptr->bit_count * POSITION_FP_MUL;
+    if (const uint64_t len = track_len()) {
+        read_position %= len * POSITION_FP_MUL;
     }
     return bit;
 }
@@ -369,8 +369,8 @@ void Floppy_woz::write_pulse(uint8_t bit) {
         }
     }
     read_position += POSITION_FP_MUL;
-    if (cur_track_ptr && cur_track_ptr->bit_count > 0) {
-        read_position %= cur_track_ptr->bit_count * POSITION_FP_MUL;
+    if (const uint64_t len = track_len()) {
+        read_position %= len * POSITION_FP_MUL;
     }
 }
 

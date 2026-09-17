@@ -60,6 +60,24 @@ protected:
 
     int      current_tmap_index()     const override { return track; }
 
+    // FORK: the Disk II's MC3470 as the WOZ 2 reference's emulator notes model it. The
+    // last four flux bits sit in a window; the LSS gets the window's bit 1 (one cell late),
+    // or, when all four are zero (the amplifier's gain has climbed into noise), a fake bit
+    // from a table about 30% ones. An empty track reads the same way, and spans 51,200
+    // bits so the angle holds across it. The table's bits are the fork's own draw (77 of
+    // 256); the reference fixes the density, not the pattern. random_bits is its index.
+    static constexpr uint8_t kFakeBits[32] = {
+        0xD1, 0xB9, 0x7C, 0xB0, 0x55, 0x04, 0x91, 0x11, 0x95, 0x14, 0x81, 0xC4, 0xD1, 0x08, 0xC0, 0x21,
+        0x58, 0x24, 0x0C, 0xA0, 0x14, 0xC0, 0x04, 0x40, 0x12, 0x11, 0x04, 0x2C, 0x06, 0xC0, 0x40, 0x88,
+    };
+    uint8_t read_amplifier(uint8_t bit) override {
+        windowBits = ((windowBits << 1) | bit) & 0x0F;
+        if (windowBits != 0) return (uint8_t)((windowBits >> 1) & 1);
+        const uint8_t i = (uint8_t)(random_bits++ & 0xFF);
+        return (uint8_t)((kFakeBits[i >> 3] >> (7 - (i & 7))) & 1);
+    }
+    uint64_t empty_track_bits() const override { return 51200; }
+
     // FORK: PH1 and PH3 on together is the SmartPort bus-enable state, which no Disk II
     // stepper sequence uses, and on the IIgs disk port 5.25 drives share the chain with
     // SmartPort devices. A drive that wrote then would take every SmartPort packet onto

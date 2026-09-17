@@ -104,6 +104,21 @@ protected:
     // mirroring real WOZ-unclean track behaviour.
     uint8_t get_random_bit();
 
+    // FORK: the read amplifier between the head and the LSS. The base keeps the fork's
+    // earlier shim (the current bit, a rotating 64-bit pattern after four zeros); the 5.25
+    // drive overrides it with the WOZ reference's MC3470 recipe.
+    virtual uint8_t read_amplifier(uint8_t bit) {
+        windowBits = (windowBits << 1) | bit;
+        if ((windowBits & 0x0F) == 0) bit = get_random_bit();   // four consecutive zeros
+        return bit;
+    }
+    // FORK: how many bits a quarter-track with no data spans, so the disk's angle survives
+    // a step across it. 0 = the length is unknown and the angle is not kept (3.5).
+    virtual uint64_t empty_track_bits() const { return 0; }
+    uint64_t track_len() const {
+        return (cur_track_ptr && cur_track_ptr->bit_count) ? cur_track_ptr->bit_count : empty_track_bits();
+    }
+
     // Hook: how many 1/8-bit-cell units head_position advances per CPU cycle.
     //   5.25: 2  (4 cycles per bit cell @ 4 us)
     //   3.5 : 4  (2 cycles per bit cell @ 2 us)
@@ -196,8 +211,8 @@ public:
 
     void tick_no_write() {
         read_position += POSITION_FP_MUL;
-        if (cur_track_ptr && cur_track_ptr->bit_count > 0) {
-            read_position %= cur_track_ptr->bit_count * POSITION_FP_MUL;
+        if (const uint64_t len = track_len()) {
+            read_position %= len * POSITION_FP_MUL;
         }
     }
 

@@ -1,7 +1,7 @@
 {
   "schema": "a2rail-unarmed-baseline-v1",
   "pins": "A2GSPU_SEED=1 A2GSPU_FAKETIME=1780000000 A2GSPU_RAMDISK=1 A2GSPU_BRAM=default",
-  "blessed": "2026-09-16",
+  "blessed": "2026-09-17",
   "rows": [
     {
       "name": "iie-rom",
@@ -10,8 +10,8 @@
       "disk": "",
       "rom": "553724E147B80137",
       "hash": "92F1E19D6FE2A383",
-      "cycles": 2043602,
-      "run": "212DD8122C4479ED"
+      "cycles": 2043601,
+      "run": "9D45F479767B943C"
     },
     {
       "name": "iigs-finder",
@@ -40,8 +40,8 @@
       "disk": "",
       "rom": "4E6B6EE5B32F63CF",
       "hash": "6D9886E3B3EE0383",
-      "cycles": 6045816,
-      "run": "3D9F4A17131D1E36"
+      "cycles": 6236744,
+      "run": "800AEA5075763504"
     }
   ]
 }
