@@ -51,6 +51,7 @@
 #include "mmus/mmu.hpp"
 #include "NClock.hpp"
 #include "matrix.h"     // systematic opcode x mode matrix + reference model
+#include "decimal_clark.h"   // decimal ADC/SBC per Clark, "Decimal Mode", Appendix A
 
 uint8_t memory[65536];
 
@@ -231,6 +232,89 @@ static const int tests_count = sizeof(tests) / sizeof(tests[0]);
 /* Records exercising documented 6502-only quirks that the 65C02 deliberately
  * changed. Skipped on other cores rather than silently reported as failures. */
 static bool is_6502_only(const char *d) { return strstr(d, "6502 page bug") != nullptr; }
+
+/* ---- DECIMAL MODE, EXHAUSTIVE --------------------------------------------------
+ * Every 8-bit A, operand and carry-in (131,072 cases each) for ADC # and SBC #, on the
+ * 6502, the 65C02 and the 65816 in emulation mode, against decimal_clark.h. Then the 65816
+ * in native 16-bit mode over a lattice of valid 4-digit BCD operands. Runs on every
+ * invocation whatever core argv picks: the flag rules differ per part, and each part's
+ * own rule is the claim. */
+static int decimal_exhaustive(MMU *mmu, NClock *clock) {
+    struct Part { processor_type t; const char *name; };
+    static const Part parts[] = { {PROCESSOR_6502, "6502"}, {PROCESSOR_65C02, "65c02"}, {PROCESSOR_65816, "65816 (E=1)"} };
+    const uint8_t FL = F_C | F_Z | F_V | F_N;
+    int total_fail = 0;
+    printf("\n--- decimal mode, exhaustive (Clark, \"Decimal Mode\", Appendix A) ---\n");
+    for (const Part &pt : parts) {
+        cpu_state *c = new cpu_state(pt.t);
+        c->cpun = createCPU(pt.t, clock);
+        c->core = c->cpun.get();
+        c->trace = false;
+        c->set_mmu(mmu);
+        c->reset();
+        for (int op = 0; op < 2; op++) {
+            const uint8_t opcode = op ? 0xE9 : 0x69;
+            int fails = 0, ran = 0;
+            for (int A = 0; A < 256; A++) for (int B = 0; B < 256; B++) for (int C = 0; C < 2; C++) {
+                mmu->write(0x1000, opcode);
+                mmu->write(0x1001, (uint8_t)B);
+                c->pc = 0x1000;
+                c->a = (uint8_t)A;
+                c->sp = 0xFF;
+                c->p = (pt.t == PROCESSOR_65816 ? 0x20 : 0x00) | F_D | (C ? F_C : 0);
+                (c->cpun->execute_next)(c);
+                ran++;
+                const clark::Out e = op ? clark::sbc8(pt.t, (uint8_t)A, (uint8_t)B, C != 0)
+                                        : clark::adc8(pt.t, (uint8_t)A, (uint8_t)B, C != 0);
+                const uint8_t ga = (uint8_t)(c->a & 0xFF);
+                const uint8_t gp = (uint8_t)(c->p & FL);
+                const uint8_t ep = (uint8_t)((e.c ? F_C : 0) | (e.z ? F_Z : 0) | (e.v ? F_V : 0) | (e.n ? F_N : 0));
+                if (ga != e.a || gp != ep) {
+                    if (fails < 4)
+                        printf("  %-12s %s A=$%02X B=$%02X C=%d: A exp=$%02X got=$%02X  NVZC exp=$%02X got=$%02X\n",
+                               pt.name, op ? "SBC" : "ADC", A, B, C, e.a, ga, ep, gp);
+                    fails++;
+                }
+            }
+            printf("%-12s %s: %d cases, %d failed\n", pt.name, op ? "SBC" : "ADC", ran, fails);
+            total_fail += fails;
+        }
+        if (pt.t == PROCESSOR_65816) {
+            // native, M=0: a lattice of valid BCD operands
+            for (int op = 0; op < 2; op++) {
+                const uint8_t opcode = op ? 0xE9 : 0x69;
+                int fails = 0, ran = 0;
+                for (int da = 0; da < 10000; da += 37) for (int db = 0; db < 10000; db += 41) for (int C = 0; C < 2; C++) {
+                    const uint16_t A = clark::bcd4(da), B = clark::bcd4(db);
+                    mmu->write(0x1000, opcode);
+                    mmu->write(0x1001, (uint8_t)(B & 0xFF));
+                    mmu->write(0x1002, (uint8_t)(B >> 8));
+                    c->E = 0;
+                    c->pc = 0x1000;
+                    c->pb = 0x00;
+                    c->a = A;
+                    c->sp = 0x01FF;
+                    c->p = F_D | (C ? F_C : 0);
+                    (c->cpun->execute_next)(c);
+                    ran++;
+                    const clark::Out16 e = op ? clark::sbc16(A, B, C != 0) : clark::adc16(A, B, C != 0);
+                    const uint16_t ga = (uint16_t)(c->a & 0xFFFF);
+                    const uint8_t gp = (uint8_t)(c->p & FL);
+                    const uint8_t ep = (uint8_t)((e.c ? F_C : 0) | (e.z ? F_Z : 0) | (e.v ? F_V : 0) | (e.n ? F_N : 0));
+                    if (ga != e.a || gp != ep) {
+                        if (fails < 4)
+                            printf("  65816 (M=0) %s A=$%04X B=$%04X C=%d: A exp=$%04X got=$%04X  NVZC exp=$%02X got=$%02X\n",
+                                   op ? "SBC" : "ADC", A, B, C, e.a, ga, ep, gp);
+                        fails++;
+                    }
+                }
+                printf("%-12s %s: %d valid-BCD cases, %d failed\n", "65816 (M=0)", op ? "SBC" : "ADC", ran, fails);
+                total_fail += fails;
+            }
+        }
+    }
+    return total_fail;
+}
 
 int main(int argc, char **argv) {
     // Unbuffered: this harness can fault, and with buffering the captured output
@@ -522,6 +606,7 @@ int main(int argc, char **argv) {
 
     failed += mfail;
     ran    += mran;
+    failed += decimal_exhaustive(mmu, clock);
     printf("\nRan %d, skipped %d. Failed tests: %d\n", ran, skipped, failed);
     return failed ? 1 : 0;
 }

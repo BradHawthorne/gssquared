@@ -1456,21 +1456,27 @@ inline void add_bcd_8_set_flags(cpu_state *cpu, uint8_t &a, uint8_t b) {
     if (AL >= 0x0A) AL = ((AL + 0x06) & 0x0F) + 0x10;
 
     uint16_t UA = (a & 0xF0) + (b & 0xF0) + AL;
+    // FORK: NMOS N is bit 7 before the $60 correction (Clark, "Decimal Mode", Appendix A,
+    // Seq.2); it was taken after, which differs whenever the high digit overflows.
+    const bool n_seq2 = (UA & 0x80) != 0;
     if (UA >= 0xA0) UA += 0x60;
 
     int16_t SA = (int8_t)(a & 0xF0) + (int8_t)(b & 0xF0) + (int16_t)AL;
-    
+
     //printf("UA: %04X  SA: %04X\n", UA, SA);
-    
+
     //printf("Result: %02X + %02X = %02X\n", a, b, UA);
-    
+
     a = UA & 0xFF;
     cpu->C = (UA >= 0x100);
-    if constexpr (CPUTraits::has_65c02_ops==false) {
-        cpu->Z = ((binary_sum & 0xFF) == 0); // NMOS 6502 
-    } else cpu->Z = (a == 0);
     cpu->V = (SA < -128 || SA > 127);
-    cpu->N = (UA & 0x80) != 0;
+    if constexpr (CPUTraits::has_65c02_ops==false) {
+        cpu->Z = ((binary_sum & 0xFF) == 0); // NMOS 6502
+        cpu->N = n_seq2;
+    } else {
+        cpu->Z = (a == 0);
+        cpu->N = (a & 0x80) != 0;
+    }
     //printf("P: %02X C: %d  Z: %d  V: %d N: %d\n", cpu.P, cpu.c, cpu.z, cpu.v, cpu.n);
 
 }
@@ -1489,32 +1495,51 @@ inline void add_bcd_16_set_flags(cpu_state *cpu, word_t b) {
 inline void sub_bcd_8_set_flags( cpu_state *cpu, uint8_t &a, uint8_t b) {
     // NMOS 6502 decimal-mode Z reflects the BINARY result A-M-1+C (i.e. A+(M^$FF)+C).
     int16_t binary_sum=a-b-1+cpu->C;
+    const uint8_t a_in = a;
 
     uint8_t N1 = b ^ 0xFF;
 
     int16_t AL = (a & 0x0F) - (b & 0x0F) + cpu->C - 1;
 
-    if (AL < 0) AL = ((AL - 0x06) & 0x0F) - 0x10;
+    // FORK: Clark, "Decimal Mode", Appendix A. The 65C02's accumulator is Seq.4 (a binary
+    // difference with the $60 and $06 corrections); the 6502's and the 65816's is Seq.3.
+    // They differ only for invalid BCD.
+    int16_t UA;
+    if constexpr (CPUTraits::has_65c02_ops && !CPUTraits::has_65816_ops) {
+        UA = (int16_t)a - (int16_t)b + cpu->C - 1;
+        cpu->V = !((a ^ N1) & 0x80) && ((a ^ UA) & 0x80);   // binary
+        if (UA < 0) UA -= 0x60;
+        if (AL < 0) UA -= 0x06;
+    } else {
+        if (AL < 0) AL = ((AL - 0x06) & 0x0F) - 0x10;
 
-    int16_t UA = (a & 0xF0) - (b & 0xF0) + AL;   
-    
-    // set based on intermediate result before final correction?
-    cpu->V = !((a ^ N1) & 0x80) && ((a ^ UA) & 0x80);
+        UA = (a & 0xF0) - (b & 0xF0) + AL;
 
-    if (UA < 0 ) UA -= 0x60;
+        // Taken before the final correction, this matches the binary rule on every
+        // input (conformtest checks all 131,072).
+        cpu->V = !((a ^ N1) & 0x80) && ((a ^ UA) & 0x80);
+
+        if (UA < 0 ) UA -= 0x60;
+    }
 
     //printf("UA: %04X  \n", UA);
-    
+
     //printf("Result: %02X - %02X = %02X\n", a, b, UA);
 
     a = UA & 0xFF;
-    
-    cpu->C = !(UA < 0);
+
+    cpu->C = !(binary_sum < 0);
     if constexpr (CPUTraits::has_65c02_ops==false) {
-        cpu->Z = ((binary_sum & 0xFF) == 0); // NMOS 6502 
-    } else cpu->Z = (a == 0);
-    
-    cpu->N = (UA & 0x80) != 0;
+        // FORK: NMOS N, V, Z and C are all the binary difference's (Appendix A); N and V
+        // came from the decimal value.
+        const uint8_t bin8 = (uint8_t)binary_sum;
+        cpu->Z = (bin8 == 0);
+        cpu->N = (bin8 & 0x80) != 0;
+        cpu->V = !((a_in ^ N1) & 0x80) && ((a_in ^ bin8) & 0x80);
+    } else {
+        cpu->Z = (a == 0);
+        cpu->N = (a & 0x80) != 0;
+    }
     //printf("P: %02X C: %d  Z: %d  V: %d N: %d\n", cpu.P, cpu.c, cpu.z, cpu.v, cpu.n);
 }
 
