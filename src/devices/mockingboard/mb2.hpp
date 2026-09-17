@@ -65,6 +65,11 @@ struct mb_cpu_data: public SlotData {
 };
 
 void init_slot_mockingboard(computer_t *computer, SlotType_t slot);
+
+// FORK: snapshot block "mb" (M5), every Mockingboard by slot.
+bool mb_A2GSPU_present();
+void mb_A2GSPU_snapshot(FILE *f);
+bool mb_A2GSPU_restore(FILE *f, int *absent);
 void mb_write_Cx00(cpu_state *cpu, uint16_t addr, uint8_t data);
 uint8_t mb_read_Cx00(cpu_state *cpu, uint16_t addr);
 void generate_mockingboard_frame(cpu_state *cpu, SlotType_t slot);

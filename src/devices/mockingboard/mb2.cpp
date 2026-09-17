@@ -263,6 +263,18 @@ public:
         n6522[1]->set_ira(0xFF);
     }
 
+    // FORK: A2GSPU snapshot (block "mb"), one card: both VIAs, then the AY pair.
+    void A2GSPU_snapshot(FILE *f) {
+        n6522[0]->A2GSPU_snapshot(f);
+        n6522[1]->A2GSPU_snapshot(f);
+        ay8910s->A2GSPU_snapshot(f);
+    }
+    bool A2GSPU_restore(FILE *f) {
+        if (!n6522[0]->A2GSPU_restore(f) || !n6522[1]->A2GSPU_restore(f)) return false;
+        return ay8910s->A2GSPU_restore(f, (double)clock->get_vid_cycles() / (double)vid_cycles_rate);
+    }
+    static constexpr size_t A2GSPU_RECORD = 2 * N6522::A2GSPU_RECORD + AY8910s::A2GSPU_RECORD;
+
     DebugFormatter *debug() {
         DebugFormatter *df = new DebugFormatter();
         n6522[0]->debug(df);
@@ -271,6 +283,45 @@ public:
         return df;
     }
 };
+
+// FORK: each Mockingboard by slot, for the snapshot code (cleared at machine shutdown).
+static Mockingboard *g_mb_cards[16] = {};
+
+bool mb_A2GSPU_present() {
+    for (auto *m : g_mb_cards) if (m) return true;
+    return false;
+}
+
+void mb_A2GSPU_snapshot(FILE *f) {
+    uint8_t cnt = 0;
+    for (auto *m : g_mb_cards) if (m) cnt++;
+    fwrite(&cnt, 1, 1, f);
+    for (int s = 0; s < 16; s++) {
+        if (!g_mb_cards[s]) continue;
+        const uint8_t slot = uint8_t(s);
+        fwrite(&slot, 1, 1, f);
+        g_mb_cards[s]->A2GSPU_snapshot(f);
+    }
+}
+
+bool mb_A2GSPU_restore(FILE *f, int *absent) {
+    *absent = 0;
+    uint8_t cnt = 0;
+    if (fread(&cnt, 1, 1, f) != 1) return false;
+    for (int i = 0; i < cnt; i++) {
+        uint8_t slot = 0;
+        if (fread(&slot, 1, 1, f) != 1) return false;
+        Mockingboard *m = slot < 16 ? g_mb_cards[slot] : nullptr;
+        if (!m) {
+            uint8_t skip[Mockingboard::A2GSPU_RECORD];
+            if (fread(skip, 1, sizeof skip, f) != sizeof skip) return false;
+            (*absent)++;
+            continue;
+        }
+        if (!m->A2GSPU_restore(f)) return false;
+    }
+    return true;
+}
 
 void mb_write_Cx00(void *context, uint32_t addr, uint8_t data) {
     mb_cpu_data *mb_d = (mb_cpu_data *)context;
@@ -296,6 +347,7 @@ void init_slot_mockingboard(computer_t *computer, SlotType_t slot) {
     mb_d->mockingboard = new Mockingboard(computer->clock, computer->irq_control, mb_d->event_timer, computer->audio_system, slot);
     
     mb_d->slot = slot;
+    g_mb_cards[slot & 15] = mb_d->mockingboard;
 
     computer->mmu->map_c1cf_page_write_h(0xC0 + slot, { mb_write_Cx00, mb_d }, "MB_IO");
     computer->mmu->map_c1cf_page_read_h(0xC0 + slot, { mb_read_Cx00, mb_d }, "MB_IO");
@@ -321,6 +373,7 @@ void init_slot_mockingboard(computer_t *computer, SlotType_t slot) {
     });
 
     computer->register_shutdown_handler([mb_d]() {
+        g_mb_cards[mb_d->slot & 15] = nullptr;
         delete mb_d->mockingboard;
         //SDL_DestroyAudioStream(mb_d->stream);
         delete mb_d;

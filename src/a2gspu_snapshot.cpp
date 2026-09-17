@@ -20,6 +20,7 @@
 #include "devices/diskii/diskii_controller.hpp"   // g_a2gspu_diskii: the Disk II controllers, by slot
 #include "devices/scc8530/scc8530.hpp"             // the IIgs SCC's block
 #include "devices/rtc/rtc_pram.hpp"                // the IIgs clock chip's block
+#include "devices/mockingboard/mb2.hpp"            // every Mockingboard's block
 #include "mmus/mmu_iie.hpp"                        // the IIgs motor detect's block
 
 
@@ -100,7 +101,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "motor", "scc", "clock", "u2", "tclock", "mousecd", "voc", "ssc", "ssight" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "motor", "scc", "clock", "u2", "tclock", "mousecd", "voc", "ssc", "mb", "ssight" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -270,6 +271,11 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "rtc", 1); rtc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "rtc" : ",rtc";
     }
+    // Every Mockingboard: both 6522s exactly, and each AY's address latch and registers.
+    if (mb_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "mb", 1); mb_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "mb" : ",mb";
+    }
     if (ssc_A2GSPU_present()) {
         long at = a2gspu_snap_dev_begin(f, "ssc", 2); ssc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);   // 2: IRQ latch and modem inputs
         names += names.empty() ? "ssc" : ",ssc";
@@ -426,6 +432,13 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
             }
         } else if (!strcmp(nm, "rtc") && ver == 1) {
             if (rtc_A2GSPU_present()) r = rtc_A2GSPU_restore(f) ? RESTORED : FAILED;
+        } else if (!strcmp(nm, "mb") && ver == 1) {
+            if (mb_A2GSPU_present()) {
+                int absent = 0;
+                r = mb_A2GSPU_restore(f, &absent) ? RESTORED : FAILED;
+                if (r == RESTORED && absent)
+                    a2gspu_warn("A2GSPU SNAP", "mb: a saved Mockingboard's slot has none in this machine; that card was not applied");
+            }
         } else if (!strcmp(nm, "ssc") && (ver == 1 || ver == 2)) {
             if (ssc_A2GSPU_present()) {
                 int absent = 0;

@@ -763,6 +763,31 @@ static const float normalized_levels[16] = {
         uint8_t read_register(int chip_index, uint8_t register_num) {
             return chips[chip_index].live_registers[register_num];
         }
+
+        // FORK: A2GSPU snapshot (block "mb"): what the guest can read back, per chip -- the
+        // bus address latch and the 16 registers as last written. Restore re-queues the
+        // registers at the restore instant, so the sound generator picks them up; its
+        // oscillator, noise and envelope phases are host audio and are not saved.
+        static constexpr size_t A2GSPU_RECORD = 2 + 2 * AY_8913_REGISTER_COUNT;
+        void A2GSPU_snapshot(FILE *f) const {
+            uint8_t b[A2GSPU_RECORD];
+            b[0] = reg_num[0]; b[1] = reg_num[1];
+            for (int c = 0; c < 2; c++)
+                for (int r = 0; r < AY_8913_REGISTER_COUNT; r++)
+                    b[2 + c * AY_8913_REGISTER_COUNT + r] = chips[c].live_registers[r];
+            fwrite(b, 1, A2GSPU_RECORD, f);
+        }
+        bool A2GSPU_restore(FILE *f, double now_seconds) {
+            uint8_t b[A2GSPU_RECORD];
+            if (fread(b, 1, A2GSPU_RECORD, f) != A2GSPU_RECORD) return false;
+            reg_num[0] = b[0]; reg_num[1] = b[1];
+            pending_events.clear();
+            if (current_time > now_seconds) current_time = now_seconds;
+            for (uint8_t c = 0; c < 2; c++)
+                for (uint8_t r = 0; r < AY_8913_REGISTER_COUNT; r++)
+                    queueRegisterChange(now_seconds, c, r, b[2 + c * AY_8913_REGISTER_COUNT + r]);
+            return true;
+        }
     
     
     private:

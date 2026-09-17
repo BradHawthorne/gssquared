@@ -516,6 +516,34 @@ public:
     }
 
 
+    // FORK: A2GSPU snapshot (block "mb"): every register, both counters and latches, and the
+    // underflow bookkeeping (pending one-shot, rollover, load-cycle skip), so a restored VIA
+    // continues on the cycle the saved one was on.
+    static constexpr size_t A2GSPU_RECORD = 25;
+    void A2GSPU_snapshot(FILE *f) const {
+        uint8_t b[A2GSPU_RECORD] = {
+            ora, ira, orb, irb, ddra, ddrb, sr, acr, pcr, ifr.value, ier.value,
+            uint8_t(t1_latch), uint8_t(t1_latch >> 8), uint8_t(t1_counter), uint8_t(t1_counter >> 8),
+            uint8_t(t2_latch), uint8_t(t2_latch >> 8), uint8_t(t2_counter), uint8_t(t2_counter >> 8),
+            uint8_t(t1_oneshot_pending ? 1 : 0), uint8_t(t2_oneshot_pending ? 1 : 0),
+            uint8_t(t1_rollover ? 1 : 0), uint8_t(t2_rollover ? 1 : 0),
+            uint8_t(t1_skip_next_decrement ? 1 : 0), uint8_t(t2_skip_next_decrement ? 1 : 0) };
+        fwrite(b, 1, A2GSPU_RECORD, f);
+    }
+    bool A2GSPU_restore(FILE *f) {
+        uint8_t b[A2GSPU_RECORD];
+        if (fread(b, 1, A2GSPU_RECORD, f) != A2GSPU_RECORD) return false;
+        ora = b[0]; ira = b[1]; orb = b[2]; irb = b[3]; ddra = b[4]; ddrb = b[5];
+        sr = b[6]; acr = b[7]; pcr = b[8]; ifr.value = b[9]; ier.value = b[10];
+        t1_latch = uint16_t(b[11] | (b[12] << 8)); t1_counter = uint16_t(b[13] | (b[14] << 8));
+        t2_latch = uint16_t(b[15] | (b[16] << 8)); t2_counter = uint16_t(b[17] | (b[18] << 8));
+        t1_oneshot_pending = b[19]; t2_oneshot_pending = b[20];
+        t1_rollover = b[21] != 0; t2_rollover = b[22] != 0;
+        t1_skip_next_decrement = b[23] != 0; t2_skip_next_decrement = b[24] != 0;
+        update_interrupt();   // the card's IRQ line follows the restored flags and enables
+        return true;
+    }
+
     void debug(DebugFormatter *df) {
 
         df->addLine("====== (%s) ======", chip_id);
