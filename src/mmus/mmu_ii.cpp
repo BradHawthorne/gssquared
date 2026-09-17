@@ -264,8 +264,13 @@ uint8_t MMU_II::read(uint32_t address) {
 
         if (page < 0xC8) { // it's not C0, but it's less than C8 - Slot-card firmware.
             uint8_t slot = page & 0x7; // slot number is just the lower digit of page
-            // FORK: only an access that selects the card (its /IOSEL) sets its flip-flop.
+            // FORK: only an access that selects the card (its /IOSEL) sets its flip-flop; an
+            // access to the motherboard's own slot ROM may give $C800 to its ROM instead.
             if (slot_card_selected(slot)) c8_select(slot);
+            else if (motherboard_c8_access(slot) && C8xx_slot != C8XX_MOTHERBOARD) {
+                map_motherboard_c8();
+                C8xx_slot = C8XX_MOTHERBOARD;
+            }
         } else if (eaddress == 0xCFFF) {
             // FORK: the $CFFF byte is served while the card's ROM is still enabled -- the
             // flip-flop clears as the access ends -- so read it first, then release. The
@@ -315,6 +320,10 @@ void MMU_II::write(uint32_t address, uint8_t value) {
         if (page < 0xC8) { // it's not C0, and less than C8 - Slot-card firmware area.
             uint8_t slot = (eaddress / 0x100) & 0x7; // TODO: use a bit shift instead
             if (slot_card_selected(slot)) c8_select(slot);   // FORK: as the read side
+            else if (motherboard_c8_access(slot) && C8xx_slot != C8XX_MOTHERBOARD) {
+                map_motherboard_c8();
+                C8xx_slot = C8XX_MOTHERBOARD;
+            }
         } else if (eaddress == 0xCFFF) {
             // FORK: as the read side -- the write reaches the card's space, then the release.
             page_table_entry_t *pte = &page_table[page];

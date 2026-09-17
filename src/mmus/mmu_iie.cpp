@@ -260,19 +260,16 @@ void MMU_IIe::map_c1cf_internal_rom(page_t page, uint8_t *data, const char *read
     pte->write_d = nullptr;
 }
 
-void iie_map_rom_slot3(void *context, SlotType_t slot) {
-    MMU_IIe *mmu = (MMU_IIe *)context;
-
-    // Sather UtA2E 5-28: "The C800-CFFF range is assigned to motherboard ROM any time SlotC3 ROM is reset and an 
-    // access is made to $C3XX.
-    if (mmu->f_slotc3rom) return; // SLOTC3ROM is -set- so this does not apply.
-
-    uint8_t *rom = mmu->get_rom_base();
-
-    // our virtual slot 3 also gets to map in C8-CF to internal ROM regardless of intcxrom if C3XX is accessed.
+// Sather UtA2E 5-28: "The C800-CFFF range is assigned to motherboard ROM any time SlotC3 ROM
+// is reset and an access is made to $C3XX." FORK: reached through motherboard_c8_access, not
+// as slot 3's card handler (a card in slot 3 replaced it there, and it counted as a card).
+void MMU_IIe::map_motherboard_c8() {
+    uint8_t *rom = get_rom_base();
+    // C8-CF map to internal ROM regardless of intcxrom when C3XX is accessed.
     for (uint8_t page = 0; page < 8; page++) {
-        mmu->map_c1cf_page_read_only(page + 0xC8, rom + 0x800 + (page * 0x100), "SYS_ROM");
+        map_c1cf_page_read_only(page + 0xC8, rom + 0x800 + (page * 0x100), "SYS_ROM");
     }
+    compose_c1cf();   // the pages land in the slot ROM table; composing puts them in the map
 }
 
 MMU_IIe::MMU_IIe(int page_table_size, int ram_amount, uint8_t *rom_pointer) : MMU_II(page_table_size, ram_amount, rom_pointer) {
@@ -294,7 +291,6 @@ MMU_IIe::MMU_IIe(int page_table_size, int ram_amount, uint8_t *rom_pointer) : MM
     set_C0XX_write_handler(0xC00A, {iie_mmu_handle_C00X_write, this});
     set_C0XX_write_handler(0xC00B, {iie_mmu_handle_C00X_write, this});
 
-    set_C8xx_handler(SLOT_3, iie_map_rom_slot3, this );
 
     // set up map table for the internal C1-CF ROM.
     for (int i = 1; i < 16; i++) {

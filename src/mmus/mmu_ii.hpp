@@ -67,6 +67,13 @@ class MMU_II : public MMU {
         // IIgs's Mega II.
         virtual int c0xx_gate(uint8_t sub) { (void)sub; return -1; }
         virtual bool slot_card_selected(uint8_t slot) { (void)slot; return true; }
+        //   motherboard_c8_access(n): a $Cn00-$CnFF access that gives $C800-$CFFF to the
+        //                   motherboard's own ROM instead (the IIe's INTC8ROM: $C3xx with
+        //                   SLOTC3ROM reset). map_motherboard_c8() maps that ROM; the owner
+        //                   then reads C8XX_MOTHERBOARD. No card's flip-flop is involved.
+        virtual bool motherboard_c8_access(uint8_t slot) { (void)slot; return false; }
+        virtual void map_motherboard_c8() {}
+        static constexpr int8_t C8XX_MOTHERBOARD = 8;
         virtual void set_C0XX_write_handler(uint16_t address, write_handler_t handler);
 /*         virtual void get_C0XX_read_handler(uint16_t address, read_handler_t &handler);
         virtual void get_C0XX_write_handler(uint16_t address, write_handler_t &handler); */

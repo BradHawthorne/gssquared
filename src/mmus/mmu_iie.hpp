@@ -44,6 +44,13 @@ class MMU_IIe : public MMU_II {
             if (slot == 3) return f_slotc3rom;
             return gs_slot_register ? ((reg_slot >> slot) & 1) != 0 : true;
         }
+        // "The C800-CFFF range is assigned to motherboard ROM any time SlotC3 ROM is reset
+        // and an access is made to $C3XX" [Sather, UtA2E 5-28], whatever INTCXROM says. The
+        // 80-column firmware (the IIgs Text Tool Set's Pascal device in slot 3 included)
+        // runs on into $C800. 575e1703 tied this to slot_card_selected(3), which is false
+        // exactly then, and the IIgs Finder boot fell into an unmapped $C800 in InitTextDev.
+        bool motherboard_c8_access(uint8_t slot) override { return slot == 3 && !f_slotc3rom; }
+        void map_motherboard_c8() override;
         void map_c1cf_internal_rom(page_t page, uint8_t *data, const char *read_d);
 
         void init_map() override;

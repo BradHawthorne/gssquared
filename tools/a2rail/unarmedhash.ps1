@@ -39,6 +39,9 @@
     INPUTS
       -GsImage   a GS/OS boot volume (the baseline is recorded against gsos601.po);
                  default $env:A2RAIL_GSOS_IMAGE, then <repo>\corpus\gsos601.po.
+      -FinderImage  Rosetta v3's pinned boot volume, row iigs-finder (unarmed, 600 frames,
+                 must end with GSDIAG status=OK); default $env:A2RAIL_FINDER_IMAGE, then
+                 <repo>\corpus\_finder.po.
                  Missing: FAIL, unless -SkipCorpus, which runs the ROM-only rows and says
                  PARTIAL -- a skipped row is reported, never silently green.
       -Bless     record the current numbers as the baseline (after a deliberate change to
@@ -49,6 +52,7 @@
 [CmdletBinding()]
 param(
     [string]$GsImage = $env:A2RAIL_GSOS_IMAGE,
+    [string]$FinderImage = $env:A2RAIL_FINDER_IMAGE,
     [switch]$SkipCorpus,
     [switch]$Bless,
     [string]$Dir = (Join-Path $env:TEMP ('a2rail-unarmed-' + [guid]::NewGuid().ToString('N').Substring(0, 8))),
@@ -64,10 +68,11 @@ $exe  = Get-GSSquaredExe
 $baselineFile = Join-Path $here 'unarmed.baseline.json'
 if (-not (Test-Path $exe)) { Write-Host "unarmedhash: FAIL - emulator not found at $exe" -ForegroundColor Red; exit 2 }
 if (-not $GsImage) { $GsImage = Join-Path $root 'corpus\gsos601.po' }
-$haveCorpus = Test-Path $GsImage
+if (-not $FinderImage) { $FinderImage = Join-Path $root 'corpus\_finder.po' }
+$haveCorpus = (Test-Path $GsImage) -and (Test-Path $FinderImage)
 if (-not $haveCorpus -and -not $SkipCorpus) {
-    Write-Host "unarmedhash: FAIL - GS/OS boot image not found at '$GsImage'" -ForegroundColor Red
-    Write-Host '  (put gsos601.po in <repo>\corpus\, set A2RAIL_GSOS_IMAGE, or pass -SkipCorpus to run the ROM-only rows)'
+    Write-Host "unarmedhash: FAIL - a corpus boot image is missing ('$GsImage', '$FinderImage')" -ForegroundColor Red
+    Write-Host '  (put gsos601.po and _finder.po in <repo>\corpus\, set A2RAIL_GSOS_IMAGE / A2RAIL_FINDER_IMAGE, or pass -SkipCorpus to run the ROM-only rows)'
     exit 2
 }
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null
@@ -191,6 +196,11 @@ $rows = @(
     @{ name = 'iie-rom';   platform = 3; frames = 120; disk = '' }
 )
 if ($haveCorpus) { $rows += @{ name = 'iigs-gsos601'; platform = 5; frames = 300; disk = $GsImage } }
+# The boot Rosetta v3 pins (600 frames of _finder.po). It runs through the internal 80-column
+# firmware's $C800 code (Text Tools' InitTextDev), which 575e1703 broke for three sessions
+# while every row above stayed green: a crash there changes the hash and the status. Unarmed
+# only -- it guards the machine, not the observers, and an armed 600-frame boot doubles the gate.
+if ($haveCorpus) { $rows += @{ name = 'iigs-finder'; platform = 5; frames = 600; disk = $FinderImage; unarmedOnly = $true } }
 
 $baseline = @{}
 if (Test-Path $baselineFile) {
@@ -208,11 +218,14 @@ Write-Host '=== UNARMED HASH / OBSERVE-DON''T-DISTURB ====================' -For
 Write-Host ("exe: {0}" -f $exe)
 foreach ($r in $rows) {
     $u = Invoke-Spike ($r.name + '-unarmed') $r.platform $r.frames $r.disk @{}
-    $a = Invoke-Spike ($r.name + '-armed') $r.platform $r.frames $r.disk (Get-ArmedEnv (Join-Path $Dir ($r.name + '-armed')) $r.platform)
     $results += [pscustomobject]@{ name = $r.name; platform = $r.platform; frames = $r.frames
                                    disk = if ($r.disk) { Split-Path $r.disk -Leaf } else { '' }
                                    rom = $u.rom; hash = $u.hash; cycles = $u.cycles; run = $u.run }
     Check ("{0}: unarmed run completed" -f $r.name) ($u.rc -eq 0 -and $u.hash) ("rc={0} status={1}" -f $u.rc, $u.status)
+    if ($r.unarmedOnly) {
+        Check ("{0}: the boot did not crash" -f $r.name) ($u.status -eq 'OK') ("GSDIAG status={0}" -f $u.status)
+    } else {
+    $a = Invoke-Spike ($r.name + '-armed') $r.platform $r.frames $r.disk (Get-ArmedEnv (Join-Path $Dir ($r.name + '-armed')) $r.platform)
     Check ("{0}: armed run completed" -f $r.name) ($a.rc -eq 0 -and $a.hash) ("rc={0} status={1}" -f $a.rc, $a.status)
     Check ("{0}: armed == unarmed (hash)" -f $r.name) ($u.hash -and $a.hash -eq $u.hash) ("unarmed={0} armed={1}" -f $u.hash, $a.hash)
     Check ("{0}: armed == unarmed (cycles)" -f $r.name) ($u.cycles -ge 0 -and $a.cycles -eq $u.cycles) ("unarmed={0} armed={1}" -f $u.cycles, $a.cycles)
@@ -240,6 +253,7 @@ foreach ($r in $rows) {
         })
         Check ("{0}: load map names the drivers" -f $r.name) ($bad.Count -eq 0) $(if ($bad.Count) { "no load record (with a start block) for " + ($bad -join ', ') } else { "{0} loads, {1}" -f $loads.Count, (($expectLoads[$r.name] | ForEach-Object { $_.Substring(5) }) -join ' ') })
     }
+    }   # armed checks
     if (-not $Bless) {
         $b = $baseline[$r.name]
         if (-not $b) {
@@ -272,9 +286,9 @@ if ($Bless) {
 }
 
 Write-Host ''
-if (-not $haveCorpus) { Write-Host "unarmedhash: PARTIAL - the GS/OS row did not run (-SkipCorpus); only ROM-only boots were checked" -ForegroundColor Yellow }
+if (-not $haveCorpus) { Write-Host "unarmedhash: PARTIAL - the GS/OS rows did not run (-SkipCorpus); only ROM-only boots were checked" -ForegroundColor Yellow }
 if ($fail -eq 0) {
-    Write-Host ("ALL GREEN -- {0} checks over {1} boot(s), unarmed and armed" -f $pass, $rows.Count) -ForegroundColor Green
+    Write-Host ("ALL GREEN -- {0} checks over {1} boot(s), unarmed (and armed where the row asks)" -f $pass, $rows.Count) -ForegroundColor Green
     Remove-Item -Recurse -Force $Dir -ErrorAction SilentlyContinue
     exit 0
 }

@@ -14,6 +14,16 @@
       "run": "212DD8122C4479ED"
     },
     {
+      "name": "iigs-finder",
+      "platform": 5,
+      "frames": 600,
+      "disk": "_finder.po",
+      "rom": "4E6B6EE5B32F63CF",
+      "hash": "2E304BF0147B220A",
+      "cycles": 22377216,
+      "run": "994DCC2DF8B6A75A"
+    },
+    {
       "name": "iigs-gsos601",
       "platform": 5,
       "frames": 300,
