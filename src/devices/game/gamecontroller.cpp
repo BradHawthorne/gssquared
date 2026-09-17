@@ -264,6 +264,12 @@ uint8_t read_game_input(void *context, uint32_t address) {
         || ds->game_input_trigger[n] > ds->clock->get_c14m());
 }
 
+// FORK: an Apple key as the machine's keyboard holds it (computer_t::apple_keys; 0 on the
+// II and II+, which have none). bit: 1 Open Apple / Command, 2 Solid Apple / Option.
+static bool apple_key(gamec_state_t *ds, uint8_t bit) {
+    return ds->computer && ds->computer->apple_keys && (ds->computer->apple_keys() & bit);
+}
+
 uint8_t read_game_switch_0(void *context, uint32_t address) {
     gamec_state_t *ds = (gamec_state_t *)context;
     /* A2GSPU injection: checked first, so a headless session can press
@@ -290,7 +296,7 @@ uint8_t read_game_switch_0(void *context, uint32_t address) {
         ds->game_switch[0] = 0;
     }
 
-    if (SDL_GetModState() & KEYMOD_OPENAPPLE) { // TODO: restrict to Apple IIe and up
+    if (apple_key(ds, 1)) {   // FORK: the machine's keyboard, not the host's modifier state
         ds->game_switch[0] = 1;
     }
     return bit7_with_float(ds, ds->game_switch[0]);
@@ -316,7 +322,7 @@ uint8_t read_game_switch_1(void *context, uint32_t address) {
                 val = SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
             }
         }
-        if (SDL_GetModState() & KEYMOD_CLOSEDAPPLE) { // TODO: restrict to Apple IIe
+        if (apple_key(ds, 2)) {
             val = true;
         }
         return bit7_with_float(ds, !val);
@@ -330,7 +336,7 @@ uint8_t read_game_switch_1(void *context, uint32_t address) {
         ds->game_switch[1] = 0;
     }
     
-    if (SDL_GetModState() & KEYMOD_CLOSEDAPPLE) { // TODO: restrict to Apple IIe
+    if (apple_key(ds, 2)) {
         ds->game_switch[1] = 1;
     }
     return bit7_with_float(ds, ds->game_switch[1]);
@@ -507,7 +513,7 @@ DebugFormatter *debug_gamecontroller(gamec_state_t *ds) {
     df->addLine("Last Read");
     df->addLine("  Button 0: %d  Button 1: %d  Button 2: %d", ds->game_switch[0], ds->game_switch[1], ds->game_switch[2]);
     df->addLine("  Values  : %d, %d", ds->last_jv.x, ds->last_jv.y);
-    df->addLine("OpenApple: %d  ClosedApple: %d", (SDL_GetModState() & KEYMOD_OPENAPPLE) != 0, (SDL_GetModState() & KEYMOD_CLOSEDAPPLE) != 0);
+    df->addLine("OpenApple: %d  ClosedApple: %d", apple_key(ds, 1) ? 1 : 0, apple_key(ds, 2) ? 1 : 0);
      
     for (int i = 0; i < MAX_GAMEPAD_COUNT; i++) {
         if (ds->gps[i].id == -1) {

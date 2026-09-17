@@ -865,6 +865,8 @@ class KeyGloo
             keysdown = 1;
         }
         void release_mods(uint8_t mods) { vars.currmod.value = (uint8_t)(vars.currmod.value & ~mods); }
+        // FORK: the micro's live modifier register ($C025 layout: b7 Command, b6 Option).
+        uint8_t live_modifiers() const { return vars.currmod.value; }
         void key_up() { keysdown = 0; }   // release AKD after the poll window
 
         // Observation-free AKD for the CTRL `cpu` ack. keysdown is private, and

@@ -302,7 +302,16 @@ void init_mb_iie_keyboard(computer_t *computer, SlotType_t slot) {
     }
     computer->mmu->set_C0XX_read_handler(0xC010, { kb_read_C010, kb_state });
 
-    computer->dispatch->registerHandler(SDL_EVENT_KEY_DOWN, [kb_state](const SDL_Event &event) {
+    // FORK: the IIe keyboard's Open and Solid Apple keys are wired to SW0 and SW1 [IIe Tech
+    // Ref ch.2]. They follow this keyboard's key events, not the host's live modifier state.
+    auto note_apple_keys = [kb_state](const SDL_Event &event) {
+        kb_state->apple_keys = (uint8_t)(((event.key.mod & KEYMOD_OPENAPPLE) ? 1 : 0) |
+                                         ((event.key.mod & KEYMOD_CLOSEDAPPLE) ? 2 : 0));
+    };
+    computer->apple_keys = [kb_state]() -> uint8_t { return kb_state->apple_keys; };
+
+    computer->dispatch->registerHandler(SDL_EVENT_KEY_DOWN, [kb_state, note_apple_keys](const SDL_Event &event) {
+        note_apple_keys(event);
         if (event.key.key == SDLK_INSERT && event.key.mod & SDL_KMOD_SHIFT) {
             handle_paste(kb_state,event);
             return true;
@@ -310,7 +319,8 @@ void init_mb_iie_keyboard(computer_t *computer, SlotType_t slot) {
         handle_keydown_iie(event, kb_state);
         return false;
     });
-    computer->dispatch->registerHandler(SDL_EVENT_KEY_UP, [kb_state](const SDL_Event &event) {
+    computer->dispatch->registerHandler(SDL_EVENT_KEY_UP, [kb_state, note_apple_keys](const SDL_Event &event) {
+        note_apple_keys(event);
         if (event.key.key == KEY_RESET) {
             kb_state->reset_control->assert_reset(RST_ID_KEYBOARD, false);
         } else handle_keyup(event, kb_state);

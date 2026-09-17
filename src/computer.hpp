@@ -65,6 +65,13 @@ enum : uint32_t {
 
 struct computer_t {
 
+    // FORK: the Apple keys as the machine's keyboard holds them, for the game port's SW0/SW1
+    // (bit 0: Open Apple / Command, bit 1: Solid Apple / Option). The keyboard device sets it:
+    // the IIe from its key events, the IIgs from the ADB micro's modifier register. Unset on
+    // the II and II+, which have no Apple keys. The switch readers used to ask the host's
+    // modifier state at every read, so a key held on the host changed automated runs.
+    std::function<uint8_t()> apple_keys;
+
     using ResetHandler = std::function<bool (bool cold_start)>;
     using ShutdownHandler = std::function<bool ()>;
     using DebugDisplayHandler = std::function<DebugFormatter *()>;

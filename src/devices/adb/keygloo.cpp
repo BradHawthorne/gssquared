@@ -175,6 +175,12 @@ void init_slot_keygloo(computer_t *computer, SlotType_t slot) {
 
     KeyGloo *kg = new KeyGloo(kb_state->reset_control, rom03);
     kb_state->kg = kg;
+    // FORK: Command and Option reach SW0 and SW1 ($C061/$C062) through the ADB micro, as
+    // the keyboard the micro scans holds them [HW Ref ch.7; MAME wires micro P3 bits 5/4].
+    computer->apple_keys = [kg]() -> uint8_t {
+        const uint8_t m = kg->live_modifiers();
+        return (uint8_t)(((m & 0x80) ? 1 : 0) | ((m & 0x40) ? 2 : 0));
+    };
     // Observatory: register the ADB microcontroller RAM/vars image as a memory window.
     obs_add_memwindow(OBS_SUB_ADB, 0, "adb.uc_ram", kg->obs_uc_window(), kg->obs_uc_len(), OBS_F_INTERNAL_ONLY);
     kg->set_host_context(kb_state);

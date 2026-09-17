@@ -2142,11 +2142,16 @@ bool try_input(const char *line, char *result, size_t rsz,
                 kb->kb_key_strobe = (uint8_t)(ch | 0x80);
                 if (kb->mk) kb->mk->last_key_val = (uint8_t)ch;
                 kb->key_down_count++;
+                // FORK: o/c hold the IIe's Open/Solid Apple keys (SW0/SW1) for the press,
+                // as they do the IIgs's Command/Option through the ADB micro.
+                const uint8_t apple_before = kb->apple_keys;
+                kb->apple_keys = (uint8_t)(apple_before | ((mods & 0x80) ? 1 : 0) | ((mods & 0x40) ? 2 : 0));
                 int ran = 0; bool halted = false;
                 for (int i = 0; i < hold; i++) {
                     if (!run_one_frame(computer)) { halted = true; break; }
                     ran++;
                 }
+                kb->apple_keys = apple_before;
                 kb->key_down_count--;
                 // Always write status= — success used to leave result empty, so a
                 // COPILOT/CTRL caller saw a blank ack and treated press as failure
@@ -2187,6 +2192,7 @@ bool try_input(const char *line, char *result, size_t rsz,
                     }
                     kg->kg->hold_key(0);
                     kg->kg->key_up();
+                    if (mods) kg->kg->release_mods(mods);   // FORK: the long hold left them down for good
                 }
             } else {
                 snprintf(result, rsz, "status=FAIL no-keyboard");

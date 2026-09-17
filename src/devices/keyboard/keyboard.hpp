@@ -33,6 +33,7 @@ struct keyboard_state_t {
     MMU_II *mmu = nullptr;
     ResetController *reset_control = nullptr;
     int key_down_count = 0;
+    uint8_t apple_keys = 0;   // FORK: IIe Open/Solid Apple as the last key event left them (computer_t::apple_keys)
 } ;
 
 /* uint8_t kb_memory_read(uint16_t address);
