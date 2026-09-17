@@ -62,5 +62,37 @@
   {
     "question": "machine",
     "answer": "IDRoutine carry clear (IIgs), ROM version Y=$01; $C036=$84"
+  },
+  {
+    "question": "IWM odd addresses drive nothing (status selected)",
+    "answer": "YES: an odd address read something other than the status register"
+  },
+  {
+    "question": "IWM even read with Q6 and Q7 on",
+    "answer": "$FF"
+  },
+  {
+    "question": "IWM handshake bits 0-5 read ones",
+    "answer": "YES"
+  },
+  {
+    "question": "IWM handshake bit 6 outside the write state",
+    "answer": "0"
+  },
+  {
+    "question": "RTC transfer: $C034 reads until bit 7 clears",
+    "answer": "write 2, read 2"
+  },
+  {
+    "question": "RTC z010ab01 reaches BRAM $10-$13",
+    "answer": "YES"
+  },
+  {
+    "question": "RTC z1abcd01 reaches BRAM $00-$0F",
+    "answer": "YES"
+  },
+  {
+    "question": "the 65816's invalid-address cycle (VDA=VPA=0) reaches I/O",
+    "answer": "YES"
   }
 ]

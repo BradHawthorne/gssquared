@@ -34,10 +34,22 @@
 ;               (16-bit) and the four destination bytes, for each.
 ;   $08 BANKS   $D0:1234, $D0:5678, $80:1234, $7F:1234, $C036, $FBB3, $FBC0,
 ;               and IDRoutine ($FE1F): P, A, X, Y.
+;   $09 IWMREG  with Q6 on and the motor off: status through an even address,
+;               an odd one, even, odd; then with Q6 and Q7 on, an even read; then
+;               the handshake register (Q6 off, Q7 on) twice.
+;   $0A RTC     polls of $C034 until bit 7 clears for a write transfer and a read
+;               transfer (16-bit each; $0000 = gave up), the seconds-lo byte, then
+;               BRAM $10-$13 by the two-byte command and by z010ab01, and BRAM
+;               $00-$03 by the two-byte command and by z1abcd01.
+;   $0B VDA     $C01C (PAGE2) before and after STA $C0FF,X with X=$56: the write
+;               lands at $C155, and the 65816's extra cycle puts $C055 on the bus
+;               with VDA=VPA=0. PAGE2 on afterwards means that cycle reached I/O.
 ;
-; NOTHING HERE IS DESTRUCTIVE. The IWM is only read, with a two-second wait
-; first so a boot drive's motor has stopped. Every soft switch touched is put
-; back. SHR is on for one test, for a few frames.
+; NOTHING HERE IS DESTRUCTIVE. The IWM is read, with a two-second wait first so
+; a boot drive's motor has stopped; its mode register is written once, with the
+; value it already holds, because an odd address with Q6 and Q7 on latches the
+; bus. The clock chip is only read. Every soft switch touched is put back. SHR
+; is on for one test, for a few frames.
 ; ===========================================================================
 
             CPU  65816
@@ -110,6 +122,9 @@ clr         STA  RES,X
             JSR  t_megaii
             JSR  t_slot6
             JSR  t_scanclr
+            JSR  t_iwmreg
+            JSR  t_rtc
+            JSR  t_vda
 
             LDA  #$00           ; record terminator
             JSR  put
@@ -546,6 +561,174 @@ sgot        LDA  $C023
             LDA  SAVE+10
             STA  $C029
             JMP  rec_end
+
+; ---------------------------------------------------------------------------
+; $09 IWMREG -- what the IWM drives at odd addresses, with Q6 and Q7 both on,
+; and in the handshake register's bits 0-6. Built-in port; the motor has been
+; off since t_slot6's wait. Only CA0 ($C0E0/$C0E1) is used for the even/odd
+; pairs: no strobe reaches a 3.5 drive and the 5.25 stepper is not enabled.
+; ---------------------------------------------------------------------------
+t_iwmreg    LDA  #$09
+            JSR  rec_begin
+            LDA  $C02D
+            STA  SAVE+$20
+            AND  #$BF
+            STA  $C02D          ; built-in port
+            LDA  $C0E8          ; ENABLE off
+            LDA  $C0EE          ; Q7 off
+            LDA  $C0ED          ; Q6 on: status selected
+            LDA  $C0E0          ; even
+            JSR  put
+            LDA  $C0E1          ; odd (CA0 on)
+            JSR  put
+            LDA  $C0E0          ; even (CA0 off)
+            JSR  put
+            LDA  $C0E1          ; odd
+            JSR  put
+            LDA  $C0E0          ; CA0 off again
+            LDA  $C0EE          ; status: bits 0-4 are the mode
+            AND  #$1F
+            STA  $C0EF          ; Q7 on: the mode register, rewritten with its own value
+            LDA  $C0E0          ; even, Q6 and Q7 on
+            JSR  put
+            LDA  $C0EC          ; Q6 off: handshake
+            JSR  put
+            LDA  $C0E0          ; handshake again
+            JSR  put
+            LDA  $C0EE          ; Q7 off
+            LDA  SAVE+$20
+            STA  $C02D
+            JMP  rec_end
+
+; ---------------------------------------------------------------------------
+; $0A RTC -- how long a transfer holds $C034 bit 7, and which BRAM bytes the
+; one-byte commands reach. Reads only.
+; ---------------------------------------------------------------------------
+t_rtc       LDA  #$0A
+            JSR  rec_begin
+            PHP
+            SEI
+            LDA  $C034
+            STA  SAVE+$21
+            LDA  #$81           ; read seconds lo
+            STA  $C033
+            JSR  rtc_wpoll      ; the command byte: a write transfer, counted
+            JSR  rtc_rpoll      ; the data byte: a read transfer, counted
+            LDA  $C033
+            JSR  put
+            LDA  #$40           ; BRAM $10-$13, two-byte reads (second byte $40 + 4i)
+            JSR  rtc_two4
+            LDA  #$A1           ; the same four by z010ab01 ($A1 + 4i)
+            JSR  rtc_one4
+            LDA  #$00           ; BRAM $00-$03, two-byte reads (second byte 4i)
+            JSR  rtc_two4
+            LDA  #$C1           ; the same four by z1abcd01 ($C1 + 4i)
+            JSR  rtc_one4
+            LDA  SAVE+$21
+            AND  #$1F           ; the transfer over: start, read and enable off
+            STA  $C034
+            PLP
+            JMP  rec_end
+; A = the first second byte (two-byte form, first byte $B8) or the first command
+; (one-byte form); four reads, stepping it by 4, each byte put
+rtc_two4    STA  SAVE+$25
+            LDA  #4
+            STA  SAVE+$26
+rt2         LDX  SAVE+$25
+            LDA  #$B8
+            JSR  rtc_rd2
+            LDA  SAVE+$25
+            CLC
+            ADC  #4
+            STA  SAVE+$25
+            DEC  SAVE+$26
+            BNE  rt2
+            RTS
+rtc_one4    STA  SAVE+$25
+            LDA  #4
+            STA  SAVE+$26
+rt1         LDA  SAVE+$25
+            JSR  rtc_rd1
+            LDA  SAVE+$25
+            CLC
+            ADC  #4
+            STA  SAVE+$25
+            DEC  SAVE+$26
+            BNE  rt1
+            RTS
+; A = command: write it, read the byte back, put it
+rtc_rd1     JSR  rtc_w
+            JSR  rtc_r
+            JMP  put
+; A, X = the two command bytes: write both, read the byte back, put it
+rtc_rd2     STX  SAVE+$22
+            JSR  rtc_w
+            LDA  SAVE+$22
+            JSR  rtc_w
+            JSR  rtc_r
+            JMP  put
+rtc_w       STA  $C033
+            LDA  SAVE+$21
+            AND  #$0F
+            ORA  #$A0           ; start, write, enable
+            STA  $C034
+rtc_wait    LDA  $C034
+            BMI  rtc_wait
+            RTS
+rtc_r       LDA  SAVE+$21
+            AND  #$0F
+            ORA  #$E0           ; start, read, enable
+            STA  $C034
+rtc_rwait   LDA  $C034
+            BMI  rtc_rwait
+            LDA  $C033
+            RTS
+; the counted forms: put the number of $C034 reads it took (16-bit)
+rtc_wpoll   LDA  SAVE+$21
+            AND  #$0F
+            ORA  #$A0
+            JMP  rtc_poll
+rtc_rpoll   LDA  SAVE+$21
+            AND  #$0F
+            ORA  #$E0
+rtc_poll    STA  $C034
+            LDX  #$00
+            STX  SAVE+$23
+rp1         INX
+            BNE  rp2
+            INC  SAVE+$23
+            BEQ  rpdone         ; 65536 reads: give up, and say so with $0000
+rp2         LDA  $C034
+            BMI  rp1
+rpdone      TXA
+            JSR  put
+            LDA  SAVE+$23
+            JMP  put
+
+; ---------------------------------------------------------------------------
+; $0B VDA -- does the IIgs decode I/O on the 65816's invalid-address cycle?
+; In emulation mode STA abs,X always takes an extra cycle with DBR,AAH,AAL+XL on
+; the bus and VDA=VPA=0 (datasheet note 4). $C0FF,X with X=$56 writes $C155, slot
+; 1's ROM space, and that cycle addresses $C055, which sets PAGE2 when accessed.
+; ---------------------------------------------------------------------------
+t_vda       LDA  #$0B
+            JSR  rec_begin
+            LDA  $C01C          ; PAGE2 as the program found it
+            STA  SAVE+$24
+            LDA  $C054          ; PAGE2 off
+            LDA  $C01C
+            JSR  put
+            LDX  #$56
+            LDA  #$00
+            STA  $C0FF,X
+            LDA  $C01C
+            JSR  put
+            LDA  $CFFF          ; release any $C800 claim the $C155 access made
+            LDA  $C054
+            LDA  SAVE+$24
+            BPL  vda1
+            LDA  $C055          ; it was on: put it back
+vda1        JMP  rec_end
 
 ; ---------------------------------------------------------------------------
 ; the results block back to the boot disk

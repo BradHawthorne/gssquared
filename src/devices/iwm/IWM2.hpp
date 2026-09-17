@@ -626,6 +626,14 @@ class IWM : public StorageDevice {
 
             // FORK: register select per the IWM spec [p.7]. A0 is the chip's /read,
             // so an odd address only sets its state bit and drives nothing.
+            // NOT MODELLED: the chip has no R/W line, so with Q6 and Q7 on an odd READ
+            // also latches the bus into the mode or data register. Two things block it.
+            // The 65816 core turns every STA abs,X extra cycle into a real read of the
+            // target (hardware marks it VDA=VPA=0; whether the IIgs decodes I/O then is
+            // hwtruth's VDA question), so DOS 3.3's STA Q6H,X would latch the floating
+            // bus a cycle before its nibble; and the sync write path shifts
+            // data_register itself rather than a shift register loaded every 8 cells,
+            // so that transient reaches the disk and SAVE fails.
             if (address_odd(reg)) {
                 return -1;
             }

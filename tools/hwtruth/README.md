@@ -15,9 +15,14 @@ and an emulator run can be compared answer by answer.
 | `GAME` | What do the buttons and paddle timers read with nothing attached? |
 | `BLKMOVE` | Do MVN and MVP step the index registers in 8 or 16 bits when x=1? |
 | `BANKS` | What do unpopulated banks read? Which ROM is this? |
+| `IWMREG` | Does the IWM drive the bus at an odd address? What does an even read return with Q6 and Q7 both on? Do the handshake register's bits 0-5 read ones, and what is bit 6 outside the write state? |
+| `RTC` | How many `$C034` polls does a clock transfer hold bit 7 for? Does `z010ab01` reach BRAM `$10-$13`, and `z1abcd01` BRAM `$00-$0F`? |
+| `VDA` | Does the IIgs decode I/O on the 65816's invalid-address cycle (VDA=VPA=0)? An `STA abs,X` whose extra cycle addresses a soft switch says. |
 
-Nothing is destructive. The IWM is only read, after a two-second wait for a boot drive's
-motor to stop. Every soft switch touched is restored. SHR is on for a few frames.
+Nothing is destructive. The IWM is read after a two-second wait for a boot drive's motor to
+stop; its mode register is written once, with the value it already holds, because an odd
+address with Q6 and Q7 on latches the bus. The clock chip is only read. Every soft switch
+touched is restored. SHR is on for a few frames.
 
 ## Build the disk
 

@@ -16,7 +16,8 @@ import json
 import os
 import sys
 
-NAMES = {1: 'SLOT6', 2: 'E0AUX', 3: 'MEGAII', 4: 'SCANCLR', 5: 'C01X', 6: 'GAME', 7: 'BLKMOVE', 8: 'BANKS'}
+NAMES = {1: 'SLOT6', 2: 'E0AUX', 3: 'MEGAII', 4: 'SCANCLR', 5: 'C01X', 6: 'GAME', 7: 'BLKMOVE', 8: 'BANKS',
+         9: 'IWMREG', 10: 'RTC', 11: 'VDA'}
 
 
 def load(path):
@@ -133,6 +134,51 @@ def verdicts(recs):
             'ROM 01 is recalled as the bank number, ROM 3 as $FF', r[:3])
         add(8, 'machine', f'IDRoutine carry {"clear (IIgs)" if not r[7] & 1 else "set"}, ROM version Y=${r[10]:02X}; $C036=${r[4]:02X}',
             '$FE1F with carry set', r[4:])
+    r = recs.get(9)
+    if r and len(r) == 7:
+        if r[0] != r[2]:
+            ans = 'inconclusive (the status register was not steady)'
+        elif r[1] == r[0] and r[3] == r[0]:
+            ans = 'NO: odd addresses read the status register'
+        else:
+            ans = 'YES: an odd address read something other than the status register'
+        add(9, 'IWM odd addresses drive nothing (status selected)', ans,
+            'Q6 on, motor off: even, odd, even, odd; the evens are the status. Two odd reads equal to it mean the IWM drove them',
+            r[0:4])
+        add(9, 'IWM even read with Q6 and Q7 on', f'${r[4]:02X}',
+            'the write-only registers are selected; the IWM specification lists no read register there', r[4:5])
+        add(9, 'IWM handshake bits 0-5 read ones', 'YES' if (r[5] & 0x3F) == 0x3F and (r[6] & 0x3F) == 0x3F else 'NO',
+            'Q6 off, Q7 on, motor off, read twice', r[5:7])
+        add(9, 'IWM handshake bit 6 outside the write state', '1' if r[5] & 0x40 else '0',
+            'the same reads: the motor is off, so this is not the write state', r[5:6])
+    r = recs.get(10)
+    if r and len(r) == 21:
+        def polls(n):
+            return 'gave up after 65536' if n == 0 else f'{n}'
+        add(10, 'RTC transfer: $C034 reads until bit 7 clears', f'write {polls(w16(r, 0))}, read {polls(w16(r, 2))}',
+            'a tight LDA $C034 / BMI loop, counted; the CPU speed is in the machine line ($C036 bit 7)', r[0:4])
+        two10, one10, two00, one00 = r[5:9], r[9:13], r[13:17], r[17:21]
+        if two10 == two00:
+            ans = 'inconclusive (BRAM $10-$13 and $00-$03 hold the same bytes)'
+        elif one10 == two10:
+            ans = 'YES'
+        elif one10 == two00:
+            ans = 'NO: it reaches $00-$03'
+        else:
+            ans = 'inconclusive'
+        add(10, 'RTC z010ab01 reaches BRAM $10-$13', ans,
+            'BRAM $10-$13 by the two-byte command, then by z010ab01, then $00-$03 by the two-byte command for contrast',
+            r[5:17])
+        add(10, 'RTC z1abcd01 reaches BRAM $00-$0F', 'YES' if one00 == two00 else 'NO',
+            'BRAM $00-$03 by the two-byte command against z1abcd01 with abcd = 0000-0011', r[13:21])
+    r = recs.get(11)
+    if r and len(r) == 2:
+        if r[0] & 0x80:
+            ans = 'inconclusive (PAGE2 did not turn off)'
+        else:
+            ans = 'YES' if r[1] & 0x80 else 'NO'
+        add(11, "the 65816's invalid-address cycle (VDA=VPA=0) reaches I/O", ans,
+            '$C01C bit 7 before and after STA $C0FF,X with X=$56, whose extra cycle addresses $C055', r)
     return v
 
 
