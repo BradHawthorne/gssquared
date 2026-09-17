@@ -83,7 +83,10 @@ void Floppy525_woz::set_phase(uint8_t phase, uint8_t onoff) {
     // multi-phase toggles (typical DOS head-step sequence) collapse into
     // a single head-settling event. instanceID is unique per slot/drive so
     // concurrent Disk II / IWM 5.25 drives do not steal each other's events.
-    event_timer->scheduleEvent(clock->get_cycles() + 520, phase_change_callback,
+    // FORK: the IWM hands this drive the 14M event timer, where a CPU-cycle deadline is
+    // already past and the settle fired at once. With A2GSPU_DISK_TIMING the settle is 520
+    // 1 MHz cycles of 14M time; unset keeps the pinned (immediate) behaviour.
+    event_timer->scheduleEvent(real_time ? clock->get_c14m() + 520 * 14 : clock->get_cycles() + 520, phase_change_callback,
                                instanceID, this);
 }
 

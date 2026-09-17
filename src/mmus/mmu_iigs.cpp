@@ -692,8 +692,14 @@ uint8_t iolc_rom_read(void *context, uint32_t address) {
 
 read_handler_t float_read_handler = { (memory_read_func)float_area_read, nullptr };
 
+// FORK: A2GSPU_DISK_TIMING=1 -- the Mega II's motor detect changed; re-decide the speed.
+static void iigs_motor_changed(void *ctx) { ((MMU_IIgs *)ctx)->update_speed(); }
+
 void MMU_IIgs::init_c0xx_handlers() {
     megaii->gs_slot_register = true;   // FORK: $C02D gates slots 1, 2, 5, 6 and 7 (mmu_iie.hpp)
+    const char *md = getenv("A2GSPU_DISK_TIMING");
+    motor_detect = md && md[0] == '1';
+    if (motor_detect) { megaii->gs_motor_changed = iigs_motor_changed; megaii->gs_motor_ctx = this; }
     for (uint32_t i = 0xC000; i <= 0xC009; i++) {
         megaii->set_C0XX_write_handler(i, {megaii_c0xx_write, this});
     }
@@ -840,6 +846,7 @@ void MMU_IIgs::reset(bool cold_start) {
 
     // on RESET, set:
     set_slot_register(0x00);
+    if (megaii) megaii->gs_motors_active = 0;   // FORK: every motor switch reads off after reset
     set_speed_register(cold_start && is_rom03 ? 0xC0u : 0x80u); // bit 7 slow; ROM03 bit 6 = power-on on cold start
     // FORK: the shadow register is cleared on reset, so everything is shadowed [HW Ref
     // Table 2-1]. It was left at $08 (SHR inhibited).
@@ -885,7 +892,9 @@ void MMU_IIgs::debug_dump(DebugFormatter *df) {
         g_altzp);
     df->addLine("           80STORE:  %d HIRES:   %d", g_80store, g_hires);
 
-    df->addLine("Speed: %02X", reg_speed);
+    df->addLine("Speed: %02X  motor detect: %s  motors on (slots 4-7): %X  running: %s", reg_speed,
+                motor_detect ? "on" : "off (A2GSPU_DISK_TIMING unset)", megaii ? megaii->gs_motors_active : 0,
+                machine_fast() ? "fast" : "1 MHz");
     debug_output_page(df, 0x00);
     debug_output_page(df, 0x01);
     debug_output_page(df, 0x02);

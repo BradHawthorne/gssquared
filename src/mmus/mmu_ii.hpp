@@ -72,6 +72,9 @@ class MMU_II : public MMU {
         //                   SLOTC3ROM reset). map_motherboard_c8() maps that ROM; the owner
         //                   then reads C8XX_MOTHERBOARD. No card's flip-flop is involved.
         virtual bool motherboard_c8_access(uint8_t slot) { (void)slot; return false; }
+        //   c0xx_motor_touch(sub): an access to $C0n8/$C0n9 for slots 4-7, the Disk II motor
+        //                   off/on switches the IIgs speed register's motor detect watches.
+        virtual void c0xx_motor_touch(uint8_t sub) { (void)sub; }
         virtual void map_motherboard_c8() {}
         static constexpr int8_t C8XX_MOTHERBOARD = 8;
         virtual void set_C0XX_write_handler(uint16_t address, write_handler_t handler);

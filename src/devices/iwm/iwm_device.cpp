@@ -3,6 +3,7 @@
 #include "iwm_device.hpp"
 #include "computer.hpp"
 #include "IWM2.hpp"
+#include "mmus/mmu_iie.hpp"   // FORK: the IIgs motor detect asks for EN35
 #include "util/DebugFormatter.hpp"
 #include "util/DebugHandlerIDs.hpp"
 //#include "util/media.hpp"
@@ -56,6 +57,11 @@ void init_iwm_slot(computer_t *computer, SlotType_t slot) {
     }
 
     computer->mmu->set_C0XX_read_handler(0xC031, { iwm_read_C031, st });
+    // FORK: the IIgs motor detect asks whether $C031 selects the 3.5 port (mmu_iie.hpp).
+    if (auto *megaii = dynamic_cast<MMU_IIe *>(computer->mmu)) {
+        megaii->gs_en35 = [](void *ctx) -> bool { return (((iwm_state_t *)ctx)->iwm->read_disk_register() & 0x40) != 0; };
+        megaii->gs_en35_ctx = st;
+    }
     computer->mmu->set_C0XX_write_handler(0xC031, { iwm_write_C031, st });
 
     computer->register_debug_display_handler(

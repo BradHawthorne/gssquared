@@ -231,6 +231,7 @@ uint8_t MMU_II::read(uint32_t address) {
             uint16_t subaddr = eaddress & 0xFF;
             // FORK: on a IIgs the slot register decides whether a slot's $C0nX reaches the
             // card or the built-in device (c0xx_gate); both used to answer, OR-ed together.
+            if (subaddr >= 0xC0 && (subaddr & 0x0E) == 0x08) c0xx_motor_touch((uint8_t)subaddr);
             const int gate = c0xx_gate((uint8_t)subaddr);
             uint8_t retval = 0x00;
             bool answered = false;
@@ -303,6 +304,7 @@ void MMU_II::write(uint32_t address, uint8_t value) {
     if (bank == 0xC) {
         if (page == 0xC0) {
             uint16_t subaddr = eaddress & 0xFF;
+            if (subaddr >= 0xC0 && (subaddr & 0x0E) == 0x08) c0xx_motor_touch((uint8_t)subaddr);
             const int gate = c0xx_gate((uint8_t)subaddr);   // FORK: as the read side
             for (int k = 0; k < 2; k++) {
                 write_handler_t funcptr = C0xx_memory_write_handlers[subaddr].hs[k];

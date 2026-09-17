@@ -20,6 +20,7 @@
 #include "devices/diskii/diskii_controller.hpp"   // g_a2gspu_diskii: the Disk II controllers, by slot
 #include "devices/scc8530/scc8530.hpp"             // the IIgs SCC's block
 #include "devices/rtc/rtc_pram.hpp"                // the IIgs clock chip's block
+#include "mmus/mmu_iie.hpp"                        // the IIgs motor detect's block
 
 
 // ---- A2GSPU warm-boot snapshot: file magic + cpu_state value-field (de)serialize ----
@@ -99,7 +100,7 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
     uint64_t eh = 0; char exe[24];
     if (a2gspu_fnv_file(g_a2gspu_argv0, eh)) snprintf(exe, sizeof exe, "%016llX", (unsigned long long)eh);
     else snprintf(exe, sizeof exe, "unreadable");
-    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "scc", "clock", "u2", "tclock", "mousecd", "voc", "ssc", "ssight" };
+    static const char *all[] = { "adb", "ensoniq", "vgcint", "iwm", "diskii", "pdblock", "media", "scanner", "rtc", "motor", "scc", "clock", "u2", "tclock", "mousecd", "voc", "ssc", "ssight" };
     std::string included = "cpu,mmu,softswitches,ram,rom-map,megaii", excluded;
     const std::string have = "," + devices + ",";
     auto holds = [&](const char *d) { return have.find(std::string(",") + d + ",") != std::string::npos; };
@@ -251,6 +252,14 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
     // Every Super Serial Card: the switches and the 6551, characters in flight included.
     // The IIgs SCC: registers, FIFOs, shift registers, interrupt block, line inputs and the
     // time left on characters in flight. The host connections behind the ports are not saved.
+    // FORK: the IIgs Mega II's motor detect (A2GSPU_DISK_TIMING), so a restored machine runs
+    // at the speed the saved one did.
+    if (auto *megaii = dynamic_cast<MMU_IIe *>(computer->mmu); megaii && megaii->gs_slot_register) {
+        long at = a2gspu_snap_dev_begin(f, "motor", 1);
+        fwrite(&megaii->gs_motors_active, 1, 1, f);
+        a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "motor" : ",motor";
+    }
     if (scc_A2GSPU_present()) {
         long at = a2gspu_snap_dev_begin(f, "scc", 1); scc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "scc" : ",scc";
@@ -406,6 +415,15 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
             if (voc_A2GSPU_present()) r = voc_A2GSPU_restore(f) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "scc") && ver == 1) {
             if (scc_A2GSPU_present()) r = scc_A2GSPU_restore(f) ? RESTORED : FAILED;
+        } else if (!strcmp(nm, "motor") && ver == 1) {
+            if (auto *megaii = dynamic_cast<MMU_IIe *>(computer->mmu); megaii && megaii->gs_slot_register) {
+                uint8_t m = 0;
+                r = fread(&m, 1, 1, f) == 1 ? RESTORED : FAILED;
+                if (r == RESTORED) {
+                    megaii->gs_motors_active = (uint8_t)(m & 0x0F);
+                    if (megaii->gs_motor_changed) megaii->gs_motor_changed(megaii->gs_motor_ctx);
+                }
+            }
         } else if (!strcmp(nm, "rtc") && ver == 1) {
             if (rtc_A2GSPU_present()) r = rtc_A2GSPU_restore(f) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "ssc") && (ver == 1 || ver == 2)) {

@@ -892,3 +892,29 @@ it.
 
 **Still the owner's:** running `hwtruth` on a real IIgs (11 records, 24 answers). The earlier
 decisions stand: the slot-bus format, and frozen versus ticking FAKETIME.
+
+## 19. IIgs disk timing, opt-in (2026-09-17)
+
+The owner asked for the next steps to be worked through. Section 18 left the IIgs disk clock
+open. This adds the hardware's disk timing as a rail. It is off by default because it moves every
+IIgs cycle hash, and the pinned boots were recorded without it.
+
+| Commit | Change | Verified |
+|---|---|---|
+| (this commit) | **`A2GSPU_DISK_TIMING=1`**, three parts. The speed register's motor-on detect [HW Ref Table 2-2]: `$C036` bits 0-3 name slots 4-7, and a named slot whose `$C0n9` came after its `$C0n8` holds the machine at 1 MHz (slot 6 only with `$C031` EN35 clear). The IWM's 5.25 drives count 1 MHz video cycles instead of CPU cycles. The IWM's write cells start with the write state. PINS says `disktiming=1`; block `motor` | the detect, EN35, snapshot and probe checks (11/11); DOS 3.3 SAVE, LOAD and VERIFY through the IIgs IWM with and without; the ROM's slot 5 driver writes and reads an 800K block (7/7); GS/OS 6.0.2 from the 3.5 drive draws the same screen (`97C5F29BE879D922`, status OK) with and without; the pinned Finder boot draws `2E304BF0147B220A` with status OK with and without; 11 gates, unarmed baselines unchanged; a2engine gscheck 46/47 (the disclosure terms file is absent; the A2GSPU presence suite crashed once at startup with `bad_alloc` while the host was at its commit limit and passes 18/18 alone) |
+
+**A correction to section 18.** It said the fork models neither the `$C036` speed bit nor the
+motor-on slowdown. Bit 7 was modelled all along (the IIgs clock's slow mode runs synchronised
+1 MHz cycles). Only the motor-on detect in bits 0-3 was missing.
+
+**What the work turned up:**
+- **The ROM's SmartPort probe runs with `$C036 = $80`,** no detect bits. The ROM sets `$84` later. So the probe runs at 2.8 MHz on any IIgs, and the drive's real-time cells are what keep it from underrunning. The detect only matters for 1 MHz code that runs later.
+- **Real-time cells exposed a race at the write state's entry.** `STA $C08F,X` touches `$C0EF` a cycle before it writes (the 65816's abs,X extra cycle is a real read in the core), and that touch sets L7. A drive cell boundary in that one cycle found no byte and latched the underrun, so the probe's whole 215-bit packet went out with /WRREQ off. The IWM clocks its write cells itself from the entry into the write state, so the first boundary is a whole cell later and the byte written with the entry is always in time (MAME's IWM restarts its bit window there too). The rail restarts the drive's cell phase at entry. The default path keeps the pinned phase.
+- **Without the rail the probe underruns in mid-packet,** and its last 104 cells go out with /WRREQ off. With the rail it underruns once, at the end of the packet, which is how an asynchronous write ends.
+- **The DOS 3.3 master in `corpus/`** runs a firmware updater as its HELLO program, which clears the DOS banner. The scratch test was looking for that banner and failed with and without the rail.
+
+**Not done, and why:**
+- Whether the FPI gates slot 6's detect on EN35. The rail assumes it does, since the IWM's enable is not a Disk II motor while the 3.5 port is selected. A hwtruth candidate.
+- The bit cell from the IWM's mode register (b3 fast, b4 8 MHz): the cell still comes from the drive family.
+- Making the rail the default: the owner's call. It moves the cycle and run hashes of the IIgs rows. Screens stay the same.
+- Storage steps 4, 7 and 8, the Mockingboard, input, the video cards, the op registry and SlotBus/SlotCardOps.

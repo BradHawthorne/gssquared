@@ -254,7 +254,7 @@ class MMU_IIgs : public MMU {
             if (is_read) ctl |= SLOT_CTL_READ;
             if (m2b0)    ctl |= SLOT_CTL_M2B0;
             if (!v2 && !is_iolc_shadowed()) ctl |= SLOT_CTL_INH;   // format 2: /INH is a card output
-            if (v2 && (reg_speed & 0x80)) ctl |= SLOT_CTL_FAST;       // format 2: an isolated slow cycle in a fast machine
+            if (v2 && machine_fast()) ctl |= SLOT_CTL_FAST;       // format 2: an isolated slow cycle in a fast machine (FORK: after the motor detect)
             if (a >= 0xC000 && a <= 0xCFFF) {                   // slot I/O strobes (this card's slot)
                 // FORMAT 2: /DEVSEL only when the slot register gives this slot's I/O to the card.
                 if ((a & 0xFFF0) == (uint16_t)(0xC080 + slot * 0x10) && (!v2 || !megaii || megaii->c0xx_gate((uint8_t)a) != 0))
@@ -311,8 +311,17 @@ class MMU_IIgs : public MMU {
         inline void set_speed_register(uint8_t value) {
             if (DEBUG(DEBUG_MMUGS)) printf("setting speed register: %02X\n", value);
             reg_speed = value;
-            if (clock) ((NClockIIgs *)clock)->set_slow_mode(value & 0x80 ? false : true);
+            update_speed();
         }
+        // FORK: 1 MHz when bit 7 is clear, or (A2GSPU_DISK_TIMING=1) while a slot whose
+        // motor detect bit is set has its Disk II motor on [HW Ref Table 2-2].
+        bool motor_detect = false;
+        inline void update_speed() {
+            const uint8_t motors = (motor_detect && megaii) ? megaii->gs_motors_active : 0;
+            const bool slow = !(reg_speed & 0x80) || ((motors & reg_speed & 0x0F) != 0);
+            if (clock) ((NClockIIgs *)clock)->set_slow_mode(slow);
+        }
+        inline bool machine_fast() { return clock ? !((NClockIIgs *)clock)->get_slow_mode() : (reg_speed & 0x80) != 0; }
         inline void set_state_register(uint8_t value) {
             if (DEBUG(DEBUG_MMUGS)) printf("setting state register: %02X\n", value);
             reg_state = value;

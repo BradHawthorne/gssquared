@@ -27,14 +27,14 @@ below records what has been done since.
 | Finding | Report | Status |
 |---|---|---|
 | Aux linearization of `$E1:2000-9FFF` (`18f5d04c`) and the ALTZP recompose (`42fd845e`) not in the fork | memory_video | **Done**: stage 2 (`6083b03c`), with CPU-order observers |
-| Fast FPI register cycles (`7333660a`) | memory_video | **Done**: stage 2. Motor-on detect slowdown is still open |
+| Fast FPI register cycles (`7333660a`) | memory_video | **Done**: stage 2. The motor-on detect slowdown is opt-in (`A2GSPU_DISK_TIMING=1`, §19) |
 | `$C037` not handled; `$C035` reset to `$08` | memory_video | **Done**: `7bf8b405` (§18): the DMA bank register's handlers, which the port brought but never installed, are in; `$C035` resets to `$00` [HW Ref Table 2-1] and the ROM sets `$08` itself. `$C036`'s reset value still needs a hardware answer (the doc and MAME differ) |
 | One-second interrupt phase from the host clock | memory_video, sound_time | **Done**: `a3b13b1d` (pinned under `A2GSPU_FAKETIME`, no drift, saved in `vgcint` v2) |
 | ThunderClock needs a time pin | sound_time, slot_bus | **Done**: `a3b13b1d` |
 | ADB micro ROM on ROM 3 machines | input | **Done**: stage 2 (`is_rom03_machine`) |
 | Upstream's IWM /ENBL model | storage | **Done**: stage 1 (`edb4ddb6`) |
 | IWM registers to the IWM specification (step 2): all-ones and floating reads, handshake ones, 1.17 s holdover, delayed clear keyed on H, underrun latch, no EN35 gating | storage | **Done**: `7d07dde9` (§18). After an underrun the buffer still takes bytes and they go out with /WRREQ off; the IWM specification names only /WRREQ and /underrun, and a model that stops the buffer hangs the ROM's SmartPort probe (next row) |
-| Disk clock: the 5.25 drive counts CPU cycles, so a IIgs at 2.8 MHz has 1.4 µs bit cells and the ROM's SmartPort probe underruns where hardware does not | storage, memory_video | Open: needs the `$C036` speed and motor-on slowdown, or a real-time 5.25 clock (storage step 4), and the mode-driven bit cell |
+| Disk clock: the 5.25 drive counts CPU cycles, so a IIgs at 2.8 MHz has 1.4 µs bit cells and the ROM's SmartPort probe underruns where hardware does not | storage, memory_video | **Opt-in** (§19): `A2GSPU_DISK_TIMING=1` gives the `$C036` motor-on detect, 5.25 drives in real time and write cells that start with the write state; the probe's packet then goes out whole. The default keeps the pinned timing (flipping it is the owner's; it moves every IIgs cycle hash). Open: the mode-driven bit cell, and whether the FPI gates slot 6's detect on EN35 |
 | `$C03D` one-access pipeline with latched address | sound_time | **Done**: stage 1 |
 | Uthernet II: no interrupts, state machine, silent LISTEN failure, host timing inside register reads | serial_hostio, slot_bus | **Done**: fused card `25c787d2` (a replayable network log is still open) |
 | No snapshot for the new cards | video_cards, serial_hostio, sound_time | **Done**: `u2`, `tclock`, `mousecd`, `voc`, `ssc`, `ssight` (SecondSight GPU mode is unsaveable and says so) |

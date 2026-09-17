@@ -90,8 +90,12 @@ inline void a2gspu_pins_format(char *buf, size_t n, int platform_id, int frames,
     else snprintf(exe, sizeof exe, "unreadable");
     if (platform_id >= 0 && frames >= 0) snprintf(pf, sizeof pf, " platform=%d frames=%d", platform_id, frames);
     else pf[0] = 0;
-    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s pace=%s%s rom=%s build=%s(configure-time) exe=%s%s%s",
-             seed ? seed : "unset", ft, ram ? 1 : 0, bram, g_a2gspu_pace_name, pf, rom,
+    // FORK: A2GSPU_DISK_TIMING changes IIgs timing, so a run that sets it says so; unset
+    // leaves the line as it was, which the pinned hashes were recorded against.
+    const char *md = getenv("A2GSPU_DISK_TIMING");
+    const bool motor = md && md[0] == '1';
+    snprintf(buf, n, "seed=%s faketime=%s ramdisk=%d bram=%s%s pace=%s%s rom=%s build=%s(configure-time) exe=%s%s%s",
+             seed ? seed : "unset", ft, ram ? 1 : 0, bram, motor ? " disktiming=1" : "", g_a2gspu_pace_name, pf, rom,
              build_version ? build_version : "unknown", exe,
              g_a2gspu_machine_ident.empty() ? "" : " ", g_a2gspu_machine_ident.c_str());
 }
@@ -112,5 +116,6 @@ inline void a2gspu_pins_read(char *buf, size_t n) {
 inline a2rails::Registrar g_reader_seed    {"A2GSPU_SEED",     a2gspu_pins_read};
 inline a2rails::Registrar g_reader_faketime{"A2GSPU_FAKETIME", a2gspu_pins_read};
 inline a2rails::Registrar g_reader_faketime_tick{"A2GSPU_FAKETIME_TICK", a2gspu_pins_read};
+inline a2rails::Registrar g_reader_disk_timing{"A2GSPU_DISK_TIMING", a2gspu_pins_read};
 inline a2rails::Registrar g_reader_ramdisk {"A2GSPU_RAMDISK",  a2gspu_pins_read};
 inline a2rails::Registrar g_reader_bram    {"A2GSPU_BRAM",     a2gspu_pins_read};

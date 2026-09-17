@@ -23,6 +23,26 @@ class MMU_IIe : public MMU_II {
         // clears bits 5 and 6 so the IWM at $C0E0-$C0EF answers, and restores it after
         // (ROM 01 $FE7026 and $FE6F63).
         bool gs_slot_register = false;
+        // FORK: the IIgs speed register's disk motor-on detect ($C036 bits 0-3 for slots 4-7):
+        // "Disk II motor-on addresses" -- $C0n9 turns slot n's motor detect on, $C0n8 off
+        // [HW Ref Table 2-2]. Tracked only while MMU_IIgs installs gs_motor_changed
+        // (A2GSPU_DISK_TIMING=1). Slot 6 is the IWM: an access while $C031 EN35 selects the
+        // 3.5 port is not a Disk II motor and does not set it (gs_en35 asks the IWM) [whether
+        // the FPI gates the detect on EN35 is unverified].
+        uint8_t gs_motors_active = 0;                   // bit n-4: slot n's motor detect
+        void (*gs_motor_changed)(void *ctx) = nullptr;
+        void *gs_motor_ctx = nullptr;
+        bool (*gs_en35)(void *ctx) = nullptr;
+        void *gs_en35_ctx = nullptr;
+        void c0xx_motor_touch(uint8_t sub) override {
+            if (!gs_motor_changed) return;
+            const uint8_t slot = (uint8_t)(sub >> 4) - 0x8;          // $C0C8 -> 4 ... $C0F9 -> 7
+            const uint8_t bit = (uint8_t)(1u << (slot - 4));
+            const uint8_t before = gs_motors_active;
+            if ((sub & 1) && !(slot == 6 && gs_en35 && gs_en35(gs_en35_ctx))) gs_motors_active |= bit;
+            else if (!(sub & 1)) gs_motors_active &= (uint8_t)~bit;
+            if (gs_motors_active != before) gs_motor_changed(gs_motor_ctx);
+        }
 
         MMU_IIe(int page_table_size, int ram_amount, uint8_t *rom_pointer);
         virtual ~MMU_IIe();

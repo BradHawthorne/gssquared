@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
 
 #include "Floppy_woz.hpp"
 #include "util/DebugFormatter.hpp"
@@ -59,11 +60,21 @@ protected:
 
     int      current_tmap_index()     const override { return track; }
 
+    // FORK: A2GSPU_DISK_TIMING=1 -- real time. The IWM clocks its bit cells from FCLK, not
+    // the CPU, so a 4 us cell stays 4 us at 2.8 MHz; counting CPU cycles made it 1.4 us.
+    // Video cycles are the machine's 1.0205 MHz timebase (Floppy35_woz uses them too).
+    bool real_time = false;
+public:
+    uint64_t get_current_time() override { return real_time ? clock->get_vid_cycles() : clock->get_cycles(); }
+protected:
+
 public:
     Floppy525_woz(SoundEffect *sound_effect, NClockII *clock, EventTimer *event_timer,
                   uint16_t slot, uint16_t drive)
         : Floppy_woz(sound_effect, clock, event_timer), drive_index(drive) {
             instanceID = 0xABAB0000ull | (static_cast<uint64_t>(slot) << 8) | drive;
+            const char *dt = getenv("A2GSPU_DISK_TIMING");
+            real_time = dt && dt[0] == '1';
         }
 
     void play_sound(uint64_t sound_effect_id) override {

@@ -187,6 +187,11 @@ public:
 
     virtual void debug(DebugFormatter *f) = 0;
 
+    // FORK: A2GSPU_DISK_TIMING=1 -- the IWM's write cells come from its own clock, which
+    // starts with the write state, so the first cell boundary is a whole cell after entry.
+    // Drops the head's sub-cell phase; the bit under the head does not change.
+    void restart_cell_phase() { head_position &= ~POSITION_FP_MASK; }
+
     void tick_no_write() {
         read_position += POSITION_FP_MUL;
         if (cur_track_ptr && cur_track_ptr->bit_count > 0) {

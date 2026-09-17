@@ -192,6 +192,14 @@ class IWM : public StorageDevice {
         uint64_t underrun_count = 0;
         uint64_t wrreq_off_bits = 0;
 
+        // FORK: A2GSPU_DISK_TIMING=1. The chip counts write cells from the write state's
+        // entry; the fork's drives count them from the spindle. A boundary can then fall
+        // between the entry and the byte that came with it: STA $C08F,X touches the
+        // address a cycle early (the 65816's abs,X extra cycle), which sets L7, and at
+        // real-time cell rates the IIgs ROM's SmartPort probe underran there and sent its
+        // whole packet with /WRREQ off. Unset keeps the pinned phase.
+        bool disk_timing = false;
+
         void update_write_state() {
             const bool ws = iwm_q7 && enbl_asserted();
             if (ws == write_state) return;
@@ -199,6 +207,7 @@ class IWM : public StorageDevice {
             underrun_latched     = false;
             async_bits_remaining = 0;   // the shift register starts at a byte boundary
             hr_underrun          = ws ? 1 : 0;
+            if (ws && disk_timing) drives[dr_enable35][iwm_select]->restart_cell_phase();
         }
 
          /* Load our sound effects */
@@ -276,6 +285,8 @@ class IWM : public StorageDevice {
             drives[0][1] = new Floppy525_woz(sound_effect, clock, event_timer, 6, 1);
             drives[1][0] = new Floppy35_woz(sound_effect, clock, event_timer,0 );
             drives[1][1] = new Floppy35_woz(sound_effect, clock, event_timer,1 );
+            const char *dt = getenv("A2GSPU_DISK_TIMING");
+            disk_timing = dt && dt[0] == '1';
             reset();
 
             this->sound_effect = sound_effect;
