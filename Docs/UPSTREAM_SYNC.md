@@ -844,3 +844,50 @@ the fidelity README's hardware list, not fixed here.
 **Still the owner's:** running `hwtruth` on a real IIgs (`tools/hwtruth/README.md`); flipping the
 slot-bus default once the card's firmware decodes `~BS2` and a real capture compares clean with
 `buscompare.py`; frozen stays the default for the time pin.
+
+## 18. What documents settle without a real IIgs (2026-09-16)
+
+The owner asked for every step the fidelity study allows short of running on a real IIgs. Each
+batch took its answer from a datasheet, an Apple or community document, or the fork's own ROM
+evidence. Each was tested on the rail, gated (11 gates) and committed on its own.
+
+| Commit | Change | Verified |
+|---|---|---|
+| `f69c16ac` | **Rail replies say what happened** (control-plane step 1, F1-F3, F7, F8, F10-F13). The JSON envelope carries `status`. `load` writes where `poke BB:AAAA` does and names a language-card switch. `keys` reports what ran. Address and count parsing is strict. PINS and the manifest name the machine and its slots, and a restore into another machine warns. A bad `-p`/`-c` exits with a reason | 19/19; the A2GSPU card placed by a config file follows `$C02D` (4/4) |
+| `c31353b6` | **Each card owns its `$C800` flip-flop** [HW Ref pp185-186]. A claim while another card's flip-flop is set is counted as contention, `$CFFF` releases after its byte, and reset clears them all | two expansion-ROM cards on a IIe (6/6) |
+| `4d4f72a1` | **SCC clocks, External/Status and modem lines** (serial steps 4 and 6). Clocks follow WR11/WR14 routing in whole 14M ticks. External/Status latches with Reset Ext/Status, and there is a zero count. Auto enables work. MODEM_STATUS, MODEM_CTL and break travel both ways; the modem reports carrier and hangs up when DTR drops | a stalled character and the BRG rates; DCD and DTR against a dialled listener (10/10); a2engine scccheck |
+| `aa103ba7` | **Block `scc`**: registers, FIFOs, shift registers, the interrupt block, lines and the time left on characters in flight | a character in flight completes after a restore (6/6) |
+| `9a5f93fb` | **The 6551 as its datasheet says** (serial step 7, A1-A7); block `ssc` v2 | 11/11; save and restore 2/2 |
+| `7d07dde9` | **IWM registers per the IWM specification** (storage step 2). Odd addresses float; the data register reads `$FF` with the motor off; handshake bits 0-5 read ones; the holdover is 2^23+100 FCLK. MODE.H keys the delayed clear. An underrun holds /WRREQ off until L7 clears; the buffer is no longer gated on EN35. Block `iwm` v4 | register test 20/20; the ROM's slot 5 driver writes and reads an 800K block through to the host file (7/7); DOS 3.3 SAVE, LOAD and VERIFY through the IWM; railcheck 40/40; unarmedhash IIgs rows re-blessed (+89 and +47 cycles, screens unchanged) |
+| `4978614e` | **RTC**: `z010ab01` reaches BRAM `$10-$13`; write-protect and test registers; block `rtc` | 11/11; unarmed hashes unchanged |
+| `7a00d873` | **hwtruth records IWMREG, RTC and VDA** | the gate holds 24 verdicts |
+| `fe7ffe13` | **Decimal-mode flags per Clark's Appendix A** (CPU step 7), with an exhaustive `conformtest` section written from the appendix | 136,104 failing cases before the fix, none after; unarmed hashes unchanged |
+| `c93a9ea5` | **65C02 abs,X shifts take 6 cycles; emulation-mode (d,X) wraps only with DL=0** (CPU steps 6 and 8, in part); a `cpu_cycles_65c02` ctest | ctest `cpu_*` 5/5; unarmed hashes unchanged |
+| `7bf8b405` | **`$C037` installed; `$C035` resets to `$00`** [HW Ref Table 2-1]. The DMA register's handlers came with the upstream port and were never installed | `$C037` reads back `$5A`/`$A5`; the shadow register is `$00` after reset and the ROM sets `$08` itself |
+| `9c4841f5` | **The motherboard's `$C800` ROM again** [Sather, UtA2E 5-28]. A `$C3xx` access with SLOTC3ROM reset maps the internal `$C800-$CFFF` ROM, apart from any card's flip-flop and whatever handler a card in slot 3 installed (owner reads 8). unarmedhash gains row `iigs-finder`, the 600-frame `_finder.po` boot, unarmed, which must end with status OK | the Finder boot is `2E304BF0147B220A`, 84 of 1,269, status OK again (Rosetta's driver agrees); `575e1703` rebuilt fails the new row under the gate's pins; INTC8ROM on the IIe and IIgs (3/3 each); the `$C800` flip-flop and `$C02D` tests (6/6, 6/6, 4/4) |
+
+**A correction to section 17.** `575e1703` said default runs see no difference. They did. It tied
+the `$C800` claim to `slot_card_selected`, and the motherboard's own `$C800` ROM (the IIe's
+INTC8ROM: a `$C3xx` access with SLOTC3ROM reset) went with it. The IIgs internal 80-column
+firmware releases `$C800` with `LDX $CFFF`, returns through `$C397` and jumps to `$C9B4`. Text
+Tools' InitTextDev does this during the pinned Finder boot, which then read floating bus, jumped
+to `$004C` and hit a BRK (57 of 1,110 toolbox returns failing, `E551D4FD83DBA882`, status
+CRASH_BRK) from `575e1703` until `9c4841f5`. No gate booted that far. It was found by reproducing
+Rosetta v3's pin, bisected with rebuilt commits (`1895a1bc` good, `575e1703` bad), and located
+by diffing instruction traces around the crash. The first bisect was wrong: `git archive` gives
+files their commit time, so ninja rebuilt nothing and every point ran one binary; `tar -m` fixed
+it.
+
+**What the work turned up:**
+- **The 5.25 drive counts CPU cycles**, and the fork models neither the `$C036` speed bit nor the motor-on slowdown. The IIgs runs at its configured clock, so at 2.8 MHz a 5.25 bit cell lasts 1.4 µs. The ROM's SmartPort probe then underruns where hardware would not. A latch that stopped the buffer hung the boot, so the IWM follows the specification's literal text (only /WRREQ and /underrun are named). The ROM leaves `$C036` at `$84` after boot, slot 6 motor-on detect enabled. The fix is the speed register and the slowdown, or a real-time 5.25 clock (memory_video 1d, storage step 4).
+- **The IWM has no R/W line**, so an odd *read* with Q6 and Q7 on latches the bus. Tried and reverted. The 65816 core turns the extra cycle of every `STA abs,X` into a real read of its target. DOS 3.3's `STA Q6H,X` then latched the floating bus a cycle before each nibble. The sync write path shifts the data register itself, so SAVE failed. hwtruth's VDA record asks whether the IIgs decodes I/O on that cycle at all.
+- **The study's "65816 SBC V ✗" did not hold.** V taken before the final correction equals the binary rule on every input.
+- **GS/OS 6.0.2 from the 3.5 drive** looked stuck at 4000 frames both before and after the IWM work. Both builds had `575e1703`. With `9c4841f5` it reaches the "Welcome to the IIgs, System 6.0.2" splash with a full progress bar and status OK. Whether it goes on to the Finder was not checked.
+
+**Not done, and why:**
+- RTC busy timing: no document gives the transfer time, so hwtruth's RTC record measures it.
+- The 65C02 unused-NOP reads (Clark's text on `$5C` is not specific), COP's pushed B bit in emulation mode, and IRQ recognition timing all need the SingleStepTests vectors, which are fetched rather than vendored.
+- Storage steps 4, 7 and 8, the Mockingboard, input, the video cards, the op registry and SlotBus/SlotCardOps were not reached.
+
+**Still the owner's:** running `hwtruth` on a real IIgs (11 records, 24 answers). The earlier
+decisions stand: the slot-bus format, and frozen versus ticking FAKETIME.
