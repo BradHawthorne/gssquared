@@ -22,6 +22,8 @@
                 hwtruth              the emulator's answers to the hardware questions in
                                      Docs/fidelity/README.md are the ones last recorded
                                      (tools/hwtruth: the same program runs on a real IIgs)
+                mbaudit              two Mockingboards pass MB-Audit v1.61, whose expected
+                                     values come from real cards (corpus image)
 
     Suites run one at a time -- they share nothing, but two emulator suites overlapping on
     one box have collided before (a shared temp directory, a command-file lock). About
@@ -30,7 +32,7 @@
       .\tools\a2rail\gates.ps1                  # everything
       .\tools\a2rail\gates.ps1 -Offline         # the four offline gates only (seconds)
       .\tools\a2rail\gates.ps1 -Skip copilot    # name suites to leave out; they are REPORTED as skipped
-      .\tools\a2rail\gates.ps1 -SkipCorpus      # unarmedhash without the GS/OS image (PARTIAL)
+      .\tools\a2rail\gates.ps1 -SkipCorpus      # unarmedhash without the GS/OS image (PARTIAL), mbaudit skipped
 
     Exit 0 only when every suite that ran returned 0. A skipped suite is printed as SKIPPED
     in the matrix and in the exit line, never folded into the green.
@@ -69,6 +71,7 @@ $suites = [ordered]@{
     'assertparity' = @{ offline = $false; run = { & (Join-Path $here 'gs816\assertparity.ps1') } }
     'unarmedhash'  = @{ offline = $false; run = { if ($SkipCorpus) { & (Join-Path $here 'unarmedhash.ps1') -SkipCorpus } else { & (Join-Path $here 'unarmedhash.ps1') } } }
     'hwtruth'      = @{ offline = $false; run = { & (Join-Path $root 'tools\hwtruth\gate.ps1') } }
+    'mbaudit'      = @{ offline = $false; corpus = $true; run = { & (Join-Path $here 'mbaudit.ps1') } }
 }
 
 $matrix = @()
@@ -77,6 +80,7 @@ foreach ($name in $suites.Keys) {
     $why = $null
     if ($Offline -and -not $s.offline) { $why = '-Offline' }
     elseif ($Skip -contains $name) { $why = '-Skip' }
+    elseif ($SkipCorpus -and $s.corpus) { $why = '-SkipCorpus' }
     if ($why) {
         $matrix += [pscustomobject]@{ suite = $name; outcome = 'SKIPPED'; rc = ''; seconds = 0; note = $why }
         continue

@@ -16,6 +16,7 @@ build that wrote it. Each user supplies their own copies.
 | `silky_classics.2mg` | the MEMVU workload sweep | application volume for the input-driven workload rows |
 | `asimov_dealerdemo.po`, `asimov_dealerdemo2.po` | the MEMVU workload sweep | the Apple IIgs Dealer Demo, two disks |
 | `_em.po` | the MEMVU workload sweep (row `em-vol`) | a GS/OS volume exercising the Event Manager |
+| `mb-audit-v1.61.po` | `tools/a2rail/mbaudit.ps1` (gate `mbaudit`) | Tom Charlesworth's MB-Audit v1.61 (github.com/tomcw/mb-audit, release asset), the Mockingboard 6522/AY audit |
 | `mintvol_m0app_cgsos.po` | a2vga `m0/cgsos_validate.ps1` (minted there) | a toolchain-minted test volume |
 
 Point a harness here with its own setting (`A2RAIL_GSOS_IMAGE`, `MEMVU_CORPUS`, …) or the
