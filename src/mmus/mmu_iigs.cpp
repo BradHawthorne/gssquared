@@ -728,6 +728,10 @@ void MMU_IIgs::init_c0xx_handlers() {
     megaii->set_C0XX_write_handler(0xC036, {c036_write, this});
     megaii->set_C0XX_read_handler(0xC035, {c035_read, this});
     megaii->set_C0XX_read_handler(0xC036, {c036_read, this});
+    // FORK: the DMA bank register. Its handlers came with the upstream port but were never
+    // installed, so $C037 read the floating bus and dropped writes.
+    megaii->set_C0XX_write_handler(0xC037, {c037_write, this});
+    megaii->set_C0XX_read_handler(0xC037, {c037_read, this});
 
     megaii->set_C0XX_write_handler(0xC029, {megaii_c0xx_write, this});
     megaii->set_C0XX_read_handler(0xC029, {megaii_c0xx_read, this});
@@ -837,7 +841,9 @@ void MMU_IIgs::reset(bool cold_start) {
     // on RESET, set:
     set_slot_register(0x00);
     set_speed_register(cold_start && is_rom03 ? 0xC0u : 0x80u); // bit 7 slow; ROM03 bit 6 = power-on on cold start
-    reg_shadow = 0x08;
+    // FORK: the shadow register is cleared on reset, so everything is shadowed [HW Ref
+    // Table 2-1]. It was left at $08 (SHR inhibited).
+    reg_shadow = 0x00;
     set_state_register(0x0C); // KEGS does 0x0D - enable ROM RD,
     set_intcxrom(g_intcxrom); // this is needed to set the C1-CF map correctly.
     // TODO: uh should I reset the LC state here? (or am I doing it via the state register above?)
