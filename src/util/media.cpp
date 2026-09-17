@@ -18,6 +18,7 @@
 /* Functions to handle setting up media descriptors */
 #include <filesystem>
 #include <iostream>
+#include <vector>
 #include <sys/stat.h>
 
 //#include "gs2.hpp"
@@ -66,6 +67,56 @@ bool compare_suffix(const std::string& filename, const char* suffix) {
         suffix, suffix + suffix_length,
         [](char a, char b) { return std::tolower(a) == std::tolower(b); }
     );
+}
+
+// FORK: a .dsk may hold either sector order; its name does not say which. Track 17
+// sector 0 (the DOS 3.3 VTOC) and sector 15 sit at the same offset in both orders, so a
+// VTOC alone cannot tell them apart: follow the catalog chain in each order and take the
+// one that walks further, as CiderPress does. With no VTOC, the ProDOS volume directory's
+// key block (block 2) decides. DOS order when neither is there, as before.
+static media_interleave_t probe_525_order(const std::string &filename) {
+    FILE *fp = fopen(filename.c_str(), "rb");
+    if (!fp) return INTERLEAVE_DO;
+    std::vector<uint8_t> img(560 * 256);
+    const bool whole = fread(img.data(), 1, img.size(), fp) == img.size();
+    fclose(fp);
+    if (!whole) return INTERLEAVE_DO;
+    // DOS 3.3 logical sector -> physical sector, and physical -> ProDOS logical sector.
+    static const uint8_t do_to_phys[16] = { 0, 13, 11, 9, 7, 5, 3, 1, 14, 12, 10, 8, 6, 4, 2, 15 };
+    static const uint8_t phys_to_po[16] = { 0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15 };
+    auto dos_sector = [&](bool po_file, unsigned t, unsigned d) -> const uint8_t * {
+        const unsigned s = po_file ? phys_to_po[do_to_phys[d & 15]] : (d & 15);
+        return img.data() + (t * 16 + s) * 256;
+    };
+    auto catalog_walk = [&](bool po_file) {
+        const uint8_t *vtoc = dos_sector(po_file, 17, 0);
+        int steps = 0;
+        unsigned t = vtoc[1], d = vtoc[2];
+        while (steps < 32 && t >= 1 && t <= 34 && d <= 15) {
+            const uint8_t *c = dos_sector(po_file, t, d);
+            steps++;
+            if (c[1] == 0 && c[2] == 0) break;                 // the last catalog sector
+            if (c[1] < 1 || c[1] > 34 || c[2] > 15) { steps = 0; break; }
+            t = c[1]; d = c[2];
+        }
+        return steps;
+    };
+    const uint8_t *vtoc = img.data() + 17 * 16 * 256;
+    const bool dos = vtoc[1] >= 1 && vtoc[1] <= 34 && vtoc[2] <= 15 &&
+                     vtoc[0x27] == 122 && vtoc[0x34] == 35 && vtoc[0x35] == 16 &&
+                     vtoc[0x36] == 0x00 && vtoc[0x37] == 0x01;
+    if (dos) {
+        return catalog_walk(true) > catalog_walk(false) ? INTERLEAVE_PO : INTERLEAVE_DO;
+    }
+    // ProDOS block 2's first half is logical sector 4 of track 0: file offset $400 in
+    // ProDOS order, $B00 in DOS order (physical sector 8).
+    auto volume_header = [&](size_t off) {
+        const uint8_t *b = img.data() + off;
+        return b[0] == 0 && b[1] == 0 && (b[4] >> 4) == 0xF && (b[4] & 0x0F) != 0 &&
+               b[0x23] == 0x27 && b[0x24] == 0x0D;
+    };
+    if (volume_header(0x400)) return INTERLEAVE_PO;
+    return INTERLEAVE_DO;
 }
 
 int get_file_size(const std::string& filename) {
@@ -427,7 +478,9 @@ int identify_media(media_descriptor& md) {
         md.interleave = INTERLEAVE_DO;
         md.data_offset = 0;
         //md.write_protected = false /*true*/;
-        md.dos33_volume = 254; // might want to try to snag this from the DOS33 VTOC
+        md.dos33_volume = 254; // not the VTOC's: 254 is what .po and CiderPress use too
+        // FORK: a .do says DOS order; a .dsk is probed (probe_525_order).
+        if (compare_suffix(md.filename, ".dsk")) md.interleave = probe_525_order(md.filename);
     } else if (compare_suffix(md.filename, ".po")) {
         md.media_type = MEDIA_NYBBLE;
         // if file size is 140K, it's a 5.25 image.
@@ -435,7 +488,7 @@ int identify_media(media_descriptor& md) {
         if (md.file_size == 560 * 256) {
             md.media_type = MEDIA_NYBBLE;
             md.block_size = 256;
-        md.block_size = 256;        } else {
+        } else {
             md.media_type = MEDIA_BLK;
             md.block_size = 512;
         }

@@ -50,6 +50,15 @@
 #include "util/media.hpp"
 #include "util/woz_nibblizer.hpp"
 #include "util/woz_nibblizer_35.hpp"
+#include "util/woz_nibblizer_525.hpp"
+
+// FORK: the nibblizer that fits the media: a 140K image is a 5.25 disk (6-and-2,
+// 16 sectors), anything else an 800K 3.5 disk. Both commands used the 3.5 one, so a
+// 5.25 import wrote an empty WOZ and still said "Imported".
+static Woz_Nibblizer *nibblizer_for(const media_descriptor &md) {
+    if (md.media_type == MEDIA_NYBBLE) return new Woz_Nibblizer_525();
+    return new Woz_Nibblizer_35();
+}
 
 /* Silence the debug_level symbol required by debug.hpp */
 uint64_t debug_level = 0;
@@ -117,8 +126,13 @@ static int cmd_import(const std::string& input_file,
     md.dos33_volume = volume;
 
     Woz woz;
-    Woz_Nibblizer *nibblizer = new Woz_Nibblizer_35();
-    nibblizer->import_block_image(woz, &md);
+    Woz_Nibblizer *nibblizer = nibblizer_for(md);
+    const int irc = nibblizer->import_block_image(woz, &md);
+    delete nibblizer;
+    if (irc != 0) {
+        fprintf(stderr, "wozutil: import failed for '%s'\n", input_file.c_str());
+        return 1;
+    }
     /* if (woz.import_from_media(&md) != 0) {
         fprintf(stderr, "wozutil: import failed\n");
         return 1;
@@ -195,8 +209,13 @@ static int cmd_export(const std::string& input_woz,
                interleave == INTERLEAVE_PO ? "PO (ProDOS)" : "DO (DOS 3.3)"); */
     }
 
-    Woz_Nibblizer *nibblizer = new Woz_Nibblizer_35();
-    nibblizer->export_block_image(woz, &md);
+    Woz_Nibblizer *nibblizer = nibblizer_for(md);
+    const int erc = nibblizer->export_block_image(woz, &md);
+    delete nibblizer;
+    if (erc != 0) {
+        fprintf(stderr, "wozutil: export failed for '%s' (rc %d)\n", output_block.c_str(), erc);
+        return erc == Woz_Nibblizer::EXPORT_LOSSY ? 2 : 1;
+    }
 
 #if 0
     disk_image_t out{};

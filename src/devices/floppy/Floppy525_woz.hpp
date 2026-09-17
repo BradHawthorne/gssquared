@@ -60,6 +60,16 @@ protected:
 
     int      current_tmap_index()     const override { return track; }
 
+    // FORK: PH1 and PH3 on together is the SmartPort bus-enable state, which no Disk II
+    // stepper sequence uses, and on the IIgs disk port 5.25 drives share the chain with
+    // SmartPort devices. A drive that wrote then would take every SmartPort packet onto
+    // its disk: the IIgs ROM's boot probe on the 5.25 port did, 19 bytes onto track 0 of
+    // any mounted disk, saved into a WOZ on unmount. Real IIgs boots do not damage 5.25
+    // disks, so the write does not reach the surface. [Whether the drive or the IIgs glue
+    // gates it is unverified; the drive's write-protect sense reading 1 with PH1 on, above,
+    // is what makes the probe send.]
+    bool write_gate() const override { return !(phase1 && phase3); }
+
     // FORK: A2GSPU_DISK_TIMING=1 -- real time. The IWM clocks its bit cells from FCLK, not
     // the CPU, so a 4 us cell stays 4 us at 2.8 MHz; counting CPU cycles made it 1.4 us.
     // Video cycles are the machine's 1.0205 MHz timebase (Floppy35_woz uses them too).

@@ -102,6 +102,9 @@ struct woz_image_t {
     uint8_t                          tmap[160];         // 0xFF = empty quarter-track
     std::vector<woz_track_t>         tracks;            // indexed by TMAP entry value
     std::map<std::string,std::string> meta;             // optional META chunk k/v pairs
+    // FORK: chunks the file carried that save() does not write (FLUX, WRIT, any unknown),
+    // by name. A writeback of such an image goes beside it, never over it.
+    std::vector<std::string>         unsaved_chunks;
 
     // tmap must be initialised to 0xFF (empty track sentinel per spec).
     woz_image_t() { std::fill(std::begin(tmap), std::end(tmap), 0xFF); }

@@ -60,6 +60,12 @@ bool Floppy_woz::mount(uint64_t key, media_descriptor *media_in) {
     update_track_ptr();
 
     write_protect = media_in->write_protected;
+    // FORK: a WOZ image's INFO chunk can say the disk is write protected [WOZ 2 reference,
+    // INFO +2]; the drive's sense follows it, as it follows a locked file or a 2MG lock.
+    if (media_in->media_type == MEDIA_WOZ && woz.image().info.write_protected) {
+        write_protect = 1;
+        media_in->write_protected = true;
+    }
     is_mounted    = true;
     media_d       = media_in;
     modified      = false;
@@ -119,6 +125,14 @@ bool Floppy_woz::writeback() {
         std::cout << "Floppy_woz: " << media_d->filestub << " unchanged; not written" << std::endl;
         return true;
     }
+    // FORK: a write-protected image (a read-only file, a locked 2MG, a WOZ whose INFO says
+    // so) is never written back, whatever reached its surface in memory.
+    if (media_d->write_protected) {
+        fprintf(stderr, "Floppy_woz: '%s' is write protected; what reached its surface is not saved "
+                        "(the original is untouched)\n", media_d->filename.c_str());
+        modified = false;
+        return true;
+    }
 
     // MEDIA_NYBBLE means the mount source was a 143K block image
     // (.do/.po/.dsk): decode the in-memory WOZ bit stream back into a raw
@@ -159,6 +173,16 @@ bool Floppy_woz::writeback() {
             return false;
         }
 #endif
+    } else if (media_d->media_type == MEDIA_WOZ && !woz.image().unsaved_chunks.empty()) {
+        // FORK: save() writes INFO, TMAP, TRKS and META only. Over this file it would drop
+        // the rest (a WOZ 2.1 FLUX chunk and the tracks it names, WRIT), so the disk as
+        // written goes to the sidecar.
+        std::string names;
+        for (const auto &c : woz.image().unsaved_chunks) names += (names.empty() ? "" : ",") + c;
+        const std::string why = "the image carries chunks this build does not write (" + names + ")";
+        if (!save_written_sidecar(woz, media_d, why.c_str())) {
+            return false;
+        }
     } else if (media_d->media_type == MEDIA_WOZ) {
         std::cout << "Floppy_woz: writing back WOZ disk image" << std::endl;
         int rc = woz.save(media_d->filename);
@@ -329,7 +353,7 @@ uint8_t Floppy_woz::read_pulse() {
 }
 
 void Floppy_woz::write_pulse(uint8_t bit) {
-    if (lss_disk_spinning() && cur_track_ptr && cur_track_ptr->bit_count > 0) {
+    if (lss_disk_spinning() && cur_track_ptr && cur_track_ptr->bit_count > 0 && write_gate()) {
         uint64_t track_bits  = cur_track_ptr->bit_count;
         uint64_t bi          = (read_position >> POSITION_FP_SHIFT) % track_bits;
         uint64_t byte_idx    = bi >> 3;

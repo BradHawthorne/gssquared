@@ -143,6 +143,8 @@ public:
 
     virtual uint8_t read_pulse();
     virtual void    write_pulse(uint8_t bit);
+    // FORK: whether /WRREQ reaches this drive's surface right now (write_pulse asks).
+    virtual bool    write_gate() const { return true; }
 
     virtual void set_phase(uint8_t phase, uint8_t onoff) = 0;
 

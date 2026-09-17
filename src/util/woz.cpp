@@ -458,6 +458,7 @@ int Woz::load(const std::string& filename) {
     // Reset image to blank state before populating from file.
     m_image.tracks.clear();
     m_image.meta.clear();
+    m_image.unsaved_chunks.clear();
     std::fill(std::begin(m_image.tmap), std::end(m_image.tmap), 0xFF);
 
     // Walk chunks starting at byte 12.
@@ -502,9 +503,16 @@ int Woz::load(const std::string& filename) {
             case WOZ_CHUNK_META:
                 rc = parse_meta(data, chunk_size);
                 break;
-            default:
+            default: {
                 // Unknown chunk – spec says to skip it.
+                // FORK: and remember it: save() would drop it (a FLUX chunk's tracks and
+                // INFO's flux block with it, which corrupts a WOZ 2.1 file).
+                char name[5] = { (char)(chunk_id & 0xFF), (char)((chunk_id >> 8) & 0xFF),
+                                 (char)((chunk_id >> 16) & 0xFF), (char)((chunk_id >> 24) & 0xFF), 0 };
+                for (int c = 0; c < 4; c++) if (name[c] < 0x20 || name[c] > 0x7E) name[c] = '?';
+                m_image.unsaved_chunks.push_back(name);
                 break;
+            }
         }
         if (rc != 0) return rc;
 
