@@ -10,6 +10,11 @@
 #include <iostream>
 #include <string>
 
+static RTC *g_a2gspu_rtc = nullptr;   // the snapshot code reaches the chip through this
+bool rtc_A2GSPU_present() { return g_a2gspu_rtc != nullptr; }
+void rtc_A2GSPU_snapshot(FILE *f) { if (g_a2gspu_rtc) g_a2gspu_rtc->A2GSPU_snapshot(f); }
+bool rtc_A2GSPU_restore(FILE *f) { return g_a2gspu_rtc && g_a2gspu_rtc->A2GSPU_restore(f); }
+
 void rtc_pram_write_C033(void *context, uint32_t address, uint8_t value) {
     rtc_pram_state_t *st = (rtc_pram_state_t *)context;
     if (DEBUG(DEBUG_RTC)) printf("write_c033: %02X\n", value);
@@ -71,6 +76,7 @@ void init_slot_rtc_pram(computer_t *computer, SlotType_t slot) {
         }
     }
     st->rtc = new RTC(bram_path);
+    g_a2gspu_rtc = st->rtc;
     
     computer->mmu->set_C0XX_write_handler(0xC033, { rtc_pram_write_C033, st });
     computer->mmu->set_C0XX_read_handler(0xC033, { rtc_pram_read_C033, st });
@@ -83,6 +89,7 @@ void init_slot_rtc_pram(computer_t *computer, SlotType_t slot) {
     computer->mmu->set_C0XX_read_handler(0xC034, { rtc_pram_read_C034, st });
     
     computer->register_shutdown_handler([st]() {
+        if (g_a2gspu_rtc == st->rtc) g_a2gspu_rtc = nullptr;
         delete st->rtc;
         delete st;
         return true;

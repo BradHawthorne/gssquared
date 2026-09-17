@@ -19,6 +19,7 @@
 #include "util/media_identity.hpp"   // g_a2gspu_media_id_version
 #include "devices/diskii/diskii_controller.hpp"   // g_a2gspu_diskii: the Disk II controllers, by slot
 #include "devices/scc8530/scc8530.hpp"             // the IIgs SCC's block
+#include "devices/rtc/rtc_pram.hpp"                // the IIgs clock chip's block
 
 
 // ---- A2GSPU warm-boot snapshot: file magic + cpu_state value-field (de)serialize ----
@@ -254,6 +255,12 @@ std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
         long at = a2gspu_snap_dev_begin(f, "scc", 1); scc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
         names += names.empty() ? "scc" : ",scc";
     }
+    // The IIgs clock chip: serial state, registers, write-protect and BRAM. A restore keeps
+    // the restoring session's clock (its pin with the saved guest offset, or the host's).
+    if (rtc_A2GSPU_present()) {
+        long at = a2gspu_snap_dev_begin(f, "rtc", 1); rtc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);
+        names += names.empty() ? "rtc" : ",rtc";
+    }
     if (ssc_A2GSPU_present()) {
         long at = a2gspu_snap_dev_begin(f, "ssc", 2); ssc_A2GSPU_snapshot(f); a2gspu_snap_dev_end(f, at);   // 2: IRQ latch and modem inputs
         names += names.empty() ? "ssc" : ",ssc";
@@ -399,6 +406,8 @@ bool a2gspu_snap_read_devices(FILE *f, computer_t *computer) {
             if (voc_A2GSPU_present()) r = voc_A2GSPU_restore(f) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "scc") && ver == 1) {
             if (scc_A2GSPU_present()) r = scc_A2GSPU_restore(f) ? RESTORED : FAILED;
+        } else if (!strcmp(nm, "rtc") && ver == 1) {
+            if (rtc_A2GSPU_present()) r = rtc_A2GSPU_restore(f) ? RESTORED : FAILED;
         } else if (!strcmp(nm, "ssc") && (ver == 1 || ver == 2)) {
             if (ssc_A2GSPU_present()) {
                 int absent = 0;

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <ctime>
 #include <cstdlib>
+#include <cstring>
 #include <cassert>
 #include <string>
 
@@ -92,6 +93,11 @@ class RTC {
     int64_t pin_offset = 0;   // FORK: a guest-set time under A2GSPU_FAKETIME, relative to the pinned clock
     
     uint8_t test_reg = 0;
+    // FORK: the write-protect register's bit 7. While set, the chip ignores writes to the
+    // clock, the test register and BRAM; the write-protect register itself stays writable
+    // [Neil Parker, "Using the IIGS Battery-Backed-Up RAM and Clock"; Cortland RTC ERS:
+    // 1101010x protects, 0101010x unprotects]. The ROM never touches it.
+    bool write_protect = false;
     uint8_t bram[256] = {0};
 
     uint8_t transaction_step_count = 0;
@@ -303,6 +309,20 @@ public:
         uint8_t cmd = command_reg[0];
         update_seconds();
 
+        // FORK: the two write-only registers, then the lock the second one sets.
+        if (cmd == 0b0011'0101) {   // write-protect register
+            write_protect = (data_reg & 0x80) != 0;
+            return;
+        }
+        if (!(cmd & 0b1000'0000) && write_protect) {
+            if (DEBUG(DEBUG_RTC)) printf("   : write %02X ignored (write-protected)\n", cmd);
+            return;
+        }
+        if (cmd == 0b0011'0001) {   // test register; bits 6-7 are the chip's test controls
+            test_reg = data_reg;
+            return;
+        }
+
         if ((cmd & 0b0'1111111) == 0b0'0000001) { // 000'0001 = seconds register lo
             if (DEBUG(DEBUG_RTC)) printf("   : seconds lo ");
             if (cmd & 0b1000'0000) {  // 1 = read, 0 = write
@@ -341,7 +361,9 @@ public:
             }
         } else if ((cmd & 0b0'111'00'11) == 0b0'010'00'01) { // 4 RAM addresses - z010ab01
             if (DEBUG(DEBUG_RTC)) printf("   : ram cmd0: %02X, cmd1: %02X\n", command_reg[0], command_reg[1]);
-            uint8_t bram_address = (cmd & 0b0'000'11'00) >> 2;
+            // FORK: "Access BRAM address 100ab" -- $10-$13, the old 20-byte chip's upper four,
+            // not $00-$03 (which z1abcd01 reaches).
+            uint8_t bram_address = 0x10 | ((cmd & 0b0'000'11'00) >> 2);
             if (cmd & 0b1000'0000) {  // 1 = read, 0 = write
                 if (DEBUG(DEBUG_RTC)) printf("read bram(4)[%02X]\n", bram_address);
                 data_reg = bram[bram_address];
@@ -414,6 +436,37 @@ public:
         }
     }
 
+    // ---- A2GSPU snapshot: the serial interface, the registers, write-protect and all 256
+    // bytes of BRAM. The seconds are written for readers; a restore keeps this session's
+    // clock (the pin with the saved guest offset, or the host clock), because a clock that
+    // jumps back to the saving session's wall time is not one either machine had.
+    void A2GSPU_snapshot(FILE *f) {
+        uint8_t b[8] = { ctl_reg_byte, command_reg[0], command_reg[1], data_reg, test_reg,
+                         (uint8_t)write_protect, transaction_step_count, (uint8_t)state };
+        fwrite(b, 1, 8, f);
+        uint32_t s = seconds; fwrite(&s, 4, 1, f);
+        int64_t po = pin_offset; fwrite(&po, 8, 1, f);
+        rtc_faketime_probe_env();
+        uint8_t pinned = g_rtc_faketime_active ? 1 : 0; fwrite(&pinned, 1, 1, f);
+        fwrite(bram, 1, 256, f);
+    }
+    bool A2GSPU_restore(FILE *f) {
+        uint8_t b[8]; if (fread(b, 1, 8, f) != 8) return false;
+        uint32_t s = 0; if (fread(&s, 4, 1, f) != 1) return false;
+        int64_t po = 0; if (fread(&po, 8, 1, f) != 1) return false;
+        uint8_t pinned = 0; if (fread(&pinned, 1, 1, f) != 1) return false;
+        uint8_t nb[256]; if (fread(nb, 1, 256, f) != 256) return false;
+        if (b[7] > RTC_STATE_AWAIT_DATA) return false;
+        ctl_reg_byte = b[0]; command_reg[0] = b[1]; command_reg[1] = b[2]; data_reg = b[3];
+        test_reg = b[4]; write_protect = b[5] != 0; transaction_step_count = b[6];
+        state = (RTC_State)b[7];
+        memcpy(bram, nb, 256);
+        rtc_faketime_probe_env();
+        pin_offset = (g_rtc_faketime_active && pinned) ? po : 0;
+        update_seconds();
+        return true;
+    }
+
     const char *state_to_string(RTC_State state) {
         switch (state) {
             case RTC_STATE_AWAIT_COMMAND: return "WAIT_CMD";
@@ -429,6 +482,8 @@ public:
         df->addLine("state: %s cmd0: %02X cmd1: %02X ", state_to_string(state), command_reg[0], command_reg[1]);
         df->addLine("ctl_reg C034 (7-5): %02X data_reg C033: %02X", ctl_reg_byte, data_reg);
         df->addLine("seconds: %08X (at the last command)", seconds);
+        df->addLine("test register: %02X  write-protect: %d  busy reads left: %d",
+                    test_reg, (int)write_protect, (int)transaction_step_count);
         if (g_rtc_faketime_active) {
             // FORK: computed without touching the chip, so the view observes and never advances it.
             df->addLine("pinned clock now: %08X (%s, guest offset %lld)",

@@ -50,6 +50,7 @@ below records what has been done since.
 | Slot bus: `$C02D` gating of `$C0nX` and the C8 handler | slot_bus | **Done**: `575e1703`, from Apple's ROM evidence (§17; confirmed or reversed by `tools/hwtruth`) |
 | Slot bus: per-card `$C800` flip-flop, card-driven pins, SlotBus/SlotCardOps | slot_bus | Open |
 | Sound: host and debugger state gating DOC IRQs | sound_time | **Done**: the DOC runs on emulated time with or without a host stream, and while stepping (§15) |
+| RTC registers: `z010ab01` aliased to BRAM `$00-$03`, write-protect and test registers ignored, no snapshot | sound_time | **Done** (§18): `$10-$13`; write-protect bit 7 locks the clock, the test register and BRAM; the test register is kept; block `rtc` v1 (BRAM included; a restore keeps the restoring session's clock). Busy still clears after two `$C034` reads: no document gives the transfer time |
 | Time pin frozen and guest-visible: RTC writes overwritten, no ticking origin | sound_time | **Done, opt-in**: `ef506b39` `A2GSPU_FAKETIME_TICK=1` ticks in emulated time on the one-second IRQ's edges; guest-set time sticks under either form (§16). Frozen stays the default: the owner decides |
 | Probes answer `$E0`/`$E1` from raw Mega II RAM (structural defect 3) | memory_video | **Done** for `$E0`/`$E1`: `e5524f13` (bank latch, LC ROM and bank 1, RAMRD) (§16). Shadow-all handler pages in banks `$02-$7F` are still open |
 | Control plane: one op registry, one trigger engine, one record stream, hermetic configuration | control_plane | Open |
