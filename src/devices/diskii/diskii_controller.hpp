@@ -223,6 +223,8 @@ public:
         uint64_t now     = clock->get_cycles();
 
         // this updates the sim and tells us how many bits to update through the LSS.
+        // FORK: in write mode every cell since the last access goes out (see Floppy_woz).
+        drives[diskii_select].set_writing(diskii_q7 == 1);
         uint64_t bits_to_sim = drives[diskii_select].fast_forward(/* now */);
 
         for (uint64_t i = 0; i < bits_to_sim; i++) {
@@ -276,6 +278,14 @@ public:
     inline void decode(uint8_t reg) {
         // Update the switch state
         switches[reg>>1] = reg & 0x01;
+
+        // FORK: an access to $C08D (Q6 high) in read mode resets the sequencer and clears
+        // the data latch [WOZ 2 reference, emulator notes]. E7 protection uses it to
+        // resynchronise the nibble stream, so timing bits become data bits.
+        if (reg == DiskII_Q6H && !diskii_q7) {
+            data_register   = 0;
+            sequencer_state = false;
+        }
         
         switch (reg) {
             case DiskII_Ph0_Off:

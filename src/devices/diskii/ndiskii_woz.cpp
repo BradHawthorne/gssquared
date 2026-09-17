@@ -76,7 +76,9 @@ void init_slot_ndiskII_woz(computer_t *computer, SlotType_t slot) {
         computer->mmu->set_C0XX_read_handler(slot_base + i,
             { ndiskII_woz_read_C0xx, diskII_d });
     }
-    for (uint16_t i = 8; i < 16; i++) {
+    // FORK: every address, not only $C0n8-$C0nF. The card's 74LS259 latch is strobed by
+    // /DEVSEL whatever R/W says, so STA $C0E1 turns a stepper phase on as LDA $C0E1 does.
+    for (uint16_t i = 0; i < 16; i++) {
         computer->mmu->set_C0XX_write_handler(slot_base + i,
             { ndiskII_woz_write_C0xx, diskII_d });
     }

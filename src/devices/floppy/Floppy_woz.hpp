@@ -85,6 +85,7 @@ protected:
     bool modified   = false;
     media_descriptor *media_d = nullptr;
 
+    bool     writing     = false;
     uint64_t random_bits = 0x5FCB9E767DC3523A;
     uint32_t windowBits  = 0;
 
@@ -160,6 +161,10 @@ public:
     virtual void    write_pulse(uint8_t bit);
     // FORK: whether /WRREQ reaches this drive's surface right now (write_pulse asks).
     virtual bool    write_gate() const { return true; }
+    // FORK: the controller says whether it is writing before it asks for bits. A writing
+    // controller's lag is caught up in full (up to a revolution): the surface receives
+    // every cell, where the read-side cap would have left old bits under a stalled write.
+    void set_writing(bool on) { writing = on; }
 
     virtual void set_phase(uint8_t phase, uint8_t onoff) = 0;
 

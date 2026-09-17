@@ -309,7 +309,7 @@ uint64_t Floppy_woz::fast_forward(/* uint64_t now */) {
     uint64_t bits_to_sim =
         ((head_position >> POSITION_FP_SHIFT) - (read_position >> POSITION_FP_SHIFT)) % track_bits;
 
-    if (bits_to_sim > MAX_BITS_TO_SIM) {
+    if (bits_to_sim > MAX_BITS_TO_SIM && !writing) {
         uint64_t head_bit = (head_position >> POSITION_FP_SHIFT) % track_bits;
         uint64_t snap_bit =
             (head_bit + track_bits - MAX_BITS_TO_SIM) % track_bits;
