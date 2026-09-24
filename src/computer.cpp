@@ -41,6 +41,27 @@ static uint64_t a2gspu_computer_c14m(void *ctx) {
     return c ? c->get_c14m() : 0;
 }
 
+void computer_t::begin_temp_speed_boost() {
+    old_speed = this->clock->get_clock_mode();
+    if (old_speed == CLOCK_FREE_RUN) {
+        ludicrous_saved_n = this->clock->get_cpu_per_14m();
+    }
+    temp_speed_saved = true;
+    this->clock->set_clock_mode(CLOCK_14_3MHZ);
+}
+
+bool computer_t::end_temp_speed_boost() {
+    if (!temp_speed_saved) {
+        return false;
+    }
+    temp_speed_saved = false;
+    this->clock->set_clock_mode(old_speed);
+    if (old_speed == CLOCK_FREE_RUN) {
+        this->clock->set_cpu_per_14m(ludicrous_saved_n);
+    }
+    return true;
+}
+
 computer_t::computer_t(NClockII *clock) {
     this->clock = clock;
     a2gspu_timesource_install(a2gspu_computer_c14m, clock);
@@ -107,22 +128,14 @@ computer_t::computer_t(NClockII *clock) {
 
     sys_event->registerHandler(SDL_EVENT_MOUSE_BUTTON_DOWN,[this](const SDL_Event &event ) {
         if (event.button.button == SDL_BUTTON_RIGHT && gs2_app_values.right_mouse_accelerate) {
-            old_speed = this->clock->get_clock_mode();
-            if (old_speed == CLOCK_FREE_RUN) {
-                ludicrous_saved_n = this->clock->get_cpu_per_14m();
-            }
-            this->clock->set_clock_mode(CLOCK_14_3MHZ);
+            begin_temp_speed_boost();
             return true;
         }
         return false;
     });
     sys_event->registerHandler(SDL_EVENT_MOUSE_BUTTON_UP,[this](const SDL_Event &event ) {
         if (event.button.button == SDL_BUTTON_RIGHT && gs2_app_values.right_mouse_accelerate) {
-            this->clock->set_clock_mode(old_speed);
-            if (old_speed == CLOCK_FREE_RUN) {
-                this->clock->set_cpu_per_14m(ludicrous_saved_n);
-            }
-            return true;
+            return end_temp_speed_boost();
         }
         return false;
     });
@@ -136,11 +149,7 @@ computer_t::computer_t(NClockII *clock) {
         } else if (key == SDLK_INSERT) {
             if (event.key.mod & SDL_KMOD_SHIFT) return false; // Shift+Insert is paste (keyboard / KeyGloo)
             if (event.key.repeat == 1) return false; // ignore repeats otherwise it will forget the original speed
-            old_speed = this->clock->get_clock_mode();
-            if (old_speed == CLOCK_FREE_RUN) {
-                ludicrous_saved_n = this->clock->get_cpu_per_14m();
-            }
-            this->clock->set_clock_mode(CLOCK_14_3MHZ);
+            begin_temp_speed_boost();
             return true;
         }
         return false;
@@ -159,11 +168,7 @@ computer_t::computer_t(NClockII *clock) {
             return true; 
         } else if (key == SDLK_INSERT) {
             if (event.key.mod & SDL_KMOD_SHIFT) return false; // Shift+Insert is paste (keyboard / KeyGloo)
-            this->clock->set_clock_mode(old_speed);
-            if (old_speed == CLOCK_FREE_RUN) {
-                this->clock->set_cpu_per_14m(ludicrous_saved_n);
-            }
-            return true;
+            return end_temp_speed_boost();
         }
         return false;
     });
