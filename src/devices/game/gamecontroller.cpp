@@ -280,7 +280,9 @@ uint8_t read_game_switch_0(void *context, uint32_t address) {
     
     if (joyport_active(ds)) { // reverse polarity for atari
         SDL_Gamepad *pad = joyport_selected_pad(ds);
-        bool val = pad && SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST);
+        // Xbox A (SOUTH) or B (EAST); either face button is the Atari fire button.
+        bool val = pad && (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST)
+                        || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_SOUTH));
         return bit7_with_float(ds, !val);
     } else if (ds->joystick_mode == JOYSTICK_APPLE_GAMEPAD) {
         // FORK: an absent pad reads NOT pressed (absent_value 0). Upstream floats
