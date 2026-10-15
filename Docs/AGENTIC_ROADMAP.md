@@ -1,5 +1,7 @@
 # Agentic layer and upstream sync: the roadmap
 
+> **North star (owner, 2026-10-15):** "my goal is always for our gssquared-fork to be the definitive partner tool for full agentic ai closed loop development along side Rosetta." Every task here is judged by how much it advances that: an agent can build with Rosetta, run and observe in this emulator, and verify, closed-loop and deterministically, without a human in the loop.
+
 **The fork's working task list.** Detailed reports are mirrored in `Docs/reports/`. This
 file is the tracked summary. It stays a local commit; pushing is the owner's call.
 

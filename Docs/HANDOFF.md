@@ -1,5 +1,7 @@
 # Handoff: gssquared-fork (2026-10-15)
 
+> **North star (owner, 2026-10-15):** "my goal is always for our gssquared-fork to be the definitive partner tool for full agentic ai closed loop development along side Rosetta." Every task here is judged by how much it advances that: an agent can build with Rosetta, run and observe in this emulator, and verify, closed-loop and deterministically, without a human in the loop.
+
 From the Claude session to GPT Astra, for the few days until Claude's weekly quota refreshes. Read this first, then
 `Docs/AGENTIC_ROADMAP.md` (the task list) and `Docs/reports/` (the detailed reports).
 
