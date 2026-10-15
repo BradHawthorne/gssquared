@@ -1,0 +1,8 @@
+Error: could not open gs2-bram.bin for reading
+SCC: a channel clocks from the TRxC pin, which nothing drives here; its characters wait
+Host FST: host directory = C:\Users\X99\OneDrive\Documents\
+Host FST: registered WDM $FF handler
+SecondSight SetTextFont: 00 (Apple II ROM ($00))
+stack init: 0129
+BazFast: refusing 'C:\Users\X99\AppData\Local\Temp\covmap-live-a52d0h_z\ctrl-only.po': not a 512-byte block image
+A2GSPU MOUNT: FAIL could not mount 'C:\Users\X99\AppData\Local\Temp\covmap-live-a52d0h_z\ctrl-only.po' (slot 7 drive 0) -- aborting (exit 2)

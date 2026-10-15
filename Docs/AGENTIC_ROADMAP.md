@@ -1,6 +1,6 @@
 # Agentic layer and upstream sync: the roadmap
 
-**The fork's working task list.** Detailed reports are mirrored locally in `Docs/local/` (excluded from git). This
+**The fork's working task list.** Detailed reports are mirrored in `Docs/reports/`. This
 file is the tracked summary. It stays a local commit; pushing is the owner's call.
 
 **The fork's stance:**
@@ -42,4 +42,4 @@ Upstream main was still at 643e6c21 on 2026-10-15.
 ## 4. Agentic layer: the phased proposal
 
 *Being written (a full inventory of upstream's and the fork's agentic surfaces, the gaps neither has, and the phases).
-It'll be summarised here, with the full text in `Docs/local/`.*
+It'll be summarised here, with the full text in `Docs/reports/`.*

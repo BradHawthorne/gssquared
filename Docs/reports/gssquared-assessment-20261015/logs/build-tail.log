@@ -1,0 +1,60 @@
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/fork/src/devices/displaypp/frame/frame.hpp:75:14: warning:   'uint32_t Frame<RGBA_t, 263, 910, SDLTextureStorage>::hloc' [-Wreorder]
+   75 |     uint32_t hloc;
+      |              ^~~~
+D:/gsqs/fork/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[649/701] Linking CXX static library lib\libplutosvg.a
+[650/701] Building CXX object apps/ui/CMakeFiles/ui.dir/main.cpp.obj
+[651/701] Building CXX object apps/mousebugtest/CMakeFiles/mousebugtest.dir/main.cpp.obj
+[652/701] Linking CXX shared library SDL3_ttf.dll
+[653/701] Building CXX object apps/conformtest/CMakeFiles/conformtest.dir/main.cpp.obj
+[654/701] Linking CXX static library lib\libgs2_computer.a
+[655/701] Linking CXX static library lib\libgs2_util.a
+[656/701] Linking CXX static library lib\libgs2_devices_floppy_woz.a
+[657/701] Linking CXX static library lib\libgs2_ui.a
+[658/701] Linking CXX static library lib\libgs2_devices_iwm.a
+[659/701] Building CXX object apps/cpu816test/CMakeFiles/cpu816test.dir/main.cpp.obj
+[660/701] Linking CXX static library lib\libgs2_devices_adb.a
+[661/701] Linking CXX static library lib\libgs2_devices_diskii_woz.a
+[662/701] Linking CXX static library lib\libgs2_debugger.a
+[663/701] Building CXX object apps/doc/CMakeFiles/doc.dir/main.cpp.obj
+[664/701] Building CXX object apps/rtctest/CMakeFiles/rtctest.dir/main.cpp.obj
+[665/701] Linking CXX static library lib\libgs2_device_registry.a
+[666/701] Linking C static library lib\libSDL3_test.a
+[667/701] Linking CXX executable w6522.exe
+[668/701] Linking CXX executable vgatext.exe
+[669/701] Building CXX object apps/ssgputexttest/CMakeFiles/ssgputexttest.dir/main.cpp.obj
+[670/701] Linking CXX executable vgatext2.exe
+[671/701] Linking CXX executable vgatext3.exe
+[672/701] Linking CXX executable vgatext4.exe
+[673/701] Linking CXX executable ssppu.exe
+[674/701] Linking CXX executable chr2tiles.exe
+[675/701] Linking CXX executable GSSquared.exe
+[676/701] Linking CXX executable diskid.exe
+[677/701] Building CXX object apps/ssgputexttest/CMakeFiles/ssgputexttest.dir/__/__/src/devices/secondsight/ss_gpu_text.cpp.obj
+[678/701] Linking CXX executable wozutil.exe
+[679/701] Building CXX object apps/coveragetest/CMakeFiles/coveragetest.dir/main.cpp.obj
+[680/701] Linking CXX executable gstrace.exe
+[681/701] Linking CXX executable mmutest.exe
+[682/701] Linking CXX executable montest.exe
+[683/701] Linking CXX executable cputest.exe
+[684/701] Linking CXX executable cycletest.exe
+[685/701] Linking CXX executable cycletest816.exe
+[686/701] Linking CXX executable conformtest.exe
+[687/701] Linking CXX executable coveragetest.exe
+[688/701] Linking CXX executable vpp2.exe
+[689/701] Linking CXX executable iieromcsum.exe
+[690/701] Linking C executable binprint.exe
+[691/701] Linking CXX executable ui.exe
+[692/701] Linking CXX executable cpu816test.exe
+[693/701] Linking CXX executable rtctest.exe
+[694/701] Linking CXX executable mousebugtest.exe
+[695/701] Linking CXX executable doc.exe
+[696/701] Linking CXX executable ssgputexttest.exe
+[697/701] Building CXX object apps/systemconfigtest/CMakeFiles/systemconfigtest.dir/main.cpp.obj
+[698/701] Linking CXX executable systemconfigtest.exe
+[699/701] Building CXX object apps/iigsmmutest/CMakeFiles/iigsmmutest.dir/main.cpp.obj
+[700/701] Linking CXX executable iigsmmutest.exe

@@ -1,0 +1,6 @@
+Platform: Apple IIgs   folder name: apple2gs
+SCC: a channel clocks from the TRxC pin, which nothing drives here; its characters wait
+Host FST: host directory = C:\Users\X99\OneDrive\Documents\
+Host FST: registered WDM $FF handler
+BazFast: refusing 'D:\gsqs\logs\r26\ctrl-140k.po': not a 512-byte block image
+A2GSPU MOUNT: FAIL could not mount 'D:\gsqs\logs\r26\ctrl-140k.po' (slot 7 drive 0) -- aborting (exit 2)

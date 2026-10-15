@@ -1,0 +1,20 @@
+runtime ucrt: C:\msys64\ucrt64\bin
+  PASS c0  p0 Apple II                                1508ms
+  PASS c1  p1 Apple II Plus                           1402ms
+  PASS c2  p2 Apple IIe                               1345ms
+  PASS c3  p3 Apple IIe Enhanced                      1349ms
+  PASS c4  p3 Apple IIe Enhanced w/Mouse              1332ms
+  PASS c5  p3 Apple IIe Enhanced Dual Mockingboard    1325ms
+  PASS c6  p4 Apple IIe 65816 w/Mouse                 1349ms
+  PASS c7  p3 Apple IIe Enhanced PAL                  1339ms
+  PASS c8  p5 Apple IIgs                              1603ms
+  PASS c9  p5 Apple IIgs / Disk II                    1527ms
+  PASS c10 p5 Apple IIgs + A2GSPU                     1522ms
+  PASS c11 p5 Apple IIgs + Uthernet II                1527ms
+  PASS c12 p5 Apple IIgs ROM 4 Mark Twain             1595ms
+  PASS c13 p5 Apple IIgs ROM 3 Tenspeed               1619ms
+  PASS c14 p3 Apple IIe Enhanced + Thunderclock       1405ms
+  PASS c15 p5 Apple IIgs + A2GSPU + Mouse             1544ms
+  PASS c16 p6 Apple IIgs (ROM 3), upstream platform   1677ms
+report: C:\Users\X99\AppData\Local\Temp\a2rail-personalities\personality-results.json
+ALL GREEN -- 17 of 17 built-in Apple II machine personalities

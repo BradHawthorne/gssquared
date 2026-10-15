@@ -1,0 +1,5 @@
+OBS IRQ: pending=00000000  edges_recorded=0
+OBS HANDLE: register->bound=1 release->freed=1 (expect 1/1)
+GSDIAG: status=OK rc=0 gate=none gsos_err=$0000 brk=0 scb=640 hash=6D9886E3B3EE0383 warnings=0 cycles=594890 insns=222710 stores=13068 run=1B83AC4DB8C39F65
+=== SPIKE COMPLETE ===
+ModemDevice: shutting down

@@ -1,0 +1,5 @@
+IIgs init_video_addresses()
+Creating texture 910 x 263 16862004
+Allocating 107520 bytes for [1][560] x 192
+SecondSight SetTextFont: 00 (Apple II ROM ($00))
+stack init: 0129

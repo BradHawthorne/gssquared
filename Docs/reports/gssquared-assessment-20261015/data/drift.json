@@ -1,0 +1,1351 @@
+[
+ {
+  "sha": "d5b63752",
+  "date": "2026-09-17",
+  "subject": "implement ss 80x50 and 132x60 text modes.",
+  "merge": false,
+  "files": [
+   "Docs/SecondSight_GPU.md",
+   "Docs/SecondSight_GPUText.md",
+   "Docs/SecondSight_Text.md",
+   "apps/ssgputexttest/main.cpp",
+   "src/devices/secondsight/secondsight.hpp",
+   "src/devices/secondsight/ss_host_text.cpp",
+   "src/devices/secondsight/ss_host_text.hpp",
+   "src/devices/secondsight/vga_render_text_8x8.cpp",
+   "src/devices/secondsight/vga_render_text_8x8.hpp",
+   "src/devices/secondsight/vga_render_text_8x8_present.cpp",
+   "src/devices/secondsight/vga_render_text_8x8_present.hpp"
+  ],
+  "stat": "11 files changed, 105 insertions(+), 25 deletions(-)",
+  "overlap": [
+   "src/devices/secondsight/secondsight.hpp"
+  ]
+ },
+ {
+  "sha": "d40d5d5f",
+  "date": "2026-09-17",
+  "subject": "Merge branch 'ssversion20'",
+  "merge": true,
+  "files": [],
+  "stat": "merge",
+  "overlap": []
+ },
+ {
+  "sha": "cb8ff63a",
+  "date": "2026-09-17",
+  "subject": "support .hda bluescsi images",
+  "merge": false,
+  "files": [
+   "CHANGELOG.md",
+   "Docs/Documentation.md",
+   "Docs/Emscripten.md",
+   "Docs/Storage.md",
+   "Docs/SystemConfigTOML.md",
+   "apps/diskid/main.cpp",
+   "src/ui/EditSystem.cpp",
+   "src/ui/OSD.cpp",
+   "src/util/media.cpp"
+  ],
+  "stat": "9 files changed, 42 insertions(+), 13 deletions(-)",
+  "overlap": [
+   "Docs/Documentation.md",
+   "Docs/SystemConfigTOML.md",
+   "src/util/media.cpp"
+  ]
+ },
+ {
+  "sha": "d9b67a89",
+  "date": "2026-09-18",
+  "subject": "WIP to auto-create woz disk tracks if they don't exist.",
+  "merge": false,
+  "files": [
+   "src/devices/floppy/Floppy525_woz.cpp",
+   "src/devices/floppy/Floppy525_woz.hpp"
+  ],
+  "stat": "2 files changed, 43 insertions(+)",
+  "overlap": [
+   "src/devices/floppy/Floppy525_woz.cpp",
+   "src/devices/floppy/Floppy525_woz.hpp"
+  ]
+ },
+ {
+  "sha": "023b657b",
+  "date": "2026-09-18",
+  "subject": "add \"new disk images\" feature",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/BlankFloppy.md",
+   "Docs/Menus.md",
+   "Docs/Storage.md",
+   "Docs/index.md",
+   "apps/wozutil/main.cpp",
+   "assets/floppyimages/blank-35-prodos.woz",
+   "assets/floppyimages/blank-525-dos33.woz",
+   "assets/floppyimages/blank-525-prodos.woz",
+   "assets/floppyimages/blank-525-unformatted.woz",
+   "src/gs2.cpp",
+   "src/platform-specific/linux/menu.cpp",
+   "src/platform-specific/macos/gs2_save_dialog.hpp",
+   "src/platform-specific/macos/gs2_save_dialog.mm",
+   "src/platform-specific/macos/menu.mm",
+   "src/platform-specific/menu.h",
+   "src/platform-specific/windows/menu.cpp",
+   "src/util/BlankDisk.cpp",
+   "src/util/BlankDisk.hpp",
+   "src/util/MenuInterface.cpp",
+   "src/util/MenuInterface.h",
+   "src/util/SystemSettings.cpp",
+   "src/util/SystemSettings.hpp"
+  ],
+  "stat": "23 files changed, 692 insertions(+), 56 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "Docs/index.md",
+   "apps/wozutil/main.cpp",
+   "src/gs2.cpp",
+   "src/util/SystemSettings.cpp",
+   "src/util/SystemSettings.hpp"
+  ]
+ },
+ {
+  "sha": "cfcae6db",
+  "date": "2026-09-18",
+  "subject": "Merge branch 'issue117'",
+  "merge": true,
+  "files": [],
+  "stat": "merge",
+  "overlap": []
+ },
+ {
+  "sha": "87b115ab",
+  "date": "2026-09-18",
+  "subject": "docs update",
+  "merge": false,
+  "files": [
+   "Docs/BlankFloppy.md",
+   "Docs/BlankFloppySpec.md",
+   "Docs/Storage.md",
+   "Docs/UserInterface.md",
+   "Docs/index.md"
+  ],
+  "stat": "5 files changed, 229 insertions(+), 198 deletions(-)",
+  "overlap": [
+   "Docs/index.md"
+  ]
+ },
+ {
+  "sha": "4a14e989",
+  "date": "2026-09-18",
+  "subject": "Add user systems path and BRAM handling improvements",
+  "merge": false,
+  "files": [
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/CyreneMapping.md",
+   "Docs/Select.md",
+   "Docs/SystemConfigTOML.md",
+   "apps/systemconfigtest/main.cpp",
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices/rtc/RTC.hpp",
+   "src/devices/rtc/rtc_pram.cpp",
+   "src/gs2.cpp",
+   "src/paths.cpp",
+   "src/paths.hpp",
+   "src/systemconfig.cpp",
+   "src/systemconfig.hpp",
+   "src/ui/EditSystem.cpp",
+   "src/util/ConfigDraft.cpp",
+   "src/util/ConfigDraft.hpp",
+   "src/util/SystemConfig.cpp",
+   "src/util/SystemConfig.hpp",
+   "src/util/SystemSettings.cpp",
+   "src/util/SystemSettings.hpp"
+  ],
+  "stat": "22 files changed, 840 insertions(+), 88 deletions(-)",
+  "overlap": [
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/Select.md",
+   "Docs/SystemConfigTOML.md",
+   "apps/systemconfigtest/main.cpp",
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices/rtc/RTC.hpp",
+   "src/devices/rtc/rtc_pram.cpp",
+   "src/gs2.cpp",
+   "src/systemconfig.cpp",
+   "src/systemconfig.hpp",
+   "src/util/SystemConfig.cpp",
+   "src/util/SystemSettings.cpp",
+   "src/util/SystemSettings.hpp"
+  ]
+ },
+ {
+  "sha": "9dbe1138",
+  "date": "2026-09-19",
+  "subject": "Add display monitor and clock mode configuration",
+  "merge": false,
+  "files": [
+   "Docs/ConfigFiles.md",
+   "Docs/SystemConfigTOML.md",
+   "apps/systemconfigtest/fixtures/Choplifter Settings.txt",
+   "apps/systemconfigtest/fixtures/SpeedDisplay.gs2",
+   "apps/systemconfigtest/fixtures/bad_display.gs2",
+   "apps/systemconfigtest/fixtures/bad_speed.gs2",
+   "apps/systemconfigtest/main.cpp",
+   "src/NClock.hpp",
+   "src/gs2.cpp",
+   "src/systemconfig.hpp",
+   "src/ui/EditSystem.cpp",
+   "src/util/ConfigDraft.cpp",
+   "src/util/SettingsConfig.cpp",
+   "src/util/SystemConfig.cpp",
+   "src/util/SystemConfig.hpp"
+  ],
+  "stat": "15 files changed, 347 insertions(+), 14 deletions(-)",
+  "overlap": [
+   "Docs/ConfigFiles.md",
+   "Docs/SystemConfigTOML.md",
+   "apps/systemconfigtest/main.cpp",
+   "src/NClock.hpp",
+   "src/gs2.cpp",
+   "src/systemconfig.hpp",
+   "src/util/SettingsConfig.cpp",
+   "src/util/SystemConfig.cpp"
+  ]
+ },
+ {
+  "sha": "ae574e1b",
+  "date": "2026-09-19",
+  "subject": "fix null pointer dereference if there is no audio device",
+  "merge": false,
+  "files": [
+   "src/devices/diskii/diskii_controller.hpp",
+   "src/devices/iwm/IWM2.hpp"
+  ],
+  "stat": "2 files changed, 29 insertions(+), 21 deletions(-)",
+  "overlap": [
+   "src/devices/diskii/diskii_controller.hpp",
+   "src/devices/iwm/IWM2.hpp"
+  ]
+ },
+ {
+  "sha": "293e0fc1",
+  "date": "2026-09-19",
+  "subject": "add windows build info",
+  "merge": false,
+  "files": [
+   "AGENTS.md"
+  ],
+  "stat": "1 file changed, 29 insertions(+), 7 deletions(-)",
+  "overlap": [
+   "AGENTS.md"
+  ]
+ },
+ {
+  "sha": "86527159",
+  "date": "2026-09-19",
+  "subject": "implement correct 6502 RESET sequence; move vector fetch to handler; model it like BRK; read-only stack walk; initialize SP to 00 on power-on only. fix issue #148",
+  "merge": false,
+  "files": [
+   "src/cpu.cpp",
+   "src/cpu.hpp",
+   "src/cpus/base_6502.cpp"
+  ],
+  "stat": "3 files changed, 26 insertions(+), 4 deletions(-)",
+  "overlap": [
+   "src/cpu.cpp",
+   "src/cpus/base_6502.cpp"
+  ]
+ },
+ {
+  "sha": "0980f9da",
+  "date": "2026-09-19",
+  "subject": "Merge branch 'main' of github.com:jawaidbazyar2/gssquared",
+  "merge": true,
+  "files": [],
+  "stat": "merge",
+  "overlap": []
+ },
+ {
+  "sha": "3947c859",
+  "date": "2026-09-19",
+  "subject": "remove noise",
+  "merge": false,
+  "files": [
+   "src/cpus/base_6502.cpp"
+  ],
+  "stat": "1 file changed, 1 insertion(+), 1 deletion(-)",
+  "overlap": [
+   "src/cpus/base_6502.cpp"
+  ]
+ },
+ {
+  "sha": "58751766",
+  "date": "2026-09-19",
+  "subject": "start supporting DCD in serial stack; improve modem handling of hayes AT cmds (new vars, ccmds, etc.); tested: 8530, modem, mac.",
+  "merge": false,
+  "files": [
+   "Docs/Cards_SuperSerial.md",
+   "Docs/Documentation.md",
+   "Docs/SCC8530_Serial.md",
+   "Docs/SSC.md",
+   "Docs/SerialConnections.md",
+   "Docs/SerialPortSpec.md",
+   "Docs/Serial_Modem.md",
+   "Docs/TodoList.md",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/scc8530/scc8530.cpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/devices/ssc/ssc.cpp",
+   "src/serial_devices/SerialDevice.hpp",
+   "src/serial_devices/host/HostSerial.hpp",
+   "src/serial_devices/host/HostSerial_linux.cpp",
+   "src/serial_devices/host/HostSerial_macos.cpp",
+   "src/serial_devices/host/HostSerial_stub.cpp",
+   "src/serial_devices/host/HostSerial_win32.cpp",
+   "src/serial_devices/modem/ModemDevice.hpp",
+   "src/serial_devices/serial/SerialPortDevice.hpp",
+   "src/ui/OSD.cpp",
+   "src/util/Connections.cpp",
+   "src/util/Connections.hpp"
+  ],
+  "stat": "23 files changed, 684 insertions(+), 112 deletions(-)",
+  "overlap": [
+   "Docs/Documentation.md",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/scc8530/scc8530.cpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/devices/ssc/ssc.cpp",
+   "src/serial_devices/SerialDevice.hpp",
+   "src/serial_devices/modem/ModemDevice.hpp",
+   "src/serial_devices/serial/SerialPortDevice.hpp",
+   "src/util/Connections.cpp",
+   "src/util/Connections.hpp"
+  ]
+ },
+ {
+  "sha": "63f1717c",
+  "date": "2026-09-19",
+  "subject": "Enhance modem and serial device handling",
+  "merge": false,
+  "files": [
+   "Docs/SerialPortSpec.md",
+   "Docs/Serial_Modem.md",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/serial_devices/host/HostSerial_macos.cpp",
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ],
+  "stat": "6 files changed, 142 insertions(+), 20 deletions(-)",
+  "overlap": [
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ]
+ },
+ {
+  "sha": "7cc19e0b",
+  "date": "2026-09-19",
+  "subject": "support inbound telnet connections on port 6502",
+  "merge": false,
+  "files": [
+   "Docs/SerialConnections.md",
+   "Docs/SerialPortSpec.md",
+   "Docs/Serial_Modem.md",
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ],
+  "stat": "4 files changed, 210 insertions(+), 16 deletions(-)",
+  "overlap": [
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ]
+ },
+ {
+  "sha": "6824aab5",
+  "date": "2026-09-19",
+  "subject": "add support for ATVn and ATS0=n to get GBBS working on inbound telnet",
+  "merge": false,
+  "files": [
+   "Docs/SerialPortSpec.md",
+   "Docs/Serial_Modem.md",
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ],
+  "stat": "3 files changed, 120 insertions(+), 18 deletions(-)",
+  "overlap": [
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ]
+ },
+ {
+  "sha": "38334fee",
+  "date": "2026-09-20",
+  "subject": "fix telnet protocol issues for inbound sessions",
+  "merge": false,
+  "files": [
+   "Docs/SerialPortSpec.md",
+   "Docs/Serial_Modem.md",
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ],
+  "stat": "3 files changed, 140 insertions(+), 38 deletions(-)",
+  "overlap": [
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ]
+ },
+ {
+  "sha": "9d44c167",
+  "date": "2026-09-20",
+  "subject": "spec",
+  "merge": false,
+  "files": [
+   "Docs/ClockTypes.md"
+  ],
+  "stat": "1 file changed, 540 insertions(+)",
+  "overlap": []
+ },
+ {
+  "sha": "7634b151",
+  "date": "2026-09-20",
+  "subject": "fix GSIRC intro ensoniq playback bug we pulled in from MAME reference in last push. (same issue affects mame,crossrunner,kegs)",
+  "merge": false,
+  "files": [
+   "Docs/DevelopLog.md",
+   "src/devices/es5503/soundglu.cpp",
+   "src/devices/es5503/soundglu.hpp"
+  ],
+  "stat": "3 files changed, 53 insertions(+), 1 deletion(-)",
+  "overlap": [
+   "Docs/DevelopLog.md",
+   "src/devices/es5503/soundglu.cpp",
+   "src/devices/es5503/soundglu.hpp"
+  ]
+ },
+ {
+  "sha": "de39c18b",
+  "date": "2026-09-20",
+  "subject": "implement color-band gear icon for .gs2 files; do filetype association for them; handle double-clicking;",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/ProtocolHandlers.md",
+   "Docs/Roadmap.md",
+   "Docs/Select.md",
+   "Docs/index.md",
+   "assets/Info.plist.in",
+   "assets/img/appleIIlogo.png",
+   "assets/img/appleIIlogo.xcf",
+   "assets/img/build.sh",
+   "assets/img/gs2-config.icns",
+   "src/gs2.cpp",
+   "src/ui/LaunchConfigModal.cpp",
+   "src/ui/LaunchConfigModal.hpp",
+   "src/ui/OSD.cpp",
+   "src/ui/OSD.hpp"
+  ],
+  "stat": "17 files changed, 439 insertions(+), 40 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/Select.md",
+   "Docs/index.md",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "b59054eb",
+  "date": "2026-09-20",
+  "subject": "gs2 icon and associations for windows / linux also.",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/DevelopLog.md",
+   "Docs/ProtocolHandlers.md",
+   "Docs/index.md",
+   "RPMS/SPECS/gssquared.spec",
+   "assets/GSSquared.desktop",
+   "assets/img/gs2-config.ico",
+   "assets/img/gs2-config.iconset/icon_128x128.png",
+   "assets/img/gs2-config.iconset/icon_128x128@2x.png",
+   "assets/img/gs2-config.iconset/icon_16x16.png",
+   "assets/img/gs2-config.iconset/icon_16x16@2x.png",
+   "assets/img/gs2-config.iconset/icon_256x256.png",
+   "assets/img/gs2-config.iconset/icon_256x256@2x.png",
+   "assets/img/gs2-config.iconset/icon_32x32.png",
+   "assets/img/gs2-config.iconset/icon_32x32@2x.png",
+   "assets/img/gs2-config.iconset/icon_48x48.png",
+   "assets/img/gs2-config.iconset/icon_512x512.png",
+   "assets/img/gs2-config.iconset/icon_512x512@2x.png",
+   "assets/img/gs2.icns",
+   "assets/img/gs2.ico",
+   "assets/mime/gssquared.xml",
+   "assets/windows/gssquared.rc.in",
+   "src/FileAssociations.cpp",
+   "src/FileAssociations.hpp",
+   "src/gs2.cpp"
+  ],
+  "stat": "25 files changed, 397 insertions(+), 4 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "Docs/DevelopLog.md",
+   "Docs/index.md",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "de0ceea7",
+  "date": "2026-09-20",
+  "subject": "change gs2 doc icon to something colorful and cool",
+  "merge": false,
+  "files": [
+   "assets/img/GS2TextureAtlas.xcf",
+   "assets/img/atlas.png",
+   "src/ui/MainAtlas.cpp",
+   "src/ui/MainAtlas.hpp",
+   "src/ui/SystemButton.cpp"
+  ],
+  "stat": "5 files changed, 12 insertions(+), 10 deletions(-)",
+  "overlap": []
+ },
+ {
+  "sha": "318ecda6",
+  "date": "2026-09-20",
+  "subject": "add 32MB formatted prodos volume option",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/BlankFloppy.md",
+   "Docs/BlankFloppySpec.md",
+   "Docs/Menus.md",
+   "Docs/Storage.md",
+   "assets/floppyimages/prodos-boot.bin",
+   "src/gs2.cpp",
+   "src/platform-specific/linux/menu.cpp",
+   "src/platform-specific/macos/menu.mm",
+   "src/platform-specific/menu.h",
+   "src/platform-specific/windows/menu.cpp",
+   "src/util/BlankDisk.cpp",
+   "src/util/BlankDisk.hpp",
+   "src/util/ProDOSFormat.cpp",
+   "src/util/ProDOSFormat.hpp"
+  ],
+  "stat": "15 files changed, 306 insertions(+), 16 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "27b88218",
+  "date": "2026-09-20",
+  "subject": "add check for updates feature in combination with gssquared-web",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/DevelopLog.md",
+   "src/platform-specific/linux/menu.cpp",
+   "src/platform-specific/macos/menu.mm",
+   "src/platform-specific/windows/menu.cpp",
+   "src/util/CheckForUpdates.cpp",
+   "src/util/CheckForUpdates.hpp"
+  ],
+  "stat": "7 files changed, 104 insertions(+), 2 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "Docs/DevelopLog.md"
+  ]
+ },
+ {
+  "sha": "5e8243fa",
+  "date": "2026-09-21",
+  "subject": "get Emscripten build over the finish line; deploy scripts to push to gssquared.net;",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/DevelopLog.md",
+   "Docs/Emscripten.md",
+   "assets/web/live.htaccess",
+   "assets/web/shell.html",
+   "scripts/deploy-web.sh",
+   "src/debugger/DebugProtocolServer.cpp",
+   "src/debugger/debugwindow.cpp",
+   "src/gs2.cpp",
+   "src/ui/EditSystem.cpp",
+   "src/ui/EditSystem.hpp",
+   "src/ui/SelectSystem.cpp",
+   "src/ui/SelectSystem.hpp",
+   "src/videosystem.cpp"
+  ],
+  "stat": "14 files changed, 425 insertions(+), 49 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "Docs/DevelopLog.md",
+   "src/debugger/DebugProtocolServer.cpp",
+   "src/debugger/debugwindow.cpp",
+   "src/gs2.cpp",
+   "src/videosystem.cpp"
+  ]
+ },
+ {
+  "sha": "4e3d5911",
+  "date": "2026-09-21",
+  "subject": "support 57600 modem response code",
+  "merge": false,
+  "files": [
+   "Docs/Serial_Modem.md",
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ],
+  "stat": "2 files changed, 3 insertions(+), 2 deletions(-)",
+  "overlap": [
+   "src/serial_devices/modem/ModemDevice.hpp"
+  ]
+ },
+ {
+  "sha": "60049b84",
+  "date": "2026-09-22",
+  "subject": "Pace the web build to the Apple II frame instead of display vsync.",
+  "merge": false,
+  "files": [
+   "Docs/DevelopLog.md",
+   "src/gs2.cpp",
+   "src/platform-specific/linux/menu.cpp",
+   "src/platform-specific/menu.h",
+   "src/ui/EditSystem.cpp",
+   "src/ui/OSD.cpp",
+   "src/ui/SelectSystem.cpp",
+   "src/videosystem.cpp",
+   "src/videosystem.hpp"
+  ],
+  "stat": "9 files changed, 202 insertions(+), 48 deletions(-)",
+  "overlap": [
+   "Docs/DevelopLog.md",
+   "src/gs2.cpp",
+   "src/videosystem.cpp",
+   "src/videosystem.hpp"
+  ]
+ },
+ {
+  "sha": "84b7d420",
+  "date": "2026-09-22",
+  "subject": "emscripten notes",
+  "merge": false,
+  "files": [
+   "Docs/DevelopLog.md"
+  ],
+  "stat": "1 file changed, 2 insertions(+), 2 deletions(-)",
+  "overlap": [
+   "Docs/DevelopLog.md"
+  ]
+ },
+ {
+  "sha": "2e4b2e5e",
+  "date": "2026-09-22",
+  "subject": "fix menu rendering for emscripten build (and maybe linux?) on high dpi displays",
+  "merge": false,
+  "files": [
+   "Docs/DevelopLog.md",
+   "src/imgui/backends/imgui_impl_sdlrenderer3.cpp"
+  ],
+  "stat": "2 files changed, 21 insertions(+), 6 deletions(-)",
+  "overlap": [
+   "Docs/DevelopLog.md"
+  ]
+ },
+ {
+  "sha": "599db0ae",
+  "date": "2026-09-23",
+  "subject": "support both legacy and modern glyph locations",
+  "merge": false,
+  "files": [
+   "src/devices/keyboard/keyboard.cpp"
+  ],
+  "stat": "1 file changed, 4 insertions(+)",
+  "overlap": [
+   "src/devices/keyboard/keyboard.cpp"
+  ]
+ },
+ {
+  "sha": "15073dbe",
+  "date": "2026-09-23",
+  "subject": "big documentation pass",
+  "merge": false,
+  "files": [
+   "Docs/BlankFloppy.md",
+   "Docs/Cards_Clock.md",
+   "Docs/Cards_Mockingboard.md",
+   "Docs/Cards_Parallel.md",
+   "Docs/Cards_SecondSight.md",
+   "Docs/Cards_UthernetII.md",
+   "Docs/Cards_VIDHD.md",
+   "Docs/Cards_Videx.md",
+   "Docs/CommandLine.md",
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/DevelopLog.md",
+   "Docs/Displays.md",
+   "Docs/Documentation.md",
+   "Docs/Features.md",
+   "Docs/HostFST.md",
+   "Docs/Joysticks.md",
+   "Docs/KeyboardShortcuts.md",
+   "Docs/Menus.md",
+   "Docs/Mouse.md",
+   "Docs/OSD.md",
+   "Docs/ProtocolHandlers.md",
+   "Docs/Select.md",
+   "Docs/SerialConnections.md",
+   "Docs/Serial_Modem.md",
+   "Docs/Storage.md",
+   "Docs/SystemConfigTOML.md",
+   "Docs/UsingTheDebugger.md",
+   "Docs/Web.md",
+   "Docs/arqyv-gs2pack.md",
+   "Docs/index.md",
+   "README.md",
+   "mkdocs.yml"
+  ],
+  "stat": "33 files changed, 1296 insertions(+), 117 deletions(-)",
+  "overlap": [
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/DevelopLog.md",
+   "Docs/Documentation.md",
+   "Docs/Select.md",
+   "Docs/SystemConfigTOML.md",
+   "Docs/index.md",
+   "README.md",
+   "mkdocs.yml"
+  ]
+ },
+ {
+  "sha": "bfbced8c",
+  "date": "2026-09-23",
+  "subject": "restyle the speed and side hud buttons",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "src/platform-specific/linux/menu.cpp",
+   "src/ui/ConfigSelectors.cpp",
+   "src/ui/FaceButton.cpp",
+   "src/ui/FaceButton.hpp",
+   "src/ui/HoverControls.cpp",
+   "src/ui/HoverControls.hpp",
+   "src/ui/SpeedSelect.cpp"
+  ],
+  "stat": "8 files changed, 273 insertions(+), 89 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt"
+  ]
+ },
+ {
+  "sha": "c2f4efda",
+  "date": "2026-09-23",
+  "subject": "shrink button, display host folder",
+  "merge": false,
+  "files": [
+   "src/ui/OSD.cpp"
+  ],
+  "stat": "1 file changed, 62 insertions(+), 2 deletions(-)",
+  "overlap": []
+ },
+ {
+  "sha": "ad1c09f8",
+  "date": "2026-09-23",
+  "subject": "docs",
+  "merge": false,
+  "files": [
+   "Docs/HostFST.md"
+  ],
+  "stat": "1 file changed, 2 insertions(+), 2 deletions(-)",
+  "overlap": []
+ },
+ {
+  "sha": "59d7823f",
+  "date": "2026-09-23",
+  "subject": "add linux motherboard serial port names",
+  "merge": false,
+  "files": [
+   "CHANGELOG.md",
+   "Docs/SerialConnections.md",
+   "Docs/SystemConfigTOML.md",
+   "src/serial_devices/host/HostSerial_linux.cpp"
+  ],
+  "stat": "4 files changed, 51 insertions(+), 5 deletions(-)",
+  "overlap": [
+   "Docs/SystemConfigTOML.md"
+  ]
+ },
+ {
+  "sha": "8ea38312",
+  "date": "2026-09-23",
+  "subject": "notes",
+  "merge": false,
+  "files": [
+   "Docs/Clipboard.md",
+   "Docs/Serial_Modem.md"
+  ],
+  "stat": "2 files changed, 117 insertions(+), 3 deletions(-)",
+  "overlap": []
+ },
+ {
+  "sha": "ab3d782b",
+  "date": "2026-09-23",
+  "subject": "fix emscripten open file dialog on Safari. lots of work just to get around Safari nonsense.",
+  "merge": false,
+  "files": [
+   "src/gs2.cpp",
+   "src/platform-specific/emscripten/web_file_dialog.cpp",
+   "src/platform-specific/emscripten/web_file_dialog.hpp",
+   "src/platform-specific/linux/menu.cpp",
+   "src/platform-specific/menu.h"
+  ],
+  "stat": "5 files changed, 216 insertions(+), 21 deletions(-)",
+  "overlap": [
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "c7046029",
+  "date": "2026-09-24",
+  "subject": "create oa-ca mapping settings",
+  "merge": false,
+  "files": [
+   "Docs/Emscripten.md",
+   "Docs/KeyboardShortcuts.md",
+   "Docs/Menus.md",
+   "Docs/Roadmap.md",
+   "assets/web/live.htaccess",
+   "assets/web/serve.py",
+   "assets/web/shell.html",
+   "src/devices/adb/ADB_Keyboard.hpp",
+   "src/devices/game/gamecontroller.cpp",
+   "src/platform-specific/linux/menu.cpp",
+   "src/platform-specific/macos/menu.mm",
+   "src/platform-specific/menu.h",
+   "src/platform-specific/windows/menu.cpp",
+   "src/util/MenuInterface.cpp",
+   "src/util/MenuInterface.h",
+   "src/util/SystemSettings.cpp",
+   "src/util/SystemSettings.hpp",
+   "src/util/applekeys.hpp"
+  ],
+  "stat": "18 files changed, 318 insertions(+), 71 deletions(-)",
+  "overlap": [
+   "src/devices/adb/ADB_Keyboard.hpp",
+   "src/devices/game/gamecontroller.cpp",
+   "src/util/SystemSettings.cpp",
+   "src/util/SystemSettings.hpp"
+  ]
+ },
+ {
+  "sha": "b22a2345",
+  "date": "2026-09-24",
+  "subject": "fix gh issue #191",
+  "merge": false,
+  "files": [
+   "src/devices/adb/keygloo_mouse_sync.hpp"
+  ],
+  "stat": "1 file changed, 8 insertions(+)",
+  "overlap": [
+   "src/devices/adb/keygloo_mouse_sync.hpp"
+  ]
+ },
+ {
+  "sha": "49ca2a34",
+  "date": "2026-09-24",
+  "subject": "start to refactor clocking - move eventtimers into nclock.",
+  "merge": false,
+  "files": [
+   "Docs/ClockTypes.md",
+   "Docs/TodoList.md",
+   "apps/mbtest/n6522.cpp",
+   "apps/mbtest/t6522b.cpp",
+   "apps/mbtest/w6522.cpp",
+   "src/NClock.hpp",
+   "src/computer.cpp",
+   "src/gs2.cpp",
+   "src/util/ClockRail.hpp",
+   "src/util/EventTimer.cpp",
+   "src/util/EventTimer.hpp"
+  ],
+  "stat": "11 files changed, 266 insertions(+), 106 deletions(-)",
+  "overlap": [
+   "apps/mbtest/w6522.cpp",
+   "src/NClock.hpp",
+   "src/computer.cpp",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "84f172ee",
+  "date": "2026-09-24",
+  "subject": "implement clock refactor phase 2",
+  "merge": false,
+  "files": [
+   "apps/mbtest/CMakeLists.txt",
+   "apps/mbtest/n6522.cpp",
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices.cpp",
+   "src/devices/Device.cpp",
+   "src/devices/applemouseii/mouse.cpp",
+   "src/devices/applemouseii/mouse.hpp",
+   "src/devices/applemouseiii/applemouseiii.cpp",
+   "src/devices/applemouseiii/applemouseiii.hpp",
+   "src/devices/diskii/diskii_controller.hpp",
+   "src/devices/diskii/ndiskii_woz.cpp",
+   "src/devices/floppy/Floppy35_woz.cpp",
+   "src/devices/floppy/Floppy35_woz.hpp",
+   "src/devices/floppy/Floppy525_woz.cpp",
+   "src/devices/floppy/Floppy525_woz.hpp",
+   "src/devices/iwm/iwm_device.cpp",
+   "src/devices/mockingboard/AY8910-2.hpp",
+   "src/devices/mockingboard/AY8910.hpp",
+   "src/devices/mockingboard/N6522.hpp",
+   "src/devices/mockingboard/mb.cpp",
+   "src/devices/mockingboard/mb.hpp",
+   "src/devices/mockingboard/mb2.cpp",
+   "src/devices/mockingboard/mb2.hpp",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/scc8530/scc8530.cpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/devices/ssc/ssc.cpp",
+   "src/devices/thunderclock_plus/thunderclockplus.cpp",
+   "src/devices/thunderclock_plus/thunderclockplus.hpp",
+   "src/display/display.cpp",
+   "src/gs2.cpp"
+  ],
+  "stat": "32 files changed, 109 insertions(+), 1862 deletions(-)",
+  "overlap": [
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices.cpp",
+   "src/devices/applemouseii/mouse.cpp",
+   "src/devices/applemouseii/mouse.hpp",
+   "src/devices/applemouseiii/applemouseiii.cpp",
+   "src/devices/applemouseiii/applemouseiii.hpp",
+   "src/devices/diskii/diskii_controller.hpp",
+   "src/devices/diskii/ndiskii_woz.cpp",
+   "src/devices/floppy/Floppy35_woz.cpp",
+   "src/devices/floppy/Floppy35_woz.hpp",
+   "src/devices/floppy/Floppy525_woz.cpp",
+   "src/devices/floppy/Floppy525_woz.hpp",
+   "src/devices/iwm/iwm_device.cpp",
+   "src/devices/mockingboard/AY8910-2.hpp",
+   "src/devices/mockingboard/mb2.cpp",
+   "src/devices/mockingboard/mb2.hpp",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/scc8530/scc8530.cpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/devices/ssc/ssc.cpp",
+   "src/devices/thunderclock_plus/thunderclockplus.cpp",
+   "src/devices/thunderclock_plus/thunderclockplus.hpp",
+   "src/display/display.cpp",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "271b254d",
+  "date": "2026-09-24",
+  "subject": "PHASE 3 of clock domain refactor.",
+  "merge": false,
+  "files": [
+   "src/NClock.hpp",
+   "src/devices/applemouseii/mouse.cpp",
+   "src/devices/applemouseii/mouse.hpp",
+   "src/devices/applemouseiii/applemouseiii.cpp",
+   "src/devices/applemouseiii/applemouseiii.hpp",
+   "src/devices/floppy/Floppy35_woz.cpp",
+   "src/devices/floppy/Floppy35_woz.hpp",
+   "src/devices/floppy/Floppy525_woz.cpp",
+   "src/devices/floppy/Floppy525_woz.hpp",
+   "src/devices/iwm/IWM2.hpp",
+   "src/devices/iwm/iwm_device.cpp",
+   "src/devices/mockingboard/N6522.hpp",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/devices/thunderclock_plus/thunderclockplus.cpp",
+   "src/display/display.cpp",
+   "src/util/ClockRail.hpp"
+  ],
+  "stat": "17 files changed, 113 insertions(+), 73 deletions(-)",
+  "overlap": [
+   "src/NClock.hpp",
+   "src/devices/applemouseii/mouse.cpp",
+   "src/devices/applemouseii/mouse.hpp",
+   "src/devices/applemouseiii/applemouseiii.cpp",
+   "src/devices/applemouseiii/applemouseiii.hpp",
+   "src/devices/floppy/Floppy35_woz.cpp",
+   "src/devices/floppy/Floppy35_woz.hpp",
+   "src/devices/floppy/Floppy525_woz.cpp",
+   "src/devices/floppy/Floppy525_woz.hpp",
+   "src/devices/iwm/IWM2.hpp",
+   "src/devices/iwm/iwm_device.cpp",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/ssc/MOS6551.hpp",
+   "src/devices/thunderclock_plus/thunderclockplus.cpp",
+   "src/display/display.cpp"
+  ]
+ },
+ {
+  "sha": "77f95eb8",
+  "date": "2026-09-24",
+  "subject": "put in the assert, but always with the right clock, bro",
+  "merge": false,
+  "files": [
+   "src/util/ClockRail.hpp"
+  ],
+  "stat": "1 file changed, 4 insertions(+)",
+  "overlap": []
+ },
+ {
+  "sha": "c30983d0",
+  "date": "2026-09-24",
+  "subject": "Merge branch 'clockdomainrefactor'",
+  "merge": true,
+  "files": [],
+  "stat": "merge",
+  "overlap": []
+ },
+ {
+  "sha": "87f56ac9",
+  "date": "2026-09-24",
+  "subject": "fix issue #194",
+  "merge": false,
+  "files": [
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/ui/SelectSystem.cpp"
+  ],
+  "stat": "3 files changed, 41 insertions(+), 25 deletions(-)",
+  "overlap": [
+   "src/computer.cpp",
+   "src/computer.hpp"
+  ]
+ },
+ {
+  "sha": "cc0a9eec",
+  "date": "2026-09-24",
+  "subject": "fix adbtest link",
+  "merge": false,
+  "files": [
+   "apps/adbtest/CMakeLists.txt"
+  ],
+  "stat": "1 file changed, 1 insertion(+)",
+  "overlap": []
+ },
+ {
+  "sha": "7eb29076",
+  "date": "2026-09-25",
+  "subject": "allow either gamepad face button to act as fire on joyport",
+  "merge": false,
+  "files": [
+   "Docs/Joysticks.md",
+   "src/devices/game/gamecontroller.cpp"
+  ],
+  "stat": "2 files changed, 4 insertions(+), 2 deletions(-)",
+  "overlap": [
+   "src/devices/game/gamecontroller.cpp"
+  ]
+ },
+ {
+  "sha": "0f774f48",
+  "date": "2026-09-25",
+  "subject": "correctly meter Rx based on baud rate",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "apps/uartbaudtest/CMakeLists.txt",
+   "apps/uartbaudtest/main.cpp",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/ssc/MOS6551.hpp"
+  ],
+  "stat": "5 files changed, 292 insertions(+), 6 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "src/devices/scc8530/Z85C30.hpp",
+   "src/devices/ssc/MOS6551.hpp"
+  ]
+ },
+ {
+  "sha": "fb6d074d",
+  "date": "2026-09-25",
+  "subject": "implement local .gs2pack: extract, mount, rewrite, Simple Browser",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/Features.md",
+   "Docs/ProtocolHandlers.md",
+   "Docs/arqyv-gs2pack.md",
+   "apps/gs2packtest/CMakeLists.txt",
+   "apps/gs2packtest/main.cpp",
+   "apps/systemconfigtest/main.cpp",
+   "assets/GSSquared.desktop",
+   "assets/Info.plist.in",
+   "assets/mime/gssquared.xml",
+   "src/FileAssociations.cpp",
+   "src/gs2.cpp",
+   "src/ui/OSD.cpp",
+   "src/ui/OSD.hpp",
+   "src/ui/PackDiskBrowser.cpp",
+   "src/ui/PackDiskBrowser.hpp",
+   "src/ui/SelectSystem.cpp",
+   "src/util/Gs2Pack.cpp",
+   "src/util/Gs2Pack.hpp",
+   "src/util/SystemConfig.cpp",
+   "src/util/SystemConfig.hpp"
+  ],
+  "stat": "21 files changed, 1453 insertions(+), 65 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "apps/systemconfigtest/main.cpp",
+   "src/gs2.cpp",
+   "src/util/SystemConfig.cpp"
+  ]
+ },
+ {
+  "sha": "13b8df52",
+  "date": "2026-09-26",
+  "subject": "web fetch of gs2pack files.",
+  "merge": false,
+  "files": [
+   ".vscode/launch.json",
+   "CMakeLists.txt",
+   "Docs/CommandLine.md",
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/Features.md",
+   "Docs/Gs2Pack.md",
+   "Docs/Menus.md",
+   "Docs/ProtocolHandlers.md",
+   "Docs/Select.md",
+   "Docs/Storage.md",
+   "Docs/arqyv-gs2pack.md",
+   "Docs/index.md",
+   "apps/gs2packtest/main.cpp",
+   "assets/GSSquared.desktop",
+   "assets/Info.plist.in",
+   "mkdocs.yml",
+   "src/FileAssociations.cpp",
+   "src/gs2.cpp",
+   "src/platform-specific/HttpsBody.cpp",
+   "src/platform-specific/HttpsBody.hpp",
+   "src/platform-specific/HttpsGet.hpp",
+   "src/platform-specific/linux/HttpsGet.cpp",
+   "src/platform-specific/macos/HttpsGet.mm",
+   "src/platform-specific/windows/HttpsGet.cpp",
+   "src/ui/OSD.cpp",
+   "src/ui/OSD.hpp",
+   "src/ui/PackFetchModal.cpp",
+   "src/ui/PackFetchModal.hpp",
+   "src/ui/SelectSystem.hpp",
+   "src/util/Gs2Url.cpp",
+   "src/util/Gs2Url.hpp"
+  ],
+  "stat": "32 files changed, 2262 insertions(+), 53 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "Docs/ConfigEditor.md",
+   "Docs/ConfigFiles.md",
+   "Docs/Select.md",
+   "Docs/index.md",
+   "mkdocs.yml",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "47684462",
+  "date": "2026-09-26",
+  "subject": "notes",
+  "merge": false,
+  "files": [
+   "Docs/Gs2Pack.md"
+  ],
+  "stat": "1 file changed, 20 insertions(+), 1 deletion(-)",
+  "overlap": []
+ },
+ {
+  "sha": "55441cb1",
+  "date": "2026-09-27",
+  "subject": "docs and todo update",
+  "merge": false,
+  "files": [
+   "Docs/Gs2Pack.md",
+   "Docs/Tests.md",
+   "Docs/TodoList.md",
+   "Docs/index.md",
+   "assets/web/shell.html",
+   "mkdocs.yml"
+  ],
+  "stat": "6 files changed, 101 insertions(+), 14 deletions(-)",
+  "overlap": [
+   "Docs/index.md",
+   "mkdocs.yml"
+  ]
+ },
+ {
+  "sha": "0f071cc3",
+  "date": "2026-09-27",
+  "subject": "implement writeback of arqyv cloud-storage images to arqyv on close, or using menu \"save to collection\".",
+  "merge": false,
+  "files": [
+   "Docs/Features.md",
+   "Docs/Menus.md",
+   "Docs/ProtocolHandlers.md",
+   "Docs/arqyv-gs2pack.md",
+   "Docs/index.md",
+   "apps/gs2packtest/main.cpp",
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices/rtc/rtc_pram.cpp",
+   "src/gs2.cpp",
+   "src/platform-specific/HttpsGet.hpp",
+   "src/platform-specific/linux/HttpsGet.cpp",
+   "src/platform-specific/linux/menu.cpp",
+   "src/platform-specific/macos/HttpsGet.mm",
+   "src/platform-specific/macos/menu.mm",
+   "src/platform-specific/menu.h",
+   "src/platform-specific/windows/HttpsGet.cpp",
+   "src/platform-specific/windows/menu.cpp",
+   "src/ui/PackFetchModal.cpp",
+   "src/util/Gs2Pack.cpp",
+   "src/util/Gs2Pack.hpp",
+   "src/util/Gs2Url.cpp",
+   "src/util/Gs2Url.hpp",
+   "src/util/MenuInterface.cpp",
+   "src/util/MenuInterface.h",
+   "src/util/mount.cpp",
+   "src/util/mount.hpp"
+  ],
+  "stat": "27 files changed, 1130 insertions(+), 62 deletions(-)",
+  "overlap": [
+   "Docs/index.md",
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices/rtc/rtc_pram.cpp",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "f7705be7",
+  "date": "2026-09-27",
+  "subject": "Merge branch 'gs2pack'",
+  "merge": true,
+  "files": [],
+  "stat": "merge",
+  "overlap": []
+ },
+ {
+  "sha": "1651597e",
+  "date": "2026-09-28",
+  "subject": "support arqyv served gs2pack files on emscripten",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt",
+   "Docs/Arqyv.md",
+   "Docs/Emscripten.md",
+   "Docs/Menus.md",
+   "Docs/ProtocolHandlers.md",
+   "Docs/Web.md",
+   "Docs/arqyv-gs2pack.md",
+   "Docs/index.md",
+   "assets/web/serve.py",
+   "assets/web/shell.html",
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices/rtc/rtc_pram.cpp",
+   "src/gs2.cpp",
+   "src/platform-specific/emscripten/web_collection_put.cpp",
+   "src/platform-specific/emscripten/web_collection_put.hpp",
+   "src/platform-specific/linux/menu.cpp",
+   "src/util/Gs2Url.cpp"
+  ],
+  "stat": "18 files changed, 941 insertions(+), 74 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt",
+   "Docs/index.md",
+   "src/computer.cpp",
+   "src/computer.hpp",
+   "src/devices/rtc/rtc_pram.cpp",
+   "src/gs2.cpp"
+  ]
+ },
+ {
+  "sha": "6047e501",
+  "date": "2026-09-28",
+  "subject": "tweak to make arqyv launch work when we're running in msys2 mode",
+  "merge": false,
+  "files": [
+   "CMakeLists.txt"
+  ],
+  "stat": "1 file changed, 54 insertions(+), 12 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt"
+  ]
+ },
+ {
+  "sha": "dfa61f38",
+  "date": "2026-09-29",
+  "subject": "tweak linux build requirements",
+  "merge": false,
+  "files": [
+   "README.md"
+  ],
+  "stat": "1 file changed, 1 insertion(+)",
+  "overlap": [
+   "README.md"
+  ]
+ },
+ {
+  "sha": "aff788b4",
+  "date": "2026-09-28",
+  "subject": "Merge branch 'main' of github.com:jawaidbazyar2/gssquared",
+  "merge": true,
+  "files": [],
+  "stat": "merge",
+  "overlap": []
+ },
+ {
+  "sha": "79bbed99",
+  "date": "2026-09-29",
+  "subject": "notes, version, changelog",
+  "merge": false,
+  "files": [
+   "CHANGELOG.md",
+   "CMakeLists.txt",
+   "Docs/ReleaseNotes-v1.0.0.md"
+  ],
+  "stat": "3 files changed, 134 insertions(+), 8 deletions(-)",
+  "overlap": [
+   "CMakeLists.txt"
+  ]
+ },
+ {
+  "sha": "643e6c21",
+  "date": "2026-09-30",
+  "subject": "change some thread/serial device startup order to fix windows listen problem #196",
+  "merge": false,
+  "files": [
+   "apps/uartbaudtest/main.cpp",
+   "src/serial_devices/SerialDevice.cpp",
+   "src/serial_devices/SerialDevice.hpp",
+   "src/serial_devices/clipboard/ClipboardDevice.hpp",
+   "src/serial_devices/echo/EchoDevice.hpp",
+   "src/serial_devices/file/FileDevice.hpp",
+   "src/serial_devices/modem/ModemDevice.hpp",
+   "src/serial_devices/serial/SerialPortDevice.hpp"
+  ],
+  "stat": "8 files changed, 19 insertions(+), 4 deletions(-)",
+  "overlap": [
+   "src/serial_devices/SerialDevice.cpp",
+   "src/serial_devices/SerialDevice.hpp",
+   "src/serial_devices/clipboard/ClipboardDevice.hpp",
+   "src/serial_devices/file/FileDevice.hpp",
+   "src/serial_devices/modem/ModemDevice.hpp",
+   "src/serial_devices/serial/SerialPortDevice.hpp"
+  ]
+ }
+]

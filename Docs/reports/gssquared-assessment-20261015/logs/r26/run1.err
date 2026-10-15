@@ -1,0 +1,6 @@
+Platform: Apple IIgs   folder name: apple2gs
+SCC: a channel clocks from the TRxC pin, which nothing drives here; its characters wait
+Host FST: host directory = C:\Users\X99\OneDrive\Documents\
+Host FST: registered WDM $FF handler
+SerialDevice: ModemDevice shutting down
+SerialDevice: FileDevice shutting down

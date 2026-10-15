@@ -1,0 +1,29 @@
+Test project D:/gsqs/fork/build
+      Start  1: cpu_conformance
+ 1/12 Test  #1: cpu_conformance ..................   Passed    0.09 sec
+      Start  2: cpu_coverage
+ 2/12 Test  #2: cpu_coverage .....................   Passed    0.09 sec
+      Start  3: cpu_cycles_6502
+ 3/12 Test  #3: cpu_cycles_6502 ..................   Passed    0.06 sec
+      Start  4: cpu_cycles_65816
+ 4/12 Test  #4: cpu_cycles_65816 .................   Passed    0.05 sec
+      Start  5: cpu_cycles_65c02
+ 5/12 Test  #5: cpu_cycles_65c02 .................   Passed    0.02 sec
+      Start  6: via_6522_t6
+ 6/12 Test  #6: via_6522_t6 ......................   Passed    0.04 sec
+      Start  7: via_6522_t7
+ 7/12 Test  #7: via_6522_t7 ......................   Passed    0.01 sec
+      Start  8: via_6522_t8
+ 8/12 Test  #8: via_6522_t8 ......................   Passed    0.01 sec
+      Start  9: via_6522_t9
+ 9/12 Test  #9: via_6522_t9 ......................   Passed    0.01 sec
+      Start 10: diskid_apm
+10/12 Test #10: diskid_apm .......................   Passed    0.08 sec
+      Start 11: systemconfigtest
+11/12 Test #11: systemconfigtest .................   Passed    0.26 sec
+      Start 12: ssgputexttest
+12/12 Test #12: ssgputexttest ....................   Passed    0.03 sec
+
+100% tests passed out of 12
+
+Total Test time (real) =   0.91 sec

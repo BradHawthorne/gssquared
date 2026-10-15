@@ -1,0 +1,31 @@
+{
+  "schema": "rosetta-ctrl-failure-v1",
+  "error": "emulator exited (rc=2) while awaiting ack.1 for 'protocol'",
+  "executable": "D:\\Projects\\gssquared-fork\\build\\GSSquared.exe",
+  "image": "C:\\Users\\X99\\AppData\\Local\\Temp\\covmap-live-a52d0h_z\\ctrl-only.po",
+  "platform": 5,
+  "command": "protocol",
+  "sequence": 1,
+  "exit_code": 2,
+  "timeout_seconds": 60,
+  "idle_timeout_seconds": 60,
+  "log": "_ctrl_session.log",
+  "failure_contract": {
+    "schema": "rosetta-loop02-failure-v1",
+    "capability": "ctrl",
+    "detector": "ctrl-command-failure",
+    "budget": {
+      "command_timeout_seconds": 60,
+      "idle_timeout_seconds": 60,
+      "session_timeout_seconds": 60
+    },
+    "command": "protocol",
+    "last_guest_state": {
+      "sequence": 1,
+      "exit_code": 2,
+      "last_reply_status": null,
+      "last_reply_text_head": null,
+      "reply_count": 0
+    }
+  }
+}
