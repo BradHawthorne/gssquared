@@ -22,6 +22,7 @@ ledger below and change the affected dispositions in the table.
 | 2026-09-16 | **all of** `c4b1fa69..d380e055` (258 commits, to upstream 2026-09-14) | triage only — nothing ported. Dispositions: 30 PORT, 89 PORT-LATER, 12 PORTED, 12 HAVE, 6 DEFERRED, 83 SKIP, 26 MERGE. The fork removed its ungated mouse-coordinate writes into guest memory (`a820c356`), leaving upstream's closed-loop ADB mouse sync (`d03c9783`, `b299b98d`, `19fe1f67`, `1f95ff78`, `533d8763`, `d380e055`) as the faithful replacement to port | this file |
 | 2026-09-16 | stage 1: `c4b1fa69..29dadbbb` (upstream first-parent 1-133, to 2026-08-05; every commit in that range) | **ported by hand** as one fork commit with a single parent (no upstream parent, see "How syncs land"). Conflicts resolved per component (section 7); fork hooks carried; boot baseline re-blessed with attribution | this row's commit |
 | 2026-09-16 | stage 2: `29dadbbb..d380e055` (upstream first-parent 134-194, to 2026-09-14; every commit in that range, so the fork now covers all of upstream to `d380e055`) | **ported by hand** as one single-parent fork commit; conflicts resolved per component (section 8); boot baseline re-blessed with attribution | this row's commit |
+| 2026-10-15 | `d380e055..643e6c21` (62 commits to upstream 2026-09-30, 56 not merges), triaged; stage A taken | **9 taken** (section 23) as single-parent `cherry-pick -x` commits, upstream authorship kept; 1 already present (`ae574e1b`); 13 take with adaptation, 19 defer, 14 skip (outside the fork's purpose). The open range for the next sync is still `d380e055..643e6c21` less the nine | `7481a130`, `07f8efea`, `8def93c6`, `fa62f107`, `6cbc3395`, `9dcb330e`, `cd2e4508`, `a0936b0e`, `854e40b7` |
 
 ### How syncs land
 
@@ -974,3 +975,42 @@ Input step S2 of the fidelity study, and part of video cards step 3.
 - S5 (ADB device accumulation, the VBL-synchronous mouse refill, the GLU status-read handshake, the `$48` and `$10` fixes): the mouse path is the one Rosetta v3 drives, and v3 takes bug fixes only, so a change there waits for a coordinated pin. The fork's ADB mouse already clamps both directions; the study's citation predates the upstream port.
 - S9 (the Joyport's reset window as a physical select): the window is upstream's deliberate choice (the real Joyport sends a IIe or IIgs into self-test on Ctrl-Reset), and it does not touch card validation.
 - A Videx snapshot block (video cards step 3; Second Sight's `ssight` came in section 15).
+
+## 23. Drift stage A: nine take-now commits of `d380e055..643e6c21` (2026-10-15)
+
+Each upstream commit since the last by-hand sync point was assessed on its own for integration (its value to the
+fork, and whether it touches files the fork's layer modifies). The nine below change no file of the layer's heavy
+rewrites. They were cherry-picked onto `a2gspu` with `-x`, one single-parent commit each, upstream's authorship kept. No
+merge commit has upstream as a parent.
+
+| Upstream | Fork | What |
+|---|---|---|
+| `7634b151` | `7481a130` | DOC: reading `$E0` acknowledges the lowest pending oscillator IRQ. The ROM's two-read idiom acknowledged two and serviced one; `$E0` is now fetched once per transaction |
+| `b22a2345` | `07f8efea` | #191: the pointer is ignored while another window has mouse focus |
+| `87f56ac9` | `8def93c6` | #194: the temporary speed boost's save and restore, factored out |
+| `cc0a9eec` | `fa62f107` | The adbtest link |
+| `d5b63752` | `6cbc3395` | Second Sight 80x50 and 132x60 text modes |
+| `599db0ae` | `9dcb330e` | IIe keyboard: the legacy and modern glyph locations |
+| `7eb29076` | `cd2e4508` | Either gamepad face button fires on the Joyport |
+| `293e0fc1` | `a0936b0e` | Windows build information in upstream's agent section (carried verbatim) |
+| `cb8ff63a` | `854e40b7` | `.hda` (BlueSCSI) images |
+
+**Verified** (a clean Release build in a scratch clone at `854e40b7`, with the vendored trees, the ROM 3/ROM 4 images
+and `corpus/` copied in):
+- ctest 12/12 and **12 gates green**;
+- **the unarmed baselines did not move.** `iigs-rom` 6,236,744 cycles, run `800AEA5075763504`; `iie-rom` 2,043,601,
+  `9D45F479767B943C`; `iigs-gsos601` 10,647,413, `9CFCBEBB3B604B4E`; `iigs-finder` 22,377,216, `994DCC2DF8B6A75A`;
+  hashes `6D9886E3B3EE0383`, `92F1E19D6FE2A383`, `D29F204D690D417F`, `2E304BF0147B220A`;
+- hwtruth's 24 verdicts unchanged;
+- MB-Audit passes.
+
+**The Second Sight snapshot carries the new modes** (a static check): block `ssight` saves the whole host-text raster
+(mode, columns, visible rows, cell and pixel sizes) and `vga_mode_num`. 132 columns and 1,056 pixels fit the saved
+widths, and restore has no mode allowlist, so `$50` and `$52` round-trip without a block change. A save and restore
+exercised in those modes is still owed.
+
+**Next stages, each an owner decision:**
+- **B, the CPU reset:** `86527159` and `3947c859`, with an unarmedhash re-blessing and a new hwtruth verdict.
+- **C, serial:** `0f774f48`, `58751766`, `63f1717c` and `643e6c21`, with `uartbaudtest`.
+- **D, the clock domains:** five commits, accepted only if unarmedhash reproduces unchanged.
+- **E, battery RAM and keys:** `4a14e989` with pin precedence kept, and `c7046029` reconciled with `a96dbb0c`.
