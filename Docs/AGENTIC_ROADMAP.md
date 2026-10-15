@@ -41,5 +41,35 @@ Upstream main was still at 643e6c21 on 2026-10-15.
 
 ## 4. Agentic layer: the phased proposal
 
-*Being written (a full inventory of upstream's and the fork's agentic surfaces, the gaps neither has, and the phases).
-It'll be summarised here, with the full text in `Docs/reports/`.*
+The full text is in `Docs/reports/gssquared-agentic-proposal-20261015/README.md`: per-task files, sizes, dependencies,
+known-pass and known-fail gates, and the home (fork, Rosetta or GSnux).
+
+**The two surfaces, inventoried from code:**
+- **Upstream** (643e6c21): `DebugProtocolServer`, a binary protocol over a Unix socket.
+  - 27 message types: session, run control, registers, a 16K trace ring, memory read/write/find across six domains,
+    device state, typed breakpoints, keys and paste, video text, mount.
+  - It pushes "stopped" and "run-state" events. Around it: a Python client, `gstrace` and the in-app debugger.
+- **The fork** (053a4e14) is a strict superset:
+  - CTRL with 65 verbs, and configurable traps;
+  - coverage, `itrace`/`tbuf`, `iolog` and bus watch;
+  - Toolbox and GS/OS tracing;
+  - transactional snapshots;
+  - determinism (seed, fake time, BRAM pin, run hash);
+  - about 144 rails, 12 gates, and headless runs.
+
+**The 20 gaps neither has** (G1-G20): SCC capture, counting coverage and profiles, a `WDM` console, Linux kernel
+awareness, a 65816 GDB stub, DWARF and `cciigs -g` source maps, record/replay with reverse step, checkpoint branching
+and state diffs, fault injection (with NMI and ABORT sources), event streams, fleets, VCD slot-bus export,
+hardware-in-the-loop compare, SHR text reading and tolerant image compare, audio assertions, input macros, a
+cross-emulator differential, bisect, and a socket manifest.
+
+| Phase | Content (sizes) | Each task needs the owner's go-ahead |
+| --- | --- | --- |
+| **P0** | SCC capture (S), counting coverage (S-M), `WDM` console (S), socket manifest (S), plus **drift B**, the reset (S-M) | GSnux-critical |
+| **P1** | Linux kernel awareness (M), the GDB stub (M), source maps (M), plus **drift C**, serial (M) | GSnux-critical |
+| **P2** | **Drift D**, the clock refactor, first (M-L); then state diffs (S-M), branching (M), record/replay with reverse step (L), bisect (S-M) | P2.1 and P2.3 are GSnux-critical |
+| **P3** | NMI/ABORT sources (S-M), an interrupt-fault suite (M), card faults (M) | P3.1 and P3.2 are GSnux-critical |
+| **P4** | Event streams (M), fleets (M) | P4.2 is GSnux-critical |
+| **P5** | VCD export (M), hardware-in-the-loop trace compare (L) | P5.1 is GSnux-critical |
+| **P6** | SHR text reading (M), tolerant image compare (S-M), audio assertions (M), input macros (S-M) | P6.1 is GSnux-critical |
+| **P7** | Cross-emulator differential (L), plus **drift E** (S). The Fast816 tier belongs to the Fast816 project | |
