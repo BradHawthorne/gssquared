@@ -2,6 +2,10 @@
 
 Guidance for coding agents working in this repository.
 
+> **Current handoff (2026-10-15): read `Docs/HANDOFF.md` first.** It covers the state, branches, the rules (never push;
+> drift stages need the owner's yes), and what's ready next. The task list is `Docs/AGENTIC_ROADMAP.md`, and the
+> reports are in `Docs/reports/`.
+
 ## What this repo is
 
 **gssquared-fork** (`a2gspu` branch) is an instrumented Apple II / IIgs emulator
