@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\test_cidarbindings.py", line 9, in <module>
+    import cidarbindings as binding
+ModuleNotFoundError: No module named 'cidarbindings'

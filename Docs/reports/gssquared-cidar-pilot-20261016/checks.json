@@ -1,0 +1,31 @@
+{
+  "schema": "cidar-phase-checks-v1",
+  "native_source_checkpoint": "bd276467a2cd1f989dae9bc3c062441af9fad172",
+  "executable": {
+    "path": "D:/gsqs/pub-20261016/build/GSSquared.exe",
+    "sha256": "9b6a866d851855d4f6fa49d47468a13ca295058ad218c47841c6fccefbfd7342"
+  },
+  "protected_consumer_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "primitive_expansion_before_sha256": "dc32f9051f2c9bf33d0f52391301c8057806db8097dc57e650447a44f31e7274",
+  "primitive_expansion_after_sha256": "dc32f9051f2c9bf33d0f52391301c8057806db8097dc57e650447a44f31e7274",
+  "native_sources_changed": false,
+  "pilot_comparisons": 32,
+  "passing_variants": 64,
+  "pilot_controls": 10,
+  "binding_refusals_before_launch": 8,
+  "native_observer_checks": 12,
+  "python_client_tests": 21,
+  "rosetta_documentation_tests": 3,
+  "full_gates": {
+    "passed": 14,
+    "skipped": 0,
+    "native_ctests_passed": 14,
+    "boot_checks": 42
+  },
+  "static": {
+    "json": 4,
+    "markdown_destinations": 59,
+    "python": 8
+  },
+  "rosetta_commit": "0a689d8f42790cdd6d3116ca2f1fc984ba14964d"
+}

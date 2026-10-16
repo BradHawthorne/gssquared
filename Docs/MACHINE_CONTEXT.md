@@ -110,9 +110,14 @@ python -I tools/a2rail/experiment.py run --plan fixture.plan.json --exe <tested-
 python -I tools/a2rail/experiment.py compare baseline/run.json candidate/run.json --out comparison.json
 ```
 
+Optional declared data loads, preserved inputs/registers, per-PC profiles,
+CPU write footprints and versioned CIDAR joins extend this workflow. Their
+schemas, refusal conditions, limits and real `_BlockMoveBytes` pilot are in
+[`CIDAR_EXPERIMENTS.md`](CIDAR_EXPERIMENTS.md).
+
 Comparison requires passing results for the same workload/expectations,
 platform, emulator, pins and clock setup. The CLI rechecks retained image and
-snapshot digests. It reports CPU-cycle/instruction/code-size deltas and native
+snapshot and declared input/observation digests. It reports CPU-cycle/instruction/code-size deltas and native
 master-14M/video-counter intervals. The context CPU interval must agree with
 the execution receipt, without a session/observed-clock discontinuity. Wrong answers
 and incomparable runs cannot win. Results are observed pairs; proven floors,

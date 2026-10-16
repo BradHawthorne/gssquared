@@ -1,0 +1,12 @@
+PASS declared source/pointer/register preservation p3
+PASS complete profiles and CPU write footprint
+PASS armed/unarmed bits and independent 54-cycle count
+PASS retained profile tampering refuses comparison
+PASS all out-of-contract writes detected
+PASS capped write evidence cannot pass
+PASS declared source/pointer/register preservation p5
+PASS complete profiles and CPU write footprint
+PASS armed/unarmed bits and independent 54-cycle count
+PASS retained profile tampering refuses comparison
+PASS all out-of-contract writes detected
+PASS capped write evidence cannot pass

@@ -55,6 +55,9 @@ Both direct raw-image execution and GS/OS disk-boot tests are supported workflow
 The additive [`experiment.py`](tools/a2rail/experiment.py) companion covers declared
 raw fixtures: explicit build tools, source/image identities, independent result checks,
 negative controls, native context and compatible cycle/instruction/byte comparisons.
+Optional [CIDAR bindings and the real block-copy pilot](Docs/CIDAR_EXPERIMENTS.md)
+join versioned specs/candidates to source/build/load identities, preserved inputs
+and registers, per-PC costs and checked CPU write footprints.
 It is not an OMF loader or a full GS/OS build/boot harness. Existing Rosetta
 differential and disk-boot tests are separate lanes; see
 [Closed-loop integration](Docs/CLOSED_LOOP_INTEGRATION.md).

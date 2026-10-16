@@ -1,0 +1,50 @@
+test_bad_observer_shapes_refuse (__main__.InputPlanTests.test_bad_observer_shapes_refuse) ... ok
+test_complete_write_footprint (__main__.InputPlanTests.test_complete_write_footprint) ... ERROR
+test_declared_input_and_preservation_plan (__main__.InputPlanTests.test_declared_input_and_preservation_plan) ... ERROR
+test_output_must_have_a_negative_control_target (__main__.InputPlanTests.test_output_must_have_a_negative_control_target) ... ok
+test_profile_totals_must_cover_measured_interval (__main__.InputPlanTests.test_profile_totals_must_cover_measured_interval) ... ERROR
+test_unexpected_write_and_loss_fail (__main__.InputPlanTests.test_unexpected_write_and_loss_fail) ... ERROR
+test_unknown_memory_check_role_refuses (__main__.InputPlanTests.test_unknown_memory_check_role_refuses) ... ok
+
+======================================================================
+ERROR: test_complete_write_footprint (__main__.InputPlanTests.test_complete_write_footprint)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\test_experiment_inputs.py", line 44, in test_complete_write_footprint
+    value=experiment.check_footprint(records,policy)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'experiment' has no attribute 'check_footprint'
+
+======================================================================
+ERROR: test_declared_input_and_preservation_plan (__main__.InputPlanTests.test_declared_input_and_preservation_plan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\test_experiment_inputs.py", line 24, in test_declared_input_and_preservation_plan
+    experiment.validate(self.plan())
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\experiment.py", line 50, in validate
+    raise ValueError('invalid experiment schema or fields')
+ValueError: invalid experiment schema or fields
+
+======================================================================
+ERROR: test_profile_totals_must_cover_measured_interval (__main__.InputPlanTests.test_profile_totals_must_cover_measured_interval)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\test_experiment_inputs.py", line 59, in test_profile_totals_must_cover_measured_interval
+    self.assertTrue(experiment.check_profile(profile,{'instructions':'2','cycles':'6'})['ok'])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'experiment' has no attribute 'check_profile'
+
+======================================================================
+ERROR: test_unexpected_write_and_loss_fail (__main__.InputPlanTests.test_unexpected_write_and_loss_fail)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\test_experiment_inputs.py", line 53, in test_unexpected_write_and_loss_fail
+    value=experiment.check_footprint(records,policy)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'experiment' has no attribute 'check_footprint'
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.003s
+
+FAILED (errors=4)

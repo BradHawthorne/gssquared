@@ -24,6 +24,7 @@ nav:
   - Instrumentation & Agentic Oracle:
     - Agentic Oracle Contract: AGENTIC_ORACLE.md
     - Machine Context: MACHINE_CONTEXT.md
+    - CIDAR Experiments: CIDAR_EXPERIMENTS.md
     - Python and MCP Setup: DebugClient.md
     - Python Agent Cookbook: gs2debug.md
     - Debug Wire Protocol: DebugProtocol.md

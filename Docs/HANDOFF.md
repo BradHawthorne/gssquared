@@ -31,6 +31,15 @@ The earlier preserved `GSSquared-awareness.exe` and tested `mcp-launch.json`
 remain documented in the machine-context report.
 The original Claude-to-Codex handoff and the assessment reports are historical evidence; current status is below.
 
+The CIDAR queue continuation adds versioned spec/candidate/source/build/raw
+debug-map joins and input/register preservation, per-PC costs and CPU write
+footprints to `experiment.py`. A genuine Rosetta `_BlockMoveBytes` invocation
+and owned specialization pass 32 dual-platform comparison pairs; invalid
+source/image/map/spec bundles refuse before launch. Rosetta curation retains
+the measured tradeoffs without changing library instructions. Schemas and
+limits: `Docs/CIDAR_EXPERIMENTS.md`; evidence:
+`Docs/reports/gssquared-cidar-pilot-20261016/README.md`.
+
 The whole-fork stale-information audit is recorded in
 `Docs/reports/gssquared-stale-audit-20261016/README.md`. Historical proposals and
 studies now point to implemented interfaces, and `Docs/DEVELOPMENT_SETUP.md`

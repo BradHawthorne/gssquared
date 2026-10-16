@@ -1,0 +1,16 @@
+Test project D:/gsqs/interface-completeness-20261015/rosetta-build
+    Start 114: docs_index
+1/3 Test #114: docs_index .......................   Passed    1.03 sec
+    Start 122: agent_docs_pair
+2/3 Test #122: agent_docs_pair ..................   Passed    0.21 sec
+    Start 169: agent_docs_gate
+3/3 Test #169: agent_docs_gate ..................   Passed    0.24 sec
+
+100% tests passed out of 3
+
+Label Time Summary:
+build         =   0.24 sec*proc (1 test)
+docs          =   1.24 sec*proc (2 tests)
+regression    =   1.49 sec*proc (3 tests)
+
+Total Test time (real) =   1.50 sec
