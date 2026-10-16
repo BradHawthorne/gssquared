@@ -283,16 +283,19 @@ class Client:
             if not isinstance(value,dict) or value.get('schema')!='a2subscription-v1':raise ProtocolError(0,'invalid agent event schema')
             return value
 
-    def quit(self) -> None:
+    def quit(self, *, timeout: float | None = None) -> None:
         """Force-quit the emulator (skips QuitModal / dirty-disk prompts).
 
         Prefer this over killing the process; SIGTERM still becomes SDL_EVENT_QUIT
         and shows the confirm dialog unless GSSquared was started with
         ``--no-quit-confirm``.
+
+        An optional reply timeout retains the original request as pending;
+        it does not establish cancellation or permit another QUIT.
         """
         if not self._handshaked:
             raise RuntimeError("hello() required before quit()")
-        reply = self.request(QUIT, b"")
+        reply = self.request(QUIT, b"", timeout=timeout)
         if reply:
             raise ProtocolError(0, f"QUIT reply not empty ({len(reply)} bytes)")
 

@@ -30,13 +30,13 @@ def encoded(value):return json.dumps(value,ensure_ascii=False,allow_nan=False,se
 
 class Backend:
     def __init__(self,args):
-        self.args=args;self.client=Client();self.process=None;self.log=None;self.root=None;self.ended=False;self.catalog=None;self.rails={};self.startup_proof=None;self.artifacts=None;self.executable_sha256=None
+        self.args=args;self.client=Client();self.process=None;self.log=None;self.root=None;self.ended=False;self.catalog=None;self.rails={};self.startup_proof=None;self.artifacts=None;self.executable_sha256=None;self.shutdown=None
 
     def receipt(self,closed=False):
         if self.root is not None:
             value={'schema':'a2mcp-session-v1','owned':True,'pid':self.process.pid if self.process else None,
                    'closed':closed and (self.process is None or self.process.poll() is not None),'exit_code':self.process.poll() if self.process else None,'executable':str(self.args.exe),'executable_sha256':self.executable_sha256,'identity_model':'SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule','requested_rails':self.rails,'startup_proof':self.startup_proof,'artifact_root':str(self.artifacts.root) if self.artifacts else None,
-                   'read_only_media_launch':bool(getattr(self.args,'read_only_media',False))}
+                   'read_only_media_launch':bool(getattr(self.args,'read_only_media',False)),'shutdown':self.shutdown}
             (self.root/'mcp-session.json').write_text(encoded(value)+'\n',encoding='utf-8')
 
     def open(self):
@@ -153,20 +153,53 @@ class Backend:
         (root/'batch-result.json').write_text(encoded(result)+'\n',encoding='utf-8');return result
 
     def close(self):
+        # A closed transport cannot resolve a previously sent operation. Preserve
+        # its identity before Client.close clears the transport state.
+        if self.shutdown is None:
+            pending=self.client.pending_request
+            self.shutdown={'schema':'a2mcp-shutdown-v1','owned':self.process is not None,
+                'pending_request':pending,'effects_unknown':pending is not None,
+                'quit_attempted':False,'quit_acknowledged':self.ended,
+                'transport_closed':False,'forced_termination':False,
+                'outcome':'incomplete','errors':[]}
+        shutdown=self.shutdown
+        def note(error):
+            message=type(error).__name__+': '+str(error)
+            if message not in shutdown['errors']:shutdown['errors'].append(message)
+            print('MCP close: '+message,file=sys.stderr)
         try:
             if self.process and self.process.poll() is None:
-                if not self.ended:
-                    try:self.client.quit()
-                    except (OSError,ProtocolError,RuntimeError) as error:print('MCP close: '+str(error),file=sys.stderr)
-                try:self.process.wait(timeout=10)
+                if not self.ended and not shutdown['quit_attempted'] and shutdown['pending_request'] is None:
+                    shutdown['quit_attempted']=True
+                    try:
+                        self.client.quit(timeout=2)
+                        shutdown['quit_acknowledged']=True
+                    except (OSError,ProtocolError,RuntimeError) as error:
+                        note(error)
+                        shutdown['effects_unknown']=True
+                        pending=self.client.pending_request
+                        if pending is not None:
+                            shutdown['pending_request']=pending;shutdown['effects_unknown']=True
+                # Disconnect before waiting, including after a partial startup
+                # or unresolved request; never replay a mutation to get QUIT in.
+                try:self.client.close();shutdown['transport_closed']=True
+                except OSError as error:note(error)
+                try:self.process.wait(timeout=10 if shutdown['quit_acknowledged'] else 2)
                 except subprocess.TimeoutExpired:
-                    # Only our own --no-quit-confirm child, after graceful quit failed.
+                    # Only our own --no-quit-confirm Popen child.
                     print('MCP close: owned emulator did not exit; terminating',file=sys.stderr)
+                    shutdown['forced_termination']=True
                     self.process.kill();self.process.wait(timeout=5)
+                shutdown['outcome']='owned-terminated' if shutdown['forced_termination'] else 'owned-exited'
+            elif shutdown['outcome']=='incomplete':
+                shutdown['outcome']='already-exited' if self.process else 'attached-disconnected'
         finally:
-            self.client.close()
-            if self.log:self.log.close()
-            self.receipt(closed=True)
+            try:
+                self.client.close();shutdown['transport_closed']=True
+            finally:
+                try:
+                    if self.log:self.log.close()
+                finally:self.receipt(closed=True)
 
 class RpcError(Exception):
     def __init__(self,code,message):self.code=code;super().__init__(message)

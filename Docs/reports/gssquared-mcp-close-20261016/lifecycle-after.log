@@ -1,0 +1,8 @@
+PASS p3 graceful 
+MCP close: owned emulator did not exit; terminating
+PASS p3 pending 
+PASS p3 attached remains controllable
+PASS p5 graceful 
+MCP close: owned emulator did not exit; terminating
+PASS p5 pending 
+PASS p5 attached remains controllable

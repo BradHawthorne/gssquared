@@ -22,6 +22,16 @@ build is preserved at `D:\gsqs\consumer-20261016\build-rollback`.
 Exact hashes, tested descriptor and scratch-space maintenance:
 `Docs/reports/gssquared-consumer-refresh-20261016/README.md`.
 
+**MCP close-out continuation, 2026-10-16:** the host adapter now bounds closing
+QUIT/exit waits and records pending identities, unknown effects and owned
+termination. Six native IIe/IIgs lifecycle cases, 26 Python tests, all 14 gates,
+14 native CTests, 42 unchanged boot checks and two stdio launches pass from a
+frozen host export. The consumer binary above is unchanged. Existing cleanup
+already reaped pending children; this closes missing evidence and unbounded
+QUIT waits. A blocked synchronous tool is not preempted by EOF. Contract and
+retained pass/fail evidence: `Docs/DebugClient.md#managed-close-out` and
+`Docs/reports/gssquared-mcp-close-20261016/README.md`.
+
 **Design direction, 2026-10-16:** instrumentation must support CIDAR-driven
 architectural understanding and measured primitive refinement across Rosetta
 and this fork. Archive prevalence is not evidence of optimality. Apply

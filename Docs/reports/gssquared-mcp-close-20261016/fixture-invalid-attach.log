@@ -1,0 +1,14 @@
+PASS p3 graceful 
+MCP close: owned emulator did not exit; terminating
+PASS p3 pending 
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\mcpclosecheck.py", line 101, in <module>
+    args=p.parse_args();run(args.exe.resolve(),args.out)
+                        ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\mcpclosecheck.py", line 77, in run
+    b.open();b.close();row['shutdown']=b.shutdown
+    ~~~~~~^^
+  File "D:\Projects\gssquared-fork\clients\python\src\gs2debug\mcp.py", line 73, in open
+    elif self.args.out_dir is not None or self.args.out_root is not None or self.args.config is not None or self.args.platform is not None or self.args.seed is not None or self.rails or getattr(self.args,'read_only_media',False):raise ValueError('launch options require --exe')
+                                                                                                                                                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: launch options require --exe

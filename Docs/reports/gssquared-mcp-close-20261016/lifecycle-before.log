@@ -1,0 +1,16 @@
+PASS p3 graceful 
+MCP close: request 6 (0x00000009) pending; wait for its original reply; timeout is not cancellation
+MCP close: owned emulator did not exit; terminating
+FAIL p3 pending 
+PASS p5 graceful 
+MCP close: request 6 (0x00000009) pending; wait for its original reply; timeout is not cancellation
+MCP close: owned emulator did not exit; terminating
+FAIL p5 pending 
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\mcpclosecheck.py", line 73, in <module>
+    args=p.parse_args();run(args.exe.resolve(),args.out)
+                        ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\mcpclosecheck.py", line 66, in run
+    assert all(row['ok'] for row in observations),'MCP shutdown failed; see checks.json before fixture cleanup'
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: MCP shutdown failed; see checks.json before fixture cleanup

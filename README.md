@@ -97,7 +97,9 @@ machine paused. Use discovery, explicitly pause before ordinary tools, load inpu
 run and inspect the result. Context read queries also work while running. Installed
 `gs2-mcp` provides the same entry point; attach with `--socket <endpoint>`.
 Transport timeouts do not cancel execution: recover the pending reply instead of
-resending a mutation. See the [client setup and ownership contract](Docs/DebugClient.md)
+resending a mutation. Managed close-out uses bounded waits and retains unresolved
+requests and forced termination in the owner receipt; attach only disconnects.
+See the [client setup and ownership contract](Docs/DebugClient.md)
 and [Python package](clients/python/README.md).
 
 For file-based sessions, use [`session.ps1`](tools/a2rail/session.ps1) and

@@ -21,7 +21,7 @@ def run(exe):
     tail=source.split('a2gspu_ctrl_loop(state);',1)[1]
     tail_rails=set(re.findall(r'getenv\s*\(\s*"((?:A2GSPU_|MEMVU_|WIZ5_)[A-Z0-9_]+)"',tail))
     check(tail_rails<=BATCH_RAILS,'all one-shot tail getenv rails are classified as batch-only')
-    for filename in ('test_mcp.py','test_observations.py','test_artifacts.py','test_recovery.py'):
+    for filename in ('test_mcp.py','test_observations.py','test_artifacts.py','test_recovery.py','test_shutdown.py'):
         fixtures=runpy.run_path(str(Path(__file__).resolve().parents[2]/'clients/python/tests'/filename))
         for name,fixture in fixtures.items():
             if name.startswith('test_'):fixture();check(True,'MCP framing/observation fixture: '+name)

@@ -191,6 +191,42 @@ transaction, automatic reconnect, cancellation, or mutation-retry facility.
 The file client likewise rejects control characters before publication and
 keeps its existing pending-sequence recovery through `wait()`.
 
+## Managed close-out
+
+`Client.quit(timeout=seconds)` optionally bounds the QUIT reply wait; omitting
+it retains the SDK's existing unbounded wait. A reply timeout leaves that same
+request pending. The MCP backend uses a two-second QUIT reply budget, then a
+ten-second exit wait after acknowledgement. With a pending request it sends
+no replacement QUIT: it disconnects, waits up to two seconds and, if necessary,
+kills and waits up to five seconds for its own `Popen` child. An unacknowledged
+closing QUIT uses that same shorter exit path. These are individual wait
+budgets, not a hard deadline on host scheduling or receipt filesystem I/O.
+An attached backend only disconnects and never quits or kills its external owner.
+Close begins when the synchronous server reaches EOF/error cleanup; it does not
+interrupt a currently blocked tool handler or provide concurrent cancellation.
+
+Managed `mcp-session.json` adds `shutdown` (null while no close has begun),
+with schema `a2mcp-shutdown-v1`:
+
+| Field | Meaning |
+| --- | --- |
+| `owned` | This backend actually launched the process |
+| `pending_request` | Sequence/type/effect captured before disconnect clears transport state; may also name an unanswered closing QUIT |
+| `effects_unknown` | A request was unresolved at close, or the closing QUIT failed; disconnect/termination does not recover its result |
+| `quit_attempted`, `quit_acknowledged` | Closing QUIT was attempted, and an empty native reply was received (including a prior explicit `gs2_quit`) |
+| `transport_closed` | The client transport was closed |
+| `forced_termination` | The backend used its owned child's `kill()` fallback |
+| `outcome` | `incomplete`, `owned-exited`, `owned-terminated`, `already-exited` or `attached-disconnected` |
+| `errors` | Named errors caught during close, separate from native exit status |
+
+The outer `closed` and `exit_code` remain authoritative for actual process
+termination. They do not prove guest correctness, successful pending effects,
+complete artifact flushes or hardware fidelity. This object describes close-out,
+not a complete command history. Repeated close preserves unresolved identities
+and completed receipt bytes. Failed reap/receipt I/O remains a real error;
+`closed` is false if the owned process is still alive. Attached sessions do not
+write a managed owner receipt into an external artifact root.
+
 The agent bootstrap reuses interactive CTRL instrument initialization, starts
 paused and suppresses host preferences/input. Pacing/coverage startup effects
 and native mode proof are tested; launch success is not inferred from an
@@ -336,7 +372,7 @@ class Client:
     def ping(self) -> None:
         """Send PING; succeed if empty PING reply arrives."""
 
-    def quit(self) -> None:
+    def quit(self, *, timeout: float | None = None) -> None:
         """Force-quit emulator (skips QuitModal / dirty-disk prompts).
         Prefer over kill/SIGTERM. If a harness must SIGTERM, start GSSquared
         with --no-quit-confirm."""

@@ -1,0 +1,66 @@
+Selected consumer package: D:\projects\gssquared-fork\clients\python\src\gs2debug\__init__.py
+.....................FFFF                                                [100%]
+================================== FAILURES ===================================
+_____________ test_quit_reply_wait_is_bounded_and_never_reissued ______________
+
+    def test_quit_reply_wait_is_bounded_and_never_reissued():
+        client=Client();left,right=socket.socketpair();client._sock=left;client._handshaked=True
+        try:
+>           try:client.quit(timeout=.01)
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: Client.quit() got an unexpected keyword argument 'timeout'
+
+clients\python\tests\test_shutdown.py:37: TypeError
+_____ test_pending_close_reaps_its_owned_child_and_keeps_unknown_effects ______
+
+    def test_pending_close_reaps_its_owned_child_and_keeps_unknown_effects():
+        with tempfile.TemporaryDirectory(prefix='mcp-close-unit-') as directory:
+            backend=Backend(SimpleNamespace(exe=Path('fixture.exe'),read_only_media=False))
+            backend.root=Path(directory);backend.client=PendingClient();backend.process=OwnedChild()
+>           backend.close()
+
+clients\python\tests\test_shutdown.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+clients\python\src\gs2debug\mcp.py:159: in close
+    try:self.client.quit()
+        ^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <test_shutdown.PendingClient object at 0x0000019354DD8D70>, kwargs = {}
+
+>   def quit(self,**kwargs):raise AssertionError('pending command must not be retried or replaced by QUIT')
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: pending command must not be retried or replaced by QUIT
+
+clients\python\tests\test_shutdown.py:19: AssertionError
+__________ test_attached_close_disconnects_without_quit_or_a_process __________
+
+    def test_attached_close_disconnects_without_quit_or_a_process():
+        backend=Backend(SimpleNamespace(exe=None));backend.client=PendingClient()
+        backend.close()
+        assert backend.client.closed and backend.process is None
+>       assert backend.shutdown['outcome']=='attached-disconnected' and backend.shutdown['effects_unknown']
+               ^^^^^^^^^^^^^^^^
+E       AttributeError: 'Backend' object has no attribute 'shutdown'
+
+clients\python\tests\test_shutdown.py:70: AttributeError
+__________ test_already_exited_child_does_not_erase_pending_outcome ___________
+
+    def test_already_exited_child_does_not_erase_pending_outcome():
+        with tempfile.TemporaryDirectory(prefix='mcp-exited-unit-') as directory:
+            backend=Backend(SimpleNamespace(exe=Path('fixture.exe'),read_only_media=False))
+            backend.root=Path(directory);backend.client=PendingClient();backend.process=OwnedChild(exited=True)
+            backend.close()
+            owner=json.loads((backend.root/'mcp-session.json').read_text())
+            assert backend.process.kills==0 and owner['closed'] and owner['exit_code']==-9
+>           assert owner['shutdown']['effects_unknown'] and not owner['shutdown']['quit_acknowledged']
+                   ^^^^^^^^^^^^^^^^^
+E           KeyError: 'shutdown'
+
+clients\python\tests\test_shutdown.py:81: KeyError
+=========================== short test summary info ===========================
+FAILED clients\python\tests\test_shutdown.py::test_quit_reply_wait_is_bounded_and_never_reissued
+FAILED clients\python\tests\test_shutdown.py::test_pending_close_reaps_its_owned_child_and_keeps_unknown_effects
+FAILED clients\python\tests\test_shutdown.py::test_attached_close_disconnects_without_quit_or_a_process
+FAILED clients\python\tests\test_shutdown.py::test_already_exited_child_does_not_erase_pending_outcome
+4 failed, 21 passed in 0.40s

@@ -1,0 +1,212 @@
+{
+  "cases": [
+    {
+      "platform": 3,
+      "pending": false,
+      "close_seconds": 0.16131559998029843,
+      "live_before_fixture_cleanup": false,
+      "receipt_before_fixture_cleanup": {
+        "schema": "a2mcp-session-v1",
+        "owned": true,
+        "pid": 47044,
+        "closed": true,
+        "exit_code": 0,
+        "executable": "D:\\Projects\\gssquared-fork\\build\\GSSquared.exe",
+        "executable_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+        "identity_model": "SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule",
+        "requested_rails": {},
+        "startup_proof": {
+          "schema": "a2agent-mode-v1",
+          "enabled": true,
+          "bootstrap_complete": true,
+          "model": "shared-CTRL-instrument-bootstrap; paused socket ownership"
+        },
+        "artifact_root": "D:\\gsqs\\mcpclose-20261016\\final-v2\\p3-graceful",
+        "read_only_media_launch": true,
+        "shutdown": {
+          "schema": "a2mcp-shutdown-v1",
+          "owned": true,
+          "pending_request": null,
+          "effects_unknown": false,
+          "quit_attempted": true,
+          "quit_acknowledged": true,
+          "transport_closed": true,
+          "forced_termination": false,
+          "outcome": "owned-exited",
+          "errors": []
+        }
+      },
+      "ok": true
+    },
+    {
+      "platform": 3,
+      "pending": true,
+      "pending_before_close": {
+        "sequence": 6,
+        "type": 9,
+        "effect": "unknown until original response; timeout is not cancellation"
+      },
+      "close_seconds": 2.0819477000040933,
+      "live_before_fixture_cleanup": false,
+      "receipt_before_fixture_cleanup": {
+        "schema": "a2mcp-session-v1",
+        "owned": true,
+        "pid": 74860,
+        "closed": true,
+        "exit_code": 1,
+        "executable": "D:\\Projects\\gssquared-fork\\build\\GSSquared.exe",
+        "executable_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+        "identity_model": "SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule",
+        "requested_rails": {},
+        "startup_proof": {
+          "schema": "a2agent-mode-v1",
+          "enabled": true,
+          "bootstrap_complete": true,
+          "model": "shared-CTRL-instrument-bootstrap; paused socket ownership"
+        },
+        "artifact_root": "D:\\gsqs\\mcpclose-20261016\\final-v2\\p3-pending",
+        "read_only_media_launch": true,
+        "shutdown": {
+          "schema": "a2mcp-shutdown-v1",
+          "owned": true,
+          "pending_request": {
+            "sequence": 6,
+            "type": 9,
+            "effect": "unknown until original response; timeout is not cancellation"
+          },
+          "effects_unknown": true,
+          "quit_attempted": false,
+          "quit_acknowledged": false,
+          "transport_closed": true,
+          "forced_termination": true,
+          "outcome": "owned-terminated",
+          "errors": []
+        }
+      },
+      "ok": true
+    },
+    {
+      "platform": 3,
+      "attached": true,
+      "shutdown": {
+        "schema": "a2mcp-shutdown-v1",
+        "owned": false,
+        "pending_request": null,
+        "effects_unknown": false,
+        "quit_attempted": false,
+        "quit_acknowledged": false,
+        "transport_closed": true,
+        "forced_termination": false,
+        "outcome": "attached-disconnected",
+        "errors": []
+      },
+      "live_after_attached_close": true,
+      "fixture_owner_exit_code": 0,
+      "ok": true
+    },
+    {
+      "platform": 5,
+      "pending": false,
+      "close_seconds": 0.1769270999939181,
+      "live_before_fixture_cleanup": false,
+      "receipt_before_fixture_cleanup": {
+        "schema": "a2mcp-session-v1",
+        "owned": true,
+        "pid": 74996,
+        "closed": true,
+        "exit_code": 0,
+        "executable": "D:\\Projects\\gssquared-fork\\build\\GSSquared.exe",
+        "executable_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+        "identity_model": "SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule",
+        "requested_rails": {},
+        "startup_proof": {
+          "schema": "a2agent-mode-v1",
+          "enabled": true,
+          "bootstrap_complete": true,
+          "model": "shared-CTRL-instrument-bootstrap; paused socket ownership"
+        },
+        "artifact_root": "D:\\gsqs\\mcpclose-20261016\\final-v2\\p5-graceful",
+        "read_only_media_launch": true,
+        "shutdown": {
+          "schema": "a2mcp-shutdown-v1",
+          "owned": true,
+          "pending_request": null,
+          "effects_unknown": false,
+          "quit_attempted": true,
+          "quit_acknowledged": true,
+          "transport_closed": true,
+          "forced_termination": false,
+          "outcome": "owned-exited",
+          "errors": []
+        }
+      },
+      "ok": true
+    },
+    {
+      "platform": 5,
+      "pending": true,
+      "pending_before_close": {
+        "sequence": 6,
+        "type": 9,
+        "effect": "unknown until original response; timeout is not cancellation"
+      },
+      "close_seconds": 2.083613999944646,
+      "live_before_fixture_cleanup": false,
+      "receipt_before_fixture_cleanup": {
+        "schema": "a2mcp-session-v1",
+        "owned": true,
+        "pid": 84120,
+        "closed": true,
+        "exit_code": 1,
+        "executable": "D:\\Projects\\gssquared-fork\\build\\GSSquared.exe",
+        "executable_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+        "identity_model": "SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule",
+        "requested_rails": {},
+        "startup_proof": {
+          "schema": "a2agent-mode-v1",
+          "enabled": true,
+          "bootstrap_complete": true,
+          "model": "shared-CTRL-instrument-bootstrap; paused socket ownership"
+        },
+        "artifact_root": "D:\\gsqs\\mcpclose-20261016\\final-v2\\p5-pending",
+        "read_only_media_launch": true,
+        "shutdown": {
+          "schema": "a2mcp-shutdown-v1",
+          "owned": true,
+          "pending_request": {
+            "sequence": 6,
+            "type": 9,
+            "effect": "unknown until original response; timeout is not cancellation"
+          },
+          "effects_unknown": true,
+          "quit_attempted": false,
+          "quit_acknowledged": false,
+          "transport_closed": true,
+          "forced_termination": true,
+          "outcome": "owned-terminated",
+          "errors": []
+        }
+      },
+      "ok": true
+    },
+    {
+      "platform": 5,
+      "attached": true,
+      "shutdown": {
+        "schema": "a2mcp-shutdown-v1",
+        "owned": false,
+        "pending_request": null,
+        "effects_unknown": false,
+        "quit_attempted": false,
+        "quit_acknowledged": false,
+        "transport_closed": true,
+        "forced_termination": false,
+        "outcome": "attached-disconnected",
+        "errors": []
+      },
+      "live_after_attached_close": true,
+      "fixture_owner_exit_code": 0,
+      "ok": true
+    }
+  ]
+}

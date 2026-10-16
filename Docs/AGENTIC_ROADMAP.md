@@ -34,6 +34,14 @@ real-hardware witnesses and the existing replay/drift prerequisites.
 file is the tracked summary. The owner's 2026-10-16 direction makes normal
 commit/sync part of validated phase closeout; the policy is `HANDOFF.md` section 7.
 
+**MCP close-out continuation, 2026-10-16:** bounded managed QUIT/exit waits and
+typed shutdown evidence preserve unresolved requests and owned termination;
+attached machines remain controllable. Six dual-platform lifecycle cases and
+26 Python tests pass. Final frozen-input validation: 14/14 gates, 14/14 native
+CTests, 42 unchanged boot checks and two stdio descriptor launches.
+Contract: `DebugClient.md#managed-close-out`; evidence:
+`reports/gssquared-mcp-close-20261016/README.md`.
+
 **Fleet continuation, 2026-10-16:** explicit independent matrices, staged inputs,
 bounded event closeouts and per-cell assertions now run through `fleet.py`.
 Native discovery exposes its structural schema option; a shared typed writeback
@@ -83,6 +91,8 @@ Evidence and acceptance details:
 | Expand observations from pilot uncertainties | Emulator: add the general missing transition/data-flow/resource channel exposed by the pilot; distinguish observed and inferred causality, check loss and armed/unarmed dual-platform behavior | Implemented the pilot-needed general input/register preservation, per-PC cost and PC-attributed CPU write-footprint companion channels, with explicit windows/loss and armed/unarmed dual-platform proof. Universal data flow, DMA/device transitions and other gaps remain open |
 | Close measured findings into curation | Rosetta: preserve counterexamples and workload constraints, refine/fuse/specialize candidate forms, retain useful nondominated variants and revalidate affected callers; hardware claims require hardware witnesses | First feedback complete: Rosetta evidence/INDEX/curation log/acceptance queue record scope and speed/size tradeoffs; false optimality/bank-length claims corrected without changing library instructions. Broader caller/hardware promotion and automatic selection remain open |
 | Remove file-harness executable-name assumptions | Fork harness: exact native start ticks and executable path, explicit mismatch/metadata refusals without command publication, renamed executables on both platforms | Implemented; 40 focused checks plus full-stack evidence in `reports/gssquared-queue-harness-20261016/README.md`. Existing receipts without identity fields require a fresh session |
+| Bound managed close-out and preserve unknown outcomes | Fork MCP/SDK: bounded QUIT, pending identity before disconnect, only owned children reaped, attached machines left controllable, idempotent receipts | Implemented with six native lifecycle cases and 26 Python tests; full frozen-input validation passes all 14 gates, 14 native tests and 42 pinned boot checks, plus two stdio launches. `reports/gssquared-mcp-close-20261016/README.md` |
+| Verify raw artifact I/O failures | Fork artifact producers: missing/failed payload or sidecar writes must fail visibly; a real zero-record artifact remains valid | Next: reproduce silent write/open failures and extend writer/reader checks without changing successful raw formats or pinned boots |
 | Adapt inherited package-release tooling for this fork | Fork packaging: explicit fork branch/repository, non-fork origins and upload overrides refused, UCRT64 Windows recipe, no network in policy fixtures | Implemented in the stale audit under the owner's explicit no-upstream direction; see report for fixture results. Actual multi-host packages remain unbuilt and unuploaded; ordinary phase sync remains handoff section 7 |
 | Generalize retained campaign helpers | Fork tooling: isolated invocation/child directories, staged media/metadata, explicit pins/provider identities, restored caller environment and retained receipts | Implemented; 20 focused scout checks and current gate integration in the harness queue report |
 | Consolidate alternate implementation references | Fork source: active Mockingboard library/headers, compatibility declarations and disabled test/reference variants have explicit dependency dispositions before retirement | Complete reference consolidation in `MOCKINGBOARD_IMPLEMENTATIONS.md`; historical notebook points there. Active paths and disabled fixtures are preserved. Any later file removal remains a compatibility migration requiring named consumer evidence |

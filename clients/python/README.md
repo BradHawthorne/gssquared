@@ -81,6 +81,14 @@ Use `wait_agent_command()` or raw `wait_response()` to recover the original
 result without reissuing; terminal transport failures close the connection.
 Neither a timeout nor disconnection establishes cancellation.
 
+`Client.quit(timeout=seconds)` can bound its reply wait. Managed MCP close-out
+uses bounded QUIT/exit waits and reaps only its own child if necessary; attach
+only disconnects. The additive `shutdown` object in `mcp-session.json` retains
+pending request identity, unknown effects, QUIT acknowledgement, forced
+termination and close errors. `closed=true` proves process exit, not guest
+success or complete evidence. See
+[managed close-out](../../Docs/DebugClient.md#managed-close-out).
+
 ## Tests (framing and MCP protocol fixtures)
 
 ```bash
