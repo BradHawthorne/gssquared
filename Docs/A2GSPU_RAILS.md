@@ -570,8 +570,8 @@ the early-boot figure as the outlier it is.
 | `A2GSPU_FORCE_KEY=<hex-ascii>` | force the ADB `$C000` keyboard latch to return this key (drives a `$C000`-polling guest headlessly) | manipulate | env |
 | `A2GSPU_KEYSCHED=<file>` | a **schedule** of keystrokes read from a file, injected entry by entry. Lines: `<frame> <keys>` (with `{RETURN}` `{ESC}` `{SPACE}`), `<frame> PRESS <hex2> [mods]`, `WAIT <substring>` (the 40-column text page, polled 4x a second), or `WHEN <cond>[,<cond>]` — a wait written as a **machine condition** in the `A2GSPU_TRAP` grammar (`WHEN z8(24)==0`, `WHEN pc>=6000,m8(E1C000)>7f`), checked every frame through the probe, all must hold. A wait entry gates the entries after it. A malformed `WHEN` is fatal at arm (exit 2), like a missing file. At exit the schedule states how far it got — `all N entries reached`, or `K of N entries reached; stopped at entry K+1: WHEN '<cond>' never held` (or the `WAIT` text, or the frame that never came) — where a stalled schedule used to leave no trace. Distinct from `SPIKE_KEYS`, which is one literal string injected at one frame. Canonical name for `WIZ5_KEYS` | manipulate | env |
 | `A2GSPU_KEYSCHED_DELAY=N` | frames between scheduled keystrokes. Canonical name for `WIZ5_KEY_DELAY` | manipulate | env |
-| `A2GSPU_WRITEBACK=1` | write in-memory (possibly modified) disks back to their **host files** at spike end. OFF by default under mutation-guard discipline — use only on writable scratch images. Canonical name for `WIZ5_WRITEBACK` | manipulate | env |
-| `A2GSPU_NO_WRITEBACK=1` | suppress write-back even when `WRITEBACK` is set. Honoured across **both** spellings, so the guard cannot be bypassed by setting the other name. Canonical for `WIZ5_NO_WRITEBACK` | manipulate | env |
+| `A2GSPU_WRITEBACK=1` | write in-memory (possibly modified) disks back to their **host files** at spike end. OFF by default under mutation-guard discipline — use only on writable scratch images. Canonical name for `WIZ5_WRITEBACK`. `rail read` returns the shared typed `a2writeback-policy-v1` predicate | manipulate | env; read |
+| `A2GSPU_NO_WRITEBACK=1` | suppress write-back even when `WRITEBACK` is set. Honoured across **both** spellings, so the guard cannot be bypassed by setting the other name. Canonical for `WIZ5_NO_WRITEBACK`. `rail read` returns requested/suppressed/flush-at-spike-end plus canonical/alias presence flags; this predicate does not govern explicit save/unmount, BRAM or arbitrary host endpoints. These flags test **presence**, including a value of `0`; unset them to remove them | manipulate | env; read |
 
 *(Live/interactive manipulation is the CTRL rail's `keys`/`press`/`holdkey`/`mount`/`save`/`restore` verbs, below.)*
 
@@ -741,8 +741,8 @@ none) and are the named exemption in `railparity.ps1`.
 | `WIZ5_KEYS` | legacy alias for `A2GSPU_KEYSCHED` | alias | env |
 | `WIZ5_KEY_DELAY` | legacy alias for `A2GSPU_KEYSCHED_DELAY` | alias | env |
 | `WIZ5_KEYRAM` | legacy alias for `A2GSPU_KEYRAM` | alias | env |
-| `WIZ5_WRITEBACK` | legacy alias for `A2GSPU_WRITEBACK` | alias | env |
-| `WIZ5_NO_WRITEBACK` | legacy alias for `A2GSPU_NO_WRITEBACK`; the suppression is honoured under **either** spelling | alias | env |
+| `WIZ5_WRITEBACK` | legacy alias for `A2GSPU_WRITEBACK`; `rail read` returns the same shared writeback policy | alias | env; read |
+| `WIZ5_NO_WRITEBACK` | legacy alias for `A2GSPU_NO_WRITEBACK`; the suppression is honoured under **either** spelling; `rail read` returns the same shared policy | alias | env; read |
 
 ## Device / determinism — reproducible oracle knobs
 

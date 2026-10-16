@@ -1,0 +1,18 @@
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":true,"outcome":"pass"}
+PASS 2x2 platform/seed fleet reports all four passing cells
+PASS aggregate order is plan order despite concurrent completion
+PASS distinct owned processes exit cleanly with media launch policy retained
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 71, in <module>
+    args=parser.parse_args();run(args.exe.resolve(),args.out,args.expect_discovery)
+                             ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 33, in run
+    check(all(row['event_capture']['complete'] and row['event_capture']['received']>0 and (Path(row['artifact_directory'])/'artifacts/events.jsonl').is_file() for row in passed['cells']),'each cell retains a closed, complete native event subset')
+          ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 33, in <genexpr>
+    check(all(row['event_capture']['complete'] and row['event_capture']['received']>0 and (Path(row['artifact_directory'])/'artifacts/events.jsonl').is_file() for row in passed['cells']),'each cell retains a closed, complete native event subset')
+              ~~~^^^^^^^^^^^^^^^^^
+KeyError: 'event_capture'

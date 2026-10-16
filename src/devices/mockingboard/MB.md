@@ -1,5 +1,11 @@
 # MB Dev Notes
 
+> Historical development notebook. The active build and retained alternatives
+> are distinguished in the fork's
+> [implementation map](../../../Docs/MOCKINGBOARD_IMPLEMENTATIONS.md).
+> Old failures and next-step notes below describe their original experiments;
+> use the current gate receipts before treating them as live defects.
+
 So the AppleWin 6522 code looks a lot like what I was doing. Calculating event timers to fire in the future, calculating what the counter's value is expected to be at a certain point, this is complex. Proceed with trying it out cycle-by-cycle.
 
 At least, use the cycle-by-cycle to validate operation, develop tests, then we can use the tests against the more complex version.
@@ -360,4 +366,4 @@ C492:FF
 Oh, it says C490-C493 are for talking to the speech chip. I never did figure out what memory locations are used on a regular mockingboard for that..
 
 It seems like you can write to both AYs at the same time. So each 6522 controls a left/right pair? Interesting.
-Unclear what C0CD is. 
+Unclear what C0CD is.

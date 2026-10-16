@@ -1,0 +1,15 @@
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+PASS 2x2 platform/seed fleet reports all four passing cells
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 64, in <module>
+    args=parser.parse_args();run(args.exe.resolve(),args.out,args.expect_discovery)
+                             ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 29, in run
+    check(all(row['native_companion_discovery'] and row['native_companion_discovery']['plan_schema']=='a2fleet-plan-v1' for row in passed['cells']),'native capabilities discover the fleet companion and plan schema')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: native capabilities discover the fleet companion and plan schema

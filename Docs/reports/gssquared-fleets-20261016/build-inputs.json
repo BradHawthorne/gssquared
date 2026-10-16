@@ -1,0 +1,139 @@
+{
+  "base_commit": "1878ecc98cbaffd2c267462479c14a19ce37ea20",
+  "overlay": [
+    {
+      "path": "Docs/A2GSPU_RAILS.md",
+      "sha256": "cffdb24af645a60dee5cde924fa21f1f1a7b28190570654f04660f52b84fa4af"
+    },
+    {
+      "path": "Docs/AGENTIC_ROADMAP.md",
+      "sha256": "86b98b0e185a241115a7c0295f2c7d59718cc4d9cccf55f29f5c04dcbb82cda4"
+    },
+    {
+      "path": "Docs/FLEETS.md",
+      "sha256": "0c8d1d6643586dff7b7d40adba3ddd8ca91df3e33fdc06c69cd5852ac32c36a5"
+    },
+    {
+      "path": "Docs/HANDOFF.md",
+      "sha256": "a60a1e971a922dda95043cc8898041a69a0d5bd95cffb12a4124f95bc8069812"
+    },
+    {
+      "path": "Docs/MOCKINGBOARD_IMPLEMENTATIONS.md",
+      "sha256": "e9a1e4fce966b7c7a8f1aef45d3f984eaad6fc6e1079b6f264aa58ac0f4ce30e"
+    },
+    {
+      "path": "Docs/reports/gssquared-fleets-20261016/README.md",
+      "sha256": "6a1e3e42478d79bc689be016a14460424fd796ad47aa0a7549eb7b339ccf2103"
+    },
+    {
+      "path": "Docs/reports/gssquared-fleets-20261016/mcp-launch.json",
+      "sha256": "65171bee766f26b858ce1386b06e19eff1e06bdf2c9932107cccb43d8c8fc2b0"
+    },
+    {
+      "path": "README.md",
+      "sha256": "94132b2db3ad545dbe5b47358d1beb80020643367eae9fb06a2e636d677fc76b"
+    },
+    {
+      "path": "apps/interfacecontracttest/main.cpp",
+      "sha256": "1df825397339af035a895c68319a8264d09d10085dd9cffb8fa46710716e3c4d"
+    },
+    {
+      "path": "clients/python/README.md",
+      "sha256": "92776c80e0d5eac8d1d3bc937f515b74296affffbcdaeda2d6dea5758f6f9e2f"
+    },
+    {
+      "path": "clients/python/src/gs2debug/mcp.py",
+      "sha256": "d834862de2bab513477b7de67f45564993fb72f655839116f291424356f92a67"
+    },
+    {
+      "path": "mkdocs.yml",
+      "sha256": "7671c88c9d97c31f9c4d84a89e15300a07f39a99de5130d11fa13c83b7bb5f11"
+    },
+    {
+      "path": "src/a2gspu_inspect.hpp",
+      "sha256": "1877e7b15231d8cad04138f66974e5b849111e221bd4872af47cd44350256c6d"
+    },
+    {
+      "path": "src/a2gspu_rail_setters.cpp",
+      "sha256": "c9f078d656f51af783026e76c83ea66734e3ddee4c429892db4aac173f252422"
+    },
+    {
+      "path": "src/a2gspu_rails_registry.hpp",
+      "sha256": "78d40623cb63c4e5c2a55c9d23c9120060174dfae1553e733c89b8a6381a1b9b"
+    },
+    {
+      "path": "src/a2gspu_spike.cpp",
+      "sha256": "fc5daa5cc5e0debb5be8b3b615c6a1cf5fb24cb6464eedce4acc5dfdf86a5ce2"
+    },
+    {
+      "path": "src/a2gspu_writeback.hpp",
+      "sha256": "ead069f0160c9f69e0154faaf11ab5377f535a177a6ccbd472e58fd6fcd39923"
+    },
+    {
+      "path": "src/devices/mockingboard/MB.md",
+      "sha256": "1a320b63a1c6013b6265b3ccea2db28cf74366738a3c36c83b01d656c390db77"
+    },
+    {
+      "path": "tools/a2rail/fleet.py",
+      "sha256": "c94ef8be7689c648571184831682dc8c2cd37864841fd4badbe88fe4879c999d"
+    },
+    {
+      "path": "tools/a2rail/fleetcheck.py",
+      "sha256": "121b35baf1a0d1fe4360d7e4f807575a500854841369ccf709a2a29f8b2f778f"
+    },
+    {
+      "path": "tools/a2rail/p0check.py",
+      "sha256": "80c58abdebfec5f31ba63ae94bf3a2bea64fd60d7be16bf3db04f66b375ddb9b"
+    },
+    {
+      "path": "tools/a2rail/readonlymediacheck.py",
+      "sha256": "0153063d438a2d2a9461969095f1ee3ae52e3382db58c74e33218042faccf72c"
+    },
+    {
+      "path": "tools/a2rail/test_fleet.py",
+      "sha256": "4a0e72f4c227c28d6380f4761f7cad45060ce615400e56e09216c56b1372e31f"
+    }
+  ],
+  "source_model": "exported commit plus digest-bound reviewed working files; configure-time revision names base, not overlay",
+  "vendored_snapshot": {
+    "sha256": "f270afdb4c093769509a3dc278cfe7b7df5fad3e9372ac689488e3cd1a47d647",
+    "files": 7459
+  },
+  "dependency_origin": "unchanged verified publication export; same pinned root and nested revisions",
+  "local_inputs": {
+    "assets/roms/apple2gs3/main.rom": {
+      "sha256": "4e606469961649381216b2a61334ccb29af4da90c630df19214b08ff7fdb9bc5",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs3/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "assets/roms/apple2gs4/main.rom": {
+      "sha256": "565d8ca073e5c46367ca56d4b12827020e76e6a0bf6c2300da0989161aa34ad9",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs4/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "corpus/DOS3.3_MASTER.dsk": {
+      "sha256": "eac550ddb65ef9b8ae34f6fe3523ec6572a5672e7ae07becc950acfdd185dbb1",
+      "bytes": 143360
+    },
+    "corpus/gsos601.po": {
+      "sha256": "ae7ca90bab81f379c9ff5770d50565e0cbec4f9b633872c2119282e4a0e2778e",
+      "bytes": 33554432
+    },
+    "corpus/_finder.po": {
+      "sha256": "4f440bacbdbe8a0180479c7ebac853d41f2777042cb46343f2f14322c31b024e",
+      "bytes": 33553920
+    },
+    "corpus/mb-audit-v1.61.po": {
+      "sha256": "d1d94dd3d1254dc46c5aa3c943c9d67cd3cc77a199df5c6738ee3c78a7a38f8a",
+      "bytes": 143360
+    }
+  },
+  "protected_consumer_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "overlay_copy_model": "content comparison then copyfile with current destination mtime; reviewed code timestamps explicitly refreshed after discovering stale copy2 metadata"
+}

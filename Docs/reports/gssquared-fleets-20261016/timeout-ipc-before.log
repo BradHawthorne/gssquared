@@ -1,0 +1,32 @@
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+PASS 2x2 platform/seed fleet reports all four passing cells
+PASS aggregate order is plan order despite concurrent completion
+PASS distinct owned processes exit cleanly with media launch policy retained
+PASS at least two live native cell intervals overlap
+PASS cell retains staged inputs, context and verdict: p3-s1
+PASS cell retains staged inputs, context and verdict: p3-s2
+PASS cell retains staged inputs, context and verdict: p5-s1
+PASS cell retains staged inputs, context and verdict: p5-s2
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":false,"outcome":"assertion-failure"}
+PASS one planted bad cell is the only red cell
+PASS red cell identity is exact
+PASS reused output refuses without overwriting evidence
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+PASS input identity failure is inconclusive before native launch
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 62, in <module>
+    args=parser.parse_args();run(args.exe.resolve(),args.out)
+                             ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 51, in run
+    check(not row['ok'] and row['outcome']=='inconclusive' and row.get('effects_unknown') and row.get('exit_code') is not None,'native budget expiry preserves unknown effects and reaps owned child')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: native budget expiry preserves unknown effects and reaps owned child

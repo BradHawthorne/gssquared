@@ -4,6 +4,7 @@
 #include "../../src/util/audio_capture.hpp"
 #include "../../src/a2gspu_events.hpp"
 #include "../../src/a2gspu_agent.hpp"
+#include "../../src/a2gspu_writeback.hpp"
 #include "../../src/util/EventTimer.hpp"
 #include "../../src/util/InterruptController.hpp"
 #include <chrono>
@@ -14,6 +15,12 @@ uint64_t debug_level=0;
 int main() {
     int checks=0;
     auto check=[&](bool pass){if(!pass)throw std::runtime_error("interface contract check "+std::to_string(checks));++checks;};
+    // Independent truth table: only request-with-no-guard combinations flush.
+    const bool flush_expected[16]={false,true,true,true,false,false,false,false,false,false,false,false,false,false,false,false};
+    for(unsigned bits=0;bits<16;++bits) {
+        a2writeback::Policy policy{bool(bits&1),bool(bits&2),bool(bits&4),bool(bits&8)};
+        check(policy.flush()==flush_expected[bits]);
+    }
     check(a2agent::valid_command("cpu") && a2agent::valid_command("load 0800 source with spaces.bin"));
     check(a2agent::valid_command(std::string("text ")+"\xc3\xa9"));
     for(auto text:{std::string(),std::string(2048,'x'),std::string("cpu\nreset"),std::string("cpu\0reset",9),std::string("\xc0\x80"),std::string("\xed\xa0\x80"),std::string("\xf4\x90\x80\x80"),std::string("\xe2\x82")})check(!a2agent::valid_command(text));

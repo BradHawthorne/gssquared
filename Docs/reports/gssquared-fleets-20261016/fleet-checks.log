@@ -1,0 +1,32 @@
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+PASS 2x2 platform/seed fleet reports all four passing cells
+PASS native capabilities discover the fleet companion, plan schema and schema option
+PASS aggregate order is plan order despite concurrent completion
+PASS distinct owned processes exit cleanly with media launch policy retained
+PASS each cell retains a closed, complete native event subset
+PASS at least two live native cell intervals overlap
+PASS cell retains staged inputs, context and verdict: p3-s1
+PASS cell retains staged inputs, context and verdict: p3-s2
+PASS cell retains staged inputs, context and verdict: p5-s1
+PASS cell retains staged inputs, context and verdict: p5-s2
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":false,"outcome":"assertion-failure"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+PASS one planted bad cell is the only red cell
+PASS red cell identity is exact
+PASS CLI returns 1 and retains every cell for a failed matrix
+PASS CLI distinguishes invalid plans before creating output
+PASS reused output refuses without overwriting evidence
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+PASS input identity failure is inconclusive before native launch
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+PASS native budget expiry preserves unknown effects and reaps owned child
+PASS pending-budget receipt proves no owned process is left running
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+PASS explicit pinned .gs2 configuration launches from a staged cell input
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+PASS native event loss cannot pass the aggregate

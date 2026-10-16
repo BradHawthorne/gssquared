@@ -1,0 +1,11 @@
+A2GSPU_RAMDISK {'schema': 'a2ctrl-reply-v2', 'ok': True, 'status': 'OK', 'command': 'rail read A2GSPU_RAMDISK', 'text': 'status=OK seed=1 faketime=1000000000 ramdisk=0 bram=none pace=fast rom=16384/553724E147B80137 build=0.11.1874+bd276467(configure-time) exe=5EC705E4E0B0EFAB machine=3/p3 slots=1:prodos_clock,2:mem_expansion,4:mockingboard,5:mouse,6:disk_ii,7:bazfast3', 'data': None}
+Traceback (most recent call last):
+  File "D:\gsqs\fleet-media-probe-20261016.py", line 12, in <module>
+    reply=backend.client.agent_command('rail read '+name)
+  File "D:\projects/gssquared-fork/clients/python/src\gs2debug\client.py", line 230, in agent_command
+    return self._decode_agent_reply(command,self.request(AGENT_COMMAND,raw,timeout=timeout),check)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\projects/gssquared-fork/clients/python/src\gs2debug\client.py", line 237, in _decode_agent_reply
+    if check and not value['ok']:raise ProtocolError(0,str(value.get('text','agent command failed')))
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+gs2debug.errors.ProtocolError: protocol error 0: status=FAIL no-readback A2GSPU_NO_WRITEBACK -- launch-only; it reports on stdout at spike end

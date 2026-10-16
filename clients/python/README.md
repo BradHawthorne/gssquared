@@ -36,6 +36,12 @@ PYTHONPATH=src python examples/hello_ping.py /tmp/gs2.sock
 
 ## Native agent tools and MCP
 
+`--read-only-media` pins RAMDISK=1 and NO_WRITEBACK=1 for managed sessions and
+their nested batches; contradictory launch settings refuse. Native typed
+`rail read A2GSPU_NO_WRITEBACK` exposes the current spike-end flush predicate
+and its scope. The [fleet companion](../../Docs/FLEETS.md) uses this policy
+for independent matrix cells, with bounded event capture and per-cell assertions.
+
 After HELLO, `Client.agent_tools()` discovers all native instruments;
 `pause()` then `agent_command('step 1')` uses the shared CTRL handler and native
 JSON verdict. Commands can deliberately change guest/host state. See the

@@ -42,6 +42,16 @@ recycled/unrelated PID or incomplete receipt refuses before publication. Restart
 old sessions whose receipts predate these identity fields; PID/name guesses are
 not a fallback.
 
+When validating exported source, freeze the implementation before compiling.
+If a reviewed overlay is copied into an already built export, copy changed
+contents with a current destination timestamp and verify that Ninja recompiles
+the affected targets. Preserving an older source mtime can hide changed content
+from an incremental build. The fleet phase's end-to-end capability check caught
+exactly that stale-object case; it now requires the advertised schema option.
+Use a clean build when object provenance is uncertain. A configure-time Git
+label alone does not identify a dirty overlay: retain input digests, executable
+identity, native capability proof and actual validation results.
+
 `scripts/release/gs2-release` and its local skill target only the owner's fork:
 the default ref is `origin/a2gspu`, host commands refuse non-fork origins and
 uploads refuse any destination other than `BradHawthorne/gssquared`, including

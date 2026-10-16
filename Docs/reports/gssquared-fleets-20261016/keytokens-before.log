@@ -1,0 +1,27 @@
+test_duplicate_or_escaping_ids_refuse (__main__.FleetPlanTests.test_duplicate_or_escaping_ids_refuse) ... ok
+test_explicit_cell_passes (__main__.FleetPlanTests.test_explicit_cell_passes) ... ok
+test_injection_unknown_fields_and_invalid_bounds_refuse (__main__.FleetPlanTests.test_injection_unknown_fields_and_invalid_bounds_refuse) ... ok
+test_missing_assertions_refuses (__main__.FleetPlanTests.test_missing_assertions_refuses) ... ok
+test_native_key_tokens_remain_native_syntax (__main__.FleetPlanTests.test_native_key_tokens_remain_native_syntax) ... ERROR
+test_platform_and_config_are_exclusive (__main__.FleetPlanTests.test_platform_and_config_are_exclusive) ... ok
+test_undeclared_input_and_escaping_output_refuse (__main__.FleetPlanTests.test_undeclared_input_and_escaping_output_refuse) ... ok
+
+======================================================================
+ERROR: test_native_key_tokens_remain_native_syntax (__main__.FleetPlanTests.test_native_key_tokens_remain_native_syntax)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\test_fleet.py", line 44, in test_native_key_tokens_remain_native_syntax
+    fleet.validate(plan)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleet.py", line 83, in validate
+    for text in job[key]:command(text);expand(text,Path.cwd().resolve()/'fleet-validation',inputs)
+                                       ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleet.py", line 55, in expand
+    if '{' in result or '}' in result:raise ValueError('unknown fleet placeholder')
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: unknown fleet placeholder
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.003s
+
+FAILED (errors=1)

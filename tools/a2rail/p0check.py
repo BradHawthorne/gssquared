@@ -351,7 +351,7 @@ def main():
     parser.add_argument("--exe",type=Path,required=True)
     args = parser.parse_args()
     profile.selftest()
-    for tool in ('ctrlclientcheck.py','guestviewcheck.py','outputassertcheck.py','test_experiment_inputs.py','test_cidarbindings.py'):
+    for tool in ('ctrlclientcheck.py','guestviewcheck.py','outputassertcheck.py','test_experiment_inputs.py','test_cidarbindings.py','test_fleet.py'):
         subprocess.run([sys.executable,'-I',str(Path(__file__).with_name(tool))],check=True)
     for platform in (3,5):
         counts(args.exe.resolve(),platform)
@@ -367,8 +367,9 @@ def main():
                     "--exe",str(args.exe.resolve())],check=True)
     subprocess.run([sys.executable,"-I",str(Path(__file__).with_name("guestlivecheck.py")),
                     "--exe",str(args.exe.resolve())],check=True)
-    for tool in ('capturecheck.py','contentcheck.py','faultcheck.py','inputcheck.py','devicecoveragecheck.py','socketstreamcheck.py','lifecyclecheck.py','sockettoolscheck.py','uicheck.py','mcpcheck.py','contextcheck.py','experimentcheck.py','experimentinputcheck.py'):
+    for tool in ('capturecheck.py','contentcheck.py','faultcheck.py','inputcheck.py','devicecoveragecheck.py','socketstreamcheck.py','lifecyclecheck.py','sockettoolscheck.py','uicheck.py','mcpcheck.py','contextcheck.py','experimentcheck.py','experimentinputcheck.py','readonlymediacheck.py'):
         subprocess.run([sys.executable,'-I',str(Path(__file__).with_name(tool)), '--exe',str(args.exe.resolve())],check=True)
+    subprocess.run([sys.executable,'-I',str(Path(__file__).with_name('fleetcheck.py')),'--exe',str(args.exe.resolve()),'--expect-discovery'],check=True)
     print("P0 checks: ALL GREEN")
 
 

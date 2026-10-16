@@ -1,0 +1,681 @@
+{
+  "root": "D:\\gsqs\\fleet-20261016-evidence-v2",
+  "model": "retained local file identities; closed IPC endpoints are not payloads",
+  "files": [
+    {
+      "path": "bad-input/completed.jsonl",
+      "bytes": 1148,
+      "sha256": "250eced2264596ea115398cdc458304acd86725439c359404158c27597e81c9b"
+    },
+    {
+      "path": "bad-input/fleet.json",
+      "bytes": 1619,
+      "sha256": "28b068b6d8dc5b8e0f27f73eefc590113d319862bd1ed7d901f9b8930506815e"
+    },
+    {
+      "path": "bad-input/p3-s1/job.json",
+      "bytes": 335,
+      "sha256": "0811f64187169fdb15ed3536a9231f4951e9d8fe0b1649d01fb9f3c66b49cd75"
+    },
+    {
+      "path": "bad-input/p3-s1/result.json",
+      "bytes": 1148,
+      "sha256": "250eced2264596ea115398cdc458304acd86725439c359404158c27597e81c9b"
+    },
+    {
+      "path": "bad-input/plan.json",
+      "bytes": 385,
+      "sha256": "5e7a1ab3a2fb803e87e20ca7f8713df90e3522b64d67c077f02d8d3cc7e65069"
+    },
+    {
+      "path": "budget/completed.jsonl",
+      "bytes": 6468,
+      "sha256": "72803c413a72d3deda9d8122e0d44f3ed0ea3348f73a570d93e8d6efbc2779d6"
+    },
+    {
+      "path": "budget/fleet.json",
+      "bytes": 6939,
+      "sha256": "d35ca2d9c1534b5d07c7dd09c58c75aa121f346444ad30c00f4a13195aac867c"
+    },
+    {
+      "path": "budget/p3-s1/artifacts/events.jsonl",
+      "bytes": 62566,
+      "sha256": "21d9bdc9314b6e9c2a846273298d8a7cdc0dce4d5197b48f822f2c77666c7623"
+    },
+    {
+      "path": "budget/p3-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "4f743ad6149647f9412ea141b46e89381765685c2a063848288ff7b0f09b70fd"
+    },
+    {
+      "path": "budget/p3-s1/job.json",
+      "bytes": 328,
+      "sha256": "76aec7dbb75c94967839317743dea17eb5137d8991e620a06021c8d1b3dc9542"
+    },
+    {
+      "path": "budget/p3-s1/result.json",
+      "bytes": 6468,
+      "sha256": "72803c413a72d3deda9d8122e0d44f3ed0ea3348f73a570d93e8d6efbc2779d6"
+    },
+    {
+      "path": "budget/p3-s1/session/emulator.log",
+      "bytes": 7374,
+      "sha256": "b9c4935f33921e83a3e1d84e32aa49f6c3736ec24ae2807c15da09544a0f726a"
+    },
+    {
+      "path": "budget/p3-s1/session/mcp-session.json",
+      "bytes": 630,
+      "sha256": "12c18c678567d7d27e7588c69a5b990324f97b35ea637a082a2d3f34e8a720f0"
+    },
+    {
+      "path": "budget/plan.json",
+      "bytes": 378,
+      "sha256": "3c7292daafea25561c2d7a018729660855487744ace11a27cce2a4b0016cf523"
+    },
+    {
+      "path": "checks.json",
+      "bytes": 249,
+      "sha256": "dbdeb211adee1a8709747adab1bffef9056ae6a12d247a752bbdb898344f0d4b"
+    },
+    {
+      "path": "configured/completed.jsonl",
+      "bytes": 11008,
+      "sha256": "1f7ebe6f0633ee9be8d38667a89d01412fa4d70a892a2e31e19eb5fb886928be"
+    },
+    {
+      "path": "configured/fleet.json",
+      "bytes": 11470,
+      "sha256": "99ffa221750de664b675db65e6ea3191ff12393ad8813e7feedf2019a794d9ad"
+    },
+    {
+      "path": "configured/p3-s1/artifacts/context.json",
+      "bytes": 24260,
+      "sha256": "637a0247e0288d71d84f03bd6f14d9f80f701a2fead7f06092fdcc062bdf1c3f"
+    },
+    {
+      "path": "configured/p3-s1/artifacts/events.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "configured/p3-s1/inputs/machine.gs2",
+      "bytes": 393,
+      "sha256": "65f751efc3813eaf6b3f0ecc5555e8a90d723ab2e5dac39fc864fd39ff31d951"
+    },
+    {
+      "path": "configured/p3-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "4f743ad6149647f9412ea141b46e89381765685c2a063848288ff7b0f09b70fd"
+    },
+    {
+      "path": "configured/p3-s1/job.json",
+      "bytes": 535,
+      "sha256": "af148fb974670275dc9809c9a356424e1eafdd3000ff7d6dd65e3af4d01c3430"
+    },
+    {
+      "path": "configured/p3-s1/result.json",
+      "bytes": 11008,
+      "sha256": "1f7ebe6f0633ee9be8d38667a89d01412fa4d70a892a2e31e19eb5fb886928be"
+    },
+    {
+      "path": "configured/p3-s1/session/emulator.log",
+      "bytes": 5913,
+      "sha256": "69757de324075c2950cdcd4da8c3bea93827ba6e1e4c974ac9e2c31223e0da02"
+    },
+    {
+      "path": "configured/p3-s1/session/mcp-session.json",
+      "bytes": 634,
+      "sha256": "fe4f15d0d0295826f34854810251315f30729f9a60fc89705ce7456ce18bdb41"
+    },
+    {
+      "path": "configured/plan.json",
+      "bytes": 585,
+      "sha256": "ff8fe63fda93cf8d517d8f7c5da8360f357fff5af9678dfb1d32f809161f719e"
+    },
+    {
+      "path": "event-loss/completed.jsonl",
+      "bytes": 10712,
+      "sha256": "9ce3255663da62c4d6f36bf0cd36f4790e664b8e6f83d6e810d6438dfd02f340"
+    },
+    {
+      "path": "event-loss/fleet.json",
+      "bytes": 11183,
+      "sha256": "5159933e614963bbc1bf7f1a90d80f292525fb10ddef8c01253945eaee0a7477"
+    },
+    {
+      "path": "event-loss/p3-s1/artifacts/context.json",
+      "bytes": 30263,
+      "sha256": "5c6780fac170333b4d59fed096cfb67a7692b036616b22b7f58692cbc0a47b88"
+    },
+    {
+      "path": "event-loss/p3-s1/artifacts/events.jsonl",
+      "bytes": 1832,
+      "sha256": "2b0c191500ef5857fae56fc93f35d7b03c9ffaf508c50e78ec1d5b831c910b31"
+    },
+    {
+      "path": "event-loss/p3-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "4f743ad6149647f9412ea141b46e89381765685c2a063848288ff7b0f09b70fd"
+    },
+    {
+      "path": "event-loss/p3-s1/job.json",
+      "bytes": 355,
+      "sha256": "748306e90b0ac11292e7da0aaf4d1228eb63b56255e3276c131b14f50ab8d9b4"
+    },
+    {
+      "path": "event-loss/p3-s1/result.json",
+      "bytes": 10712,
+      "sha256": "9ce3255663da62c4d6f36bf0cd36f4790e664b8e6f83d6e810d6438dfd02f340"
+    },
+    {
+      "path": "event-loss/p3-s1/session/emulator.log",
+      "bytes": 5896,
+      "sha256": "0e7839f60d3be93fb742eb911aae2c65cdf150eca53f5400eafad1aa0fa4ad2f"
+    },
+    {
+      "path": "event-loss/p3-s1/session/mcp-session.json",
+      "bytes": 634,
+      "sha256": "4ffe66b8e844db4a4d321c8b38a5959d70193ba8b95e9acedea5a6f48b3440ea"
+    },
+    {
+      "path": "event-loss/plan.json",
+      "bytes": 405,
+      "sha256": "1814e82ec440a0cada4199c8312424b012d303b1604f8c5464651b6173e9e44f"
+    },
+    {
+      "path": "invalid.plan.json",
+      "bytes": 1390,
+      "sha256": "c1d6b186db3c49fed56d587350bfda52e1b94d680cc23edcb79b1db20e347679"
+    },
+    {
+      "path": "one-red/completed.jsonl",
+      "bytes": 42783,
+      "sha256": "3110c12978607af20f2461ed1347be987e55788208c6e731df795bdc654f5b0a"
+    },
+    {
+      "path": "one-red/fleet.json",
+      "bytes": 43265,
+      "sha256": "e318e7af8286da90264b0a1d44fef6fbc526d93cd6e96ee9f30682f11ff28f38"
+    },
+    {
+      "path": "one-red/p3-s1/artifacts/context.json",
+      "bytes": 30263,
+      "sha256": "f3cf1d79692c9ab34951e8398cba1867f067d9df775845e29fb2ebd338066af0"
+    },
+    {
+      "path": "one-red/p3-s1/artifacts/events.jsonl",
+      "bytes": 68112,
+      "sha256": "eb66fdcb7a67e7cf513a09b64480786f46c7d8d62f76baa18151c1c94ec5e892"
+    },
+    {
+      "path": "one-red/p3-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "4f743ad6149647f9412ea141b46e89381765685c2a063848288ff7b0f09b70fd"
+    },
+    {
+      "path": "one-red/p3-s1/job.json",
+      "bytes": 335,
+      "sha256": "3389e58567a9e58d3ffa3ba8f1d110195a84a5a84b3406b1adb9571b975d6ec2"
+    },
+    {
+      "path": "one-red/p3-s1/result.json",
+      "bytes": 10645,
+      "sha256": "a8c770f7b00fddd0579fa09e2bd1b117f79c38a286f497bc6a3a6dde3ff14f70"
+    },
+    {
+      "path": "one-red/p3-s1/session/emulator.log",
+      "bytes": 5890,
+      "sha256": "38809944e42858e37b463ce51abec49dcd07519aa9b32dd18eead693b73b8c42"
+    },
+    {
+      "path": "one-red/p3-s1/session/mcp-session.json",
+      "bytes": 631,
+      "sha256": "8c22144fa664197a4e0c177ef89e04e0c4cb53fc4e17e670395d6856f8d2d7a3"
+    },
+    {
+      "path": "one-red/p3-s2/artifacts/context.json",
+      "bytes": 30263,
+      "sha256": "6d6777e312a8125e0bbcfa498c2f58e3c0ae8bc823cd9c8571210f8c923042fa"
+    },
+    {
+      "path": "one-red/p3-s2/artifacts/events.jsonl",
+      "bytes": 68112,
+      "sha256": "db83b58c387a3d669676ed8d0bab8c4ef2aafb959e9777e40bb254e828953dcf"
+    },
+    {
+      "path": "one-red/p3-s2/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "04c4322cb11491872476f17dd5ee85f0cda7edb8b3a1ef0fe1667d391a202052"
+    },
+    {
+      "path": "one-red/p3-s2/job.json",
+      "bytes": 335,
+      "sha256": "8edafa0660da835a709c32ccbeaddedd28441ba135a3ca94388868ff335c6701"
+    },
+    {
+      "path": "one-red/p3-s2/result.json",
+      "bytes": 10644,
+      "sha256": "a9216accb1ab4aae5084bb89a1a188d848b91b9d33c84610828f02b5f86af329"
+    },
+    {
+      "path": "one-red/p3-s2/session/emulator.log",
+      "bytes": 5890,
+      "sha256": "2930bef9171d2c32d3f2a42ac00435c9af4acdb9b0d8a861ead47b961a993ccc"
+    },
+    {
+      "path": "one-red/p3-s2/session/mcp-session.json",
+      "bytes": 631,
+      "sha256": "a86c2b14ed4ab335c5062e6095c3cf5d0d0b2563c35bf0e21ff9727afce52132"
+    },
+    {
+      "path": "one-red/p5-s1/artifacts/context.json",
+      "bytes": 58230,
+      "sha256": "96d032a2bfd0ab8f363db329d204e06b85b7b5851807c41791fc0fc19b5c0385"
+    },
+    {
+      "path": "one-red/p5-s1/artifacts/events.jsonl",
+      "bytes": 194397,
+      "sha256": "624518fe1890122ec3785548d93714d1115387a4febd1e14229dc42191117156"
+    },
+    {
+      "path": "one-red/p5-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "00fd7c65248b46364ba32321049d33970cecd2e0cbd680c7d97928a064795043"
+    },
+    {
+      "path": "one-red/p5-s1/job.json",
+      "bytes": 335,
+      "sha256": "cc80fe29cae5ad7d9e6cb8d975d74a9ea2648e34be6c835e7badb115aa5402d7"
+    },
+    {
+      "path": "one-red/p5-s1/result.json",
+      "bytes": 10777,
+      "sha256": "76e1a7f776421582f7713c252c8c0c9045a861a3f0adf88d8caf51b3b3c8e66c"
+    },
+    {
+      "path": "one-red/p5-s1/session/emulator.log",
+      "bytes": 6107,
+      "sha256": "fc84cd87083eaac53c1bcbadf63f9efe2fad674f69cc6a6a6b0fa0c0607c0adc"
+    },
+    {
+      "path": "one-red/p5-s1/session/mcp-session.json",
+      "bytes": 631,
+      "sha256": "750fa30a5bc0beb12a915698fad72ea10b6a9fee972a492261e3593529701e94"
+    },
+    {
+      "path": "one-red/p5-s2/artifacts/context.json",
+      "bytes": 58230,
+      "sha256": "12b48f694e221a4e3487373e98b5be9574cae143cae4ad85baebeed8aad4071a"
+    },
+    {
+      "path": "one-red/p5-s2/artifacts/events.jsonl",
+      "bytes": 194397,
+      "sha256": "735d06cb27eb7dedfed6a4b913bec863b9f09b7dd504dea8bb5af06b0dbd6856"
+    },
+    {
+      "path": "one-red/p5-s2/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "484c393379b2770229a85840272ba4e27ca2ae244eb3cb0eabf97a6a2addd6ee"
+    },
+    {
+      "path": "one-red/p5-s2/job.json",
+      "bytes": 335,
+      "sha256": "78778a17d31e03e2988c822da790a4a4ba1e07759e9c74ec84d74dbf3147bf1f"
+    },
+    {
+      "path": "one-red/p5-s2/result.json",
+      "bytes": 10717,
+      "sha256": "0fea3687df2a8abd1fea9d6c8bec1e4d852bba893c18a9c73f0dae7255d27558"
+    },
+    {
+      "path": "one-red/p5-s2/session/emulator.log",
+      "bytes": 6107,
+      "sha256": "f0182b7d1f56eaceab3e169cdae46b8ff1605efff8a1c06e2ece51dfc25268a4"
+    },
+    {
+      "path": "one-red/p5-s2/session/mcp-session.json",
+      "bytes": 631,
+      "sha256": "f7242e9f908c2ab7941b7534a02024fcc431629e429dec41743275338932759c"
+    },
+    {
+      "path": "one-red/plan.json",
+      "bytes": 1387,
+      "sha256": "5e45b0360706a34b403307547fbc42fa535d4fc23f75b54d2ef0cb6b615b2a69"
+    },
+    {
+      "path": "one-red-cli/completed.jsonl",
+      "bytes": 42865,
+      "sha256": "7ef9b92174d2a38c020937fc1771e0437c6a486f9fc78239f0c6af98c4069ba0"
+    },
+    {
+      "path": "one-red-cli/fleet.json",
+      "bytes": 43347,
+      "sha256": "db70d5c4edb2c6b81b214d9e1c5ea3afd7ad7dea840d28de7f9487337a665caa"
+    },
+    {
+      "path": "one-red-cli/p3-s1/artifacts/context.json",
+      "bytes": 30263,
+      "sha256": "e51ed720ede488bc9c23a3f6f4eb7220c26f36deb65226e3fc1a65f077f3a6d5"
+    },
+    {
+      "path": "one-red-cli/p3-s1/artifacts/events.jsonl",
+      "bytes": 68112,
+      "sha256": "e9feb8395385762912cdd79beb38a466c2dbb7b2c9e0ef0d7d24ed51cf78f40c"
+    },
+    {
+      "path": "one-red-cli/p3-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "4f743ad6149647f9412ea141b46e89381765685c2a063848288ff7b0f09b70fd"
+    },
+    {
+      "path": "one-red-cli/p3-s1/job.json",
+      "bytes": 335,
+      "sha256": "3389e58567a9e58d3ffa3ba8f1d110195a84a5a84b3406b1adb9571b975d6ec2"
+    },
+    {
+      "path": "one-red-cli/p3-s1/result.json",
+      "bytes": 10665,
+      "sha256": "276a6fe98f5790aa3db43e56932489ab8d75bcaa2b1361777d59e9c39722cef0"
+    },
+    {
+      "path": "one-red-cli/p3-s1/session/emulator.log",
+      "bytes": 5898,
+      "sha256": "ba7088d6d950e3a61942b7968e8d0d2966fec599ed4ea8f7874b7116f340cb51"
+    },
+    {
+      "path": "one-red-cli/p3-s1/session/mcp-session.json",
+      "bytes": 635,
+      "sha256": "f54b114a7ba1f2008da369ad3f98dcb1f3ecace8b951e494591ef574b290370c"
+    },
+    {
+      "path": "one-red-cli/p3-s2/artifacts/context.json",
+      "bytes": 30263,
+      "sha256": "0195cf583807c131bde502befb0c5426a60f28f90e4bcb1d5ea8573e1a91cf9c"
+    },
+    {
+      "path": "one-red-cli/p3-s2/artifacts/events.jsonl",
+      "bytes": 68112,
+      "sha256": "f2a7f672584d166ff3a79779f751e7b4e3a42718930978b09c320e93f4ef8245"
+    },
+    {
+      "path": "one-red-cli/p3-s2/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "04c4322cb11491872476f17dd5ee85f0cda7edb8b3a1ef0fe1667d391a202052"
+    },
+    {
+      "path": "one-red-cli/p3-s2/job.json",
+      "bytes": 335,
+      "sha256": "8edafa0660da835a709c32ccbeaddedd28441ba135a3ca94388868ff335c6701"
+    },
+    {
+      "path": "one-red-cli/p3-s2/result.json",
+      "bytes": 10665,
+      "sha256": "4f85a38c42da1a3cf3e1a58d62fa1becfcd0c9d28a200936c6b66433c3184f5c"
+    },
+    {
+      "path": "one-red-cli/p3-s2/session/emulator.log",
+      "bytes": 5898,
+      "sha256": "4097019e7c0705d163d37f8fed84deeaeb7532fed98d88d71cd448d22ef4fe3e"
+    },
+    {
+      "path": "one-red-cli/p3-s2/session/mcp-session.json",
+      "bytes": 635,
+      "sha256": "673e18dbb0cc391b8e5dad0300293a197716fb8fe8b37257d528134b8f9903a1"
+    },
+    {
+      "path": "one-red-cli/p5-s1/artifacts/context.json",
+      "bytes": 58229,
+      "sha256": "fddf626bca9f2ea72ea32c3c31f95596ae2697f627161c7a5afff5f16ecc8a3e"
+    },
+    {
+      "path": "one-red-cli/p5-s1/artifacts/events.jsonl",
+      "bytes": 194396,
+      "sha256": "48edfeace49d6bd98a8443ef2c7d8b1dd5f5278b02dc5ec012c3c0f68876779d"
+    },
+    {
+      "path": "one-red-cli/p5-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "00fd7c65248b46364ba32321049d33970cecd2e0cbd680c7d97928a064795043"
+    },
+    {
+      "path": "one-red-cli/p5-s1/job.json",
+      "bytes": 335,
+      "sha256": "cc80fe29cae5ad7d9e6cb8d975d74a9ea2648e34be6c835e7badb115aa5402d7"
+    },
+    {
+      "path": "one-red-cli/p5-s1/result.json",
+      "bytes": 10798,
+      "sha256": "578cef246eb3f1ba9fcd08066e801138e2f7d5a7ef713e04c5ca722d596c52cc"
+    },
+    {
+      "path": "one-red-cli/p5-s1/session/emulator.log",
+      "bytes": 6115,
+      "sha256": "7d3e8ecf1a0453d02dae6fb106c424b40e4bb5dc3d91fc8f9cdaa32df82b57da"
+    },
+    {
+      "path": "one-red-cli/p5-s1/session/mcp-session.json",
+      "bytes": 635,
+      "sha256": "0a572c8d4ce722201956bb60a2a80806acf4841b22b25b012d6d32464145581c"
+    },
+    {
+      "path": "one-red-cli/p5-s2/artifacts/context.json",
+      "bytes": 58230,
+      "sha256": "6f32a312386d5e4486543104187226aeed1fda64cd66cd67603fb251129b9282"
+    },
+    {
+      "path": "one-red-cli/p5-s2/artifacts/events.jsonl",
+      "bytes": 194397,
+      "sha256": "cf4b853fd7d79e530ea74d7ba3d4e97cb99779f4c2576f053d03096d7d3dc450"
+    },
+    {
+      "path": "one-red-cli/p5-s2/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "484c393379b2770229a85840272ba4e27ca2ae244eb3cb0eabf97a6a2addd6ee"
+    },
+    {
+      "path": "one-red-cli/p5-s2/job.json",
+      "bytes": 335,
+      "sha256": "78778a17d31e03e2988c822da790a4a4ba1e07759e9c74ec84d74dbf3147bf1f"
+    },
+    {
+      "path": "one-red-cli/p5-s2/result.json",
+      "bytes": 10737,
+      "sha256": "ead702d41bc831600284589ef8db21ba81049c30c428a7d0cb329c1b30e024b8"
+    },
+    {
+      "path": "one-red-cli/p5-s2/session/emulator.log",
+      "bytes": 6115,
+      "sha256": "dcb78c9e89285e2294df1bf79c9c70d5c3e89d9ac136cfd504425d62c0260e0b"
+    },
+    {
+      "path": "one-red-cli/p5-s2/session/mcp-session.json",
+      "bytes": 635,
+      "sha256": "e9c6c2e1e900f594e0a5bcb0d6264ced7ba727dc771b27f58883ecfc6d9c554b"
+    },
+    {
+      "path": "one-red-cli/plan.json",
+      "bytes": 1387,
+      "sha256": "5e45b0360706a34b403307547fbc42fa535d4fc23f75b54d2ef0cb6b615b2a69"
+    },
+    {
+      "path": "one-red.plan.json",
+      "bytes": 1387,
+      "sha256": "5e45b0360706a34b403307547fbc42fa535d4fc23f75b54d2ef0cb6b615b2a69"
+    },
+    {
+      "path": "p3-s1.bin",
+      "bytes": 6,
+      "sha256": "4f743ad6149647f9412ea141b46e89381765685c2a063848288ff7b0f09b70fd"
+    },
+    {
+      "path": "p3-s2.bin",
+      "bytes": 6,
+      "sha256": "04c4322cb11491872476f17dd5ee85f0cda7edb8b3a1ef0fe1667d391a202052"
+    },
+    {
+      "path": "p5-s1.bin",
+      "bytes": 6,
+      "sha256": "00fd7c65248b46364ba32321049d33970cecd2e0cbd680c7d97928a064795043"
+    },
+    {
+      "path": "p5-s2.bin",
+      "bytes": 6,
+      "sha256": "484c393379b2770229a85840272ba4e27ca2ae244eb3cb0eabf97a6a2addd6ee"
+    },
+    {
+      "path": "pass/completed.jsonl",
+      "bytes": 42665,
+      "sha256": "e4fbaddef4ce5e17830aa48b58a80a9afdd74cd324055a8e3a1934f88e195302"
+    },
+    {
+      "path": "pass/fleet.json",
+      "bytes": 43124,
+      "sha256": "688b9345d6b69a37e9ee99ead69ceecb21c82424ba80e0ef79c31a92bfe91b41"
+    },
+    {
+      "path": "pass/p3-s1/artifacts/context.json",
+      "bytes": 30263,
+      "sha256": "f292c412c6db457260d3c7e8bc1add587c06049c789d6ad38681b38ec4d5d9a5"
+    },
+    {
+      "path": "pass/p3-s1/artifacts/events.jsonl",
+      "bytes": 68112,
+      "sha256": "ba8b7ad426907de011cbccc1162ce12f51f7c81f5f1de7833ea6a4396a53749a"
+    },
+    {
+      "path": "pass/p3-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "4f743ad6149647f9412ea141b46e89381765685c2a063848288ff7b0f09b70fd"
+    },
+    {
+      "path": "pass/p3-s1/job.json",
+      "bytes": 335,
+      "sha256": "3389e58567a9e58d3ffa3ba8f1d110195a84a5a84b3406b1adb9571b975d6ec2"
+    },
+    {
+      "path": "pass/p3-s1/result.json",
+      "bytes": 10630,
+      "sha256": "487b29dec00797b7f6a1917986b1aa5740f0ffe96e1b1ad510bcf67e795c48bf"
+    },
+    {
+      "path": "pass/p3-s1/session/emulator.log",
+      "bytes": 5884,
+      "sha256": "a8ce9b0a33977d0a52810d31c7d50b8994aca078b52cc8ab308e1d7631764d92"
+    },
+    {
+      "path": "pass/p3-s1/session/mcp-session.json",
+      "bytes": 628,
+      "sha256": "0e74b3f09244bc02db0e853de7c265895bfdeaa675e9c156c53c8c970f6c5203"
+    },
+    {
+      "path": "pass/p3-s2/artifacts/context.json",
+      "bytes": 30263,
+      "sha256": "27b972fe4a554391add32a27fc66e4b33a50257cdee14c05d495923d3050ec9d"
+    },
+    {
+      "path": "pass/p3-s2/artifacts/events.jsonl",
+      "bytes": 68112,
+      "sha256": "978fb6d6be1f023964887cfb7ab9cdd13ab6a521f55d0fb18de3b9e94159585f"
+    },
+    {
+      "path": "pass/p3-s2/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "04c4322cb11491872476f17dd5ee85f0cda7edb8b3a1ef0fe1667d391a202052"
+    },
+    {
+      "path": "pass/p3-s2/job.json",
+      "bytes": 335,
+      "sha256": "8edafa0660da835a709c32ccbeaddedd28441ba135a3ca94388868ff335c6701"
+    },
+    {
+      "path": "pass/p3-s2/result.json",
+      "bytes": 10629,
+      "sha256": "710eadf8fd3b262131c3d33e9d461d23c01415cf27b76d8fb7e0709e6830bace"
+    },
+    {
+      "path": "pass/p3-s2/session/emulator.log",
+      "bytes": 5884,
+      "sha256": "a6dd734381ef0d6c72d7116370e2ea49f0dab0ecbf6e08984e9ae8401b11e454"
+    },
+    {
+      "path": "pass/p3-s2/session/mcp-session.json",
+      "bytes": 628,
+      "sha256": "262e83e8740b58b82b9c0bc8a3a97c1b3ff091222ea7dbdfa09ca5384bcff75b"
+    },
+    {
+      "path": "pass/p5-s1/artifacts/context.json",
+      "bytes": 58229,
+      "sha256": "641689c8d108dcfc283f4c80354432c8ef1d5d4e30aabb72a931575e5d3a683e"
+    },
+    {
+      "path": "pass/p5-s1/artifacts/events.jsonl",
+      "bytes": 194396,
+      "sha256": "3269f45fbc893aa05a2099bc86de0c62a0953bf98c3847a82de2238085ef435f"
+    },
+    {
+      "path": "pass/p5-s1/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "00fd7c65248b46364ba32321049d33970cecd2e0cbd680c7d97928a064795043"
+    },
+    {
+      "path": "pass/p5-s1/job.json",
+      "bytes": 335,
+      "sha256": "8173df87867fba9e4fbbac5b7e7afec6433935f49f055a7d9f0b521c6b2b4c41"
+    },
+    {
+      "path": "pass/p5-s1/result.json",
+      "bytes": 10704,
+      "sha256": "acfc07498b8afd87cc8ce9fd14b7afb9f3c1ffd04542daaad873b67090bf3ef5"
+    },
+    {
+      "path": "pass/p5-s1/session/emulator.log",
+      "bytes": 6101,
+      "sha256": "cae38c98bca41b201fa707626e8ab3c3d21c96193f462f58d310a8280baf35cb"
+    },
+    {
+      "path": "pass/p5-s1/session/mcp-session.json",
+      "bytes": 628,
+      "sha256": "11f33da9704e33d33fbd5ca6d9c1729cd43b95cb27d14a1118d558ea729e48e2"
+    },
+    {
+      "path": "pass/p5-s2/artifacts/context.json",
+      "bytes": 58228,
+      "sha256": "e1d166b3a013c8fda18a1880213e9f6ab79beaa705b2e2f02ebe801b2606f03d"
+    },
+    {
+      "path": "pass/p5-s2/artifacts/events.jsonl",
+      "bytes": 194395,
+      "sha256": "c47b94430d0860d0940dfb06a31fafa02cb1bc1a6615578508f9ab782f4909e0"
+    },
+    {
+      "path": "pass/p5-s2/inputs/program.bin",
+      "bytes": 6,
+      "sha256": "484c393379b2770229a85840272ba4e27ca2ae244eb3cb0eabf97a6a2addd6ee"
+    },
+    {
+      "path": "pass/p5-s2/job.json",
+      "bytes": 335,
+      "sha256": "78778a17d31e03e2988c822da790a4a4ba1e07759e9c74ec84d74dbf3147bf1f"
+    },
+    {
+      "path": "pass/p5-s2/result.json",
+      "bytes": 10702,
+      "sha256": "0b41d0f97b0dc99ef0ef5c94db33082100f5cf66579a6ce6e9ca9a9609bd5d1a"
+    },
+    {
+      "path": "pass/p5-s2/session/emulator.log",
+      "bytes": 6101,
+      "sha256": "c06bb8663434a211570d104038270c464383f34a203082b98a20e20465360128"
+    },
+    {
+      "path": "pass/p5-s2/session/mcp-session.json",
+      "bytes": 628,
+      "sha256": "9246d5a0cc0ea1688fafe20bdb6654790edf87fcc9f64e6be8907dba585b8868"
+    },
+    {
+      "path": "pass/plan.json",
+      "bytes": 1387,
+      "sha256": "72cd52572724802e81a7314af629a41800b26f59bdcf5a1f815bb6efe76bbd02"
+    }
+  ]
+}

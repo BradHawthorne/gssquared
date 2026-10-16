@@ -31,8 +31,20 @@
 #include "a2gspu_rail_setters.hpp"
 #include "devices/a2gspu/a2gspu_cmdreg.hpp"   // the card model's command log
 #include "devices/uthernet2/u2_rail.hpp"      // the Uthernet II's records
+#include "a2gspu_writeback.hpp"
+#include "a2gspu_ctrl_json.hpp"
 
 namespace {
+void writeback_policy_format(char *out,size_t capacity) {
+    const auto policy=a2writeback::current();
+    a2ctrljson::native_payload=policy.json();
+    snprintf(out,capacity,"status=OK schema=a2writeback-policy-v1 requested=%d suppressed=%d flush_at_spike_end=%d model=current-env-presence/spike-end-flush-only",
+        policy.requested()?1:0,policy.suppressed()?1:0,policy.flush()?1:0);
+}
+a2rails::Registrar read_writeback{"A2GSPU_WRITEBACK",writeback_policy_format};
+a2rails::Registrar read_no_writeback{"A2GSPU_NO_WRITEBACK",writeback_policy_format};
+a2rails::Registrar read_legacy_writeback{"WIZ5_WRITEBACK",writeback_policy_format};
+a2rails::Registrar read_legacy_no_writeback{"WIZ5_NO_WRITEBACK",writeback_policy_format};
 
 using a2rails::SET_OK;
 using a2rails::SET_REFUSED;

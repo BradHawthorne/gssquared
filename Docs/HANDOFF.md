@@ -27,6 +27,13 @@ The 2026-10-16 continuation adds exposed machine context and context-bound
 Rosetta efficiency experiments. The latest fresh publication build is
 `D:\gsqs\pub-20261016\build\GSSquared.exe`, compiled from `bd276467`;
 its identity and results are in the publication report's `validation.json`.
+The fleet continuation's current build is
+`D:\gsqs\fleet-20261016\build\GSSquared.exe`, built from an exported
+`1878ecc9` base plus reviewed, digest-bound source overlays. Its exact identity,
+validation and new repeatable read-only-media MCP launch descriptor are in
+`Docs/reports/gssquared-fleets-20261016/README.md`. This supersedes the older
+binary selection for fleet/typed-writeback-policy work. The publication build
+above remains preserved for its recorded checkpoint.
 The earlier preserved `GSSquared-awareness.exe` and tested `mcp-launch.json`
 remain documented in the machine-context report.
 The original Claude-to-Codex handoff and the assessment reports are historical evidence; current status is below.
@@ -80,6 +87,7 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 | Upstream observations | Four additional structured MCP/Python read adapters bring MCP to 79 tools. Trace text no longer changes when re-decoded or infers scanlines from fixed CPU speed. Final Release ctest 14/14, gates 14/14, Python 10/10, Rosetta CPU differential classification passes; baselines/consumer binary unchanged. Main and development-renderer comparison plus tested launch descriptor: `gssquared-upstream-observability-20261015/` |
 | Autonomous feature shapes | 82 MCP tools after scoped artifact upload/list/read with native PNG delivery. Socket partial-reply recovery, file-client publication guards, quoted load paths, validated execution requests and native completion reasons; all 73 native verbs inventoried by shape. Final 14/14 gates, 14/14 CTests, 18/18 Python tests and Rosetta CPU differential classification pass; baselines/consumer binary unchanged. Scope, tested launch descriptor and evidence: `gssquared-autonomy-shape-20261015/` |
 | Exposed machine context | 74 verbs / 85 MCP tools. Native synchronized context, compiled/installed/absent topology, live read queries, address/IRQ/stop/reference-pixel explanations, parented events, scheduler labels, marks/deltas and expanded snapshots. Additive Rosetta experiment companion records correctness and native cycle/timing/image-byte comparisons. Final ctest 14/14, gates 14/14, Python 21/21; eight real Rosetta efficiency pairs, C source/value proof on p4/p5 and unchanged CPU differential classification. Pinned baselines/consumer preserved. Evidence, tested launch descriptor and remaining gaps: `gssquared-machine-context-20261016/README.md`; API: `Docs/MACHINE_CONTEXT.md` |
+| Independent fleets and media policy | `fleet.py` with explicit matrices, staged inputs, native assertions, checked event closeouts, per-cell receipts and aggregate verdicts. Native typed writeback predicate and opt-in read-only-media policy propagate to nested batches. Final 14/14 gates, 14/14 native CTests, 21 client tests, 7 plan cases, 20 fleet checks, 53 media checks and two MCP descriptor launches; 42 pinned boot checks unchanged. Exact identity and build/cache-failure evidence: `gssquared-fleets-20261016/README.md`; API: `Docs/FLEETS.md` |
 
 ## 3. How to build and verify
 
@@ -103,8 +111,9 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
   supported; wrong/missing identities refuse before command publication. Old
   receipts without the new identity fields require a fresh session. The original
   failure and current known-pass/negative evidence are retained in the harness
-  queue report. Use `D:\gsqs\pub-20261016\build\GSSquared.exe` for the current
-  native implementation; these queue changes are in the host harness.
+  queue report. Use `D:\gsqs\fleet-20261016\build\GSSquared.exe` for the current
+  native implementation. The identity/scout queue changes are in the host harness;
+  the later fleet checkpoint also adds native discovery/writeback-policy readback.
 - **Windows shell:** invoke MSYS2 bash for commands, with UCRT64 tools on PATH for
   this fork's CMake build. Invoke `pwsh -File` from bash for the fork-mandated
   `.ps1` gates; the verbatim upstream shell guidance below AGENTS.md's fork section
@@ -145,7 +154,8 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
   only if unarmedhash stays unchanged).
 - **The phased agentic proposal** (roadmap §4, `Docs/reports/gssquared-agentic-proposal-20261015/`) is historical.
   Boundary faults, measured event streams, semantic checkpoint companions and source/layout tools now exist.
-  Full replay/branching, a 65816 GDB stub, complete kernel/device semantics, VCD export and fleets remain open;
+  Independent fleets are now implemented (`Docs/FLEETS.md`). Full replay/branching,
+  a 65816 GDB stub, complete kernel/device semantics and phase-accurate VCD remain open;
   use the current roadmap statuses rather than reimplementing completed subsets.
 - **P2.1 and P2.4 are implemented independently of drift:** snapshot-file state
   diffs and a local revision witness search. The latter builds in scratch,

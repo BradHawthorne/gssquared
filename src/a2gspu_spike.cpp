@@ -18,6 +18,7 @@
 #include "gs2_app.hpp"
 #include "a2gspu_rail_setters.hpp"   // rails that are also armed live: one apply function each
 #include "a2gspu_artifact_meta.hpp"   // M6: <artifact>.meta.json beside every raw artifact
+#include "a2gspu_writeback.hpp"
 
 // A2GSPU_OUT_DIR: parallel-safe output relocation. When set, the fixed-name
 // headless/spike output files (spike_e1.bin, spike_e1_init.bin, spike_frame.bmp,
@@ -1110,9 +1111,7 @@ void run_headless_spike(GS2AppState *state) {
     // disks back is not Pascal-specific. Suppression stays OR-ed across both
     // spellings, so setting either NO_WRITEBACK still wins over either WRITEBACK
     // -- a guard that can be bypassed by using the other name is not a guard.
-    const bool wb_on  = getenv("A2GSPU_WRITEBACK")    || getenv("WIZ5_WRITEBACK");
-    const bool wb_off = getenv("A2GSPU_NO_WRITEBACK") || getenv("WIZ5_NO_WRITEBACK");
-    if (wb_on && !wb_off) {
+    if (a2writeback::current().flush()) {
         for (const auto &dm : state->disks_to_mount) {
             storage_key_t k{}; k.slot = dm.slot; k.drive = dm.drive;
             k.partition = 0; k.subunit = 0;

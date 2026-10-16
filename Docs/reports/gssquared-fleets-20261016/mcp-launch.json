@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "gssquared": {
+      "command": "C:\\Users\\X99\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "args": [
+        "-I",
+        "D:\\projects\\gssquared-fork\\tools\\a2rail\\mcpserver.py",
+        "--exe",
+        "D:\\gsqs\\fleet-20261016\\build\\GSSquared.exe",
+        "--platform",
+        "5",
+        "--read-only-media",
+        "--out-root",
+        "D:\\gsqs\\fleet-20261016\\mcp-runs-v2"
+      ],
+      "env": {
+        "PATH": "C:/msys64/ucrt64/bin;D:\\gsqs\\fleet-20261016\\build;C:/Windows/System32"
+      }
+    }
+  }
+}

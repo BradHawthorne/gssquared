@@ -1,0 +1,80 @@
+{
+  "schema": "fleet-phase-checks-v1",
+  "base_commit": "1878ecc98cbaffd2c267462479c14a19ce37ea20",
+  "current_code_matches_built_overlay": [
+    {
+      "path": "apps/interfacecontracttest/main.cpp",
+      "sha256": "1df825397339af035a895c68319a8264d09d10085dd9cffb8fa46710716e3c4d"
+    },
+    {
+      "path": "clients/python/src/gs2debug/mcp.py",
+      "sha256": "d834862de2bab513477b7de67f45564993fb72f655839116f291424356f92a67"
+    },
+    {
+      "path": "src/a2gspu_inspect.hpp",
+      "sha256": "1877e7b15231d8cad04138f66974e5b849111e221bd4872af47cd44350256c6d"
+    },
+    {
+      "path": "src/a2gspu_rail_setters.cpp",
+      "sha256": "c9f078d656f51af783026e76c83ea66734e3ddee4c429892db4aac173f252422"
+    },
+    {
+      "path": "src/a2gspu_rails_registry.hpp",
+      "sha256": "78d40623cb63c4e5c2a55c9d23c9120060174dfae1553e733c89b8a6381a1b9b"
+    },
+    {
+      "path": "src/a2gspu_spike.cpp",
+      "sha256": "fc5daa5cc5e0debb5be8b3b615c6a1cf5fb24cb6464eedce4acc5dfdf86a5ce2"
+    },
+    {
+      "path": "src/a2gspu_writeback.hpp",
+      "sha256": "ead069f0160c9f69e0154faaf11ab5377f535a177a6ccbd472e58fd6fcd39923"
+    },
+    {
+      "path": "tools/a2rail/fleet.py",
+      "sha256": "c94ef8be7689c648571184831682dc8c2cd37864841fd4badbe88fe4879c999d"
+    },
+    {
+      "path": "tools/a2rail/fleetcheck.py",
+      "sha256": "121b35baf1a0d1fe4360d7e4f807575a500854841369ccf709a2a29f8b2f778f"
+    },
+    {
+      "path": "tools/a2rail/p0check.py",
+      "sha256": "80c58abdebfec5f31ba63ae94bf3a2bea64fd60d7be16bf3db04f66b375ddb9b"
+    },
+    {
+      "path": "tools/a2rail/readonlymediacheck.py",
+      "sha256": "0153063d438a2d2a9461969095f1ee3ae52e3382db58c74e33218042faccf72c"
+    },
+    {
+      "path": "tools/a2rail/test_fleet.py",
+      "sha256": "4a0e72f4c227c28d6380f4761f7cad45060ce615400e56e09216c56b1372e31f"
+    }
+  ],
+  "executable": {
+    "path": "D:\\gsqs\\fleet-20261016\\build\\GSSquared.exe",
+    "sha256": "560811f1b4373951fd44512cd2aa547265e91dd4f4fb86fa4bff8cb5d19516d1"
+  },
+  "consumer_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "dependencies_unchanged": true,
+  "local_pins_unchanged": true,
+  "gates": {
+    "passed": 14,
+    "skipped": 0
+  },
+  "native_ctests": 14,
+  "pinned_boot_checks": 42,
+  "python_client_tests": 21,
+  "fleet_plan_tests": 7,
+  "fleet_native_checks": 20,
+  "media_checks": 53,
+  "new_policy_truth_table_cases": 16,
+  "mcp_launches": 2,
+  "mcp_tools": 85,
+  "manual_windowed_ux": "not exercised; source defaults preserved and headless matrix tested",
+  "static": {
+    "json": 6,
+    "markdown_destinations": 46,
+    "python": 6
+  }
+}

@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "D:\gsqs\check-fleet-launch-20261016.py", line 30, in <module>
+    assert companion['plan_schema']=='a2fleet-plan-v1' and companion['schema_option']=='--schema'
+                                                           ~~~~~~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'schema_option'

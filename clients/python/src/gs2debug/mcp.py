@@ -35,7 +35,8 @@ class Backend:
     def receipt(self,closed=False):
         if self.root is not None:
             value={'schema':'a2mcp-session-v1','owned':True,'pid':self.process.pid if self.process else None,
-                   'closed':closed and (self.process is None or self.process.poll() is not None),'exit_code':self.process.poll() if self.process else None,'executable':str(self.args.exe),'executable_sha256':self.executable_sha256,'identity_model':'SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule','requested_rails':self.rails,'startup_proof':self.startup_proof,'artifact_root':str(self.artifacts.root) if self.artifacts else None}
+                   'closed':closed and (self.process is None or self.process.poll() is not None),'exit_code':self.process.poll() if self.process else None,'executable':str(self.args.exe),'executable_sha256':self.executable_sha256,'identity_model':'SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule','requested_rails':self.rails,'startup_proof':self.startup_proof,'artifact_root':str(self.artifacts.root) if self.artifacts else None,
+                   'read_only_media_launch':bool(getattr(self.args,'read_only_media',False))}
             (self.root/'mcp-session.json').write_text(encoded(value)+'\n',encoding='utf-8')
 
     def open(self):
@@ -47,6 +48,7 @@ class Backend:
             if name in BATCH_RAILS:raise ValueError('one-shot rail requires gs2_batch or an explicit interactive command: '+name)
             if name in self.rails:raise ValueError('duplicate startup rail: '+name)
             self.rails[name]=value
+        if getattr(self.args,'read_only_media',False) and self.rails.get('A2GSPU_RAMDISK','1')!='1':raise ValueError('startup rail contradicts --read-only-media: A2GSPU_RAMDISK')
         explicit_artifact_root=getattr(self.args,'artifact_root',None)
         if explicit_artifact_root is not None:self.artifacts=Artifacts(explicit_artifact_root)
         if self.args.exe is not None:
@@ -63,11 +65,12 @@ class Backend:
             env={k:v for k,v in os.environ.items() if not k.startswith(('A2GSPU_','MEMVU_','WIZ5_'))}
             env.update(A2GSPU_AGENT='1',A2GSPU_BACKGROUND_WINDOW='1',A2GSPU_OUT_DIR=str(self.root),A2GSPU_BRAM='default',A2GSPU_SEED=str(self.args.seed if self.args.seed is not None else 1),A2GSPU_FAKETIME='1000000000')
             env.update(self.rails)
+            if getattr(self.args,'read_only_media',False):env.update(A2GSPU_RAMDISK='1',A2GSPU_NO_WRITEBACK='1')
             self.log=(self.root/'emulator.log').open('wb')
             selection=[str(self.args.config.resolve())] if self.args.config else ['-p',str(self.args.platform if self.args.platform is not None else 3)]
             self.process=subprocess.Popen([str(self.args.exe.resolve()),'--debug',endpoint,*selection,'-n','--no-quit-confirm'],cwd=self.root,env=env,stdout=self.log,stderr=subprocess.STDOUT)
             self.receipt()
-        elif self.args.out_dir is not None or self.args.out_root is not None or self.args.config is not None or self.args.platform is not None or self.args.seed is not None or self.rails:raise ValueError('launch options require --exe')
+        elif self.args.out_dir is not None or self.args.out_root is not None or self.args.config is not None or self.args.platform is not None or self.args.seed is not None or self.rails or getattr(self.args,'read_only_media',False):raise ValueError('launch options require --exe')
         if self.artifacts is None and self.root is not None:self.artifacts=Artifacts(self.root)
         deadline=time.monotonic()+20
         while True:
@@ -118,6 +121,7 @@ class Backend:
         for name,value in rails.items():
             if name not in known or name in RESERVED_RAILS:raise ValueError('unknown or lifecycle-reserved batch rail: '+name)
             if not isinstance(value,str) or '\0' in value or len(value.encode('utf-8'))>16384:raise ValueError('batch rail values must be bounded strings')
+            if getattr(self.args,'read_only_media',False) and name in ('A2GSPU_RAMDISK','A2GSPU_NO_WRITEBACK','WIZ5_NO_WRITEBACK') and value!='1':raise ValueError('batch rail contradicts --read-only-media: '+name)
         if 'platform' in params and 'config' in params:raise ValueError('choose platform or config')
         if 'config' in params:
             if not isinstance(params['config'],str) or not params['config']:raise ValueError('config must be a path string')
@@ -130,6 +134,7 @@ class Backend:
         env={k:v for k,v in os.environ.items() if not k.startswith(('A2GSPU_','MEMVU_','WIZ5_'))}
         env.update(A2GSPU_SEED=str(self.args.seed if self.args.seed is not None else 1),A2GSPU_BRAM='default',A2GSPU_FAKETIME='1000000000',A2GSPU_PACE='fast')
         env.update(rails);env.update(A2GSPU_SPIKE_FRAMES=str(frames),A2GSPU_BACKGROUND_WINDOW='1',A2GSPU_OUT_DIR=str(root))
+        if getattr(self.args,'read_only_media',False):env.update(A2GSPU_RAMDISK='1',A2GSPU_NO_WRITEBACK='1')
         timed_out=False
         with log_path.open('wb') as log:
             process=subprocess.Popen([str(self.args.exe.resolve()),*selection,'-n','--no-quit-confirm'],cwd=root,env=env,stdout=log,stderr=subprocess.STDOUT)
@@ -141,6 +146,7 @@ class Backend:
         length=log_path.stat().st_size
         with log_path.open('rb') as log:log.seek(max(0,length-65536));excerpt=log.read(65536).decode('utf-8',errors='replace')
         result={'schema':'a2mcp-batch-v1','ok':process.returncode==0 and not timed_out,'exit_code':process.returncode,'timed_out':timed_out,
+                'read_only_media_launch':bool(getattr(self.args,'read_only_media',False)),
                 'frames_requested':frames,'requested_rails':rails,'artifact_directory':str(root),'log_path':str(log_path),'stdout_bytes':length,
                 'stdout_excerpt':excerpt,'stdout_truncated':length>65536,'evidence_complete':not timed_out and length<=65536,
                 'verdict_model':'emulator process exit; supply assertions/goldens for guest behavior; separate CPU/RAM, configured media/host endpoints may be shared; not checkpoint branching'}
@@ -255,6 +261,7 @@ def main():
     target=parser.add_mutually_exclusive_group(required=True);target.add_argument('--socket');target.add_argument('--exe',type=Path)
     output=parser.add_mutually_exclusive_group();output.add_argument('--out-dir',type=Path);output.add_argument('--out-root',type=Path)
     parser.add_argument('--artifact-root',type=Path,help='explicit existing root for artifact access; managed launch defaults to its fresh output directory')
+    parser.add_argument('--read-only-media',action='store_true',help='launch with RAMDISK=1 and NO_WRITEBACK=1; explicit later commands/host endpoints remain under caller control')
     selection=parser.add_mutually_exclusive_group();selection.add_argument('--platform',type=int);selection.add_argument('--config',type=Path);parser.add_argument('--seed',type=int);parser.add_argument('--rail',action='append',default=[],metavar='NAME=VALUE')
     backend=Backend(parser.parse_args())
     try:backend.open();serve(backend,sys.stdin.buffer,sys.stdout.buffer)

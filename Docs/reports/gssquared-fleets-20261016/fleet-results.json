@@ -1,0 +1,70 @@
+{
+  "schema": "fleet-phase-results-v1",
+  "cells": [
+    {
+      "case": "bad-input",
+      "counts": {
+        "inconclusive": 1
+      },
+      "ok": false,
+      "path": "D:\\gsqs\\fleet-20261016-evidence-v2\\bad-input\\fleet.json",
+      "sha256": "28b068b6d8dc5b8e0f27f73eefc590113d319862bd1ed7d901f9b8930506815e"
+    },
+    {
+      "case": "budget",
+      "counts": {
+        "inconclusive": 1
+      },
+      "ok": false,
+      "path": "D:\\gsqs\\fleet-20261016-evidence-v2\\budget\\fleet.json",
+      "sha256": "d35ca2d9c1534b5d07c7dd09c58c75aa121f346444ad30c00f4a13195aac867c"
+    },
+    {
+      "case": "configured",
+      "counts": {
+        "pass": 1
+      },
+      "ok": true,
+      "path": "D:\\gsqs\\fleet-20261016-evidence-v2\\configured\\fleet.json",
+      "sha256": "99ffa221750de664b675db65e6ea3191ff12393ad8813e7feedf2019a794d9ad"
+    },
+    {
+      "case": "event-loss",
+      "counts": {
+        "inconclusive": 1
+      },
+      "ok": false,
+      "path": "D:\\gsqs\\fleet-20261016-evidence-v2\\event-loss\\fleet.json",
+      "sha256": "5159933e614963bbc1bf7f1a90d80f292525fb10ddef8c01253945eaee0a7477"
+    },
+    {
+      "case": "one-red",
+      "counts": {
+        "assertion-failure": 1,
+        "pass": 3
+      },
+      "ok": false,
+      "path": "D:\\gsqs\\fleet-20261016-evidence-v2\\one-red\\fleet.json",
+      "sha256": "e318e7af8286da90264b0a1d44fef6fbc526d93cd6e96ee9f30682f11ff28f38"
+    },
+    {
+      "case": "one-red-cli",
+      "counts": {
+        "assertion-failure": 1,
+        "pass": 3
+      },
+      "ok": false,
+      "path": "D:\\gsqs\\fleet-20261016-evidence-v2\\one-red-cli\\fleet.json",
+      "sha256": "db70d5c4edb2c6b81b214d9e1c5ea3afd7ad7dea840d28de7f9487337a665caa"
+    },
+    {
+      "case": "pass",
+      "counts": {
+        "pass": 4
+      },
+      "ok": true,
+      "path": "D:\\gsqs\\fleet-20261016-evidence-v2\\pass\\fleet.json",
+      "sha256": "688b9345d6b69a37e9ee99ead69ceecb21c82424ba80e0ef79c31a92bfe91b41"
+    }
+  ]
+}

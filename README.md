@@ -58,6 +58,8 @@ negative controls, native context and compatible cycle/instruction/byte comparis
 Optional [CIDAR bindings and the real block-copy pilot](Docs/CIDAR_EXPERIMENTS.md)
 join versioned specs/candidates to source/build/load identities, preserved inputs
 and registers, per-PC costs and checked CPU write footprints.
+[Native fleets](Docs/FLEETS.md) run explicit independent matrices with staged
+inputs, checked event capture, per-cell assertions and complete aggregate verdicts.
 It is not an OMF loader or a full GS/OS build/boot harness. Existing Rosetta
 differential and disk-boot tests are separate lanes; see
 [Closed-loop integration](Docs/CLOSED_LOOP_INTEGRATION.md).

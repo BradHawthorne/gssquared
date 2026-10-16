@@ -1,0 +1,14 @@
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s2","ok":false,"outcome":"inconclusive"}
+{"id":"p5-s1","ok":false,"outcome":"inconclusive"}
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 74, in <module>
+    args=parser.parse_args();run(args.exe.resolve(),args.out,args.expect_discovery)
+                             ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\fleetcheck.py", line 27, in run
+    check(passed['ok'] and passed['counts']=={'pass':4},'2x2 platform/seed fleet reports all four passing cells')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: 2x2 platform/seed fleet reports all four passing cells

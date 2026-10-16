@@ -27,6 +27,17 @@ real-hardware witnesses and the existing replay/drift prerequisites.
 file is the tracked summary. The owner's 2026-10-16 direction makes normal
 commit/sync part of validated phase closeout; the policy is `HANDOFF.md` section 7.
 
+**Fleet continuation, 2026-10-16:** explicit independent matrices, staged inputs,
+bounded event closeouts and per-cell assertions now run through `fleet.py`.
+Native discovery exposes its structural schema option; a shared typed writeback
+predicate supports the managed read-only-media launch mode and nested batches.
+Final: 14/14 gates, 14/14 native CTests, 21 client tests, 7 new plan cases,
+20 fleet and 53 media checks, two tested MCP descriptor launches and 42 unchanged
+boot checks. The source-variant reference map also closes its consolidation
+slice without removing compatibility paths. API: `FLEETS.md`; exact build,
+retained failures/receipts and limits:
+`reports/gssquared-fleets-20261016/README.md`.
+
 **GitHub catch-up complete (2026-10-16).** The integrated checkpoint
 `bd276467` is published on `origin/a2gspu`, independently verified by a live
 remote query. It includes the previous 68 local commits plus the completed
@@ -67,7 +78,7 @@ Evidence and acceptance details:
 | Remove file-harness executable-name assumptions | Fork harness: exact native start ticks and executable path, explicit mismatch/metadata refusals without command publication, renamed executables on both platforms | Implemented; 40 focused checks plus full-stack evidence in `reports/gssquared-queue-harness-20261016/README.md`. Existing receipts without identity fields require a fresh session |
 | Adapt inherited package-release tooling for this fork | Fork packaging: explicit fork branch/repository, non-fork origins and upload overrides refused, UCRT64 Windows recipe, no network in policy fixtures | Implemented in the stale audit under the owner's explicit no-upstream direction; see report for fixture results. Actual multi-host packages remain unbuilt and unuploaded; ordinary phase sync remains handoff section 7 |
 | Generalize retained campaign helpers | Fork tooling: isolated invocation/child directories, staged media/metadata, explicit pins/provider identities, restored caller environment and retained receipts | Implemented; 20 focused scout checks and current gate integration in the harness queue report |
-| Consolidate alternate implementation references | Fork source: active Mockingboard library/headers, compatibility declarations and disabled test/reference variants have explicit dependency dispositions before retirement | Classified in the harness report; reference consolidation/consumer retirement remains open, without deleting active declarations or presuming external consumers absent |
+| Consolidate alternate implementation references | Fork source: active Mockingboard library/headers, compatibility declarations and disabled test/reference variants have explicit dependency dispositions before retirement | Complete reference consolidation in `MOCKINGBOARD_IMPLEMENTATIONS.md`; historical notebook points there. Active paths and disabled fixtures are preserved. Any later file removal remains a compatibility migration requiring named consumer evidence |
 
 The implemented schemas, observations and reproduction recipe are in
 `CIDAR_EXPERIMENTS.md`; phase evidence is in
@@ -226,6 +237,7 @@ the new offline `bisect` gate builds tiny fixtures and needs a compiler/Ninja.
 | P1.3 source maps | Bound Rosetta assembler and C statement maps implemented; real compiled/linked C proof passes on 65816 IIe/IIgs. DWARF and source-text/variable/unwind verification remain open |
 | P3 boundary faults | Scheduled NMI/ABORT/owned IRQ sources and instruction-boundary vector/stack/timing fixtures pass. Mid-bus ABORT rollback is outside this model |
 | P4.1 event streams | File/co-pilot and bounded socket native streams pass; IRQ/audio and command/frame-sampled device changes included; exhaustive transient device events remain open |
+| P4.2 independent fleets | Implemented explicit platform/seed/config/image command matrices, isolated owned sessions and staged inputs, assertions, bounded event closeout and per-cell/aggregate verdicts. Current phase validation/evidence: `reports/gssquared-fleets-20261016/README.md`. These are independent starts, not checkpoint branches |
 | P6 output/input tools | Configured SHR glyphs, tolerant PNG comparisons, generated DOC/SFX samples and cycle/frame agent-input macros implemented and gated; physical host mix/input and full-machine replay are outside these models |
 | P2.4 bisect | Complete: scratch-only revision builds, strict repeated witnesses, verified earlier prefix, inconclusive failures. Nine fixture tests, real-history no-change case, current ctest 13/13 and gates 14/14; see `gssquared-queue-p24-20261015/` |
 | Drift B-E / engine merge / consumer build | Still separate owner decisions; no baseline re-bless, merge or consumer binary replacement in this iteration |
@@ -261,7 +273,7 @@ cross-emulator differential, bisect, and a socket manifest.
 | **P1** | Configured kernel readers and Rosetta assembly/C maps implemented; real kernel integration, DWARF and GDB stub remain; **drift C**, serial (M) | GSnux-critical; C unapproved |
 | **P2** | State diffs (P2.1) and local bisect (P2.4) implemented independently; **drift D** remains required before timing-heavy replay/branching; branching (M), record/replay (L) remain | P2.1/P2.4 implemented; P2.3 GSnux-critical |
 | **P3** | Boundary NMI/ABORT/IRQ sources and fixtures implemented; existing card fault rails retained; mid-bus rollback excluded | P3.1/P3.2 boundary model gated |
-| **P4** | Native event subset implemented; complete device transition coverage and fleets remain | P4.2 is GSnux-critical |
+| **P4** | Native event subset and independent fleets implemented; complete device transition coverage remains | P4.2 provides explicit matrix/aggregate contracts; full replay/branching remains gated |
 | **P5** | VCD export (M), hardware-in-the-loop trace compare (L) | P5.1 is GSnux-critical |
 | **P6** | Configured SHR text, tolerant image/audio assertions and agent-input macros implemented; physical host state and complete replay excluded | Model-specific positive/negative fixtures gated |
 | **P7** | Cross-emulator differential (L), plus **drift E** (S). The Fast816 tier belongs to the Fast816 project | |

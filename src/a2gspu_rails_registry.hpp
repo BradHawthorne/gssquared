@@ -295,6 +295,10 @@ inline const SetterReg *setter_find(const char *rail) {
 inline const Reach *reach(int &n) {
     static const Reach r[] = {
     {"A2GSPU_AGENT", "", "fn"},
+    {"A2GSPU_WRITEBACK", "", "fn"},
+    {"A2GSPU_NO_WRITEBACK", "", "fn"},
+    {"WIZ5_WRITEBACK", "", "fn"},
+    {"WIZ5_NO_WRITEBACK", "", "fn"},
     {"A2GSPU_SCC_A", "capture", "fn"},
     {"A2GSPU_SCC_B", "capture", "fn"},
     {"A2GSPU_WDM_CONSOLE", "capture", "fn"},

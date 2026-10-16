@@ -1,0 +1,576 @@
+runtime ucrt: C:\msys64\ucrt64\bin
+
+=== GATE railparity ============================================
+
+railparity: 161 rail(s) read by src/, 161 declared in the registry
+
+carve-outs this PASS does not cover:
+  record contract  a2gspu_coverage.hpp    A2COV1/A2COV2 and a2profile-v1 are standalone coverage artifacts, not NDJSON rail events; profile.py validates the JSON document
+  record contract  a2gspu_ctrl_json.hpp   the CTRL reply envelope is protocol, not a rail record
+  record contract  a2record.hpp           the writer itself
+  record contract  wiz5_config.hpp        title-specific streams (WIZ5_EC19_OUT, WIZ5_DISKWR_OUT, WIZ5_CSP6_OUT) predate the contract, and all three build their records piecemeal; they convert when their readers do
+  rail catalogue   (none)                every declared rail is described
+
+railparity: PASS - every rail the code reads is discoverable, every declared rail
+                   exists and has a row of its own under its registry family in
+                   Docs/A2GSPU_RAILS.md with a whole synopsis, no non-exempt file
+                   prints a JSON record or writes to any of the 15 rail sinks itself,
+                   all 28 declared readers and all 70 live-settable rails are registered
+                   by their rails, and all 74 CTRL verbs are both dispatched and listed.
+
+=== GATE artifacts =============================================
+The term 'python' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+
+=== GATE gdiff =================================================
+The term 'python' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+
+=== GATE buscompare ============================================
+The term 'python' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+
+=== GATE bisect ================================================
+runtime ucrt: C:\msys64\ucrt64\bin
+The term 'python' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+
+=== GATE agentic ===============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\Agent identity c2c4eb9d9f674ef28dc5643707dd5260.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail-identity-6f151e57d2e6438f97be4fe2a76e5c48\p3
+log:       C:\msys64\tmp\a2rail-identity-6f151e57d2e6438f97be4fe2a76e5c48\p3\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+PASS renamed executable starts on p3
+PASS renamed executable is driven on p3
+PASS a live session cannot be replaced on p3
+PASS wrong-path refuses on p3
+PASS wrong-path names identity/metadata instead of claiming process exit
+PASS wrong-path publishes no command
+PASS wrong-start refuses on p3
+PASS wrong-start names identity/metadata instead of claiming process exit
+PASS wrong-start publishes no command
+PASS unrelated-pid refuses on p3
+PASS unrelated-pid names identity/metadata instead of claiming process exit
+PASS unrelated-pid publishes no command
+PASS missing-start refuses on p3
+PASS missing-start names identity/metadata instead of claiming process exit
+PASS missing-start publishes no command
+PASS invalid-start refuses on p3
+PASS invalid-start names identity/metadata instead of claiming process exit
+PASS invalid-start publishes no command
+PASS restoring the real receipt restores control on p3
+PASS a genuinely exited process is reported as gone on p3
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\Agent identity c2c4eb9d9f674ef28dc5643707dd5260.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail-identity-6f151e57d2e6438f97be4fe2a76e5c48\p5
+log:       C:\msys64\tmp\a2rail-identity-6f151e57d2e6438f97be4fe2a76e5c48\p5\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+PASS renamed executable starts on p5
+PASS renamed executable is driven on p5
+PASS a live session cannot be replaced on p5
+PASS wrong-path refuses on p5
+PASS wrong-path names identity/metadata instead of claiming process exit
+PASS wrong-path publishes no command
+PASS wrong-start refuses on p5
+PASS wrong-start names identity/metadata instead of claiming process exit
+PASS wrong-start publishes no command
+PASS unrelated-pid refuses on p5
+PASS unrelated-pid names identity/metadata instead of claiming process exit
+PASS unrelated-pid publishes no command
+PASS missing-start refuses on p5
+PASS missing-start names identity/metadata instead of claiming process exit
+PASS missing-start publishes no command
+PASS invalid-start refuses on p5
+PASS invalid-start names identity/metadata instead of claiming process exit
+PASS invalid-start publishes no command
+PASS restoring the real receipt restores control on p5
+PASS a genuinely exited process is reported as gone on p5
+ALL GREEN -- session identity checks=40 baseline=False evidence=C:\msys64\tmp\a2rail-identity-6f151e57d2e6438f97be4fe2a76e5c48
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS synthetic unreachable milestones report no observed advance
+PASS caller instrumentation environment is restored
+PASS closed receipt declares its outcome/model
+PASS bounded baseline retains one native pins/diagnostic pair
+PASS child owns a separate working/output directory
+PASS child pins are independent from inherited rails
+PASS staged media and producer logs are retained
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS existing output refuses without replacing evidence
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS synthetic unreachable milestones report no observed advance
+PASS caller instrumentation environment is restored
+PASS closed receipt declares its outcome/model
+PASS bounded baseline retains one native pins/diagnostic pair
+PASS child owns a separate working/output directory
+PASS child pins are independent from inherited rails
+PASS staged media and producer logs are retained
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS existing output refuses without replacing evidence
+PASS repeated invocations never share a run root
+PASS source image remains byte-identical
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS explicit provider setup cannot leak instrumentation environment to caller
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS missing declared input refuses before output or execution
+ALL GREEN -- isolated scout checks=20 evidence=C:\msys64\tmp\scout-check-7e142739ed0e436889b9b4bc7bb556e3
+The term 'python' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+
+=== GATE dualsmoke =============================================
+
+=== DUALSMOKE (IIe + IIgs instrument gate) =====================
+  Docs/DUAL_PLATFORM.md -- shared rail changes need both platforms
+runtime ucrt: C:\msys64\ucrt64\bin
+SUITE RUN-START dualsmoke
+toolpin GSSquared: D:/gsqs/fleet-20261016/build/GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+
+##### gssquared ctest (offline) ################################
+SUITE START gssquared ctest (offline)
+Test project D:/gsqs/fleet-20261016/build
+      Start  1: cpu_conformance
+ 1/14 Test  #1: cpu_conformance ..................   Passed    0.10 sec
+      Start  2: cpu_coverage
+ 2/14 Test  #2: cpu_coverage .....................   Passed    0.09 sec
+      Start  3: cpu_cycles_6502
+ 3/14 Test  #3: cpu_cycles_6502 ..................   Passed    0.05 sec
+      Start  4: cpu_cycles_65816
+ 4/14 Test  #4: cpu_cycles_65816 .................   Passed    0.06 sec
+      Start  5: cpu_cycles_65c02
+ 5/14 Test  #5: cpu_cycles_65c02 .................   Passed    0.02 sec
+      Start  6: via_6522_t6
+ 6/14 Test  #6: via_6522_t6 ......................   Passed    0.04 sec
+      Start  7: via_6522_t7
+ 7/14 Test  #7: via_6522_t7 ......................   Passed    0.02 sec
+      Start  8: via_6522_t8
+ 8/14 Test  #8: via_6522_t8 ......................   Passed    0.01 sec
+      Start  9: via_6522_t9
+ 9/14 Test  #9: via_6522_t9 ......................   Passed    0.02 sec
+      Start 10: diskid_apm
+10/14 Test #10: diskid_apm .......................   Passed    0.07 sec
+      Start 11: systemconfigtest
+11/14 Test #11: systemconfigtest .................   Passed    0.21 sec
+      Start 12: ssgputexttest
+12/14 Test #12: ssgputexttest ....................   Passed    0.04 sec
+      Start 13: snapshot_diff
+13/14 Test #13: snapshot_diff ....................   Passed    0.04 sec
+      Start 14: interface_contract
+14/14 Test #14: interface_contract ...............   Passed    0.05 sec
+
+100% tests passed out of 14
+
+Total Test time (real) =   0.94 sec
+SUITE END gssquared ctest (offline)
+
+##### rail parity (offline) ####################################
+SUITE START rail parity (offline)
+
+railparity: 161 rail(s) read by src/, 161 declared in the registry
+
+carve-outs this PASS does not cover:
+  record contract  a2gspu_coverage.hpp    A2COV1/A2COV2 and a2profile-v1 are standalone coverage artifacts, not NDJSON rail events; profile.py validates the JSON document
+  record contract  a2gspu_ctrl_json.hpp   the CTRL reply envelope is protocol, not a rail record
+  record contract  a2record.hpp           the writer itself
+  record contract  wiz5_config.hpp        title-specific streams (WIZ5_EC19_OUT, WIZ5_DISKWR_OUT, WIZ5_CSP6_OUT) predate the contract, and all three build their records piecemeal; they convert when their readers do
+  rail catalogue   (none)                every declared rail is described
+
+railparity: PASS - every rail the code reads is discoverable, every declared rail
+                   exists and has a row of its own under its registry family in
+                   Docs/A2GSPU_RAILS.md with a whole synopsis, no non-exempt file
+                   prints a JSON record or writes to any of the 15 rail sinks itself,
+                   all 28 declared readers and all 70 live-settable rails are registered
+                   by their rails, and all 74 CTRL verbs are both dispatched and listed.
+SUITE END rail parity (offline)
+
+##### railcheck (IIe / platform 3) #############################
+SUITE START railcheck (IIe / platform 3)
+=== RAIL SELF-TEST =============================================
+  every verb challenged by an observation the verb does not control
+
+=== platform 3: Apple IIe Enhanced =============================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail\railcheck-p3
+log:       C:\msys64\tmp\a2rail\railcheck-p3\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  session                Apple IIe Enhanced, pid 81692
+  PASS  poke -> read           $6000 = A9
+  PASS  poke -> EXECUTED       $7000 = 34 after LDA #$34 / STA $7000
+  PASS  setreg -> cpu          A register reads back
+  PASS  run-until              stopped at the requested PC
+  PASS  run-until cycles       non-zero in-command delta
+  PASS  load -> read           4 bytes landed
+  PASS  dis refuses bad args   no filename -> FAIL, not a file named after the address
+  PASS  dis writes a listing   with addr, count and path
+  PASS  save/restore           11 -> 99 -> 11
+  PASS  vram sees the screen   16384 bytes, main $2000 = 7E 7E
+  PASS  boots a real disk      text page shows the ROM banner after a floppy boot -- DOS3.3_MASTER.dsk
+  PASS  reset                  
+
+ALL GREEN -- 13 rail checks
+SUITE END railcheck (IIe / platform 3)
+
+##### railcheck (IIgs / platform 5) ############################
+SUITE START railcheck (IIgs / platform 5)
+=== RAIL SELF-TEST =============================================
+  every verb challenged by an observation the verb does not control
+
+=== platform 5: Apple IIgs =====================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail\railcheck-p5
+log:       C:\msys64\tmp\a2rail\railcheck-p5\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+  PASS  session                Apple IIgs, pid 78912
+  PASS  poke -> read           $6000 = A9
+  PASS  poke -> EXECUTED       $7000 = 34 after LDA #$34 / STA $7000
+  PASS  setreg -> cpu          A register reads back
+  PASS  run-until              stopped at the requested PC
+  PASS  run-until cycles       non-zero in-command delta
+  PASS  load -> read           4 bytes landed
+  PASS  dis refuses bad args   no filename -> FAIL, not a file named after the address
+  PASS  dis writes a listing   with addr, count and path
+  PASS  save/restore           11 -> 99 -> 11
+  PASS  shr renders            160 pixels lit changed the count by 160
+  PASS  vram sees the screen   16384 bytes, main $2000 = 7E 7E
+  PASS  boots a real disk      text page shows the ROM banner after a floppy boot -- DOS3.3_MASTER.dsk
+  PASS  reset                  
+
+ALL GREEN -- 14 rail checks
+SUITE END railcheck (IIgs / platform 5)
+
+##### exec control (IIe) #######################################
+SUITE START exec control (IIe)
+
+=== EXEC CONTROL -- platform 3 =================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail\exec-p3
+log:       C:\msys64\tmp\a2rail\exec-p3\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  PC parked at 6100                  
+  PASS  run reports OK                     
+  PASS  run MOVED PC                       PC=$6103 -- the arm bug left this at 6100
+  PASS  run ack shows PC                   the ack must not claim motion the CPU did not make
+  PASS  cpu ack names its kbd source       [8] cpu
+     -> status=OK cpu PC=00:6103 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  IIe kbd is the keyboard module     [8] cpu
+     -> status=OK cpu PC=00:6103 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  step 1 advances one                
+  PASS  step 2 advances two                
+  PASS  bare bp reports off                was: no status= prefix at all
+  PASS  bad bp FAILs w/ status             [15] bp zzzz
+     -> status=FAIL bp-parse-fail 'zzzz' -- usage: bp <addr|BANK:addr|off>, hex
+  PASS  bp armed has status=               
+  PASS  bare bp reports armed              
+  PASS  bp halts a run                     [19] run 2
+     -> status=HALT ran=1 cycles=6 (in-command) halt=2 pc=$00:6103 at=bp (its instruction not yet executed) -- `resume` (or the next run/step) continues past a breakpoint instructions=3
+  PASS  halted AT the bp                   
+  PASS  cpu reports HALT=1                 
+  PASS  run resumes past a bp              [22] run 2
+     -> status=HALT ran=1 cycles=3 (in-command) resumed-from-halt halt=2 pc=$00:6103 at=bp (its instruction not yet executed) -- `resume` (or the next run/step) continues past a breakpoint instructions=1
+  PASS  resume is idempotent               [23] resume
+     -> status=OK resume cleared user-halt PC=00:6103 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  bp off has status=                 
+  PASS  run is clean after off             [28] run 2
+     -> status=OK ran=2 cycles=34047 (in-command) PC $00:6100->$00:6103 instructions=11350
+  PASS  and still executes                 
+  PASS  bp halts a step run                [32] step 8
+     -> status=HALT stepped=4 cycles=9 (in-command) PC=00:6103 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=1 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module instructions=4
+  PASS  step stopped short                 8 asked; 4 taken
+
+ALL GREEN -- 22 exec-control checks
+SUITE END exec control (IIe)
+
+##### exec control (IIgs) ######################################
+SUITE START exec control (IIgs)
+
+=== EXEC CONTROL -- platform 5 =================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail\exec-p5
+log:       C:\msys64\tmp\a2rail\exec-p5\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+  PASS  PC parked at 6100                  
+  PASS  run reports OK                     
+  PASS  run MOVED PC                       PC=$6103 -- the arm bug left this at 6100
+  PASS  run ack shows PC                   the ack must not claim motion the CPU did not make
+  PASS  cpu ack names its kbd source       [8] cpu
+     -> status=OK cpu PC=00:6103 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+  PASS  IIgs kbd is the ADB latch          a IIgs has no MODULE_KEYBOARD; anything else here is a fallback inventing a byte
+  PASS  run ack has BOTH banks             [13] run 1
+     -> status=OK ran=1 cycles=43351 (in-command) PC $00:6200->$01:6300 instructions=14450
+  PASS  run ack SHOWS the cross            a JML to bank 01 from bank 00 must not ack as one bank -- got 00->01
+  PASS  and the CPU really crossed         [13] run 1
+     -> status=OK ran=1 cycles=43351 (in-command) PC $00:6200->$01:6300 instructions=14450
+  PASS  step 1 advances one                
+  PASS  step 2 advances two                
+  PASS  bare bp reports off                was: no status= prefix at all
+  PASS  bad bp FAILs w/ status             [22] bp zzzz
+     -> status=FAIL bp-parse-fail 'zzzz' -- usage: bp <addr|BANK:addr|off>, hex
+  PASS  bp armed has status=               
+  PASS  bare bp reports armed              
+  PASS  bp halts a run                     [26] run 2
+     -> status=HALT ran=1 cycles=6 (in-command) halt=2 pc=$00:6103 at=bp (its instruction not yet executed) -- `resume` (or the next run/step) continues past a breakpoint instructions=3
+  PASS  halted AT the bp                   
+  PASS  cpu reports HALT=1                 
+  PASS  run resumes past a bp              [29] run 2
+     -> status=HALT ran=1 cycles=3 (in-command) resumed-from-halt halt=2 pc=$00:6103 at=bp (its instruction not yet executed) -- `resume` (or the next run/step) continues past a breakpoint instructions=1
+  PASS  resume is idempotent               [30] resume
+     -> status=OK resume cleared user-halt PC=00:6103 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+  PASS  bp off has status=                 
+  PASS  run is clean after off             [35] run 2
+     -> status=OK ran=2 cycles=86682 (in-command) PC $00:6100->$00:6103 instructions=28895
+  PASS  and still executes                 
+  PASS  bp halts a step run                [39] step 8
+     -> status=HALT stepped=4 cycles=9 (in-command) PC=00:6103 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=1 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch instructions=4
+  PASS  step stopped short                 8 asked; 4 taken
+
+ALL GREEN -- 25 exec-control checks
+SUITE END exec control (IIgs)
+
+##### ALTZP/LC (IIe) ###########################################
+SUITE START ALTZP/LC (IIe)
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail\altzp-p3
+log:       C:\msys64\tmp\a2rail\altzp-p3\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+
+=== ALTZP / STACK / LANGUAGE CARD -- platform 3 ================
+  PASS  zero page follows ALTZP    main $50=11  aux $50=22  (want 11 / 22)
+  PASS  stack follows ALTZP        main pull=AA  aux pull=BB  (want AA / BB)
+  PASS  LC RAM follows ALTZP       main $D000=C3  aux $D000=D4  (want C3 / D4)
+  PASS  ALTZP does NOT move $0300  $0300 across the switch = 5E (want 5E -- unchanged)
+  PASS  RAMWRT splits write banks  main $4000=88  aux $4000=77  (want 88 / 77)
+  PASS  RAMRD redirects reads      read of $4000 with RAMRD on = 77 (want 77, the aux value)
+  PASS  RAMWRT does NOT move ZP    $60 with RAMWRT on = 3C (want 3C -- unchanged)
+
+ALL GREEN -- 7 ALTZP/LC checks
+SUITE END ALTZP/LC (IIe)
+
+##### ALTZP/LC (IIgs) ##########################################
+SUITE START ALTZP/LC (IIgs)
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail\altzp-p5
+log:       C:\msys64\tmp\a2rail\altzp-p5\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+
+=== ALTZP / STACK / LANGUAGE CARD -- platform 5 ================
+  PASS  zero page follows ALTZP    main $50=11  aux $50=22  (want 11 / 22)
+  PASS  stack follows ALTZP        main pull=AA  aux pull=BB  (want AA / BB)
+  PASS  LC RAM follows ALTZP       main $D000=C3  aux $D000=D4  (want C3 / D4)
+  PASS  ALTZP does NOT move $0300  $0300 across the switch = 5E (want 5E -- unchanged)
+  PASS  RAMWRT splits write banks  main $4000=88  aux $4000=77  (want 88 / 77)
+  PASS  RAMRD redirects reads      read of $4000 with RAMRD on = 77 (want 77, the aux value)
+  PASS  RAMWRT does NOT move ZP    $60 with RAMWRT on = 3C (want 3C -- unchanged)
+  PASS  $C035 inhibits shadowing   FPI $00:2000=BB  MegaII $E0:2000=AA  (want BB / AA)
+
+ALL GREEN -- 8 ALTZP/LC checks
+SUITE END ALTZP/LC (IIgs)
+
+=== DUALSMOKE MATRIX ===========================================
+  PASS  gssquared ctest (offline)
+  PASS  rail parity (offline)
+  PASS  railcheck (IIe / platform 3)
+  PASS  railcheck (IIgs / platform 5)
+  PASS  exec control (IIe)
+  PASS  exec control (IIgs)
+  PASS  ALTZP/LC (IIe)
+  PASS  ALTZP/LC (IIgs)
+
+SUITE RUN-END dualsmoke
+ALL GREEN -- 8 dual-platform suites
+
+=== GATE personality ===========================================
+runtime ucrt: C:\msys64\ucrt64\bin
+  PASS c0  p0 Apple II                                1480ms
+  PASS c1  p1 Apple II Plus                           1468ms
+  PASS c2  p2 Apple IIe                               1406ms
+  PASS c3  p3 Apple IIe Enhanced                      1463ms
+  PASS c4  p3 Apple IIe Enhanced w/Mouse              1404ms
+  PASS c5  p3 Apple IIe Enhanced Dual Mockingboard    1389ms
+  PASS c6  p4 Apple IIe 65816 w/Mouse                 1389ms
+  PASS c7  p3 Apple IIe Enhanced PAL                  1383ms
+  PASS c8  p5 Apple IIgs                              1604ms
+  PASS c9  p5 Apple IIgs / Disk II                    1591ms
+  PASS c10 p5 Apple IIgs + A2GSPU                     1601ms
+  PASS c11 p5 Apple IIgs + Uthernet II                1616ms
+  PASS c12 p5 Apple IIgs ROM 4 Mark Twain             1621ms
+  PASS c13 p5 Apple IIgs ROM 3 Tenspeed               1577ms
+  PASS c14 p3 Apple IIe Enhanced + Thunderclock       1405ms
+  PASS c15 p5 Apple IIgs + A2GSPU + Mouse             1599ms
+  PASS c16 p6 Apple IIgs (ROM 3), upstream platform   1617ms
+report: C:\msys64\tmp\a2rail-personalities\personality-results.json
+ALL GREEN -- 17 of 17 built-in Apple II machine personalities
+
+=== GATE protocol ==============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail-protocol-d19c464d5a2546a599b853d591537e6d
+log:       C:\msys64\tmp\a2rail-protocol-d19c464d5a2546a599b853d591537e6d\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+ALL GREEN -- protocol/discovery(7 platforms, 17 configs)/json/ownership/SHR differential
+
+=== GATE copilot ===============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+ALL GREEN -- windowed agent observe+control and live observation arming; poke and halting rails refused
+
+=== GATE assertparity ==========================================
+
+=== ASSERT PARITY -- platform 5 ================================
+runtime ucrt: C:\msys64\ucrt64\bin
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail-assertparity
+log:       C:\msys64\tmp\a2rail-assertparity\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+  PASS  AGREE  peek:FFFA62 >= 0d0                env=PASS ctrl=PASS -- every byte is >= 0 -- operator >=, which CTRL did not have
+  PASS  EXPECT peek:FFFA62 >= 0d0                want=PASS got=PASS :: [2] assert peek:FFFA62 >= 0d0
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  AGREE  peek:FFFA62 <= 0d255              env=PASS ctrl=PASS -- every byte is <= 255 -- operator <=
+  PASS  EXPECT peek:FFFA62 <= 0d255              want=PASS got=PASS :: [3] assert peek:FFFA62 <= 0d255
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  AGREE  peek:FFFA62 < 0d0                 env=FAIL ctrl=FAIL -- no byte is < 0 -- a FAIL that is not an UNEVAL
+  PASS  EXPECT peek:FFFA62 < 0d0                 want=FAIL got=FAIL :: [4] assert peek:FFFA62 < 0d0
+     -> status=FAIL assert pass=0 fail=1 path=probe_peek FAIL peek:FFFA62 < $0 (0) (actual=$A9 (169))
+  PASS  AGREE  peek:FFFA62 != 0d999              env=PASS ctrl=PASS -- operator !=
+  PASS  EXPECT peek:FFFA62 != 0d999              want=PASS got=PASS :: [5] assert peek:FFFA62 != 0d999
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  AGREE  peek:FFFA62 == 22                 env=UNEVAL ctrl=UNEVAL -- ambiguous base: 22 or $22? refuse, do not guess
+  PASS  EXPECT peek:FFFA62 == 22                 want=UNEVAL got=UNEVAL :: [6] assert peek:FFFA62 == 22
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'peek:FFFA62 == 22' ambiguous base: write $22 or 0d22
+  PASS  AGREE  peek:00C029 == $EE                env=UNEVAL ctrl=UNEVAL -- handler-backed page -- CTRL used to PASS this on floating bus
+  PASS  EXPECT peek:00C029 == $EE                want=UNEVAL got=UNEVAL :: [7] assert peek:00C029 == $EE
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'peek:00C029 == $EE (238)' UNEVALUATED (see log)
+  PASS  AGREE  no_such_field == 0d1              env=UNEVAL ctrl=UNEVAL -- unknown field must not compare as a sentinel
+  PASS  EXPECT no_such_field == 0d1              want=UNEVAL got=UNEVAL :: [8] assert no_such_field == 0d1
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'no_such_field == $1 (1)' UNEVALUATED (see log)
+  PASS  AGREE  qd_carry = 0d0                    env=UNEVAL ctrl=UNEVAL -- single-= typo: a dropped clause is not a passed clause
+  PASS  EXPECT qd_carry = 0d0                    want=UNEVAL got=UNEVAL :: [9] assert qd_carry = 0d0
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'qd_carry = 0d0' has no comparison operator (== != <= >= < >)
+  PASS  AGREE  qd_carry == 0d0                   env=UNEVAL ctrl=UNEVAL -- QDStartUp never fired in either run -- no result to compare
+  PASS  EXPECT qd_carry == 0d0                   want=UNEVAL got=UNEVAL :: [10] assert qd_carry == 0d0
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'qd_carry == $0 (0)' UNEVALUATED (see log)
+  PASS  AGREE  gsos_err == 0d0                   env=PASS ctrl=PASS -- no GS/OS error on either surface; a non-peek field CTRL could not even parse
+  PASS  EXPECT gsos_err == 0d0                   want=PASS got=PASS :: [11] assert gsos_err == 0d0
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  both printed the observed byte           env='$A9 (169)' ctrl='$A9 (169)'
+  PASS  SAME byte, SAME base, SAME text          env='$A9 (169)' ctrl='$A9 (169)' -- one rail must not print two bases
+  PASS  nonzero: spike computes it               env=PASS
+  PASS  nonzero: live rail refuses               ctrl=UNEVAL -- must not invent an SHR statistic
+
+ALL GREEN -- 24 assert-parity checks
+
+=== GATE unarmedhash ===========================================
+runtime ucrt: C:\msys64\ucrt64\bin
+
+=== UNARMED HASH / OBSERVE-DON'T-DISTURB ====================
+exe: D:/gsqs/fleet-20261016/build/GSSquared.exe
+  PASS  iigs-rom: unarmed run completed              rc=0 status=OK
+  PASS  iigs-rom: armed run completed                rc=0 status=OK
+  PASS  iigs-rom: armed == unarmed (hash)            unarmed=6D9886E3B3EE0383 armed=6D9886E3B3EE0383
+  PASS  iigs-rom: armed == unarmed (cycles)          unarmed=6236744 armed=6236744
+  PASS  iigs-rom: armed == unarmed (run)             unarmed=800AEA5075763504 armed=800AEA5075763504
+  PASS  iigs-rom: armed rails all recorded           8 sinks
+  PASS  iigs-rom: SCC_A bound and accounted          capture bytes match close-out (zero allowed)
+  PASS  iigs-rom: SCC_B bound and accounted          capture bytes match close-out (zero allowed)
+  PASS  iigs-rom: WDM_CONSOLE bound and accounted    capture bytes match close-out (zero allowed)
+  PASS  iigs-rom: trap records carry names           RESET
+  PASS  iigs-rom: unarmed == baseline (hash)         baseline=6D9886E3B3EE0383 now=6D9886E3B3EE0383
+  PASS  iigs-rom: unarmed == baseline (cycles)       baseline=6236744 now=6236744
+  PASS  iigs-rom: unarmed == baseline (run)          baseline=800AEA5075763504 now=800AEA5075763504
+  PASS  iie-rom: unarmed run completed               rc=0 status=OK
+  PASS  iie-rom: armed run completed                 rc=0 status=OK
+  PASS  iie-rom: armed == unarmed (hash)             unarmed=92F1E19D6FE2A383 armed=92F1E19D6FE2A383
+  PASS  iie-rom: armed == unarmed (cycles)           unarmed=2043601 armed=2043601
+  PASS  iie-rom: armed == unarmed (run)              unarmed=9D45F479767B943C armed=9D45F479767B943C
+  PASS  iie-rom: armed rails all recorded            7 sinks
+  PASS  iie-rom: trap records carry names            RESET
+  PASS  iie-rom: unarmed == baseline (hash)          baseline=92F1E19D6FE2A383 now=92F1E19D6FE2A383
+  PASS  iie-rom: unarmed == baseline (cycles)        baseline=2043601 now=2043601
+  PASS  iie-rom: unarmed == baseline (run)           baseline=9D45F479767B943C now=9D45F479767B943C
+  PASS  iigs-gsos601: unarmed run completed          rc=0 status=OK
+  PASS  iigs-gsos601: armed run completed            rc=0 status=OK
+  PASS  iigs-gsos601: armed == unarmed (hash)        unarmed=D29F204D690D417F armed=D29F204D690D417F
+  PASS  iigs-gsos601: armed == unarmed (cycles)      unarmed=10647413 armed=10647413
+  PASS  iigs-gsos601: armed == unarmed (run)         unarmed=9CFCBEBB3B604B4E armed=9CFCBEBB3B604B4E
+  PASS  iigs-gsos601: armed rails all recorded       8 sinks
+  PASS  iigs-gsos601: SCC_A bound and accounted      capture bytes match close-out (zero allowed)
+  PASS  iigs-gsos601: SCC_B bound and accounted      capture bytes match close-out (zero allowed)
+  PASS  iigs-gsos601: WDM_CONSOLE bound and accounted capture bytes match close-out (zero allowed)
+  PASS  iigs-gsos601: trap records carry names       RESET SystemLoader. GSOS.SystemDispatchTable+ GSOS.Dispatcher+
+  PASS  iigs-gsos601: load map names the drivers     9 loads, AppleDisk3.5 AppleDisk5.25 Console.Driver Char.FST
+  PASS  iigs-gsos601: unarmed == baseline (hash)     baseline=D29F204D690D417F now=D29F204D690D417F
+  PASS  iigs-gsos601: unarmed == baseline (cycles)   baseline=10647413 now=10647413
+  PASS  iigs-gsos601: unarmed == baseline (run)      baseline=9CFCBEBB3B604B4E now=9CFCBEBB3B604B4E
+  PASS  iigs-finder: unarmed run completed           rc=0 status=OK
+  PASS  iigs-finder: the boot did not crash          GSDIAG status=OK
+  PASS  iigs-finder: unarmed == baseline (hash)      baseline=2E304BF0147B220A now=2E304BF0147B220A
+  PASS  iigs-finder: unarmed == baseline (cycles)    baseline=22377216 now=22377216
+  PASS  iigs-finder: unarmed == baseline (run)       baseline=994DCC2DF8B6A75A now=994DCC2DF8B6A75A
+
+ALL GREEN -- 42 checks over 4 boot(s), unarmed (and armed where the row asks)
+
+=== GATE hwtruth ===============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail-hwtruth-gate\rail
+log:       C:\msys64\tmp\a2rail-hwtruth-gate\rail\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+hwtruth: finished after about 180 frames; results page saved to C:\msys64\tmp\a2rail-hwtruth-gate\page.bin
+The term 'python' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+
+=== GATE mbaudit ===============================================
+
+=== MB-AUDIT (Mockingboard 6522 + AY, two cards) ===================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\fleet-20261016\build\GSSquared.exe | git ? | mtime 2026-10-16 07:15:32
+CTRL rail: C:\msys64\tmp\a2rail-mbaudit-gate
+log:       C:\msys64\tmp\a2rail-mbaudit-gate\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  MB-Audit: All tests passed (total=$000782) (Ctrl-Reset prompts answered: 2)
+
+=== GATES MATRIX ===============================================
+  PASS     railparity        1.8s  
+  FAIL     artifacts           0s  
+  FAIL     gdiff               0s  
+  FAIL     buscompare          0s  
+  FAIL     bisect            0.1s  
+  FAIL     agentic          14.1s  
+  PASS     dualsmoke          21s  
+  PASS     personality      25.8s  
+  PASS     protocol          2.5s  
+  PASS     copilot           3.9s  
+  PASS     assertparity     12.8s  
+  PASS     unarmedhash      75.2s  
+  FAIL     hwtruth           5.7s  
+  PASS     mbaudit           8.3s  
+report: D:/gsqs/queue-20261016/fleet-gates.ndjson
+6 of 14 gate(s) FAILED: artifacts, gdiff, buscompare, bisect, agentic, hwtruth

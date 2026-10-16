@@ -1,0 +1,53 @@
+PASS managed read-only launch has native RAMDISK pin p3
+PASS native typed writeback policy proves the launch guard
+PASS nested batch inherits media policy and passes native assertion
+PASS contradictory nested launch refuses: A2GSPU_RAMDISK
+PASS contradictory nested launch refuses: A2GSPU_NO_WRITEBACK
+PASS contradictory nested launch refuses: WIZ5_NO_WRITEBACK
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS managed read-only launch has native RAMDISK pin p5
+PASS native typed writeback policy proves the launch guard
+PASS nested batch inherits media policy and passes native assertion
+PASS contradictory nested launch refuses: A2GSPU_RAMDISK
+PASS contradictory nested launch refuses: A2GSPU_NO_WRITEBACK
+PASS contradictory nested launch refuses: WIZ5_NO_WRITEBACK
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS contradictory startup media policy refuses before launch/output

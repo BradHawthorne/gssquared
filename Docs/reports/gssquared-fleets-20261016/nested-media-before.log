@@ -1,0 +1,11 @@
+PASS managed read-only launch has native RAMDISK pin p3
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\readonlymediacheck.py", line 44, in <module>
+    run(parser.parse_args().exe.resolve())
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\readonlymediacheck.py", line 27, in run
+    check(batch['ok'] and re.search(r'^A2GSPU PINS: .*\bramdisk=1\b',batch['stdout_excerpt'],re.MULTILINE),'nested batch inherits media policy and passes native assertion')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: nested batch inherits media policy and passes native assertion
