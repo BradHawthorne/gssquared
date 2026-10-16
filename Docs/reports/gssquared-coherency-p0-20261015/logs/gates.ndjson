@@ -1,0 +1,13 @@
+{"schema":"a2gates-event-v1","seconds":1.7,"ts":"2026-10-15T14:56:53.8270652Z","suite":"railparity","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":0.1,"ts":"2026-10-15T14:56:53.9652362Z","suite":"artifacts","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":0.1,"ts":"2026-10-15T14:56:54.0771199Z","suite":"gdiff","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":0.6,"ts":"2026-10-15T14:56:54.7178991Z","suite":"buscompare","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":13.5,"ts":"2026-10-15T14:57:08.2033033Z","suite":"agentic","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":21.6,"ts":"2026-10-15T14:57:29.8461455Z","suite":"dualsmoke","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":25.9,"ts":"2026-10-15T14:57:55.7506946Z","suite":"personality","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":2.3,"ts":"2026-10-15T14:57:58.0736458Z","suite":"protocol","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":3.8,"ts":"2026-10-15T14:58:01.8797732Z","suite":"copilot","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":13.1,"ts":"2026-10-15T14:58:14.9767214Z","suite":"assertparity","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":76.4,"ts":"2026-10-15T14:59:31.4266148Z","suite":"unarmedhash","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":5.6,"ts":"2026-10-15T14:59:37.0769303Z","suite":"hwtruth","note":"","outcome":"PASS","rc":0}
+{"schema":"a2gates-event-v1","seconds":8.2,"ts":"2026-10-15T14:59:45.2576595Z","suite":"mbaudit","note":"","outcome":"PASS","rc":0}

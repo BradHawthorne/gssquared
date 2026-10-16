@@ -1,0 +1,28 @@
+{
+  "schema": "a2autonomy-shape-validation-v1",
+  "gates_passed": 14,
+  "ctest_passed": 14,
+  "python_tests_passed": 18,
+  "mcp_tools": 82,
+  "native_verbs": 73,
+  "rails": 161,
+  "wire_types": 32,
+  "feature_review_verbs": 73,
+  "executable": "D:\\gsqs\\coherency-20261015\\build\\GSSquared-autonomy.exe",
+  "sha256": "3e56516aedd10e41502cf8b456c073bab50eb7fa061cf8c465675035031a693b",
+  "protected_consumer_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "python_client_source_sha256": {
+    "clients\\python\\src\\gs2debug\\__init__.py": "2576de116f98c72f0aa71744b91f8988c1d8b86cb6648e682ee3a3207806c418",
+    "clients\\python\\src\\gs2debug\\artifacts.py": "58fe6e83b3cd4503312a7813f174c947249c7b94d566e78be2e977864d0533d0",
+    "clients\\python\\src\\gs2debug\\client.py": "35134f80f5507137ccff4fe850b66a8cbfdb1b69ee2ce4e8baf19130fb36f280",
+    "clients\\python\\src\\gs2debug\\ctrl.py": "dab16a5e5bd7d24fe0ce27783d8fc9b1779d391632d734d32cb9c612bbe1d7e8",
+    "clients\\python\\src\\gs2debug\\errors.py": "6b42f01bedf0121732b93bc99ce45cbd73ed771de69414b90e5dc47c97114ccd",
+    "clients\\python\\src\\gs2debug\\frame.py": "94d7df108e46511c8a0a2483e8600551f87c138a4474f1c75e5b0b30a67edf13",
+    "clients\\python\\src\\gs2debug\\keys.py": "3584160112d446de7cadda19e0ae81fd35893bf1dfdc178d62c45caedc72bfe1",
+    "clients\\python\\src\\gs2debug\\mcp.py": "3debd794cabd01a1184848b3bf8d1192e0e7a06461826de826273c37faadb7c9",
+    "clients\\python\\src\\gs2debug\\observations.py": "c1658b1828733abb924e51e3b14c58d61a3c6169bc0c6ffa75a0c598ee42bae9",
+    "clients\\python\\src\\gs2debug\\types.py": "a1735e5f910b7d14a26961474150ced808766e63ab20f58da3e695624a6c9005",
+    "clients\\python\\src\\gs2debug\\unix_socket.py": "baf14e59253b390adef81bc83656d6365f16db2dc4cef988dd17ee5fa314c0a8"
+  },
+  "source_model": "working checkout at validation; no claim of frozen asset/media/replay capsule"
+}

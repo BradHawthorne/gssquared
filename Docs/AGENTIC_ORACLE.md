@@ -10,6 +10,14 @@ This is not “more debug prints.” It is a **product definition**.
 
 ---
 
+**2026-10-16 direction:** expose a connected, explainable machine in real time.
+Native `context` supplies synchronized state, compiled/installed/absent models,
+source references, bounded causal evidence, changes and named explanations.
+Socket read queries work while running; uncertainty and missing coverage stay
+visible. The Rosetta companion binds correctness to measured efficiency.
+See [`MACHINE_CONTEXT.md`](MACHINE_CONTEXT.md). Current inventory: 74 native
+verbs and 85 MCP tools; 161 rails and 32 socket types.
+
 ## 1. Non-negotiable properties
 
 | # | Property | Meaning for agents |
@@ -63,6 +71,8 @@ Black-box anti-patterns (forbidden):
 | **SPIKE** env + `-n` | Batch CI / one-shot verdict | `GSDIAG:` + `A2GSPU_RAILS.md` |
 | **Env rails** | Arm traces/watch/assert | catalogued in RAILS; `manifest` lists groups |
 | **Windowed co-pilot** | Human drives, agent reads and nudges | `copilot` |
+| **Debug socket agent tools** | Shared native CTRL handlers on the machine thread | `MANIFEST`, `AGENT_TOOLS`; invoke with `AGENT_COMMAND` |
+| **MCP stdio companion** | Direct tool discovery/calls for AI clients | `initialize`, `tools/list`, `gs2_agent_tools`; native registry plus structured debugger observations, artifact transport and batch adapter |
 
 Windowed co-pilot uses `A2GSPU_COPILOT=<dir>`, a `cmd.N`/`ack.N` rail polled on
 the SDL frame thread after each normal frame, so it never races the human from a
@@ -91,6 +101,47 @@ documented acks (L3); every env rail is L2 (registry, `rail find`, a catalogue r
 checked by `railparity.ps1`). L4 exists for `watch bus`, `valtrap`, `itrace`,
 `tbtrace`, `callstream`, `cov`, `memvu`, `shr-golden` and `dhgr-golden`; the rest of
 the 144 rails are launch-only, and `rail live` lists exactly which reach a verb.
+
+**2026-10-15 inventory correction:** rail parity now measures 160 rails (157
+before P0), 67 CTRL verbs (66 before P2.1) and 70 live-settable rails. The older counts above
+describe the earlier inventory. Launch-only rails can still have registered
+readback; consult the reach table and `rail live`, rather than inferring control
+from a rail's presence in that table.
+
+**2026-10-15 interface work:** 72 CTRL verbs after `inspect`, `capture`, `fault`, `input` and
+`subscribe`; rail/setter counts remain 160/70. Native inspection exports typed
+CPU/device/signal/capability data with explicit coverage and availability.
+Ordered JSONL subscriptions cover the central record writer and selected
+console/control events, with loss counters. This is a measured subset; the
+active interface-completeness report tracks remaining semantic/control/replay
+gaps. Runtime RTC snapshot guidance now agrees with the per-file manifest.
+
+**2026-10-15 tool integration:** 73 verbs after `ui`, 32 socket types after
+AGENT_TOOLS/AGENT_COMMAND, 161 rails after the explicit `A2GSPU_AGENT` bootstrap
+mode, and initially 75 generated MCP tools including native catalog and isolated batch
+discovery. The file rail and socket invoke one dispatcher. Useful menu settings
+have native state, availability and effect receipts. The stdio companion can
+launch an owned machine with shared CTRL startup initialization and registered
+interactive rails, run separate one-shot batches, or attach without owning
+its lifetime. It does not install an AI application's configuration. Launch-only
+rails and unsupported physical host flows remain explicit, rather than being
+advertised as live controls or complete GUI proof.
+
+**2026-10-15 upstream observation audit:** 79 MCP tools after four structured
+debugger adapters (trace, memory-domain reads, masked search and native text
+page metadata). Reads report unreadability, searches exclude I/O placeholders,
+trace clock deltas refer only to adjacent retained records, and extended trace
+text is repeatable without a fixed-speed scanline estimate. See
+`reports/gssquared-upstream-observability-20261015/README.md` for the upstream
+main/development-branch comparison and validation.
+
+**2026-10-15 autonomous feature-shape pass:** 82 MCP tools after scoped
+create-once input upload, artifact discovery and digest-bound evidence reads,
+including native PNG image content. Socket timeouts preserve partial framing
+and the original request; wait recovery never resends. Execution validates
+before effects and distinguishes completed goals from bounded work. The native
+73-verb interface inventory and remaining model/shape limits are in
+`reports/gssquared-autonomy-shape-20261015/README.md`.
 
 ---
 
@@ -174,3 +225,36 @@ parser. Human-readable replies remain useful diagnostics, not the sole API.
 | 6 | Dual-mode gate still holds (no A2GSPU ⇒ stock UX) | the headless half is mechanical (`unarmedhash.ps1`); the windowed no-environment check is still by hand |
 
 This document is the bar. Implementations are judged against it.
+
+## 10. Design review for architectural understanding
+
+**Owner direction, 2026-10-16:** maximal instrumentation serves agent reasoning
+about how software should be shaped. Historical code is evidence to understand
+and challenge. Familiarity, archive frequency and a successful run do not
+establish an efficient implementation. The paired design contract is
+[`SHARED_FOUNDATION.md`](SHARED_FOUNDATION.md#corpus-informed-architectural-refinement-owner-direction-2026-10-16).
+
+These are review requirements for new or revised features, not a claim that
+every existing model already exposes everything below. Enforcement is by
+review, supplemented by the named regression gates for implemented surfaces.
+
+| Design question | Required shape and evidence |
+| --- | --- |
+| Can an agent explain the result? | Expose relevant state, transitions, mappings, device dependencies and source/model references through discoverable typed interfaces. Identify unsupported fields, unreadable bytes and absent devices explicitly. A hidden dependency is an observability gap to record and address. |
+| What actually caused it? | Distinguish observed events, dynamic nesting, sampled changes and inferred data flow. Identify instruction/bus/command/frame boundaries, clock domains, ordering, retention loss and reset/session identity as applicable. A parent event ID alone is not proof of a value's last writer. |
+| Can the explanation be challenged? | Pair inspection with explicit controls for bounded execution and relevant input/state/fault interventions, reporting the intervention and completion reason. Use fresh comparable sessions where restore/replay is incomplete; never invent replay precision. |
+| Can CIDAR and Rosetta join the evidence? | Retain artifact/tool identity, loaded address/segment mapping and available source provenance so observations can be joined to a workload and candidate. Keep primitive IDs, product policy and source interpretation in companions, without embedding archive or product maps in the native emulator. |
+| Is the measured improvement meaningful? | Name workload, machine/configuration, memory placement, CPU mode, initial conditions, measurement interval and clock units. Report guest cycles/instructions/bytes and relevant latency/resource effects separately from host capture/transport cost. Missing channels stay unavailable rather than becoming zero. |
+| Could instrumentation have changed the answer? | Check guest behavior and timing with observation armed and unarmed on the applicable IIe/IIgs paths; disclose sampling omissions and host overhead. Instrumentation must not manufacture the architectural gain it reports. |
+| Does the claim exceed the evidence? | Preserve passing reference cases, failing negative controls, boundary/adversarial coverage and counterexamples. State tested-domain bounds separately from sampled best/worst cases; emulator evidence alone proves neither a global optimum nor physical-IIgs equivalence. |
+
+Prefer additions that let an agent resolve a concrete uncertainty and falsify
+its explanation over additions that merely increase field or tool counts.
+Offer bounded queries, selective capture and durable expanded artifacts so
+maximal exposure remains usable within an agent's context and execution budget.
+Any bounded view must expose its truncation, sampling and availability limits.
+
+The next integration work is tracked in `AGENTIC_ROADMAP.md`; the current
+`context` and experiment interfaces remain the implemented subset described in
+`MACHINE_CONTEXT.md`. Complete data flow, all device transitions and physical
+hardware validation remain open.

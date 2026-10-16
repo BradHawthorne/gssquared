@@ -1,0 +1,192 @@
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP response identity
+PASS MCP request accepted
+PASS all native/observation/artifact tools discoverable
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict agent_tools
+PASS native inventory retained
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pause
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict setreg
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict step
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict inspect
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP consumes native typed state artifact without filesystem access
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pngc
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS native PNG delivered as viewable MCP image content
+PASS image content is bound to returned digest and completeness
+PASS transported 4dot image independently decodes to expected doubled-height raster
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS uploaded input can be inspected byte-for-byte
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict batch
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS cold batch evidence is accessible through same artifact root
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_list
+PASS artifact discovery includes outputs and excludes rejected upload
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS agent can retrieve exact emulator binary identity
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict quit
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS evidence remains readable after guest quit
+PASS MCP owned process closes cleanly
+PASS native owned emulator closes cleanly
+PASS blocked mutation allocates no new wire sequence
+PASS real timed-out run recovers original native evidence
+PASS recovery leaves paused machine usable
+PASS recovered session exits normally
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP response identity
+PASS MCP request accepted
+PASS all native/observation/artifact tools discoverable
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict agent_tools
+PASS native inventory retained
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pause
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict setreg
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict step
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict inspect
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP consumes native typed state artifact without filesystem access
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pngc
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS native PNG delivered as viewable MCP image content
+PASS image content is bound to returned digest and completeness
+PASS transported 4dot image independently decodes to expected doubled-height raster
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS uploaded input can be inspected byte-for-byte
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict batch
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS cold batch evidence is accessible through same artifact root
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_list
+PASS artifact discovery includes outputs and excludes rejected upload
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS agent can retrieve exact emulator binary identity
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict quit
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS evidence remains readable after guest quit
+PASS MCP owned process closes cleanly
+PASS native owned emulator closes cleanly
+PASS blocked mutation allocates no new wire sequence
+PASS real timed-out run recovers original native evidence
+PASS recovery leaves paused machine usable
+PASS recovered session exits normally

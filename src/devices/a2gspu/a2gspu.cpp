@@ -1238,7 +1238,16 @@ void init_slot_a2gspu(computer_t *computer, SlotType_t slot) {
 
     // Register debug display
     computer->register_debug_display_handler("A2GSPU", (uint64_t)ad,
-        [ad]() -> DebugFormatter * { return a2gspu_debug_display(ad); });
+        [ad]() -> DebugFormatter * { return a2gspu_debug_display(ad); },[ad]()->DebugFormatter* {
+            auto *df=new DebugFormatter();df->boolField("legacy",ad->legacy);df->boolField("serial_connected",ad->serial_handle!=nullptr);
+            df->unsignedField("telemetry_bytes",ad->telemetry_bytes,64,"bytes");
+            if(!ad->legacy) {
+                const auto&r=ad->cmdreg;df->unsignedField("command_register",r.reg_lo,8);df->unsignedField("writes",r.writes,64);
+                df->unsignedField("frames",r.frames,64);df->unsignedField("gaps",r.gaps,64);df->unsignedField("duplicates",r.dups,64);df->unsignedField("overflow",r.overflow,64);
+                df->boolField("last_valid",r.last_valid);df->unsignedField("last_op",r.last_op,8);df->unsignedField("last_length",r.last_len,16);
+            }else {df->unsignedField("mode",ad->emu.mode,32);df->boolField("initialized",ad->emu.initialized);df->signedField("cursor_x",ad->proto.cursor_x);df->signedField("cursor_y",ad->proto.cursor_y);}
+            return df;
+        });
 
     // Register shutdown handler
     computer->register_shutdown_handler([ad]() -> bool {

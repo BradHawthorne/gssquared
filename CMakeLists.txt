@@ -830,6 +830,8 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(apps/systemconfigtest)
 
     add_subdirectory(apps/ssgputexttest)
+    add_subdirectory(apps/snapdifftest)
+    add_subdirectory(apps/interfacecontracttest)
 endif()
 
 ################################################################################

@@ -1,0 +1,52 @@
+PASS context-bound experiment p3-00-baseline: pass
+PASS context-bound experiment p3-00-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS actual wrong-result experiment fails and retains evidence
+PASS invalid experiment refuses before creating output or launching
+PASS context-bound experiment p3-7f-baseline: pass
+PASS context-bound experiment p3-7f-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p3-80-baseline: pass
+PASS context-bound experiment p3-80-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p3-ff-baseline: pass
+PASS context-bound experiment p3-ff-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p5-00-baseline: pass
+PASS context-bound experiment p5-00-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS actual wrong-result experiment fails and retains evidence
+PASS invalid experiment refuses before creating output or launching
+PASS context-bound experiment p5-7f-baseline: pass
+PASS context-bound experiment p5-7f-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p5-80-baseline: pass
+PASS context-bound experiment p5-80-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p5-ff-baseline: pass
+PASS context-bound experiment p5-ff-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison

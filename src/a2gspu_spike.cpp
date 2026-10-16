@@ -52,7 +52,7 @@ void run_headless_spike(GS2AppState *state) {
     // the CTRL rail drives, so once armed they fire during `run` commands. The
     // bus/obs oracle arming stays spike-only (its rings record every SHR write
     // and would grow unbounded across a long interactive session).
-    const bool a2gspu_ctrl_mode = (SDL_getenv("A2GSPU_CTRL") != nullptr);
+    const bool a2gspu_ctrl_mode = (SDL_getenv("A2GSPU_CTRL") != nullptr) || state->agent_socket_mode;
 
     // Env-gated CPU micro-test short-circuit: when A2GSPU_CPUTEST names a case,
     // run only that case and exit with its verdict (the normal frame spike, the
@@ -372,6 +372,13 @@ void run_headless_spike(GS2AppState *state) {
     // gate) is the fixed-frame spike and is bypassed for CTRL, exactly as the
     // original early short-circuit did.
     if (a2gspu_ctrl_mode) {
+        if(state->agent_socket_mode) {
+            computer->execution_mode=EXEC_PAUSED;computer->instructions_left=0;
+            g_a2gspu_agent_bootstrap_complete=true;
+            a2gspu_pins_print(state->platform_id,0,BUILD_VERSION);
+            printf("A2GSPU AGENT: shared CTRL bootstrap complete; socket owns a paused machine\n");
+            return;
+        }
         a2gspu_ctrl_loop(state);
         // Destroy the computer BEFORE exiting. exit() does not run destructors,
         // and computer_t::~computer_t() is what fires every registered shutdown

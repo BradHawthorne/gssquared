@@ -287,6 +287,9 @@ void init_slot_keygloo(computer_t *computer, SlotType_t slot) {
         DH_ADB, // unique ID for this, need to have in a header.
         [kb_state]() -> DebugFormatter * {
             return debug_keygloo(kb_state);
+        },
+        [kb_state]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();kb_state->kg->debug_display(df,true);return df;
         }
     );
 

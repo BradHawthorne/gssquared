@@ -1,0 +1,33 @@
+PASS platform 3: identical snapshot has empty state diff
+PASS snapshot diff leaves live CPU unchanged
+PASS changed A reported by name/value
+PASS planted RAM byte located exactly in physical domain
+PASS diff artifact names its schema/model
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS input overwrite refused
+PASS refused report did not modify input
+PASS truncated manifest refused before report output
+PASS invalid input preserves prior report
+PASS missing snapshot fails loud
+PASS unwritable report path fails loud
+PASS session exits cleanly
+PASS platform 5: identical snapshot has empty state diff
+PASS snapshot diff leaves live CPU unchanged
+PASS changed A reported by name/value
+PASS planted RAM byte located exactly in physical domain
+PASS diff artifact names its schema/model
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS input overwrite refused
+PASS refused report did not modify input
+PASS truncated manifest refused before report output
+PASS invalid input preserves prior report
+PASS missing snapshot fails loud
+PASS unwritable report path fails loud
+PASS session exits cleanly
+snapshot checks: ALL GREEN

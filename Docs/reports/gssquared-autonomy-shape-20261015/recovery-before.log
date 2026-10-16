@@ -1,0 +1,118 @@
+..........FFFF                                                           [100%]
+================================== FAILURES ===================================
+_____________ test_file_client_rejects_controls_before_publishing _____________
+
+    def test_file_client_rejects_controls_before_publishing():
+        with tempfile.TemporaryDirectory() as temporary:
+            with CtrlClient(temporary,timeout=.01) as client:
+                for command in ('cpu\nreset','cpu\rreset','cpu\treset','cpu\x7f','cpu\x00','cpu\x1b'):
+                    try:client.command(command)
+                    except ControlError:pass
+                    else:raise AssertionError('control character accepted')
+>                   assert list(Path(temporary).glob('cmd.*'))==[],'invalid command was published'
+E                   AssertionError: invalid command was published
+E                   assert [WindowsPath(...gzobs/cmd.1')] == []
+E                     
+E                     Left contains one more item: WindowsPath('C:/msys64/tmp/tmpph7gzobs/cmd.1')
+E                     Use -v to get more diff
+
+clients\python\tests\test_recovery.py:19: AssertionError
+____________ test_partial_reply_timeout_recovers_without_resending ____________
+
+    def test_partial_reply_timeout_recovers_without_resending():
+        for split in (5,18):  # midway through header, then through payload
+            client=Client();local,remote=socket.socketpair();client._sock=local;client._handshaked=True
+            release=threading.Event();received=[];errors=[]
+            def peer():
+                try:
+                    kind,sequence,payload=peer_request(remote);received.append((kind,sequence,payload))
+                    reply=json.dumps({'schema':'a2ctrl-reply-v2','ok':True,'command':payload.decode(),'data':{'effect':'once'}}).encode()
+                    wire=pack_frame(kind,sequence,reply);remote.sendall(wire[:split])
+                    if not release.wait(3):raise AssertionError('test did not release reply')
+                    remote.sendall(wire[split:])
+                    kind,sequence,payload=peer_request(remote);received.append((kind,sequence,payload));remote.sendall(pack_frame(kind,sequence,b''))
+                except BaseException as error:errors.append(error)
+            worker=threading.Thread(target=peer,daemon=True);worker.start()
+            try:
+                try:client.agent_command('setreg a 42',timeout=.03)
+                except TimeoutError:pass
+                else:raise AssertionError('partial reply did not time out')
+>               pending=client.pending_request
+                        ^^^^^^^^^^^^^^^^^^^^^^
+E               AttributeError: 'Client' object has no attribute 'pending_request'
+
+clients\python\tests\test_recovery.py:46: AttributeError
+________________ test_partial_event_timeout_preserves_framing _________________
+
+    def test_partial_event_timeout_preserves_framing():
+        client=Client();local,remote=socket.socketpair();client._sock=local;client._handshaked=True
+        wire=pack_frame(EVENT,11,(99).to_bytes(4,'little')+b'evidence')
+        try:
+            remote.sendall(wire[:7])
+            try:client.wait_event(timeout=.02)
+            except TimeoutError:pass
+            else:raise AssertionError('incomplete event did not time out')
+            remote.sendall(wire[7:])
+>           assert client.wait_event(timeout=1)==(99,11,b'evidence')
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+clients\python\tests\test_recovery.py:67: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+clients\python\src\gs2debug\client.py:511: in wait_event
+    frame = self._recv_frame(timeout=remaining)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+clients\python\src\gs2debug\client.py:803: in _recv_frame
+    type_word, seq, length = unpack_header(header)
+                             ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+data = b'\x00\x0c\x00\x00\x00c\x00\x00\x00evi'
+
+    def unpack_header(data: bytes) -> tuple[int, int, int]:
+        if len(data) < HEADER_SIZE:
+            raise ValueError("short header")
+        type_word, seq, length = HEADER_STRUCT.unpack(data[:HEADER_SIZE])
+        if length > MAX_PAYLOAD:
+>           raise ValueError(f"frame length {length} exceeds max {MAX_PAYLOAD}")
+E           ValueError: frame length 1769366784 exceeds max 1048576
+
+clients\python\src\gs2debug\frame.py:32: ValueError
+_____________________ test_bad_timeout_has_no_wire_effect _____________________
+
+    def test_bad_timeout_has_no_wire_effect():
+        client=Client();local,remote=socket.socketpair();client._sock=local;client._handshaked=True
+        try:
+            for timeout in (True,0,-1,float('nan'),float('inf')):
+>               try:client.request(PING,timeout=timeout)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+clients\python\tests\test_recovery.py:74: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+clients\python\src\gs2debug\client.py:751: in request
+    frame = self._recv_frame(timeout=remaining)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+clients\python\src\gs2debug\client.py:802: in _recv_frame
+    header = self._recv_exact(HEADER_SIZE, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <gs2debug.client.Client object at 0x000001A661E15BD0>, n = 12
+timeout = 0.9999993999954313
+
+    def _recv_exact(self, n: int, timeout: float | None) -> bytes:
+        sock = self._require_sock()
+        if timeout is not None:
+            sock.settimeout(timeout)
+        buf = bytearray()
+        while len(buf) < n:
+>           chunk = sock.recv(n - len(buf))
+                    ^^^^^^^^^^^^^^^^^^^^^^^
+E           TimeoutError: timed out
+
+clients\python\src\gs2debug\client.py:795: TimeoutError
+=========================== short test summary info ===========================
+FAILED clients\python\tests\test_recovery.py::test_file_client_rejects_controls_before_publishing
+FAILED clients\python\tests\test_recovery.py::test_partial_reply_timeout_recovers_without_resending
+FAILED clients\python\tests\test_recovery.py::test_partial_event_timeout_preserves_framing
+FAILED clients\python\tests\test_recovery.py::test_bad_timeout_has_no_wire_effect
+4 failed, 10 passed in 1.31s

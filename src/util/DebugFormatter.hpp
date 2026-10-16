@@ -20,12 +20,33 @@
 #include <vector>
 #include <string>
 #include <cstdio>
+#include <cstdint>
+#include <stdexcept>
+#include "../a2gspu_ctrl_json.hpp"
 
 class DebugFormatter {
 private:
     std::vector<std::string> lines;
     
 public:
+    struct Field { std::string name,type,value_json,unit; };
+    std::vector<Field> fields;
+    void field(const std::string &name,const std::string &type,const std::string &value,const std::string &unit="raw") {
+        for(const auto &f:fields)if(f.name==name)throw std::runtime_error("duplicate device field: "+name);
+        fields.push_back({name,type,value,unit});
+    }
+    void unsignedField(const std::string &name,uint64_t value,unsigned bits=32,const std::string &unit="raw") {
+        field(name,"u"+std::to_string(bits),bits>32?a2ctrljson::quote(std::to_string(value)):std::to_string(value),unit);
+    }
+    void boolField(const std::string &name,bool value){field(name,"bool",value?"true":"false");}
+    void signedField(const std::string &name,int64_t value,unsigned bits=32,const std::string &unit="raw") {
+        field(name,"i"+std::to_string(bits),bits>32?a2ctrljson::quote(std::to_string(value)):std::to_string(value),unit);
+    }
+    void stringField(const std::string &name,const std::string &value){field(name,"string",a2ctrljson::quote(value));}
+    void bytesField(const std::string &name,const uint8_t *value,size_t count) {
+        std::string json="[";for(size_t i=0;i<count;i++){if(i)json+=',';json+=std::to_string(value[i]);}
+        field(name,"bytes",json+"]","bytes");
+    }
     // Printf-style formatting for adding a line
     template<typename... Args>
     void addLine(const char* format, Args... args) {
@@ -59,6 +80,7 @@ public:
     // Clear all lines
     void clear() {
         lines.clear();
+        fields.clear();
     }
     
     // Get number of lines

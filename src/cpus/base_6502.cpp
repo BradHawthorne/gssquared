@@ -33,6 +33,7 @@
 #include "memvu_storevis.hpp"  // MEMVU_STOREVIS: store-visibility accounting (off => 1 branch)
 #include "memvu_istream.hpp"   // MEMVU_OPMIX / MEMVU_IREUSE: instruction-stream shape
 #include "a2gspu_progress_taps.hpp" // A2GSPU_LIVENESS: insns, last screen/text store (off => 1 branch)
+#include "a2gspu_fault.hpp"
 
 
 /**
@@ -2263,6 +2264,7 @@ inline void invalid_nop(cpu_state *cpu, int bytes, int cycles) {
 public:
 
 int execute_next(cpu_state *cpu) override {
+    if(!a2fault::queue.empty())a2fault::poll(cpu,clock->get_cycles());
 
     if (cpu->clock_stopped) { // clock stopped.
         incr_cycles(cpu);
@@ -2296,9 +2298,47 @@ int execute_next(cpu_state *cpu) override {
     }
     )
 
+    // WDC priorities: reset, ABORT, NMI, IRQ. The ABORT source here is a
+    // deliberate boundary exception before fetching the next opcode. It does
+    // not emulate a pin edge during an instruction or roll back bus writes.
+    if(cpu->nmi_pending || cpu->boundary_abort_pending) {
+        bool abort=cpu->boundary_abort_pending;
+        if(abort)cpu->boundary_abort_pending=false;else cpu->nmi_pending=false;
+        uint16_t vector=abort?ABORTB_VECTOR:NMI_VECTOR;
+        if constexpr(CPUTraits::has_65816_ops) {
+            if constexpr(!CPUTraits::e_mode)vector=abort?N_ABORTB_VECTOR:N_NMI_VECTOR;
+            if(g_intlog_on)iigs_intlog(cpu,abort?"ABORT-boundary":"NMI",vector);
+        }
+        uint64_t entry_evidence=0;
+        if(a2events::needs("interrupt")) {
+            entry_evidence=a2events::publish("interrupt","{\"kind\":"+a2ctrljson::quote(abort?"ABORT-boundary":"NMI")+
+                ",\"phase\":\"accepted-before-stack-and-vector-access\",\"interrupted_pc\":"+std::to_string(make_pc_long(cpu,cpu->pc))+
+                ",\"vector_address\":"+std::to_string(vector)+",\"p\":"+std::to_string(cpu->p)+",\"sp\":"+std::to_string(cpu->sp)+"}");
+        }
+        a2events::CauseScope interrupt_cause(entry_evidence);
+        phantom_read_ign(cpu,make_pc_long(cpu,cpu->pc));
+        if constexpr(CPUTraits::has_65816_ops && !CPUTraits::e_mode)push_byte(cpu,cpu->pb);
+        push_word(cpu,cpu->pc);
+        if constexpr(CPUTraits::has_65816_ops && !CPUTraits::e_mode)push_byte(cpu,cpu->p);
+        else push_byte(cpu,(cpu->p&~FLAG_B)|FLAG_UNUSED);
+        cpu->I=1;
+        if constexpr(CPUTraits::has_65c02_ops || CPUTraits::has_65816_ops)cpu->D=0;
+        cpu->pc=read_word_bank0(cpu,vector);cpu->pb=0;incr_cycles(cpu);cpu->rdy=false;
+        if(a2events::needs("interrupt"))a2events::publish("interrupt","{\"kind\":"+a2ctrljson::quote(abort?"ABORT-boundary":"NMI")+",\"phase\":\"vector-resolved\",\"handler_pc\":"+std::to_string(make_pc_long(cpu,cpu->pc))+"}");
+        TRACE(tb->eaddr=cpu->pc;tb->f_irq=1;)
+        TRACE(if(cpu->trace)cpu->trace_buffer->add_entry(cpu->trace_entry);)
+        return 0;
+    }
     //if (!cpu->EFFI && cpu->irq_asserted) { // if IRQ is not disabled, and IRQ is asserted, handle it.
     //if (!cpu->I && (cpu->irq_pipe & 0x02)) { // T1: look back 2 cycles for IRQ assertion
     if (cpu->irq_pipe & 0x02) { // T2: look back 2 cycles for IRQ assertion AND I
+        uint64_t entry_evidence=0;
+        if(a2events::needs("interrupt")) {
+            const uint16_t vector=CPUTraits::has_65816_ops && !CPUTraits::e_mode?N_IRQ_VECTOR:IRQ_VECTOR;
+            entry_evidence=a2events::publish("interrupt","{\"kind\":\"IRQ\",\"phase\":\"accepted-before-stack-and-vector-access\",\"interrupted_pc\":"+
+                std::to_string(make_pc_long(cpu,cpu->pc))+",\"vector_address\":"+std::to_string(vector)+",\"p\":"+std::to_string(cpu->p)+",\"sp\":"+std::to_string(cpu->sp)+"}");
+        }
+        a2events::CauseScope interrupt_cause(entry_evidence);
         if constexpr ((CPUTraits::has_65816_ops)) {
             // A2GSPU_INTLOG: interrupt-entry logger (IRQ), before the pushes so
             // PC/P/S read the interrupted state. Compiled out of the 6502 core.
@@ -2339,6 +2379,7 @@ int execute_next(cpu_state *cpu) override {
         }
         
         cpu->rdy = false;
+        if(a2events::needs("interrupt"))a2events::publish("interrupt","{\"kind\":\"IRQ\",\"phase\":\"vector-resolved\",\"handler_pc\":"+std::to_string(make_pc_long(cpu,cpu->pc))+"}");
         //cpu->EFFI = cpu->I;
 
         TRACE ( tb->eaddr = cpu->pc; tb->f_irq = 1;);
@@ -2493,7 +2534,9 @@ int execute_next(cpu_state *cpu) override {
         0x80 | (CPUTraits::has_65816_ops?0x10:CPUTraits::has_65c02_ops?8:0) |
         ((CPUTraits::e_mode || !CPUTraits::has_65816_ops)?4:0) |
         (CPUTraits::m_16?2:0) | (CPUTraits::x_16?1:0));
+    const uint64_t profile_cycle0 = g_cov_counts_on ? this->clock->get_cycles() : 0;
     opcode_t opcode = fetch_pc(cpu);
+    if (cpu->count_instructions || g_cov_counts_on) ++cpu->executed_instructions;
     tb->opcode = opcode;
     if (g_progress_taps) g_progress_insns++;   // run hash + A2GSPU_LIVENESS insns (off => 1 branch)
     // MEMVU_OPMIX / MEMVU_IREUSE (off => 1 branch). The mode context is a
@@ -5032,6 +5075,12 @@ int execute_next(cpu_state *cpu) override {
             break;
     }
 
+    if (g_cov_counts_on && memvu_ipc >= g_cov_lo && memvu_ipc <= g_cov_hi &&
+        (g_cov_maps.empty() || g_cov_current_map != (size_t)-1)) {
+        auto &count = g_cov_counts[memvu_ipc];
+        ++count.instructions;
+        count.cycles += this->clock->get_cycles() - profile_cycle0;
+    }
     TRACE(if (cpu->trace) cpu->trace_buffer->add_entry(cpu->trace_entry);)
 
     return 0;

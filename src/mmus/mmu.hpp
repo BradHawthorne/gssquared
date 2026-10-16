@@ -115,6 +115,14 @@ class MMU {
         virtual uint8_t *get_memory_base() { return nullptr; }
         virtual uint32_t get_memory_size() { return 0; }
 
+        // Pure page-table metadata. Never invoke a bus handler or dereference
+        // an I/O pointer while explaining a CPU address.
+        const page_table_entry_t *observation_page(uint32_t address) const {
+            const uint64_t page=(uint64_t)address >> page_size_bits;
+            return page<(uint64_t)num_pages?&page_table[page]:nullptr;
+        }
+        uint32_t observation_page_size() const {return page_size;}
+
         // Raw. Do not trigger cycles or do the IO bus stuff
         uint8_t read_raw(uint32_t address) {
             uint16_t page = address >> page_size_bits; // / GS2_PAGE_SIZE;

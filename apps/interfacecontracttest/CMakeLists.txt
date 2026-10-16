@@ -1,0 +1,3 @@
+add_executable(interfacecontracttest main.cpp)
+target_link_libraries(interfacecontracttest PRIVATE gs2_util)
+add_test(NAME interface_contract COMMAND interfacecontracttest)

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstdlib>
+#include "audio_capture.hpp"
 
 /*
  * audio_probe -- the one place generated sample streams can be observed.
@@ -116,6 +117,7 @@ inline void note(int src, const int16_t *buf, uint32_t frames, int channels) {
 
 // A batch arrived that this source could not decode (unexpected sample format).
 inline void note_unread(int src) {
+    audio_capture::unread(src);
     if (!g_on || src < 0 || src >= N_SRC) return;
     g_src[src].unread++;
 }

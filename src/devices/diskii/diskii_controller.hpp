@@ -402,8 +402,14 @@ public:
         return true;
     }
 
-    DebugFormatter *debug() {
+    DebugFormatter *debug(bool native_only=false) {
         DebugFormatter *f = new DebugFormatter();
+        if(native_only) {
+            f->unsignedField("selected_drive",diskii_select,8);
+            f->boolField("motor_on",motor_on);f->boolField("enable",diskii_enable);
+            f->boolField("q6",diskii_q6);f->boolField("q7",diskii_q7);
+            f->unsignedField("motor_turnoff_at",mark_cycles_turnoff,64,"14M-ticks");return f;
+        }
         f->addLine("Drive Select: %d", diskii_select);
         f->addLine("Motor On: %d (latch=%d)", motor_on, diskii_enable);
         f->addLine("Mark Cycles Turnoff: %llu", mark_cycles_turnoff);

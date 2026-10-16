@@ -17,6 +17,15 @@
 // The CTRL verb families. Declarations: a2gspu_ctrl_cmds.hpp.
 #include "gs2_app.hpp"
 #include "a2gspu_artifact_meta.hpp"   // M6: vram dumps describe themselves
+#include "a2gspu_inspect.hpp"
+#include "a2gspu_context.hpp"
+#include "a2gspu_events.hpp"
+#include "a2gspu_console.hpp"
+#include "a2gspu_scc_capture.hpp"
+#include "devices/scc8530/scc8530.hpp"
+#include "a2gspu_fault.hpp"
+#include "a2gspu_input.hpp"
+#include "a2gspu_ui.hpp"
 
 namespace a2ctrl {
 // A2CTRL-DISPATCH-BEGIN -- railparity.ps1 reads CTRL command words (strncmp/strcmp
@@ -661,8 +670,10 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
     }
     if (!strncmp(line, "load ", 5)) {
         uint32_t addr = 0;
-        char abuf[64], fbuf[512];
-        if (sscanf(line + 5, "%63s %511s", abuf, fbuf) == 2 && parse_addr(abuf, &addr)) {
+        try {
+            auto args=a2inspect::arguments(line+5);
+            if(args.size()!=2 || !parse_addr(args[0].c_str(),&addr))throw std::runtime_error("need: load <addr> <file>; quote paths with spaces");
+            const char *fbuf=args[1].c_str();
             long n = 0;
             char err[256];
             if (load_file_at(computer, addr, fbuf, &n, err, sizeof err)) {
@@ -677,9 +688,9 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
             } else {
                 snprintf(result, rsz, "status=FAIL load-%s", err);
             }
-        } else {
+        } catch(const std::exception &error) {
             snprintf(result, rsz,
-                     "status=FAIL load-parse-fail (need: load <addr> <file>)");
+                     "status=FAIL load-parse-fail (%s)",error.what());
         }
         return true;
     }
@@ -712,6 +723,7 @@ bool try_visual(const char *line, char *result, size_t rsz, computer_t *computer
         if (scale < 1 || scale > 8) scale = 3;
         MMU *m = rail_mmu(computer);
         if (!m) { snprintf(result, rsz, "status=FAIL shr-no-mmu"); return true; }
+        if(!dynamic_cast<MMU_IIgs*>(m)){snprintf(result,rsz,"status=FAIL shr-requires-IIgs");return true;}
 
         static uint8_t pix[32000], scb[200], pal[512];
         for (int i = 0; i < 32000; i++) pix[i] = m->probe_peek(0xE12000u + i);
@@ -983,9 +995,9 @@ bool try_meta(const char *line, char *result, size_t rsz) {
            instrumentation env (COVERAGE/SPIKE/CTRL takeover) stays off. */
         snprintf(result, rsz,
                  "status=OK copilot transport=atomic-files mode=windowed-agent thread=SDL-frame "
-                 "observe=protocol,systems,manifest,help,oracle,cpu,read,assert,png,pngc,speaker,audio,pause-status "
-                 "instrument=rail(list,find,live,read,schema,set,unset:windowed-safe),trap "
-                 "control=pause,resume,reset,quit,press,key,keys,holdkey,paddle,pbutton,joymode,mount");
+                 "observe=protocol,systems,manifest,help,oracle,cpu,read,assert,png,pngc,speaker,audio,pause-status,inspect,context "
+                 "instrument=rail(list,find,live,read,schema,set,unset:windowed-safe),trap,subscribe,capture json_wrapper='json <command>' "
+                 "control=pause,resume,reset,quit,press,key,keys,holdkey,input,paddle,pbutton,joymode,mount,ui(status+settings)");
         return true;
     }
     if (!strcmp(line, "protocol")) {
@@ -997,13 +1009,15 @@ bool try_meta(const char *line, char *result, size_t rsz) {
     }
     if (!strcmp(line,"limitations") || !strncmp(line,"limitations ",12)) {
         const char *path=line[11]?line+12:nullptr; while(path&&*path==' ')path++;
-        if(!path||!*path) snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 known=4 capabilities=1 use='limitations <file>'");
+        if(!path||!*path) snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 known=%d capabilities=%d use='limitations <file>'",
+            a2manifest::limitation_count("limitation"),a2manifest::limitation_count("capability"));
         else { FILE *lf=fopen(path,"wb"); if(!lf)snprintf(result,rsz,"status=FAIL limitations-open-fail %s",path);
             else {a2manifest::write_limitations(lf);fclose(lf);snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 wrote %s",path);} }
         return true;
     }
     if (!strcmp(line, "oracle") || !strncmp(line, "oracle ", 7)) {
         snprintf(result, rsz, "%s", a2manifest::oracle_banner());
+        a2ctrljson::native_status="OK";
         return true;
     }
     if (!strcmp(line, "help") || !strncmp(line, "help ", 5)) {
@@ -1701,8 +1715,47 @@ inline bool rail_clear_user_halt(computer_t *computer) {
 // run / step / run-until — needs ctrl_frame for itrace frame clock on `run`.
 bool try_exec(const char *line, char *result, size_t rsz,
                      computer_t *computer, int *ctrl_frame) {
+    struct InstructionAck {
+        cpu_state *cpu; char *out; size_t size; uint64_t before; bool active, was_counting;
+        computer_t *computer;uint64_t cycle_before;
+        std::string detail={};
+        ~InstructionAck() {
+            if (active) { size_t used = strlen(out);
+                snprintf(out+used,size-used," instructions=%llu",(unsigned long long)(cpu->executed_instructions-before));
+                cpu->count_instructions=was_counting;
+                const uint64_t after=computer->clock?computer->clock->get_cycles():0;
+                a2ctrljson::native_payload="{\"schema\":\"a2execution-v1\",\"cycle_model\":\"in-command\",\"cycles\":"+
+                    a2ctrljson::quote(std::to_string(after-cycle_before))+",\"instructions\":"+
+                    a2ctrljson::quote(std::to_string(cpu->executed_instructions-before))+detail+",\"cpu_after\":"+a2inspect::cpu(computer)+"}";
+            }
+        }
+    } instruction_ack{computer->cpu,result,rsz,computer->cpu->executed_instructions,
+        !strncmp(line,"run ",4) || !strncmp(line,"run-until ",10) ||
+        (!strncmp(line,"step",4) && (!line[4] || line[4]==' ')),computer->cpu->count_instructions,
+        computer,computer->clock?computer->clock->get_cycles():0};
+    uint64_t requested=1;uint32_t requested_target=0;
+    if(instruction_ack.active) {
+        try {
+            auto args=a2inspect::arguments(line);
+            const bool until=args[0]=="run-until",run=args[0]=="run";
+            if((until && (args.size()<2 || args.size()>3 || !parse_addr(args[1].c_str(),&requested_target))) ||
+               (run && args.size()!=2) || (!until && !run && args.size()>2))throw std::runtime_error("wrong argument count or target");
+            const size_t number=until?2:1;
+            requested=until?2000000:1;
+            if(args.size()>number) {
+                for(char c:args[number])if(c<'0' || c>'9')throw std::runtime_error("count must be decimal digits");
+                requested=a2inspect::integer(args[number],10,run?1000000:2147483647);
+            }
+            if(!requested)throw std::runtime_error("count must be positive");
+        } catch(const std::exception &error) {
+            instruction_ack.detail=",\"completed\":false,\"stop_reason\":\"invalid_request\"";
+            snprintf(result,rsz,"status=FAIL execution-parse-fail cycles=0 (in-command) -- %s",error.what());
+            return true;
+        }
+        computer->cpu->count_instructions=true;
+    }
     if (!strncmp(line, "run ", 4)) {
-        int frames = atoi(line + 4);
+        int frames = (int)requested;
         const char *rsm = rail_clear_user_halt(computer) ? " resumed-from-halt" : "";
         // `step` and `run-until` have always armed the CPU here; `run` did not,
         // and that asymmetry made the most-used verb on the rail lie. On a fresh
@@ -1729,6 +1782,9 @@ bool try_exec(const char *line, char *result, size_t rsz,
         }
         uint64_t dc = computer->clock->get_cycles() - cyc0;
         uint32_t pc1 = computer->cpu->full_pc & 0xFFFFFF;
+        instruction_ack.detail=",\"requested_frames\":"+std::to_string(frames)+",\"completed_frames\":"+std::to_string(ran)+
+            ",\"completed\":"+(halted || dc==0?std::string("false"):std::string("true"))+",\"stop_reason\":"+
+            a2ctrljson::quote(halted?"halted":dc==0?"no_progress":"frame_budget_completed");
         if (halted) {
             snprintf(result, rsz,
                      "status=HALT ran=%d cycles=%llu (in-command)%s%s halt=%d pc=$%02X:%04X%s "
@@ -1739,7 +1795,7 @@ bool try_exec(const char *line, char *result, size_t rsz,
                      g_iigs_break_parked ? " at=bp (its instruction not yet executed)" : "");
         } else if (dc == 0) {
             snprintf(result, rsz,
-                     "status=FAIL RAN NOTHING: %d frame(s), 0 cycles, PC still $%02X:%04X "
+                     "status=FAIL RAN NOTHING: %d frame(s), cycles=0 (in-command), PC still $%02X:%04X "
                      "-- exec_mode=%d clock_mode=%d instr_left=%d halt=%d",
                      ran, (unsigned)((pc1 >> 16) & 0xFF), (unsigned)(pc1 & 0xFFFF),
                      (int)computer->execution_mode,
@@ -1766,57 +1822,60 @@ bool try_exec(const char *line, char *result, size_t rsz,
         return true;
     }
     if (!strncmp(line, "run-until ", 10)) {
-        char addrbuf[64] = {0};
-        long budget = 2000000;
-        uint32_t target = 0;
-        if (sscanf(line + 10, "%63s %ld", addrbuf, &budget) >= 1 &&
-            parse_addr(addrbuf, &target)) {
-            const char *armed = arm_cpu(computer);
-            const char *rsm = rail_clear_user_halt(computer) ? " resumed-from-halt" : "";
+        const long budget=(long)requested;
+        const uint32_t target=requested_target;
+        {
+            bool hit=(computer->cpu->full_pc & 0xFFFFFF)==target;
+            const char *armed = hit?nullptr:arm_cpu(computer);
+            const char *rsm = !hit && rail_clear_user_halt(computer) ? " resumed-from-halt" : "";
             uint64_t cyc0 = computer->clock ? computer->clock->get_cycles() : 0;
-            long i = 0; bool hit = false;
-            for (; i < budget; i++) {
+            long attempts = 0;
+            for (; !hit && attempts < budget;) {
                 if (computer->cpu->halt) break;
+                ++attempts;
                 step_one(computer);
                 if (g_iigs_break_parked) break;      // stopped in front of a bp: not an instruction
-                // i+1: the instruction that reached the target WAS executed. Breaking
-                // before the loop's i++ reported instr=0 for a one-instruction hit.
-                if ((computer->cpu->full_pc & 0xFFFFFF) == target) { hit = true; i++; break; }
+                if ((computer->cpu->full_pc & 0xFFFFFF) == target) { hit = true; break; }
             }
             uint64_t dcyc = (computer->clock ? computer->clock->get_cycles() : 0) - cyc0;
+            instruction_ack.detail=",\"target\":"+std::to_string(target)+",\"attempt_budget\":"+std::to_string(budget)+",\"attempts\":"+std::to_string(attempts)+
+                ",\"budget_model\":\"instruction-boundary attempts; idle and interrupt-only attempts consume the bound\""+
+                ",\"target_reached\":"+(hit?std::string("true"):std::string("false"))+",\"completed\":"+(hit?std::string("true"):std::string("false"))+
+                ",\"stop_reason\":"+a2ctrljson::quote(hit?"target_reached":computer->cpu->halt || g_iigs_break_parked?"halted":"budget_exhausted");
             char st[192];
             format_cpu_line(computer, st, sizeof st);
             snprintf(result, rsz,
-                     "status=%s instr=%ld cycles=%llu (in-command)%s%s %s",
+                     "status=%s instr=%llu cycles=%llu (in-command)%s%s %s",
                      hit ? "OK" : (computer->cpu->halt ? "HALT" : "BUDGET"),
-                     i, (unsigned long long)dcyc, armed ? armed : "", rsm, st);
+                     (unsigned long long)(computer->cpu->executed_instructions-instruction_ack.before), (unsigned long long)dcyc, armed ? armed : "", rsm, st);
             soft_watch_after(computer, result, rsz);
-        } else {
-            snprintf(result, rsz, "status=FAIL run-until-parse-fail");
         }
         return true;
     }
     // "step" or "step N" — not "stepper" if we require end/space, but match legacy
     // strncmp(line,"step",4) which accepts any prefix of length>=4 starting step.
     if (!strncmp(line, "step", 4) && (line[4] == 0 || line[4] == ' ')) {
-        int n = 1;
-        if (line[4] == ' ') n = atoi(line + 5);
-        if (n < 1) n = 1;
+        int n = (int)requested;
         const char *armed = arm_cpu(computer);
         const char *rsm = rail_clear_user_halt(computer) ? " resumed-from-halt" : "";
         uint64_t cyc0 = computer->clock ? computer->clock->get_cycles() : 0;
         int done = 0;
-        for (; done < n; done++) {
+        for (; done < n;) {
             if (computer->cpu->halt) break;
+            ++done;
             step_one(computer);
             if (g_iigs_break_parked) break;          // stopped in front of a bp: not a step
         }
         uint64_t dcyc = (computer->clock ? computer->clock->get_cycles() : 0) - cyc0;
+        const uint64_t executed=computer->cpu->executed_instructions-instruction_ack.before;
+        const bool halted=computer->cpu->halt || g_iigs_break_parked;
+        instruction_ack.detail=",\"requested_instructions\":"+std::to_string(n)+",\"attempt_budget\":"+std::to_string(n)+",\"attempts\":"+std::to_string(done)+",\"completed\":"+(executed==(uint64_t)n?std::string("true"):std::string("false"))+
+            ",\"stop_reason\":"+a2ctrljson::quote(halted?"halted":executed==(uint64_t)n?"instruction_budget_completed":"instruction_budget_not_completed");
         char st[192];
         format_cpu_line(computer, st, sizeof st);
         snprintf(result, rsz,
-                 "status=OK stepped=%d cycles=%llu (in-command)%s%s %s",
-                 done, (unsigned long long)dcyc, armed ? armed : "", rsm, st);
+                 "status=%s stepped=%llu cycles=%llu (in-command)%s%s %s",
+                 halted?"HALT":executed==(uint64_t)n?"OK":"BUDGET",(unsigned long long)executed, (unsigned long long)dcyc, armed ? armed : "", rsm, st);
         soft_watch_after(computer, result, rsz);
         return true;
     }
@@ -2290,12 +2349,140 @@ bool try_cpu(const char *line, char *result, size_t rsz,
     char st[192];
     format_cpu_line(computer, st, sizeof st);
     snprintf(result, rsz, "status=OK cpu %s", st);
+    a2ctrljson::native_payload="{\"schema\":\"a2cpu-v1\",\"model\":\"internal-state-observation\",\"state\":"+a2inspect::cpu(computer)+"}";
     return true;
 }
 
 // read / setreg / cycles / bp / stack — agent hands + timing mark + breakpoint.
 bool try_regs(const char *line, char *result, size_t rsz,
                      computer_t *computer) {
+    if(!strncmp(line,"ui",2) && (!line[2] || line[2]==' '))return a2ui::command(line,result,rsz,computer);
+    if(!strncmp(line,"input",5) && (!line[5] || line[5]==' ')) {
+        try {
+            auto p=a2inspect::arguments(line[5]?line+6:"");
+            if(!a2input::installed) {
+                a2input::installed=true;
+                computer->register_reset_handler([computer](bool){a2input::release(computer);return true;});
+                computer->register_shutdown_handler([](){a2input::key_down=false;a2input::key=a2input::mods=a2input::new_mods=0;a2input::installed=false;return true;});
+            }
+            if(p.size()==1 && p[0]=="status"){}
+            else if(p.size()==1 && p[0]=="keyup") {
+                if(!a2input::key_down)throw std::runtime_error("no injected key held");a2input::release(computer);
+            } else if((p.size()==2 || p.size()==3) && p[0]=="keydown")a2input::down(computer,a2inspect::integer(p[1],16,127),p.size()==3?a2inspect::integer(p[2],16,255):0);
+            else if(p.size()==5 && p[0]=="mouse") {
+                int dx=a2input::signed_value(p[2],-63,63),dy=a2input::signed_value(p[3],-63,63);
+                unsigned buttons=a2inspect::integer(p[4],10,3);
+                if(p[1]=="adb") {
+                    auto *kg=(keygloo_state_t*)computer->get_module_state(MODULE_KEYGLOO);
+                    if(!kg || !kg->kg)throw std::runtime_error("machine has no ADB mouse path");
+                    if(!kg->kg->can_inject_mouse())throw std::runtime_error("previous ADB mouse packet unread");
+                    kg->kg->inject_mouse_data(((buttons&1)?0:0x80)|((uint8_t)dy&0x7f),((buttons&2)?0:0x80)|((uint8_t)dx&0x7f));
+                    keygloo_update_interrupt_status(kg,kg->kg);
+                } else if(p[1]=="card") {
+                    auto *mouse=(applemouseiii_state_t*)computer->get_module_state(MODULE_MOUSECARD);
+                    if(!mouse)throw std::runtime_error("machine has no mouse card");
+                    if(buttons>1)throw std::runtime_error("mouse card supports one button");
+                    applemouseiii_inject(mouse,dx,dy,buttons);
+                } else throw std::runtime_error("unknown mouse endpoint");
+            } else throw std::runtime_error("usage: input keydown <ASCII-hex> [modifier-hex] | keyup | mouse adb|card <dx-decimal> <dy-decimal> <buttons-mask-decimal> | status");
+            a2ctrljson::native_payload="{\"schema\":\"a2input-v1\",\"model\":\"immediate-device-injection\",\"guest_consumption_proved\":false,\"key_down\":"+std::string(a2input::key_down?"true":"false")+
+                ",\"key\":"+std::to_string(a2input::key)+",\"modifiers\":"+std::to_string(a2input::mods)+",\"cycles\":"+a2ctrljson::quote(std::to_string(computer->clock->get_cycles()))+",\"frame\":"+a2ctrljson::quote(std::to_string(computer->clock->get_frame_count()))+"}";
+            snprintf(result,rsz,"status=OK input model=immediate-device-injection consumed=unproved key_down=%d",a2input::key_down);
+        }catch(const std::exception&e){snprintf(result,rsz,"status=FAIL input %s",e.what());}
+        return true;
+    }
+    if(!strncmp(line,"fault",5) && (!line[5] || line[5]==' ')) {
+        try {
+            auto p=a2inspect::arguments(line[5]?line+6:"");auto *cpu=computer->cpu;
+            if(p.size()==1 && p[0]=="status"){}
+            else if(p.size()==1 && p[0]=="clear") {
+                if(!a2fault::busy(cpu))throw std::runtime_error("no active fault state");
+                a2fault::clear(cpu);
+            } else if(p.size()==3 && p[0]=="schedule") {
+                if(!computer->clock || !computer->irq_control)throw std::runtime_error("fault clock/IRQ controller unavailable");
+                if(!a2fault::installed) {
+                    a2fault::controller=computer->irq_control;a2fault::installed=true;
+                    computer->register_reset_handler([cpu](bool){a2fault::clear(cpu);return true;});
+                    computer->register_shutdown_handler([cpu](){a2fault::clear(cpu);a2fault::controller=nullptr;a2fault::owner=nullptr;a2fault::installed=false;return true;});
+                }
+                a2fault::schedule(cpu,p[2],a2inspect::integer(p[1],10,1000000000000ULL),computer->clock->get_cycles());
+            } else throw std::runtime_error("usage: fault schedule <delay-cycles-decimal> nmi|abort|irq-on|irq-off | status | clear");
+            a2ctrljson::native_payload=a2fault::status(cpu);
+            snprintf(result,rsz,"status=OK fault model=instruction-boundary-injection queued=%zu delivered=%llu",a2fault::queue.size(),(unsigned long long)a2fault::delivered);
+        }catch(const std::exception&e){snprintf(result,rsz,"status=FAIL fault %s",e.what());}
+        return true;
+    }
+    if(!strncmp(line,"capture",7) && (!line[7] || line[7]==' ')) {
+        try {
+            auto p=a2inspect::arguments(line[7]?line+8:"");
+            if(p.size()<2 || p.size()>3)throw std::runtime_error("usage: capture scc-a|scc-b|wdm status|off|on <file:path|pipe:endpoint>");
+            const bool wdm=p[0]=="wdm";
+            A2ByteSink *sink=nullptr;
+            std::string closed_bytes="null";
+            if(wdm) {
+                if(computer->cpu->cpu_type!=PROCESSOR_65816)throw std::runtime_error("WDM requires a 65816");
+                sink=&g_wdm_console;
+            } else if(p[0]=="scc-a" || p[0]=="scc-b") {
+                if(!scc_A2GSPU_present())throw std::runtime_error("machine has no SCC");
+                sink=&g_scc_capture[p[0]=="scc-b"];
+            } else throw std::runtime_error("unknown capture source");
+            if(p[1]=="on" && p.size()==3) {
+                if(wdm && (computer->cpu->wdm_handlers[0xfd].handler || computer->cpu->wdm_handlers[0xfe].handler))
+                    throw std::runtime_error("WDM operand already owned; turn capture off first");
+                try {sink->open_checked(p[0].c_str(),p[2].c_str());}catch(...){if(!sink->enabled)sink->close();throw;}
+                if(wdm) {
+                    computer->cpu->set_wdm_handler(0xfd,{a2_wdm_string,nullptr});
+                    computer->cpu->set_wdm_handler(0xfe,{a2_wdm_byte,nullptr});
+                }
+            } else if(p[1]=="off" && p.size()==2) {
+                if(!sink->enabled)throw std::runtime_error("capture is not armed");
+                if(wdm) {
+                    if(computer->cpu->wdm_handlers[0xfd].handler!=a2_wdm_string || computer->cpu->wdm_handlers[0xfe].handler!=a2_wdm_byte)
+                        throw std::runtime_error("WDM operand ownership changed");
+                    computer->cpu->set_wdm_handler(0xfd,{});computer->cpu->set_wdm_handler(0xfe,{});
+                }
+                closed_bytes=a2ctrljson::quote(std::to_string(sink->bytes));sink->close();
+            } else if(p[1]!="status" || p.size()!=2)throw std::runtime_error("invalid capture operation");
+            a2ctrljson::native_payload="{\"schema\":\"a2capture-v1\",\"source\":"+a2ctrljson::quote(p[0])+",\"enabled\":"+(sink->enabled?"true":"false")+
+                ",\"bytes\":"+a2ctrljson::quote(std::to_string(sink->bytes))+",\"closed_bytes\":"+closed_bytes+",\"binding\":"+a2ctrljson::quote(sink->binding)+"}";
+            snprintf(result,rsz,"status=OK capture source=%s enabled=%d bytes=%llu",p[0].c_str(),sink->enabled,sink->bytes);
+        } catch(const std::exception &e){snprintf(result,rsz,"status=FAIL capture %s",e.what());}
+        return true;
+    }
+    if(!strncmp(line,"subscribe",9) && (!line[9] || line[9]==' ')) {
+        try {
+            auto p=a2inspect::arguments(line[9]?line+10:"");
+            if(p.size()==1 && p[0]=="kinds") {
+                std::string json="{\"schema\":\"a2subscription-kinds-v1\",\"kinds\":[";
+                for(const auto &kind:a2events::available_kinds()){if(json.back()!='[')json+=',';json+=a2ctrljson::quote(kind);}
+                a2ctrljson::native_payload=json+"]}";
+                snprintf(result,rsz,"status=OK subscribe kinds=all,trap,watch,liveness,callstream,tap,loadmap,snap,card,u2,artifact,console,command,stop,fault,audio,irq,device");return true;
+            }
+            if(p.empty() || (p.size()==1 && p[0]=="status")) {}
+            else if(p.size()==1 && p[0]=="off")a2events::close();
+            else if((p.size()==3 || p.size()==4) && p[0]=="on") {
+                std::vector<std::string> filters;std::istringstream in(p[1]);std::string filter;
+                if(p[1].front()==',' || p[1].back()==',' || p[1].find(",,")!=std::string::npos)throw std::runtime_error("empty subscription kind");
+                const std::set<std::string> allowed(a2events::available_kinds().begin(),a2events::available_kinds().end());
+                while(std::getline(in,filter,',')){if(!allowed.count(filter))throw std::runtime_error("unknown subscription kind: "+filter);filters.push_back(filter);}
+                if(filters.empty())throw std::runtime_error("empty subscription kinds");
+                uint64_t cap=100000;
+                if(p.size()==4){size_t used=0;cap=std::stoull(p[3],&used);if(used!=p[3].size() || !cap || cap>1000000)throw std::runtime_error("record limit must be 1..1000000");}
+                std::string why;if(!a2events::open(filters,p[2],cap,why))throw std::runtime_error(why);
+            } else throw std::runtime_error("usage: subscribe on <kinds-comma-separated> <file> [max-records] | status | off");
+            a2ctrljson::native_payload=a2events::status();
+            snprintf(result,rsz,"status=%s subscribe active=%d retained=%llu dropped=%llu error=%s",
+                a2events::error.empty() && !a2events::dropped?"OK":"FAIL",a2events::active,(unsigned long long)a2events::retained,
+                (unsigned long long)a2events::dropped,a2events::error.empty()?"none":a2events::error.c_str());
+        } catch(const std::exception &e){snprintf(result,rsz,"status=FAIL subscribe %s",e.what());}
+        return true;
+    }
+    if (!strncmp(line,"context",7) && (!line[7] || line[7]==' ')) {
+        a2context::command(line[7]?line+8:"",result,rsz,computer);return true;
+    }
+    if (!strncmp(line,"inspect",7) && (!line[7] || line[7]==' ')) {
+        a2inspect::command(line[7]?line+8:"",result,rsz,computer);return true;
+    }
     /* verify <addr> <len> <file> -- compare guest memory against a host file
        HERE, and answer with the verdict rather than the bytes.
 
@@ -2625,6 +2812,22 @@ bool try_regs(const char *line, char *result, size_t rsz,
     if (!strncmp(line, "audio", 5) && (line[5] == 0 || line[5] == ' ')) {
         const char *arg = (line[5] == ' ') ? line + 6 : "";
         while (*arg == ' ') arg++;
+        if(!strncmp(arg,"capture",7) && (!arg[7] || arg[7]==' ')) {
+            try {
+                auto p=a2inspect::arguments(arg[7]?arg+8:"");
+                if(p.size()==1 && p[0]=="off")audio_capture::stop();
+                else if(p.size()==1 && p[0]=="status"){}
+                else if((p.size()==2 || p.size()==3) && (p[0]=="doc" || p[0]=="sfx")) {
+                    if(p[0]=="doc" && !g_a2gspu_ensoniq)throw std::runtime_error("machine has no DOC");
+                    audio_capture::start(p[0]=="doc"?0:1,p[1],p.size()==3?a2inspect::integer(p[2],10,1000000):1000000);
+                } else throw std::runtime_error("usage: audio capture doc|sfx <file> [maxframes] | off | status");
+                a2ctrljson::native_payload=audio_capture::status();
+                snprintf(result,rsz,"status=%s audio-capture active=%d frames=%llu dropped=%llu error=%s",
+                    audio_capture::error.empty() && !audio_capture::dropped?"OK":"FAIL",audio_capture::active,
+                    (unsigned long long)audio_capture::frames,(unsigned long long)audio_capture::dropped,audio_capture::error.c_str());
+            }catch(const std::exception &e){snprintf(result,rsz,"status=FAIL audio-capture %s",e.what());}
+            return true;
+        }
         int which = audio_probe::SRC_DOC;
         if (!strcmp(arg, "on"))       audio_probe::arm(true);
         else if (!strcmp(arg, "off")) audio_probe::arm(false);
@@ -2822,3 +3025,5 @@ bool try_regs(const char *line, char *result, size_t rsz,
 
 // A2CTRL-DISPATCH-END
 } // namespace a2ctrl
+void a2gspu_device_events(computer_t *computer){a2inspect::device_events(computer);a2context::sample(computer);}
+std::string a2gspu_agent_capabilities(computer_t *computer){return a2inspect::capabilities(computer);}

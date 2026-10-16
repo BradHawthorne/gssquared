@@ -32,6 +32,9 @@
 #include <string>
 
 namespace a2record {
+// Optional fan-out observer. Installed explicitly by an agent subscription;
+// absent by default. Both file and stdout records take the same path.
+inline void (*g_observer)(const char *,const std::string &) = nullptr;
 
 inline FILE       *g_global = nullptr;      // A2GSPU_RECORDS
 inline std::string g_global_path;
@@ -139,7 +142,7 @@ struct Record {
 
     // The closed body, for a rail that prints it on stdout behind its prefix.
     // By definition it never reached the global sink, so it counts as "own".
-    std::string done() { std::string r = s; r += '}'; count(rail, false); return r; }
+    std::string done() { std::string r = s; r += '}'; count(rail, false); if(g_observer)g_observer(rail,r); return r; }
 
     // One whole line to the sink. flush for low-rate rails whose reader may be
     // tailing the file; not for streams.
@@ -151,6 +154,7 @@ struct Record {
         // rail's own FILE* when it has one, so f == g_global is the only
         // evidence that this line landed in the global sink.
         count(rail, f == g_global);
+        if(g_observer)g_observer(rail,s);
     }
 };
 

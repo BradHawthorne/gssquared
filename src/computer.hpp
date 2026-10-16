@@ -85,6 +85,7 @@ struct computer_t {
         std::string name;
         uint64_t id;
         DebugDisplayHandler handler;
+        DebugDisplayHandler native_handler;
     };
 
     computer_t(NClockII *clock);
@@ -138,6 +139,8 @@ struct computer_t {
     std::vector<ResetHandler> reset_handlers;
     std::vector<ShutdownHandler> shutdown_handlers;
     std::vector<DebugDisplayHandlerInfo> debug_display_handlers;
+    // Installed model identities, recorded by the same loop that powers them on.
+    std::vector<std::pair<int,int>> installed_devices;
     DeviceDebugHandler device_debug_handlers[NUM_DEVICE_IDS]{};
 
     void *module_store[MODULE_NUM_MODULES];
@@ -233,7 +236,8 @@ struct computer_t {
 
     void register_reset_handler(ResetHandler handler);
     void register_shutdown_handler(ShutdownHandler handler);
-    void register_debug_display_handler(std::string name, uint64_t id, DebugDisplayHandler handler);
+    void register_debug_display_handler(std::string name, uint64_t id, DebugDisplayHandler handler,
+                                        DebugDisplayHandler native_handler = {});
     DebugFormatter *call_debug_display_handler(std::string name);
 
     void register_device_debug(device_id id, DeviceDebugHandler handler);

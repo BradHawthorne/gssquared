@@ -1,0 +1,357 @@
+{
+  "after": {
+    "capture_cost_model": "host wall duration through capture/render; excludes final envelope/file/transport",
+    "capture_host_ns": "7600",
+    "data": {
+      "clock": {
+        "cpu_per_14m": 1,
+        "frame_end_14m": "238944",
+        "frame_start_14m": "0",
+        "mode": "2.8 MHz",
+        "mode_id": 2,
+        "model": "native counters; no fixed CPU-speed conversion or host refresh inference",
+        "nominal_hz": "2857370",
+        "scanline_phase_14m": "0",
+        "source": "src/NClock.hpp",
+        "video_phase_14m": "13"
+      },
+      "coverage": {
+        "complete_causal_history": false,
+        "complete_machine_state": false,
+        "host_presentation": "reference raster and source audio differ from actual GPU and host mix",
+        "replay": "snapshots exclude clock/host state; no full replay",
+        "source_semantics": "Rosetta bound maps via guestview; variables/unwind/DWARF incomplete"
+      },
+      "cpu": {
+        "halt_reason": 0,
+        "interrupts": {
+          "boundary_abort_pending": false,
+          "irq_line": false,
+          "irq_pipeline": 0,
+          "nmi_pending": false,
+          "reset_sources": "0"
+        },
+        "processor_type": 2,
+        "register_widths": {
+          "a": 8,
+          "x": 8,
+          "y": 8
+        },
+        "registers": {
+          "a": 255,
+          "a_storage": 255,
+          "d": 0,
+          "dbr": 0,
+          "e": true,
+          "p": 180,
+          "pbr": 0,
+          "pc": 2054,
+          "sp": 297,
+          "x": 0,
+          "y": 0
+        },
+        "sp_model": "bank0-stack-address",
+        "stopped": false,
+        "waiting_for_interrupt": false
+      },
+      "history": {
+        "active": true,
+        "capacity": 256,
+        "complete_machine_history": false,
+        "coverage": "armed interval only; command boundaries, central records, IRQ edges, interrupt entry, EventTimer transitions and sampled native device fields",
+        "discarded": "174",
+        "last_event_id": "430",
+        "oversized": "0",
+        "retained": 256
+      },
+      "installed_device_instances": 11,
+      "native_observers": 12,
+      "platform": "Apple IIgs",
+      "queries": [
+        "topology [offset]",
+        "device <id>",
+        "address <hex>",
+        "irq",
+        "stop",
+        "pixel <x> <y>",
+        "schedule [offset]",
+        "history [after-id] [count]",
+        "mark [hex-address decimal-length]",
+        "changes <mark-id> [offset]",
+        "snapshot <file>",
+        "on [capacity]",
+        "off"
+      ],
+      "registered_signals": 3,
+      "system_id": 8
+    },
+    "kind": "overview",
+    "schema": "a2context-v1",
+    "stamp": {
+      "boundary": "machine-thread observation; no guest execution during capture",
+      "clock_epoch": "0",
+      "clock_model": "native NClock domains; compare cycles only within a continuous timeline",
+      "context_session": "1792137194362571500-343689211887800",
+      "cpu_cycles": "10",
+      "execution_mode": 2,
+      "master_14m_ticks": "55",
+      "observation_id": "436",
+      "video_cycles": "3",
+      "video_frames": "0"
+    }
+  },
+  "before": {
+    "capture_cost_model": "host wall duration through capture/render; excludes final envelope/file/transport",
+    "capture_host_ns": "16500",
+    "data": {
+      "clock": {
+        "cpu_per_14m": 1,
+        "frame_end_14m": "238944",
+        "frame_start_14m": "0",
+        "mode": "2.8 MHz",
+        "mode_id": 2,
+        "model": "native counters; no fixed CPU-speed conversion or host refresh inference",
+        "nominal_hz": "2857370",
+        "scanline_phase_14m": "0",
+        "source": "src/NClock.hpp",
+        "video_phase_14m": "10"
+      },
+      "coverage": {
+        "complete_causal_history": false,
+        "complete_machine_state": false,
+        "host_presentation": "reference raster and source audio differ from actual GPU and host mix",
+        "replay": "snapshots exclude clock/host state; no full replay",
+        "source_semantics": "Rosetta bound maps via guestview; variables/unwind/DWARF incomplete"
+      },
+      "cpu": {
+        "halt_reason": 0,
+        "interrupts": {
+          "boundary_abort_pending": false,
+          "irq_line": false,
+          "irq_pipeline": 0,
+          "nmi_pending": false,
+          "reset_sources": "0"
+        },
+        "processor_type": 2,
+        "register_widths": {
+          "a": 8,
+          "x": 8,
+          "y": 8
+        },
+        "registers": {
+          "a": 0,
+          "a_storage": 0,
+          "d": 0,
+          "dbr": 0,
+          "e": true,
+          "p": 52,
+          "pbr": 0,
+          "pc": 2048,
+          "sp": 297,
+          "x": 0,
+          "y": 0
+        },
+        "sp_model": "bank0-stack-address",
+        "stopped": false,
+        "waiting_for_interrupt": false
+      },
+      "history": {
+        "active": true,
+        "capacity": 256,
+        "complete_machine_history": false,
+        "coverage": "armed interval only; command boundaries, central records, IRQ edges, interrupt entry, EventTimer transitions and sampled native device fields",
+        "discarded": "166",
+        "last_event_id": "422",
+        "oversized": "0",
+        "retained": 256
+      },
+      "installed_device_instances": 11,
+      "native_observers": 12,
+      "platform": "Apple IIgs",
+      "queries": [
+        "topology [offset]",
+        "device <id>",
+        "address <hex>",
+        "irq",
+        "stop",
+        "pixel <x> <y>",
+        "schedule [offset]",
+        "history [after-id] [count]",
+        "mark [hex-address decimal-length]",
+        "changes <mark-id> [offset]",
+        "snapshot <file>",
+        "on [capacity]",
+        "off"
+      ],
+      "registered_signals": 3,
+      "system_id": 8
+    },
+    "kind": "overview",
+    "schema": "a2context-v1",
+    "stamp": {
+      "boundary": "machine-thread observation; no guest execution during capture",
+      "clock_epoch": "0",
+      "clock_model": "native NClock domains; compare cycles only within a continuous timeline",
+      "context_session": "1792137194362571500-343689211887800",
+      "cpu_cycles": "2",
+      "execution_mode": 2,
+      "master_14m_ticks": "10",
+      "observation_id": "426",
+      "video_cycles": "0",
+      "video_frames": "0"
+    }
+  },
+  "build": [
+    {
+      "argv": [
+        "D:\\gsqs\\interface-completeness-20261015\\rosetta-build\\apps\\asmiigs\\asmiigs.exe",
+        "--cpu",
+        "65C02",
+        "--format",
+        "bin",
+        "fixture.s",
+        "-o",
+        "fixture.bin"
+      ],
+      "exit_code": 0,
+      "tool_sha256": "d54a6037828cd61ee6ffa1becd60e920374d55ea22536915e527b97871f74560"
+    }
+  ],
+  "checks": [
+    {
+      "address": 2304,
+      "bytes": [
+        255
+      ]
+    }
+  ],
+  "claim": "declared raw CPU fixture on the selected emulator; not physical hardware or application boot acceptance",
+  "context_snapshot": {
+    "bytes": "58240",
+    "hash": "1462818684668028867",
+    "hash_algorithm": "house-fnv1a64-noncanonical",
+    "path": "D:/gsqs/machine-context-20261016/rosetta-final2/p5-ff-baseline/machine/context.json",
+    "producer": "context.snapshot",
+    "producer_finalized": true,
+    "schema": "a2context-ref-v1",
+    "stamp": {
+      "boundary": "machine-thread observation; no guest execution during capture",
+      "clock_epoch": "0",
+      "clock_model": "native NClock domains; compare cycles only within a continuous timeline",
+      "context_session": "1792137194362571500-343689211887800",
+      "cpu_cycles": "10",
+      "execution_mode": 2,
+      "master_14m_ticks": "55",
+      "observation_id": "437",
+      "video_cycles": "3",
+      "video_frames": "0"
+    }
+  },
+  "context_snapshot_sha256": "d5b72dca78e4b78d28593361b09354307816e9f3cea0b52d03359477b9a610f2",
+  "executable_sha256": "f6d61438eee05e999e72a4411117f64ba24429e244b69f484f286d4bae72ae2f",
+  "execution": {
+    "command": "run-until 000806 8",
+    "data": {
+      "attempt_budget": 8,
+      "attempts": 3,
+      "budget_model": "instruction-boundary attempts; idle and interrupt-only attempts consume the bound",
+      "completed": true,
+      "cpu_after": {
+        "halt_reason": 0,
+        "interrupts": {
+          "boundary_abort_pending": false,
+          "irq_line": false,
+          "irq_pipeline": 0,
+          "nmi_pending": false,
+          "reset_sources": "0"
+        },
+        "processor_type": 2,
+        "register_widths": {
+          "a": 8,
+          "x": 8,
+          "y": 8
+        },
+        "registers": {
+          "a": 255,
+          "a_storage": 255,
+          "d": 0,
+          "dbr": 0,
+          "e": true,
+          "p": 180,
+          "pbr": 0,
+          "pc": 2054,
+          "sp": 297,
+          "x": 0,
+          "y": 0
+        },
+        "sp_model": "bank0-stack-address",
+        "stopped": false,
+        "waiting_for_interrupt": false
+      },
+      "cycle_model": "in-command",
+      "cycles": "8",
+      "instructions": "3",
+      "schema": "a2execution-v1",
+      "stop_reason": "target_reached",
+      "target": 2054,
+      "target_reached": true
+    },
+    "ok": true,
+    "schema": "a2ctrl-reply-v2",
+    "status": "OK",
+    "text": "status=OK instr=3 cycles=8 (in-command) PC=00:0806 A=FF X=00 Y=00 SP=0129 P=B4 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch instructions=3"
+  },
+  "exit_code": 0,
+  "image": {
+    "address": 2048,
+    "path": "D:\\gsqs\\machine-context-20261016\\rosetta-final2\\p5-ff-baseline\\fixture.bin",
+    "sha256": "cf53482d1a87303a8b8d22fe8b50e19ea6b042e2264df49f8c08dddf9e6a4eb0",
+    "size": 6
+  },
+  "inputs": [
+    {
+      "path": "fixture.s",
+      "sha256": "ead0a692d3dab71ffe6061da9bafedfc83470e643ab8353b55f5e54abe905f10",
+      "source": "D:\\gsqs\\machine-context-20261016\\rosetta-final2\\p5-ff-baseline.s"
+    }
+  ],
+  "negative_control": {
+    "command": "assert peek:000900==$FE",
+    "data": null,
+    "ok": false,
+    "schema": "a2ctrl-reply-v2",
+    "status": "FAIL",
+    "text": "status=FAIL assert pass=0 fail=1 path=probe_peek FAIL peek:000900 == $FE (254) (actual=$FF (255))"
+  },
+  "observations": [
+    {
+      "address": 2304,
+      "bytes": [
+        255
+      ],
+      "consistency": "paused; data and readability are separate bridge calls; caller owns session",
+      "domain": "main",
+      "length": 1,
+      "ok": true,
+      "readable": [
+        true
+      ],
+      "schema": "a2debug-memory-v1",
+      "unreadable_bytes": 0
+    }
+  ],
+  "ok": true,
+  "outcome": "pass",
+  "pins": {
+    "bram": "default",
+    "faketime": 1000000000,
+    "seed": 1
+  },
+  "platform": 5,
+  "schema": "a2experiment-run-v1",
+  "workload": {
+    "case": "input-ff",
+    "id": "store-one-byte"
+  },
+  "workload_sha256": "1dd8d0228f38549e0705a1d6fece55265b951a068a535163b47be8c816ac12e3"
+}

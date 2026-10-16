@@ -2465,7 +2465,18 @@ class SecondSight {
             return true;
         }
 
-        void debug(DebugFormatter *df) {
+        void debug(DebugFormatter *df,bool native_only=false) {
+            if(native_only) {
+                df->boolField("vga_active",vga_active);
+                df->unsignedField("active_command",active_command,32);
+                df->unsignedField("command_step",command_step,32);
+                df->unsignedField("handshake",reg_handshake,8);
+                df->unsignedField("dma_direction",dma_direction,32);
+                df->unsignedField("dma_remaining",dma_length,32,"bytes");
+                df->unsignedField("display_mode",ss_mode,32);
+                df->unsignedField("vga_mode",vga_mode_num,8);
+                df->unsignedField("text_border",host_text_border,8);return;
+            }
             df->addLine("VGA Active: %d", vga_active);
             {
                 // FORK: the command in progress and its DMA window, as the snapshot saves them.

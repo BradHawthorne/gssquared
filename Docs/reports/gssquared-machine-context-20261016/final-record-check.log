@@ -1,0 +1,5 @@
+PASS: final selected source hashes match
+PASS: executable and protected consumer identities match
+PASS: all fourteen gates passed
+PASS: launch descriptor proof uses final executable
+PASS: diff whitespace and vendored checks

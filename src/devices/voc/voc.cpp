@@ -230,6 +230,9 @@ void init_voc(computer_t *computer, SlotType_t slot) {
                     d->interlace_enabled() ? "ON" : "OFF",
                     d->field_parity ? 1 : 0);
         return df;
+    },[d]()->DebugFormatter* {
+        auto *df=new DebugFormatter();df->unsignedField("slot",d->_slot,8);df->bytesField("registers",d->reg,VOC_REG_COUNT);
+        df->boolField("field_parity",d->field_parity);df->boolField("interlaced",d->interlace_enabled());return df;
     });
 }
 

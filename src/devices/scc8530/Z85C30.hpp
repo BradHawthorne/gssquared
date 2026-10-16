@@ -9,6 +9,7 @@
 #include "util/EventTimer.hpp"
 #include "NClock.hpp"
 #include "serial_devices/SerialDevice.hpp"
+#include "a2gspu_scc_capture.hpp"
 #include "serial_devices/host/HostSerial.hpp"
 
 constexpr bool SCDEBUG = 0;
@@ -422,7 +423,7 @@ class Z85C30 {
             if (!char_ticks(channel, true, ticks)) { tx_stalled[channel] = true; return; }
             tx_stalled[channel] = false;
             tx_due_14m[channel] = clock->get_c14m() + ticks;
-            event_timer->scheduleEvent(tx_due_14m[channel], tx_complete_callback, tx_timer_id[channel], this);
+            event_timer->scheduleEvent(tx_due_14m[channel], tx_complete_callback, tx_timer_id[channel], this, "scc8530.tx_complete_callback", "src/devices/scc8530/Z85C30.hpp");
         }
 
         void schedule_rx_complete(scc_channel_t channel) {
@@ -431,7 +432,7 @@ class Z85C30 {
             if (!char_ticks(channel, false, ticks)) { rx_stalled[channel] = true; return; }
             rx_stalled[channel] = false;
             rx_due_14m[channel] = clock->get_c14m() + ticks;
-            event_timer->scheduleEvent(rx_due_14m[channel], rx_complete_callback, rx_timer_id[channel], this);
+            event_timer->scheduleEvent(rx_due_14m[channel], rx_complete_callback, rx_timer_id[channel], this, "scc8530.rx_complete_callback", "src/devices/scc8530/Z85C30.hpp");
         }
 
         // ---- External/Status -------------------------------------------------------
@@ -483,7 +484,7 @@ class Z85C30 {
             uint64_t period = (MASTER_CLOCK * ((uint64_t)r.r12_time_constant + 2ull)) / hz;
             if (period == 0) period = 1;
             zc_scheduled[channel] = true;
-            event_timer->scheduleEvent(clock->get_c14m() + period, zc_callback, zc_timer_id[channel], this);
+            event_timer->scheduleEvent(clock->get_c14m() + period, zc_callback, zc_timer_id[channel], this, "scc8530.zc_callback", "src/devices/scc8530/Z85C30.hpp");
         }
         void zc_tick(scc_channel_t channel) {
             zc_scheduled[channel] = false;
@@ -1124,7 +1125,7 @@ class Z85C30 {
         void rx_poll_arm(scc_channel_t channel) {
             if (!event_timer || !clock || serial_devices[channel] == nullptr || rx_poll_scheduled[channel]) return;
             rx_poll_scheduled[channel] = true;
-            event_timer->scheduleEvent(clock->get_c14m() + RX_POLL_14M, rx_poll_callback, rx_poll_id[channel], this);
+            event_timer->scheduleEvent(clock->get_c14m() + RX_POLL_14M, rx_poll_callback, rx_poll_id[channel], this, "scc8530.rx_poll_callback", "src/devices/scc8530/Z85C30.hpp");
         }
 
         void rx_poll(scc_channel_t channel) {
@@ -1235,11 +1236,11 @@ class Z85C30 {
                 baud_rate[c] = (clock_source(ch, true, hz, div) && hz) ? (float)((double)hz / ((double)clock_mode[c] * (double)div)) : 0.0f;
                 if (r.tx_in_progress && !tx_stalled[c] && event_timer && clock) {
                     tx_due_14m[c] = now + (s.left[0] ? s.left[0] : 1);
-                    event_timer->scheduleEvent(tx_due_14m[c], tx_complete_callback, tx_timer_id[c], this);
+                    event_timer->scheduleEvent(tx_due_14m[c], tx_complete_callback, tx_timer_id[c], this, "scc8530.tx_complete_callback", "src/devices/scc8530/Z85C30.hpp");
                 }
                 if (r.rx_in_progress && !rx_stalled[c] && event_timer && clock) {
                     rx_due_14m[c] = now + (s.left[1] ? s.left[1] : 1);
-                    event_timer->scheduleEvent(rx_due_14m[c], rx_complete_callback, rx_timer_id[c], this);
+                    event_timer->scheduleEvent(rx_due_14m[c], rx_complete_callback, rx_timer_id[c], this, "scc8530.rx_complete_callback", "src/devices/scc8530/Z85C30.hpp");
                 }
                 zc_arm(ch);
                 rx_poll_arm(ch);
@@ -1252,7 +1253,27 @@ class Z85C30 {
             return true;
         }
 
-        void debug_output(DebugFormatter *df) {
+        void debug_output(DebugFormatter *df,bool native_only=false) {
+            if(native_only) {
+            for(int c=0;c<SCC_CHANNEL_COUNT;c++) {
+                const std::string prefix=c==SCC_CHANNEL_A?"a.":"b.";
+                df->unsignedField(prefix+"register_select",reg_select[c],8);
+                df->bytesField(prefix+"write_registers",registers[c].w_regs,16);
+                df->unsignedField(prefix+"rr0",registers[c].r_reg_0,8);
+                df->unsignedField(prefix+"rr1",registers[c].r_reg_1,8);
+                df->unsignedField(prefix+"rx_count",rx_fifo[c].count,8,"bytes");
+                df->bytesField(prefix+"rx_fifo_storage",rx_fifo[c].data,3);
+                df->boolField(prefix+"rx_busy",registers[c].rx_in_progress);
+                df->boolField(prefix+"tx_busy",registers[c].tx_in_progress);
+                df->boolField(prefix+"tx_buffer_empty",registers[c].r0_tx_buffer_empty);
+                df->boolField(prefix+"dcd",dcd_in[c]);
+                df->boolField(prefix+"cts",cts_in[c]);
+                df->boolField(prefix+"break",break_in[c]);
+                df->boolField(prefix+"tx_stalled",tx_stalled[c]);
+                df->boolField(prefix+"rx_stalled",rx_stalled[c]);
+            }
+            return;
+            }
             df->addLine("Reg Select A: %02X  B: %02X", reg_select[SCC_CHANNEL_A], reg_select[SCC_CHANNEL_B]);
             df->addLine("Clock Mode A: %dX   B: %dX", clock_mode[SCC_CHANNEL_A], clock_mode[SCC_CHANNEL_B]);
             df->addLine("Rx Data A: %02X  B: %02X", registers[SCC_CHANNEL_A].char_rx, registers[SCC_CHANNEL_B].char_rx);
@@ -1309,8 +1330,11 @@ class Z85C30 {
                 } else {
                     if (SCDEBUG) printf("SCC: Ch %c RX disabled, dropping loopback char\n", ch_name(channel));
                 }
-            } else if (serial_devices[channel] != nullptr) {
-                serial_devices[channel]->q_host.send(SerialMessage{MESSAGE_DATA, data});
+            } else {
+                if (g_scc_capture[channel].enabled) g_scc_capture[channel].byte(data);
+                a2events::byte(channel==SCC_CHANNEL_A?"scc-a":"scc-b",data);
+                if (serial_devices[channel] != nullptr)
+                    serial_devices[channel]->q_host.send(SerialMessage{MESSAGE_DATA, data});
             }
 
             // FORK: a character waiting in the buffer moves into the now-idle shift register.

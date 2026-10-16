@@ -197,6 +197,7 @@ static void ensoniq_catch_up(ensoniq_state_t *st, uint64_t now_c14m) {
         // a sample total, which is what lets a gate catch a dropped channel.
         // Observed at emulated time, before the host staging and resampler.
         audio_probe::note(audio_probe::SRC_DOC, st->audio_buffer, n, ch);
+        audio_capture::note(0,st->audio_buffer,n,ch,now_c14m-st->c14m_accum-(samples_due-n)*c14m_per_sample,c14m_per_sample);
 
         // TEMP (MAME-like / stereo-card test): do not apply $C03C volume to DOC
         // output. Real motherboard amp uses this nibble; stereo cards tap DOC
@@ -593,6 +594,22 @@ void init_ensoniq_slot(computer_t *computer, SlotType_t slot) {
         DH_ES5503, // unique ID for this, need to have in a header.
         [st]() -> DebugFormatter * {
             return debug_ensoniq(st);
+        },
+        [st]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();df->unsignedField("control",st->soundctl,8);
+            df->unsignedField("address",(st->soundadrh<<8)|st->soundadrl,16);
+            df->unsignedField("enabled_oscillators",st->chip->get_oscsenabled(),32,"oscillators");
+            for(int i=0;i<32;i++) {
+                auto *o=st->chip->get_oscillator(i);const std::string p="osc."+std::to_string(i)+".";
+                df->unsignedField(p+"frequency",o->freq,16);df->unsignedField(p+"control",o->control,8);
+                df->unsignedField(p+"volume",o->vol,8);df->unsignedField(p+"data",o->data,8);
+                df->unsignedField(p+"wavetable_pointer",o->wavetblpointer,32);
+                df->unsignedField(p+"wavetable_size",o->wavetblsize,8);
+                df->unsignedField(p+"resolution",o->resolution,8);
+                df->unsignedField(p+"accumulator",o->accumulator,32);
+                df->boolField(p+"irq_pending",o->irqpend);
+            }
+            return df;
         }
     );
 

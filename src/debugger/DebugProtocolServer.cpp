@@ -1,4 +1,6 @@
 #include "debugger/DebugProtocolServer.hpp"
+#include "a2gspu_debug_manifest.hpp"
+#include "a2gspu_agent.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -41,6 +43,8 @@
 #include "PlatformIDs.hpp"
 #include "util/mount.hpp"
 #include "util/StorageDevice.hpp"
+#include "a2gspu_events.hpp"
+#include "NClock.hpp"
 
 namespace {
 
@@ -49,34 +53,7 @@ constexpr uint32_t kMaxPayload = 0x00100000;
 constexpr uint32_t kMaxReadMem = 65536;
 constexpr uint32_t kMaxWriteMem = 65536;
 
-constexpr uint32_t kTypeHello     = 0x00000001;
-constexpr uint32_t kTypePing      = 0x00000002;
-constexpr uint32_t kTypeError     = 0x00000003;
-constexpr uint32_t kTypeEvent     = 0x00000004;
-constexpr uint32_t kTypeQuit      = 0x00000005;
-constexpr uint32_t kTypeGetStatus = 0x00000101;
-constexpr uint32_t kTypeReset     = 0x00000102;
-constexpr uint32_t kTypePause     = 0x00000103;
-constexpr uint32_t kTypeContinue  = 0x00000104;
-constexpr uint32_t kTypeStepInto  = 0x00000105;
-constexpr uint32_t kTypeGetTrace  = 0x00000201;
-constexpr uint32_t kTypeGetRegs   = 0x00000202;
-constexpr uint32_t kTypeSetRegs   = 0x00000203;
-constexpr uint32_t kTypeReadMem   = 0x00000301;
-constexpr uint32_t kTypeWriteMem  = 0x00000302;
-constexpr uint32_t kTypeFindMem   = 0x00000303;
-constexpr uint32_t kTypeStateGet  = 0x00000601;
-constexpr uint32_t kTypeStateSet  = 0x00000602;
-constexpr uint32_t kTypeBpSet     = 0x00000401;
-constexpr uint32_t kTypeBpClear   = 0x00000402;
-constexpr uint32_t kTypeBpClearAll = 0x00000403;
-constexpr uint32_t kTypeBpEnable  = 0x00000404;
-constexpr uint32_t kTypeBpList    = 0x00000405;
-constexpr uint32_t kTypeKeyEvent  = 0x00000501;
-constexpr uint32_t kTypePasteText = 0x00000502;
-constexpr uint32_t kTypeVideoText = 0x00000701;
-constexpr uint32_t kTypeMount     = 0x00000801;
-constexpr uint32_t kTypeUnmount   = 0x00000802;
+using namespace a2debug; // shared socket registry: constants and MANIFEST
 
 constexpr uint32_t kEvtStopped   = 1;
 constexpr uint32_t kEvtRunState  = 2;
@@ -493,6 +470,8 @@ bool DebugProtocolServer::start() {
 }
 
 void DebugProtocolServer::stop() {
+    agent_subscription_=false;
+    if(agent_listener_installed_){a2events::set_secondary({});agent_listener_installed_=false;agent_computer_=nullptr;}
     stop_ = true;
     {
         std::lock_guard<std::mutex> lock(bridge_mu_);
@@ -529,6 +508,9 @@ void DebugProtocolServer::wake_bridge_locked() {
 }
 
 void DebugProtocolServer::process_main_thread(computer_t *computer) {
+    if(agent_disconnect_pending_.exchange(false) && !agent_subscription_ && agent_listener_installed_) {
+        a2events::set_secondary({});agent_listener_installed_=false;agent_computer_=nullptr;
+    }
     std::lock_guard<std::mutex> lock(bridge_mu_);
     if (!bridge_pending_ || bridge_done_) {
         return;
@@ -540,7 +522,51 @@ void DebugProtocolServer::process_main_thread(computer_t *computer) {
     bridge_timed_out_ = false;
     bridge_megaii_platform_reject_ = false;
 
-    if (bridge_type_ == kTypeGetStatus) {
+    if(bridge_type_==kTypeAgentTools || bridge_type_==kTypeAgentCommand) {
+        if(!agent_handler_){bridge_error_=kEInternal;bridge_error_text_="agent tool handler unavailable";}
+        else try {
+            const std::string command(bridge_request_.begin(),bridge_request_.end());
+            const std::string reply=agent_handler_(bridge_type_==kTypeAgentTools,command);
+            if(reply.size()>kMaxPayload)throw std::runtime_error("agent tool reply exceeds protocol limit");
+            bridge_reply_.assign(reply.begin(),reply.end());
+        } catch(const std::exception &error){bridge_error_=kEInternal;bridge_error_text_=error.what();}
+    } else if(bridge_type_==kTypeSubscribe) {
+        try {
+            if(bridge_request_.size()<8 || bridge_request_.size()>4096 || !computer || !computer->clock)throw std::runtime_error("invalid subscription payload/machine");
+            uint32_t action=0,cap=0;std::memcpy(&action,bridge_request_.data(),4);std::memcpy(&cap,bridge_request_.data()+4,4);
+            if(action>2 || (action!=1 && (cap || bridge_request_.size()!=8)) || (action==1 && (!cap || cap>4096)))throw std::runtime_error("invalid subscription action/cap");
+            if(action==1) {
+                if(agent_subscription_)throw std::runtime_error("subscription already active; turn it off first");
+                std::string filters(bridge_request_.begin()+8,bridge_request_.end());std::vector<std::string> parsed;size_t start=0;
+                for(;;) {
+                    auto end=filters.find(',',start);auto part=filters.substr(start,end==std::string::npos?end:end-start);
+                    if(std::find(a2events::available_kinds().begin(),a2events::available_kinds().end(),part)==a2events::available_kinds().end())throw std::runtime_error("unknown subscription kind");
+                    if(std::find(parsed.begin(),parsed.end(),part)!=parsed.end())throw std::runtime_error("duplicate subscription kind");
+                    parsed.push_back(part);if(end==std::string::npos)break;start=end+1;
+                }
+                agent_filters_=std::move(parsed);agent_computer_=computer;
+                {
+                    std::lock_guard<std::mutex> lock(event_mu_);
+                    for(auto it=event_queue_.begin();it!=event_queue_.end();) {uint32_t id=0;if(it->size()>=4)std::memcpy(&id,it->data(),4);if(id==3)it=event_queue_.erase(it);else ++it;}
+                    agent_sequence_=agent_retained_=agent_dropped_=agent_queued_bytes_=0;agent_cap_=cap;
+                }
+                a2events::set_secondary([this](const char *kind,const std::string &record){emit_agent_record(kind,record);},[this](const char *kind){
+                    if(!agent_subscription_)return false;
+                    for(const auto &filter:agent_filters_)if(filter=="all" || filter==kind || std::string(kind).compare(0,filter.size()+1,filter+".")==0)return true;
+                    return false;
+                });agent_listener_installed_=true;agent_subscription_=true;
+            } else if(action==2) {
+                if(!agent_subscription_)throw std::runtime_error("subscription not active");
+                agent_subscription_=false;a2events::set_secondary({});agent_listener_installed_=false;
+            }
+            std::lock_guard<std::mutex> lock(event_mu_);
+            std::string status="{\"schema\":\"a2socket-subscription-v1\",\"active\":"+std::string(agent_subscription_?"true":"false")+
+                ",\"complete\":"+(agent_dropped_?"false":"true")+",\"retained\":"+a2ctrljson::quote(std::to_string(agent_retained_))+
+                ",\"dropped\":"+a2ctrljson::quote(std::to_string(agent_dropped_))+",\"next_sequence\":"+a2ctrljson::quote(std::to_string(agent_sequence_))+
+                ",\"queue_cap\":"+std::to_string(agent_cap_)+",\"queue_byte_cap\":4194304,\"delivery_model\":\"enqueued; disconnect cannot prove consumption\"}";
+            bridge_reply_.assign(status.begin(),status.end());
+        }catch(const std::exception&e){bridge_error_=kEBadLength;bridge_error_text_=e.what();}
+    } else if (bridge_type_ == kTypeGetStatus) {
         if (!computer) {
             bridge_error_ = kEInternal;
         } else {
@@ -1122,7 +1148,10 @@ bool DebugProtocolServer::submit_and_wait(uint32_t type, uint32_t seq,
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
     while (!bridge_done_ && !stop_) {
-        if (bridge_cv_.wait_until(lock, deadline) == std::cv_status::timeout) {
+        // The main thread holds bridge_mu_ through execution. A long tool may
+        // finish after the wait deadline but before we can reacquire this lock.
+        // Keep that completed result; only cancel a still-undispatched request.
+        if (bridge_cv_.wait_until(lock, deadline) == std::cv_status::timeout && !bridge_done_) {
             bridge_pending_ = false;
             bridge_done_ = false;
             error_code_out = kEInternal;
@@ -1153,6 +1182,17 @@ void DebugProtocolServer::enqueue_event(uint32_t event_id, const std::vector<uin
     }
     std::lock_guard<std::mutex> lock(event_mu_);
     event_queue_.push_back(std::move(item));
+}
+void DebugProtocolServer::emit_agent_record(const char *kind,const std::string &payload) {
+    if(!agent_subscription_)return;
+    bool selected=false;for(const auto &filter:agent_filters_)if(filter=="all" || filter==kind || std::string(kind).compare(0,filter.size()+1,filter+".")==0)selected=true;
+    if(!selected)return;
+    a2record::Record row("subscription","event",a2record::frame_now(),agent_computer_->clock->get_cycles());
+    row.str("schema","a2subscription-v1").u("sequence",agent_sequence_++).raw("payload",("{\"kind\":"+a2ctrljson::quote(kind)+",\"clock_available\":true,\"data\":"+payload+"}").c_str());
+    auto text=row.done();std::lock_guard<std::mutex> lock(event_mu_);
+    if(text.size()+4>kMaxPayload || event_queue_.size()>=agent_cap_ || agent_queued_bytes_+text.size()+4>4194304){++agent_dropped_;return;}
+    std::vector<uint8_t> item(4+text.size());uint32_t id=3;std::memcpy(item.data(),&id,4);std::memcpy(item.data()+4,text.data(),text.size());
+    agent_queued_bytes_+=item.size();++agent_retained_;event_queue_.push_back(std::move(item));
 }
 
 void DebugProtocolServer::fill_live_trace(computer_t *computer, system_trace_entry_t *out) {
@@ -1218,6 +1258,7 @@ void DebugProtocolServer::emit_stopped(computer_t *computer, const StopHit &hit)
     std::vector<uint8_t> data;
     pack_stopped_event(data, hit, mode, trace);
     enqueue_event(kEvtStopped, data);
+    if(a2events::enabled()){a2record::Record event("stop","stopped",a2record::frame_now(),computer && computer->clock?computer->clock->get_cycles():0);event.u("reason",hit.reason).u("pc",hit.pc).u("mode",mode);event.done();}
 }
 
 void DebugProtocolServer::emit_stopped_pause(computer_t *computer) {
@@ -1235,6 +1276,7 @@ void DebugProtocolServer::emit_stopped_pause(computer_t *computer) {
     std::vector<uint8_t> data;
     pack_stopped_event(data, hit, mode, trace);
     enqueue_event(kEvtStopped, data);
+    if(a2events::enabled()){a2record::Record event("stop","pause",a2record::frame_now(),computer && computer->clock?computer->clock->get_cycles():0);event.u("pc",hit.pc).u("mode",mode);event.done();}
 }
 
 void DebugProtocolServer::emit_stopped_step(computer_t *computer) {
@@ -1254,6 +1296,7 @@ void DebugProtocolServer::emit_stopped_step(computer_t *computer) {
     std::vector<uint8_t> data;
     pack_stopped_event(data, hit, mode, trace);
     enqueue_event(kEvtStopped, data);
+    if(a2events::enabled()){a2record::Record event("stop","step",a2record::frame_now(),computer && computer->clock?computer->clock->get_cycles():0);event.u("pc",hit.pc).u("mode",mode);event.done();}
 }
 
 void DebugProtocolServer::emit_run_state(uint32_t new_mode, uint32_t prev_mode) {
@@ -1261,6 +1304,7 @@ void DebugProtocolServer::emit_run_state(uint32_t new_mode, uint32_t prev_mode) 
     std::memcpy(data.data() + 0, &new_mode, 4);
     std::memcpy(data.data() + 4, &prev_mode, 4);
     enqueue_event(kEvtRunState, data);
+    if(a2events::enabled()){a2record::Record event("stop","run-state",a2record::frame_now(),a2record::cycles_now());event.u("mode",new_mode).u("previous",prev_mode);event.done();}
 }
 
 bool DebugProtocolServer::flush_events(DebugSocketHandle fd) {
@@ -1269,6 +1313,7 @@ bool DebugProtocolServer::flush_events(DebugSocketHandle fd) {
     {
         std::lock_guard<std::mutex> lock(event_mu_);
         pending.swap(event_queue_);
+        agent_queued_bytes_=0;
     }
     for (const auto &item : pending) {
         if (!send_frame(fd, kTypeEvent, event_seq_++, item.data(), static_cast<uint32_t>(item.size()))) {
@@ -1316,6 +1361,8 @@ void DebugProtocolServer::thread_main() {
         client_fd_ = client_fd;
         SDL_Log("DebugProtocolServer: client connected");
         serve_client(client_fd);
+        agent_subscription_=false;
+        agent_disconnect_pending_=true;
         client_fd_ = kInvalidSocket;
         close_socket(client_fd);
         SDL_Log("DebugProtocolServer: client disconnected");
@@ -1671,6 +1718,14 @@ next_request:
             handshaked = true;
             break;
         }
+        case kTypeManifest: {
+            if (hdr.length != 0) {
+                REJECT(client_fd, hdr.seq, kEBadLength, "MANIFEST requires empty payload");
+            }
+            const std::string reply = a2debug::manifest();
+            REPLY_OK(kTypeManifest, hdr.seq, reply.data(), static_cast<uint32_t>(reply.size()));
+            break;
+        }
         case kTypePing: {
             if (hdr.length != 0) {
                 REJECT(client_fd, hdr.seq, kEBadLength, "PING requires empty payload");
@@ -1695,6 +1750,22 @@ next_request:
             }
             // Ignore bridge errors after ACK — process may already be exiting.
             break;
+        }
+        case kTypeAgentTools:
+        case kTypeAgentCommand: {
+            if(hdr.type==kTypeAgentTools && hdr.length)REJECT(client_fd,hdr.seq,kEBadLength,"AGENT_TOOLS requires empty payload");
+            if(hdr.type==kTypeAgentCommand && !a2agent::valid_command(std::string(payload.begin(),payload.end())))REJECT(client_fd,hdr.seq,kEBadLength,"AGENT_COMMAND requires 1..2047 printable UTF8 bytes, no control characters");
+            std::vector<uint8_t> reply;uint32_t err=0;
+            if(!submit_and_wait(hdr.type,hdr.seq,0,0,0,payload,reply,err,kMainThreadTimeoutMs))return;
+            if(err)REJECT(client_fd,hdr.seq,err,bridge_error_message(err));
+            REPLY_OK(hdr.type,hdr.seq,reply.data(),static_cast<uint32_t>(reply.size()));break;
+        }
+        case kTypeSubscribe: {
+            if(hdr.length<8 || hdr.length>4096)REJECT(client_fd,hdr.seq,kEBadLength,"SUBSCRIBE requires bounded header and filters");
+            std::vector<uint8_t> reply;uint32_t err=0;
+            if(!submit_and_wait(kTypeSubscribe,hdr.seq,0,0,0,payload,reply,err,kMainThreadTimeoutMs))return;
+            if(err)REJECT(client_fd,hdr.seq,err,bridge_error_message(err));
+            REPLY_OK(kTypeSubscribe,hdr.seq,reply.data(),static_cast<uint32_t>(reply.size()));break;
         }
         case kTypeGetStatus: {
             if (hdr.length != 0) {

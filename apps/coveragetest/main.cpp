@@ -194,17 +194,20 @@ static void bound_cases() {
     check("bind map",a2gspu_cov_map_load(plan.string().c_str()));
     h.prepare(0x1000);
     h.code(0x1000,{0x80,0x01,0x42,0xEA,0x00});
+    check("arm mapped counts",a2gspu_cov_counts_on());
     memory[0x1004]=0xFF; // Unexecuted data may change without invalidating code.
     h.execute(2);
     check("precise bytes and instruction starts",g_cov_maps[0].bits[0]==0x0B &&
           g_cov_maps[0].starts==std::vector<uint8_t>({0x94,0,0,0x94,0}));
     check("mutable data permits write",a2gspu_cov_write(artifact.string().c_str()));
+    check("mapped counts permit write",a2gspu_cov_counts_write((dir/"counts.json").string().c_str()));
     uint64_t generation=g_cov_generation;
     a2gspu_cov_reset();
     check("reset separates generations",g_cov_generation>generation && !g_cov_marked && g_cov_maps[0].bits[0]==0);
     h.cpu.full_pc=0x1000;memory[0x1003]=0xA9;
     h.execute(2);
     check("stale executed code refuses artifact",g_cov_map_error[0] && !a2gspu_cov_write(artifact.string().c_str()));
+    check("stale executed code refuses counts",!a2gspu_cov_counts_write((dir/"counts.json").string().c_str()));
 
     write_plan({0xA9,0x43,0xEA});
     generation=g_cov_generation;
@@ -223,6 +226,7 @@ static void bound_cases() {
     h.prepare(0x1000);h.code(0x1000,{0xA9,0x42});h.execute();
     check("partial instruction mapping refuses evidence",strstr(g_cov_map_error,"boundary") &&
           !a2gspu_cov_write(artifact.string().c_str()));
+    std::filesystem::remove(dir/"counts.json");
     std::filesystem::remove(plan);std::filesystem::remove(artifact);std::filesystem::remove(dir);
 }
 
@@ -288,6 +292,29 @@ int main() {
     c.execute();
     c.expect("65C02 three-byte NOP", 0x1003, {0x1000, 0x1001, 0x1002});
 
+    // Independent loop arithmetic, on both client platforms. Operand bytes
+    // must never acquire instruction counts; resetting also clears counts.
+    for (auto type : {PROCESSOR_65C02, PROCESSOR_65816}) {
+        Harness loop(type);
+        a2gspu_cov_init("1000-10FF");
+        loop.prepare(0x1000);
+        loop.code(0x1000, {0xA2, 3, 0xCA, 0xD0, 0xFD, 0xEA});
+        a2gspu_cov_counts_on();
+        auto before = loop.cpu.executed_instructions;
+        loop.execute(7); // LDX; three DEX/BNE pairs. 2+6+(3+3+2)=16.
+        ++cases;
+        if (loop.cpu.executed_instructions-before != 7 ||
+            g_cov_counts[0x1002].instructions != 3 ||
+            g_cov_counts[0x1003].instructions != 3 ||
+            g_cov_counts[0x1003].cycles != 8 || g_cov_counts.count(0x1001) ||
+            g_cov_counts[0x1000].cycles != 2) ++failures;
+        a2gspu_cov_reset();
+        ++cases; if (!g_cov_counts.empty()) ++failures;
+        loop.cpu.rdy = true; loop.execute();
+        ++cases; if (!g_cov_counts.empty()) ++failures; // idle WAI isn't an instruction
+        a2gspu_cov_off();
+        ++cases; if (g_cov_counts_on || a2gspu_cov_counts_write("unarmed-counts.json")) ++failures;
+    }
     a2gspu_cov_off();
     bound_cases();
     a2gspu_cov_off();

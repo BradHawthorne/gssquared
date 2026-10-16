@@ -15,6 +15,21 @@
 
 ## Governing constraints
 
+The current connective layer is [`MACHINE_CONTEXT.md`](MACHINE_CONTEXT.md):
+live machine context, source-linked model explanations and retained causal
+evidence. `tools/a2rail/experiment.py` adds a declared raw-fixture build/run
+lane with input/tool/image identity, independent result/negative checks,
+context artifacts and compatible cycle/instruction/byte comparisons. It is
+an external companion to Rosetta v3, with existing OMF/GS/OS boot lanes intact.
+Measured emulator gains and physical-IIgs acceptance are separate evidence.
+
+The loop also feeds CIDAR's evolving primitive specifications and libraries:
+understand a reference, state its contract, build alternatives, challenge them
+in exposed execution, and return measured findings to curation. Apply the
+architectural-refinement review in [`AGENTIC_ORACLE.md` section 10](AGENTIC_ORACLE.md#10-design-review-for-architectural-understanding).
+Byte-faithful recovery remains a separate artifact from a deliberately changed
+candidate; repeated historical implementations are not an optimization oracle.
+
 1. **The agent's eyes and hands.** Instrumentation is agentic-first: an agent must be able to
    observe *and deliberately manipulate* the machine (`load`, `poke`, `setreg`, `press`,
    `mount`, `save`/`restore`, `A2GSPU_POKE`, `A2GSPU_RUN_BIN`). Manipulation is labelled as

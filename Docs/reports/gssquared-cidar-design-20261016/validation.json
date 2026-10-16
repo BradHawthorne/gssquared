@@ -1,0 +1,171 @@
+{
+  "record_type": "design-checkpoint",
+  "created_utc": "2026-10-16T09:06:54.280680+00:00",
+  "scope": "Documentation and workflow comment only; runtime integration tasks remain pending.",
+  "fork_gates": [
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:00:28.0289562Z",
+      "suite": "railparity",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 1.8
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:00:28.1907358Z",
+      "suite": "artifacts",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 0.1
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:00:28.3054015Z",
+      "suite": "gdiff",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 0.1
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:00:28.9309168Z",
+      "suite": "buscompare",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 0.6
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:01:29.4004643Z",
+      "suite": "bisect",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 60.5
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:03:20.5994809Z",
+      "suite": "agentic",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 111.2
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:03:42.5048673Z",
+      "suite": "dualsmoke",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 21.9
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:04:09.1893236Z",
+      "suite": "personality",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 26.7
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:04:11.7830371Z",
+      "suite": "protocol",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 2.6
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:04:15.5948689Z",
+      "suite": "copilot",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 3.8
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:04:28.6204687Z",
+      "suite": "assertparity",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 13.0
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:05:46.0431327Z",
+      "suite": "unarmedhash",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 77.4
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:05:51.7367871Z",
+      "suite": "hwtruth",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 5.7
+    },
+    {
+      "note": "",
+      "outcome": "PASS",
+      "ts": "2026-10-16T09:05:59.9227106Z",
+      "suite": "mbaudit",
+      "schema": "a2gates-event-v1",
+      "rc": 0,
+      "seconds": 8.2
+    }
+  ],
+  "rosetta_checks": [
+    "docs_index",
+    "agent_docs_pair",
+    "agent_docs_gate"
+  ],
+  "rosetta_scope": "3 targeted documentation CTests; no full Rosetta rerun claimed.",
+  "executable": {
+    "path": "D:\\gsqs\\coherency-20261015\\build\\GSSquared.exe",
+    "sha256": "f6d61438eee05e999e72a4411117f64ba24429e244b69f484f286d4bae72ae2f"
+  },
+  "consumer": {
+    "path": "D:\\projects\\gssquared-fork\\build\\GSSquared.exe",
+    "sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c"
+  },
+  "repositories": {
+    "D:\\projects\\gssquared-fork": "834028cd5ab3d553a9398e0ca88f5ec72de63b68",
+    "D:\\projects\\toolchain\\rosetta_v3": "e758e3b4999d1b780c422c52eabdf6cdef8123b2"
+  },
+  "selected_document_sha256": {
+    "D:\\projects\\gssquared-fork\\Docs\\SHARED_FOUNDATION.md": "11b17511c2cb023491c7d45def62136178678216d6102889d5b9137fdba7abad",
+    "D:\\projects\\gssquared-fork\\Docs\\AGENTIC_ORACLE.md": "da68ae3334c6f8518d5c22c866d8a81e400890654d191d3a10439f36295354df",
+    "D:\\projects\\gssquared-fork\\Docs\\CLOSED_LOOP_INTEGRATION.md": "ef101ff7265514b16cfabea0c59e9e02a4af14881b3291bd4daae98c1fd8a3c2",
+    "D:\\projects\\gssquared-fork\\Docs\\AGENTIC_ROADMAP.md": "13f658aad10e935e6de894b66607bc2faf81a67104bc158d7ed4888fc54230bc",
+    "D:\\projects\\gssquared-fork\\Docs\\HANDOFF.md": "94a3d7d532b89e060f3b7a39ad6f4e3ef239a9e4796baea8272a66fe081caf57",
+    "D:\\projects\\gssquared-fork\\Docs\\reports\\README.md": "888268ca78d12378daa1f47442c11bfaa1df7bf9db422d33d657ea769fa32992",
+    "D:\\projects\\gssquared-fork\\Docs\\reports\\gssquared-cidar-design-20261016\\README.md": "a25bd1df7ecd010218e2df4f9e0f46899208376492f7b28800f02f2e971d2187",
+    "D:\\projects\\toolchain\\rosetta_v3\\AGENTS.md": "5f2173567805f8f028cdcd9708464d02175d76667ab4dbfa0cb1e20c1efd8a5e",
+    "D:\\projects\\toolchain\\rosetta_v3\\CLAUDE.md": "897793c010964fadd37da14463d6db0c616bb3308f7282ed826c2dffe8174312",
+    "D:\\projects\\toolchain\\rosetta_v3\\docs\\SHARED_FOUNDATION.md": "baecddb4005a15fd7088854905938a67bcf62a0fa28f0882c22e0e11a551b6a8",
+    "D:\\projects\\toolchain\\rosetta_v3\\docs\\cidar\\README.md": "bc8ae2744b3e27e3456d9d2dc5c7b7888896c1f313f544dd20ff6818d2626334",
+    "D:\\projects\\toolchain\\rosetta_v3\\docs\\internal\\ACCEPTANCE_QUEUE.md": "2003355127db695bf8f85bd1aa6188646e65d4410cc9bebd8349d4b3b1a043c6",
+    "D:\\projects\\toolchain\\rosetta_v3\\docs\\internal\\HANDOFF_2026-10-15.md": "c619b4a742a35f425155b371ea4d9d1fe0323a8f32e89f900af50c1d92ca9a72",
+    "D:\\projects\\toolchain\\rosetta_v3\\stdlib\\primitives\\CURATION.md": "d82d6e71802b8a26bb2882fa985a126e595481ba8a6e5fdfa8531a5060622ed3",
+    "D:\\projects\\toolchain\\rosetta_v3\\stdlib\\primitives\\INDEX.md": "a1ce8db00e3fbf9b2df2690578b5b822caeb0e8fd2bedf8441f40411c2a9a3ce",
+    "D:\\projects\\toolchain\\rosetta_v3\\.claude\\commands\\cidar.md": "ad475125a758d442f4d19a3f7d0bd9daadd481308df15404d6b7965b3c54e9b6",
+    "D:\\projects\\toolchain\\rosetta_v3\\.claude\\workflows\\cidar-enhance.js": "8e615d4fdcd414622db80ba69f3a1c8419a17114f3eb2bd513378ba9b39a1476"
+  },
+  "initial_gate_attempt": "gates-alias-initial.log / gates-alias-initial.ndjson: process-name assumptions reject the awareness alias; rerun uses identical bytes named GSSquared.exe."
+}

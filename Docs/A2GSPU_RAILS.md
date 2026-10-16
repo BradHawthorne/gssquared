@@ -1,5 +1,219 @@
 # A2GSPU rails — the instrumentation contract catalog
 
+## Native inspection
+
+`inspect cpu|devices|signals|capabilities <file> [signal-glob]` writes native
+`a2inspect-v1` JSON on CTRL or the windowed co-pilot. Quote paths with spaces.
+It samples internal model fields without guest bus reads or parsing human
+diagnostics. CPU register widths are explicit. The absolute session cycle stamp
+is a decimal string, labelled `session-absolute-NClock`; it does not promise
+continuity across restore. Other 64-bit values use decimal-string encoding.
+
+Device inventory identifies native typed fields and remaining coverage gaps;
+unregistered native observers are unavailable rather than fabricated. Initial
+native RTC, SCC and ADB observers expose registers, FIFOs, line/IRQ status and
+BRAM. Human `devstate` output remains separate. Registered Observatory scalar,
+array and byte-window descriptors include types, widths, flags and availability.
+Event-only, missing-owner, unarmed clock and undeclared-array-length values
+carry explicit reasons. Array/window previews cap at 256 entries with a
+truncation flag. Registry coverage is partial, not a complete machine schema.
+
+`json cpu` adds native `a2cpu-v1` data; `json run`, `json step` and
+`json run-until` add `a2execution-v1` in-command cycle/instruction counts and
+CPU state. `json inspect ...` returns an `a2inspect-ref-v1` artifact reference.
+Other commands may return `data:null`. Existing envelope/text fields are
+preserved. Control characters are escaped losslessly; oversized envelopes fail
+explicitly with `reply-too-large` instead of silently cutting their contents.
+
+`inspect memory <file> <hex-address> <decimal-length>` captures up to 65,536
+CPU-visible bytes through the canonical CPU MMU and `a2obs_peek`. A parallel
+`readable` boolean array marks unavailable bytes; their zeros are placeholders,
+never observations. The artifact reports completeness and unreadable count.
+Inspection identifies its serving surface (`ctrl` or `copilot`). Live compound
+guest views require a CTRL observation epoch; they refuse co-pilot and changes
+to the guest cycle stamp during the read.
+
+## Presentation and clock settings
+
+`ui [status] | monitor composite|rgb|green|amber|white | crt on|off | speed
+free|1.024|2.8|7.159|14.3` is available on CTRL, co-pilot and socket agent tools.
+Native `a2ui-v1` status lists window flags, monitor, CRT availability/enabled
+state, requested/effective clock mode and pending application. Setters return
+`a2ui-action-v1` with before/after state, effect and `changed`; an unchanged
+request explicitly reports `changed=false`. Unknown values refuse before apply.
+Missing GPU shaders fail instead of acknowledging an unavailable effect.
+
+Monitor/CRT operations change host presentation without advancing guest time.
+Speed uses the existing menu's request/normal-frame transition and reports that
+deferred application. Native settings/readback do not prove physical display
+appearance. Host dialogs, clipboard, fullscreen and pointer capture are outside
+this tool; explicit `mount`/artifact paths and input injection serve the agent's
+guest-facing work. The manual uninstrumented GUI check remains separate.
+
+The socket's AGENT_TOOLS/AGENT_COMMAND expose the full shared command registry;
+the Python MCP adapter makes it directly discoverable to MCP clients. See
+`Docs/DebugClient.md` for launch/attach and ownership, and `Docs/DebugProtocol.md`
+for framing and pause policy. Startup-only rails are configured at managed
+launch; discovery never claims every rail is live-settable.
+
+## Live capture and device coverage
+
+`capture scc-a|scc-b|wdm status|off|on <file:path|pipe:endpoint>` binds the
+existing TX/console models at runtime on CTRL or co-pilot. Quote the whole
+binding when it contains spaces. Active rebinding, duplicate endpoint aliases,
+unsupported machines and occupied WDM operands fail. Turn a capture off before
+rebinding; the off path releases only its owned operands. A failed arm leaves
+other active captures intact. Native status is `a2capture-v1`. `file:` requires
+an ordinary file. Byte/write failures retain the original fail-loud contract.
+
+`inspect devices` separately lists every powered-on model (device ID and slot)
+and every debug handler. Each model declares observer names, control surfaces,
+candidate snapshot blocks and incomplete semantic coverage. A candidate block
+is not an inclusion claim: `snapdiff --describe <snapshot>` reports the actual
+checked GSPS sections, versions, sizes and per-file manifest.
+
+`python -I tools/a2rail/checkpoint.py capture --ctrl <dir> --snapdiff <exe>
+--out <new-directory>` saves a paused GSPS file and native CPU/device/signal/
+capability observations from one cycle epoch. SHA256 binds each artifact; the
+bundle joins installed models to their available fields and actual snapshot
+blocks. `diff <bundleA> <bundleB> --snapdiff <exe> [--out <new-report>]` compares
+named native fields plus saved-state bytes. Missing fields remain missing;
+uninterpreted payload versions are identified. This is a semantic observation
+companion, not a complete decoder for arbitrary historical device payloads.
+
+## Deliberate boundary faults
+
+`fault schedule <delay-cycles-decimal> nmi|abort|irq-on|irq-off | status | clear`
+is CTRL-only. It schedules relative to the current CPU cycle counter and
+delivers at the first instruction boundary on or after the deadline. Native
+`a2fault-v1` status and `fault` subscription events expose requested/actual
+cycles and lateness. IRQ uses a separate injector bit; it never borrows a real
+card's IRQ source. Redundant IRQ transitions, duplicate pending NMI/ABORT and
+unsupported ABORT refuse the command. Reset clears injector state.
+
+NMI and the 65816 boundary ABORT use the architectural vectors and stack
+formats. The ABORT model runs before the next opcode: no mid-instruction pin
+timing, register rollback or bus-write rollback is claimed. Priority and vector
+semantics follow the [WDC datasheet](https://www.westerndesigncenter.com/wdc/documentation/w65c816s.pdf),
+sections 2.13, 2.21 and 7.19. Active queued/latched faults, held injector IRQ,
+or an owned input key block save/restore because host ownership is not saved.
+Existing SCC/SSC/U2 fault rails remain independently discoverable.
+
+## Output content assertions
+
+`audio capture doc|sfx <file> [maxframes] | capture off|status` records bounded
+`a2audio-v1` JSONL, independently of aggregate `audio on`. Samples are signed
+int16 interleaved values before host resampling: DOC batches include c14m end
+ticks and ticks/sample, SFX batches their source sample rate. Sources are never
+summed. The default/maximum cap is 1,000,000 frames. Stop finalizes evidence;
+overflow, unsupported formats and I/O failures make it incomplete. This does
+not capture the host mixer, speaker waveform, DAC or physical sound.
+
+`python -I tools/a2rail/outputassert.py image <expected.png> <actual.png>
+[--channel-delta N] [--bad-pixel-fraction F]` compares decoded RGBA pixels with
+explicit tolerance, changed-pixel bounds and input hashes. Supported PNGs are
+noninterlaced 8-bit gray/RGB/gray-alpha/RGBA; unsupported shapes fail.
+`audio <expected.jsonl> <actual.jsonl> [--sample-tolerance N]
+[--rms-tolerance F]` checks lifecycle/completeness, source/channel/frame shape,
+relative DOC timing and per-channel content errors/RMS. No alignment is guessed.
+
+`text <image.png> <font.json> --columns N --rows N [--x N --y N --threshold N]`
+recovers configured bitmap glyphs, including native `shr` PNGs. The
+`a2bitmap-font-v1` input has integer `width`, `height` and `glyphs` mapping one
+character to rows of `.`/`#`. Unknown or ambiguous glyphs refuse a passing
+result. This is explicit grid/font recognition, not universal OCR. Every
+assertion supports `--out <new-report>` and returns 0 pass, 1 mismatch, 2 invalid
+evidence. Reports include models, thresholds and input hashes.
+
+## Input edges and macros
+
+`input keydown <ASCII-hex> [modifier-hex] | keyup | mouse adb|card <dx-decimal>
+<dy-decimal> <buttons-mask-decimal> | status` injects without advancing time.
+Keys are owned until keyup; duplicate downs/ups fail. Modifiers use C025 bits
+`C3`; IIe supports Apple-key modifier edges and takes shift/control as ASCII.
+Mouse deltas must be -63..63; buttons bit 0 is left and bit 1 right (card path
+supports left only). An unread ADB packet refuses overwrite. `a2input-v1`
+receipts prove injection, not guest consumption. Paddle/button input continues
+through `paddle`/`pbutton` with native readback in device fields.
+
+`python -I tools/a2rail/inputmacro.py --ctrl <dir> --plan <plan.json>
+--out <new-directory>` records an agent-input timeline. `--replay <record.json>`
+repeats the recorded plan and checks relative input timestamps. The
+`a2input-plan-v1` contract requires `clock` (`cycles` or `frames`), `initial_pc`,
+`max_lateness`, SHA256 `bindings` (`start`, `length`, `sha256`) and ordered
+`actions` (`at`, `op` plus the operation's arguments). Operations: `keydown`
+(`ascii`, optional `modifiers`), `keyup`, `mouse` (`endpoint`, `dx`, `dy`,
+`buttons`), `paddle` (`index`, `value`), `pbutton` (`index`, `down`). Plans must
+release held keys; optional `expect_memory` assertions have `start` and `bytes`.
+Cycles use instruction boundaries and report lateness; frame mode uses the
+NClock video-frame counter. A million execution calls bounds each run. Stale
+code, unexpected stops, no progress and exceeded lateness fail with retained
+receipts. This records agent inputs, not physical host events or full-machine
+replay; a passing injection does not imply consumption unless separately tested.
+
+## Configured guest views
+
+`python -I tools/a2rail/guestview.py schema` gives the machine-readable contract
+for source placements and kernel layouts. `inspect capabilities` advertises
+this companion and its requirements. It is available with the source checkout;
+discovery does not claim a standalone executable package ships it.
+
+`normalize-rosetta --debug <sidecar.dbg> --placement <json> --out <map.json>`
+reads Rosetta assembler file/line/segment records. `source --map <map.json>
+--pc <hex> [--memory <capture.json>]` returns all matching source locations,
+including ambiguity and byte-binding status. Unbound lookup never claims live
+verification; a stale byte binding fails. Segment placements and SHA256s are
+explicit inputs. Repeat `--compiler-assembly <file.s>` to translate assembler
+rows through Rosetta's opt-in `cciigs -g` statement comments
+(`;@rosetta-source-v1 line=N filehex=<UTF8-hex>`, reset `line=0 filehex=-`).
+File identities must match the assembler sidecar exactly after path
+normalization. Generated assembly bytes and loaded code are hash-bound;
+`source_text_verified=false` distinguishes this from verifying today's C text.
+Columns are unavailable. This supports Rosetta's line-sidecar subset and C
+statement markers; DWARF remains separate work.
+
+`dmesg|tasks|stack|panic --layout <json> --memory <capture.json>` reads configured
+structures. Alternatively `--ctrl <session-dir> [--owner <token>]` reads live
+memory through `CtrlClient` in one paused observation epoch, retaining captured
+pages. Offline panic views additionally take `--cpu <native-cpu.json>`; stack
+and panic accept `--map <source-map.json>`. `--symbols <System.map>` resolves
+layout symbol references. Layouts require immutable code-region SHA256 bindings
+so a profile for another kernel cannot silently produce plausible output.
+
+Models are explicitly limited: a monotonic byte ring, a circular intrusive task
+list, a configured linked frame chain and configured panic entry PCs. No kernel
+version, structure offsets or ABI is inferred. Unknown memory, corrupt indices,
+cyclic/over-limit lists, missing terminators and stale bindings refuse the view.
+These primitives do not claim that every modern Linux printk layout has been
+decoded. Production profiles and additional formats need their own fixtures.
+Every kernel result reports its layout hash and binding status.
+
+## Ordered event subscriptions
+
+`subscribe on <kinds> <file> [max-records] | kinds | status | off` is available
+on CTRL and co-pilot. `json subscribe kinds` lists accepted comma-separated
+filters; unknown kinds refuse the command. The file is a flushed JSONL stream
+using `a2subscription-v1`, with `event=subscription.started|event|overflow|stopped`,
+monotonic `sequence`, source frame/cycle stamps and a `payload` object. Event
+payloads contain a `kind`, clock availability and native `data` (the original
+rail record, console bytes, or the command's JSON reply). This includes records
+even when their original destination is stdout or a private rail sink.
+
+Coverage is the central record writer, command completion/stops, completed SCC
+TX bytes, armed WDM console/audio capture, IRQ edges and command/frame-sampled
+native device fields. `device.baseline`/`device.change` include before/after
+values and a sampling model; transitions between samples can be missed. It is
+an ordered subset, not replay. Output requires an ordinary file;
+there is one active subscription per process. The default data-record limit is
+100,000 (maximum 1,000,000). Overflow writes an explicit warning record and
+counts dropped events; `json subscribe status` exposes `complete=false` and
+loss counts, and a lossy or failed subscription reports FAIL. `off` writes a
+close-out with retained/dropped totals. Agents must check completeness before
+treating an event trace as evidence. File I/O failures are also reported on
+stderr and in status. The debug socket exposes the same kinds through its
+independent bounded SUBSCRIBE observer; MANIFEST discovers the filters and
+queue/loss contract. See `Docs/DebugProtocol.md` and `Docs/DebugClient.md`.
+
 > **Which rails exist is answered by the binary, not by this file.**
 >
 > `src/a2gspu_rails_registry.hpp` is the source of truth for the *set* of rails;
@@ -120,6 +334,9 @@ Where the code lives (by function, not line number — line numbers here went st
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
+| `A2GSPU_SCC_A=file:<path>` or `pipe:<endpoint>` | Passive SCC channel A TX-wire capture, in SPIKE and CTRL: records completed bytes excluding local loopback. Requires an SCC. Also live through `capture scc-a`; `rail read A2GSPU_SCC_A` reports binding and byte count. Empty capture means no completed bytes. Startup and sink write errors are fatal (exit 2); live arm errors return FAIL. | observe | env + capture |
+| `A2GSPU_SCC_B=file:<path>` or `pipe:<endpoint>` | SCC channel B, independently bound and counted. Also live through `capture scc-b`; `rail read A2GSPU_SCC_B` reports binding and byte count. | observe | env + capture |
+| `A2GSPU_WDM_CONSOLE=file:<path>` or `pipe:<endpoint>` | 65816 console: `$FE` emits A.low; `$FD` emits Y bytes at X.low:A (maximum 4096, full A/Y even in 8-bit mode). Reads use `a2obs_peek`; unreadable or overflowing ranges fail before output. Preserves registers/flags and two-cycle timing. Operands unhandled when unset; Host FST `$FF` separate. Also live through `capture wdm`; readback reports binding and bytes. | observe | env + capture |
 | `A2GSPU_DUMP="BANK/LO-HI[,…]"` | hexdump memory ranges (hex). `$E0`/`$E1` read the Mega II image directly (side-effect-free); other banks via the MMU | observe | env |
 | `A2GSPU_TEXTDUMP=<file>` | dump text page 1 (2KB): main `$0400-07FF` via `probe_peek` (no `$C0xx` side effects) + aux `$0400-07FF` (80-col even columns) | observe | env |
 | `A2GSPU_TEXT40=1` | at spike end, ASCII-decode the 40-col text page (`$E0:0400-07FF`) to stdout | observe | env |
@@ -158,6 +375,14 @@ it differences two runs.
 
 ## Trace — execution / dispatch / load / mode streams
 
+Console files are binary byte streams, truncated at launch, flushed after each
+write, and closed with a byte-count summary (including zero). Relative file
+paths resolve under `A2GSPU_OUT_DIR` when set, otherwise the working directory.
+Pipes must already exist and have a reader: Windows named pipes use a bounded
+100 ms write deadline; POSIX FIFOs use nonblocking writes. Missing endpoints,
+disconnects, backpressure, unsupported machines and invalid binding syntax exit 2.
+Use distinct resolved paths for channel A, channel B and the WDM console.
+
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
 | `A2GSPU_TBTRACE=1` | trace Tool Locator (`$E10000`) + GS/OS class-0/1 dispatch (`$E100A8`/`$E100B0`): call name on entry, carry+A on return. **A harness that counts `IIGS TOOLBOX: ret` lines sees more of them since `e68c82e5`:** returns buried under an unmatched GS/OS inline call used to print nothing. The pinned 600-frame Finder boot went from 1236 returns (62 `carry=1`) to 1269 (84); an A/B build of the old tracker reproduces the old numbers, and the 22 new failures are 18 `NewHandle` `err=$0201` and 4 tool `$2111` `err=$1101`. Rosetta v3's `max_tool_errors` budget was re-measured to match | trace | env |
@@ -170,7 +395,7 @@ it differences two runs.
 | `A2GSPU_ITRACE_LO=<hex24>`, `A2GSPU_ITRACE_HI=<hex24>` | restrict ITRACE to a PC window `[LO,HI]`; setting either one also **enables** ITRACE (they are the master switch that has no bare `A2GSPU_ITRACE` behind it — that name is not a rail and the binary rejects it) | trace | env |
 | `A2GSPU_ITRACE_REARM=<n>` | re-arm ITRACE this many times (windowed re-capture) | trace | env |
 | `A2GSPU_ITRACE_OUT=<file>` | write ITRACE to a file instead of stderr | trace | env |
-| `A2GSPU_TRACE_EXT=1` | append DBR/DP/cycle-delta/scanline columns to 65816 trace lines | trace | env |
+| `A2GSPU_TRACE_EXT=1` | append recorded DBR/DP/NClock-cycle columns to trace lines; formatting is repeatable and does not infer video phase | trace | env |
 | `A2GSPU_CALLTRACE=1\|<hexPC>` | JSR/JSL call trace, armed from frame 0 (`1`) or at a PC | trace | env |
 | `A2GSPU_CALLTRACE_N=<n>` | cap CALLTRACE entries | trace | env |
 | `A2GSPU_CALLTRACE_SKIP=<n>` | skip the first n calls before logging | trace | env |
@@ -352,6 +577,45 @@ the early-boot figure as the outlier it is.
 
 ## Snapshot — save/restore machine state
 
+`diff <snapshotA> <snapshotB> <report.json>` compares saved files without
+restoring either or advancing the machine. Quote paths containing spaces;
+Windows backslashes remain literal. Available through CTRL and co-pilot, and
+through the standalone `snapdiff` executable in the build directory.
+
+The `a2snapdiff-v1` JSON document separates named CPU register changes from
+MMU registers, physical RAM, page maps, and opaque versioned device payloads.
+Memory/device ranges use half-open **section offsets**, not CPU-visible
+addresses. Each range includes up to 16 before/after bytes as hex; at most
+128 ranges per section are emitted, with exact byte/range totals and an
+explicit truncation flag. `section_changed_bytes` counts section bytes; CPU
+register changes are reported separately. Device block presence and version
+changes are reported even if payload bytes match.
+
+`equal` means the serialized saved-state fields match. Manifests are compared
+separately as metadata; their differences do not change `equal`. This is not
+proof of equality for devices or host state absent from the snapshots. Device
+payloads are compared as bytes, without claiming semantic decoding of their
+private formats. The JSON includes both manifest texts and these scope limits.
+CPU field names describe the saved register container: processor type is not
+serialized, so a field's presence does not imply that register exists on the
+guest's physical CPU (for example DB on a 65C02).
+
+The reader supports current little-endian GSPS v1 IIe and IIgs layouts, including
+structurally valid pre-manifest files. It follows lengths and page tables rather
+than scanning guest RAM for marker strings. Malformed/truncated files, duplicate
+device blocks, invalid page references, unsupported/ambiguous layouts, trailing
+garbage, incompatible RAM/ROM geometries and files over 256 MiB are refused.
+The report must not alias either input. No snapshot format or restore behavior
+is changed by this reader.
+Validation checks structure and geometry; the existing snapshot format has no
+end-to-end payload checksum.
+
+The CTRL ack reports comparison completion as `status=OK ... equal=0|1`, or
+`status=FAIL` for invalid input/output. CLI usage is
+`snapdiff A.snap B.snap [report.json] [--expect-different]`: exit 0 for equal,
+1 for different, 2 for invalid input/output. `--expect-different` reverses the
+first two outcomes so an identical pair fails a divergence expectation.
+
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
 | `A2GSPU_SNAP_SAVE=<file>` | at spike end, save CPU regs + full MMU snapshot (128K + page tables + soft-switch state) + device blocks + trailing sentinel + a **manifest** naming what the file holds, what it omits, the frame, the pins and the binary. **Do not read the lists from here — read them from the file.** They vary by platform and by what the machine had when the save ran (`tools/a2rail/artifacts.py snap <file>` prints the trailer; the `restore` ack carries the same text) | snapshot | env |
@@ -508,6 +772,7 @@ protocol authority.
 
 | Rail | Effect | Group | Gated |
 |------|--------|-------|-------|
+| `A2GSPU_AGENT=0\|1` | default off. With 1, require `--debug <endpoint>` and an explicit machine (`-p`, `-c` or config file); reuse the full interactive CTRL instrumentation bootstrap and start paused, without entering its file loop. Suppresses host preferences/input; no fixed-frame spike/verdict loop. Cannot combine CTRL, COPILOT or SPIKE_FRAMES. Invalid values/configurations fail before starting a machine. `rail read A2GSPU_AGENT` returns native `a2agent-mode-v1` enabled/bootstrap-complete proof. Managed MCP launch sets this rail and checks that proof before serving tools | ctrl | env |
 | `A2GSPU_CTRL=<dir>` | enable the interactive stepping rail: 20 Hz poll of `<dir>/cmd.N`, atomic `<dir>/ack.N` reply; replaces the fixed-frame spike. Also forces headless when set | ctrl | env |
 | `A2GSPU_CTRL_TIMEOUT=<s>` | idle timeout in seconds before an orphaned session quits (default 300) | ctrl | env |
 | `A2GSPU_CTRL_ATOMIC=1` | the client declares it writes `cmd.N` atomically (a temp file, then rename). The rail then skips the 20 ms re-read guard it keeps for clients that write in place, which could otherwise be seen mid-write. `tools/a2rail/session.ps1` sets it; `protocol` reports `cmd_guard=`. With the poll hot for a second after each ack, the emulator's side of a command is its execution time plus about a millisecond | ctrl | env |
@@ -518,6 +783,7 @@ protocol authority.
 
 | Verb | Effect | Group |
 |------|--------|-------|
+| `context overview` / `topology [offset]` / `device <id>` / `address <hex>` / `irq` / `stop` / `pixel <x> <y>` / `schedule [offset]` / `on [capacity]` / `off` / `history [after-id] [count]` / `mark [hex-address decimal-length]` / `changes <mark-id> [offset]` / `snapshot <file>` | `a2context-v1`: one machine-thread observation stamp with native CPU/14M/video clocks; connected compiled/installed/absent inventory and source references; device fields, mapping/IRQ/stop/reference-pixel explanations; timer queues in their own domains; bounded causal history and sampled changes. Reads work over the socket while running without implicit pause. `on`, `off`, and `mark` change observer state and require socket pause; snapshot writes a host file. Capacity 1..4096, event pages 1..8 with byte caps, topology/change pages eight; four retained marks, optional 1..256-byte CPU memory window. Loss, omitted payloads, capture host cost and incomplete models are explicit. Full snapshot captures devices, signals and core graph at one boundary; this is not complete machine replay. Paths may be quoted | CTRL-verb (mixed) |
 | `run <frames>` | step N frames; reply `status=OK ran=N cycles=N (in-command) PC $bb:aaaa->$bb:aaaa`, **both program counters banked** -- they are 24-bit and printing them masked to 16 bits made a cold IIgs boot (really $00:FA62 -> $FF:FCDE) ack as `PC $FA62->$FCDE`, two addresses in a bank the ack never named; the format now matches `cpu`'s `PC=BB:AAAA` so one parser reads both, or `status=HALT ran=N …` if the guest halted inside the call. **Match this as a PREFIX, not a whole line:** `arm_cpu()` appends ` [cleared RESET]`, ` [cleared STOP]` or ` [cleared RESET+STOP]` when it had to un-assert the CPU before advancing, and the first `run` of a session is exactly the case that does -- so the most common ack an agent will ever meet carries the suffix. (It never replies `ok`, and never `halted@<i>` — that belongs to `press`/`key`, which report which injected key was consumed) | CTRL-verb (run) |
 | `keys <str>` | append to the keyboard paste buffer (paced by guest polls) | CTRL-verb (manipulate) |
 | `press <hex2> [hold] [mods]` | full physical keypress — latch + any-key-down, held `hold` frames (default 15), then released; IIe latch path AND IIgs KeyGloo+IRQ path. `mods` is letters `o` (Open-Apple) `c` (Closed-Apple) `s` (shift) `k` (control), carried in the key's modifier byte (what `$C025` and the Event Manager report): `press 6F 2 o` is Open-Apple-O, which is how the Finder is told to **open** a selected icon — a bare Return on one starts a rename (measured). `o` and `c` also hold SW0 and SW1 (`$C061`/`$C062`) for the press: the IIe's Open/Solid Apple keys, the IIgs's Command/Option through the ADB micro; the II and II+ have no Apple keys | CTRL-verb (manipulate) |
@@ -527,6 +793,7 @@ protocol authority.
 | `dis <addr> <n> <file> [m8\|m16] [x8\|x16]` | disassemble N instructions via the debugger `Disassembler` to `<file>`. The address takes the same `BB:AAAA` form as `load`/`read`/`poke`. **Reads are side-effect-free:** `$xxC000-$xxC0FF` is never touched **in any bank** (the old guard compared the full 24-bit address, so `dis E1C055 1 …` fell through to the CPU's read path and physically flipped `PAGE2` and `HIRES` — an observe verb actuating the machine), and everything else goes through `probe_readable`/`probe_peek` rather than `mmu->read`. A byte the MMU will not show is reported as `<unreadable>` instead of being decoded from the `$EE` placeholder into a fictional `INC $EEEE`, and the ack carries `unreadable=N`. **65816 immediate width:** `m`/`x` are seeded from the live CPU (override with the trailing tokens for code that has not run yet), `REP`/`SEP` are followed as the listing decodes them, and `XCE` resets to the conservative 8-bit reading; the first line of the output file and the ack's `mx=m8x16@start src=<cpu\|arg>` both name the assumption. Without this the listing desynchronised from the first 16-bit immediate: `A9 34 12` read as `LDA #$34` / `ORA ($8F)` while the CPU executed `LDA #$1234` | CTRL-verb (observe) |
 | `text <file>` | dump the text page to `<file>` | CTRL-verb (observe) |
 | `shot <file>` | update the display and save the SDL backbuffer to `<file>`; ack `status=OK shot profile=sdl-human <file>` — for a human to look at, never an oracle (use `pngc`/`shr`) | CTRL-verb (observe) |
+| `diff <snapshotA> <snapshotB> <report.json>` | checked saved-state comparison, schema `a2snapdiff-v1`, model `serialized-saved-state`; reports registers, physical RAM/MMU/page-map and opaque device-byte changes; metadata separate; quote paths with spaces | CTRL-verb (observe) |
 | `read <hexaddr> <len> <file>` | dump `len` bytes from `<addr>` via `probe_peek` (side-effect-free, bank-correct on `-p 5`) to `<file>` | CTRL-verb (observe) |
 | `poke [BB:]<addr> <hexbytes…>` | deliberate splice. Bare `AAAA` writes through the MMU, so soft switches reach their handlers. `BB:AAAA` writes observation-free where the CPU will read it (IIe: the flat image; IIgs: `probe_poke`, resolved through aux and language-card state). A byte the MMU will not place — `$C0xx`, ROM, a write-inhibited language card, `$E0/$E1:C000-CFFF` — fails the ack: `status=FAIL poke-refused refused=N landed=M first=$BB:AAAA`, never `poked N byte(s)` | CTRL-verb (manipulate) |
 | `mount sXdY <path>` | runtime media swap (save-and-unmount the drive first so writes persist) | CTRL-verb (manipulate) |
@@ -536,13 +803,15 @@ protocol authority.
 | `oracle` | north-star contracts (cycles/colour/snapshot/dual-mode) | CTRL-verb (meta) |
 | `help` / `help <file>` | list CTRL verbs; optional full catalog to file | CTRL-verb (meta) |
 | `manifest <file>` | machine-oriented capability dump (verbs+env groups+models) | CTRL-verb (meta) |
-| `step [n]` | execute N instructions; `cycles=` **in-command**. `stepped=` counts instructions that executed: a step that reached a breakpoint stopped in front of it and is not counted | CTRL-verb (run) |
-| `run-until <addr> [max]` | stop at PC; `cycles=` **in-command**; `instr=` counts the instructions executed, including the one that arrived | CTRL-verb (run) |
+| `step [n]` | request N instructions (default 1), bounded by N instruction-boundary attempts; positive decimal through 2147483647 only, with no extra arguments. Invalid requests have zero effects. `cycles=` **in-command**; `stepped=` and `instructions=` count instructions actually executed, excluding idle/interrupt-only attempts and pre-instruction breakpoint stops. Native `completed`, `requested_instructions`, `attempt_budget`, `attempts`, `stop_reason` distinguish completion, HALT and BUDGET | CTRL-verb (run) |
+| `run <frames>` input/completion | positive decimal 1..1000000 only, with no extra arguments; invalid requests report zero work before arming/clearing CPU state. Native `requested_frames`, `completed_frames`, `completed`, `stop_reason` supplement in-command cycles/instructions. Frame completion is distinct from executing a requested number of CPU instructions | CTRL-verb (run) |
+| `run-until <addr> [max]` | test the current PC first; an already-reached target executes nothing and does not arm/clear CPU state. Positive decimal boundary-attempt budget, default 2000000 and maximum 2147483647; invalid/extra arguments refuse before effects. Native `target_reached`, `completed`, `target`, `attempt_budget`, `attempts`, `budget_model`, `stop_reason` distinguish target, halt and budget exhaustion. Idle/interrupt-only attempts consume the bound; `instr=`/`instructions=` count actual instructions and `cycles=` is **in-command** | CTRL-verb (run) |
 | `vid` | softswitch decode TEXT…DHIRES | CTRL-verb (observe) |
 | `stack [n]` | stack contents above SP | CTRL-verb (observe) |
 | `png` / `pngc` | mono (`profile=bits-mono`) / named-colour (`profile=4dot`, `profile=mono`) DHGR from RAM | CTRL-verb (observe) |
 | `vram` | 8K aux + 8K main raw, with `<file>.meta.json` (`vram-raw-v1`, page, hashes) for `artifacts.py raw` | CTRL-verb (observe) |
 | `load` / `poke` / `setreg` | deliberate RAM/reg splice | CTRL-verb (manipulate) |
+| `load <addr> <file>` | binary load with readback verification; quote filenames containing spaces. Malformed, missing or extra arguments fail before memory writes. MCP inputs can come from create-once `gs2_artifact_put` with a checked SHA256 | CTRL-verb (manipulate) |
 | `cycles` / `cycles reset` | the absolute guest cycle counter. `cycles reset` sets a mark; a later `cycles` adds `delta_from_mark=N model=cross-command(every-command-since-mark)` — true, but it counts every command run since the mark, so it is a routine's cost only when nothing else ran. A routine's cost is the `cycles=` on `run`/`step`/`run-until` | CTRL-verb (observe) |
 | `dhgr-calibrate` / `dhgr-export` | 4-dot self-test + profile files for a2tile | CTRL-verb (calibrate) |
 | `dhgr-golden <file> [page] [vram-raw\|4dot] [bless]` | FNV page golden; `vram-raw`=16K AUX‖MAIN; `4dot`=discrete RGB 560×192 | CTRL-verb (calibrate) |
@@ -607,6 +876,37 @@ A `delta_from_mark` or the difference of two `cycles` acks includes every comman
 ---
 
 ## The closed-loop contract — the Rosetta harness recipe
+
+### Instruction counts and function profiles
+
+`run`, `step`, and `run-until` append `instructions=`: actual opcode executions
+during that command, excluding parked breakpoints, reset waits, WAI idle cycles
+and stopped clocks. Existing `instr=`/`stepped=` fields remain compatible.
+Each block-move iteration counts as one opcode execution. The observation total
+is monotonic across reset/restore; it is not restored guest state.
+
+For a bounded profile, issue `cov on 008000-008FFF` (or `cov map <A2MAP1>`),
+then `cov counts on`, execute the workload, and `cov counts write <file.json>`.
+`cov reset` clears both bits and counts; rearming/disarming coverage disables
+counting. `cov counts off` discards counts without disarming byte coverage.
+Counts have schema `a2profile-v1`: range, generation, binary-plan `map_hash`
+(zero for raw ranges), and sorted PC rows with `instructions` and `cycles`.
+Writes refuse unarmed counting, stale mapped code, and unwritable paths.
+Empty `pcs` is a valid observation of no execution, not a workload pass.
+
+The `instruction-cycles` model attributes each instruction's own CPU cycles to
+its starting PC. Interrupt entry before an opcode and idle waits are excluded,
+so profile cycles may be less than a command's elapsed `cycles=`. Existing
+`A2COV1`/`A2COV2` bitmap formats stay unchanged.
+
+`python -I tools/a2rail/profile.py counts.json --symbols functions.json`
+rolls PCs into named, half-open absolute ranges. Symbol JSON has schema
+`a2symbols-v1` and `functions: [{"name":"loop","start":32768,"end":32784}]`.
+Unmatched PCs remain `<unassigned>`; no total is silently dropped. `A2MAP1`
+contains binary segment identity, not function names: pass `--map plan.a2map`
+to validate segment ranges and identity alongside the symbol file. For mapped
+profiles the symbol document must carry the matching `map_hash`. Use
+`--expect-instructions N` to gate a total; a mismatch exits 1.
 
 The Rosetta `GssquaredDriver` (see [`CLOSED_LOOP_INTEGRATION.md`](CLOSED_LOOP_INTEGRATION.md),
 task #87) closes the loop on **this** tool. Two shapes:

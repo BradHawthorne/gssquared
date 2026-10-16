@@ -1,0 +1,126 @@
+{
+  "schema": "a2context-launch-proof-v1",
+  "exit_code": 0,
+  "tools": 85,
+  "executable_sha256": "f6d61438eee05e999e72a4411117f64ba24429e244b69f484f286d4bae72ae2f",
+  "context": {
+    "schema": "a2context-v1",
+    "kind": "overview",
+    "stamp": {
+      "context_session": "1792137196497839500-343691347155900",
+      "clock_epoch": "0",
+      "observation_id": "1",
+      "cpu_cycles": "2",
+      "master_14m_ticks": "10",
+      "video_cycles": "0",
+      "video_frames": "0",
+      "clock_model": "native NClock domains; compare cycles only within a continuous timeline",
+      "execution_mode": 2,
+      "boundary": "machine-thread observation; no guest execution during capture"
+    },
+    "capture_host_ns": "24800",
+    "capture_cost_model": "host wall duration through capture/render; excludes final envelope/file/transport",
+    "data": {
+      "system_id": 8,
+      "platform": "Apple IIgs",
+      "cpu": {
+        "processor_type": 2,
+        "sp_model": "bank0-stack-address",
+        "registers": {
+          "pc": 64098,
+          "a": 0,
+          "x": 0,
+          "y": 0,
+          "sp": 297,
+          "p": 52,
+          "a_storage": 0,
+          "d": 0,
+          "dbr": 0,
+          "pbr": 0,
+          "e": true
+        },
+        "register_widths": {
+          "a": 8,
+          "x": 8,
+          "y": 8
+        },
+        "halt_reason": 0,
+        "stopped": false,
+        "waiting_for_interrupt": false,
+        "interrupts": {
+          "irq_line": false,
+          "irq_pipeline": 0,
+          "nmi_pending": false,
+          "boundary_abort_pending": false,
+          "reset_sources": "0"
+        }
+      },
+      "clock": {
+        "mode": "2.8 MHz",
+        "mode_id": 2,
+        "nominal_hz": "2857370",
+        "cpu_per_14m": 1,
+        "frame_start_14m": "0",
+        "frame_end_14m": "238944",
+        "video_phase_14m": "10",
+        "scanline_phase_14m": "0",
+        "source": "src/NClock.hpp",
+        "model": "native counters; no fixed CPU-speed conversion or host refresh inference"
+      },
+      "history": {
+        "active": false,
+        "capacity": 256,
+        "retained": 0,
+        "last_event_id": "0",
+        "discarded": "0",
+        "oversized": "0",
+        "coverage": "armed interval only; command boundaries, central records, IRQ edges, interrupt entry, EventTimer transitions and sampled native device fields",
+        "complete_machine_history": false
+      },
+      "installed_device_instances": 11,
+      "native_observers": 12,
+      "registered_signals": 3,
+      "queries": [
+        "topology [offset]",
+        "device <id>",
+        "address <hex>",
+        "irq",
+        "stop",
+        "pixel <x> <y>",
+        "schedule [offset]",
+        "history [after-id] [count]",
+        "mark [hex-address decimal-length]",
+        "changes <mark-id> [offset]",
+        "snapshot <file>",
+        "on [capacity]",
+        "off"
+      ],
+      "coverage": {
+        "complete_machine_state": false,
+        "complete_causal_history": false,
+        "host_presentation": "reference raster and source audio differ from actual GPU and host mix",
+        "source_semantics": "Rosetta bound maps via guestview; variables/unwind/DWARF incomplete",
+        "replay": "snapshots exclude clock/host state; no full replay"
+      }
+    },
+    "ok": true
+  },
+  "quit": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"schema\":\"a2ctrl-reply-v2\",\"command\":\"quit\",\"ok\":true,\"status\":\"OK\",\"text\":\"QUIT acknowledged; shutdown requested\",\"data\":null}"
+      }
+    ],
+    "structuredContent": {
+      "schema": "a2ctrl-reply-v2",
+      "command": "quit",
+      "ok": true,
+      "status": "OK",
+      "text": "QUIT acknowledged; shutdown requested",
+      "data": null
+    },
+    "isError": false
+  },
+  "stderr": ""
+}

@@ -1,0 +1,67 @@
+PASS context verdict overview
+PASS native context schema
+PASS history is explicitly off by default
+PASS context verdict address 000800
+PASS RAM explains actual probe value
+PASS context verdict address 00C030
+PASS I/O explanation never returns placeholder as truth
+PASS context verdict overview
+PASS observation consumes no guest cycles
+PASS context verdict topology 0
+PASS context verdict topology 8
+PASS context verdict topology 16
+PASS context verdict topology 24
+PASS context verdict topology 32
+PASS absent models are discoverable
+PASS context verdict device 1
+PASS absent model cannot borrow another installed model observer
+PASS CPU participates in topology
+PASS topology links implementation sources
+PASS context verdict on 0
+PASS context verdict overview
+PASS invalid arm does not change history
+PASS context verdict on 128
+PASS context verdict on 128
+PASS context verdict mark 000900 1
+PASS context verdict changes 1 0
+PASS context verdict changes 1 8
+PASS instruction store joins marked memory delta
+PASS CPU register delta is typed
+PASS context verdict changes 999999
+PASS context verdict address 1000000
+PASS context verdict history 999999 4
+PASS context verdict irq
+PASS IRQ explains independent asserted source
+PASS context verdict history 0 8
+PASS context verdict history 68 8
+PASS context verdict history 76 8
+PASS context verdict history 84 8
+PASS context verdict history 92 8
+PASS context verdict history 100 8
+PASS context verdict history 108 8
+PASS context verdict history 116 8
+PASS context verdict history 124 8
+PASS context verdict history 132 8
+PASS context verdict history 139 8
+PASS context verdict history 146 8
+PASS context verdict history 151 8
+PASS context verdict history 159 8
+PASS context verdict history 164 8
+PASS context verdict history 169 8
+PASS context verdict history 177 8
+PASS context verdict history 184 8
+PASS accepted NMI has exact transition evidence
+PASS resolved vector links its actual interrupt entry
+PASS IRQ edge retained without separate subscription
+PASS context verdict stop
+PASS stop explanation links execution receipt
+PASS context verdict stop
+PASS session exits cleanly
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\contextcheck.py", line 202, in <module>
+    run(parser.parse_args().exe.resolve())
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\contextcheck.py", line 87, in run
+    check(receipt['data']['schema'] == 'a2execution-v1', 'stop explanation ignores similarly named non-execution commands')
+          ~~~~~~~~~~~~~~~^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable

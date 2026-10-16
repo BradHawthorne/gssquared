@@ -1,0 +1,23 @@
+{
+  "schema": "a2bisect-scenario-v1",
+  "frames": 30,
+  "repeats": 2,
+  "max_revisions": 16,
+  "configure": [
+    "C:/msys64/ucrt64/bin/cmake.exe", "-S", "{source}", "-B", "{build}",
+    "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe",
+    "-DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe",
+    "-DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe"
+  ],
+  "build": ["C:/msys64/ucrt64/bin/cmake.exe", "--build", "{build}", "--parallel", "8"],
+  "checks": [["C:/msys64/ucrt64/bin/ctest.exe", "--test-dir", "{build}", "--output-on-failure"]],
+  "executable": "GSSquared.exe",
+  "arguments": ["-p", "5", "-n"],
+  "build_timeout_seconds": 900,
+  "check_timeout_seconds": 900,
+  "run_timeout_seconds": 120,
+  "accepted_exit_codes": [0],
+  "env": {},
+  "inputs": []
+}

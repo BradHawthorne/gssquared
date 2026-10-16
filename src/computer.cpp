@@ -26,6 +26,7 @@
 #include "util/ResetController.hpp"
 #include "util/DebugHandlerIDs.hpp"
 #include "util/AudioSystem.hpp"
+#include "util/audio_capture.hpp"
 #include "util/SoundEffect.hpp"
 #include "util/printf_helper.hpp"
 #include "paths.hpp"
@@ -92,6 +93,9 @@ computer_t::computer_t(NClockII *clock) {
         DH_IRQ, // unique ID for this, need to have in a header.
         [this]() -> DebugFormatter * {
             return irq_control->debug_irq();
+        },
+        [this]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();df->unsignedField("pending",*irq_control->obs_pending_ptr(),64,"source-bitmask");return df;
         }
     );
 
@@ -117,6 +121,9 @@ computer_t::computer_t(NClockII *clock) {
     event_timer = new EventTimer(clock); // runs at 14MHz clock speed.
     vid_event_timer = new EventTimer(clock); // runs at video clock speed (always 1MHz)
     cpu_event_timer = new EventTimer(clock); // runs at cpu clock speed.
+    event_timer->observation_domain="master-14m";
+    vid_event_timer->observation_domain="video";
+    cpu_event_timer->observation_domain="cpu";
 
     slot_manager = new SlotManager_t();
     mounts = new Mounts();
@@ -293,6 +300,11 @@ computer_t::computer_t(NClockII *clock) {
 }
 
 computer_t::~computer_t() {
+    // Finalize owned evidence before the device/CPU/clock owners disappear.
+    if(audio_capture::stream.is_open()) {
+        try{audio_capture::stop();}catch(const std::exception &e){std::fprintf(stderr,"A2GSPU AUDIO: FAIL close %s\n",e.what());}
+    }
+    a2events::set_secondary({});a2events::close();
     // Unwire and destroy SerialDevices while chip/card state is still alive.
     if (connections) {
         connections->clear();
@@ -332,8 +344,9 @@ void computer_t::register_shutdown_handler(ShutdownHandler handler) {
     shutdown_handlers.push_back(handler);
 }
 
-void computer_t::register_debug_display_handler(std::string name, uint64_t id, DebugDisplayHandler handler) {
-    debug_display_handlers.push_back({name, id, handler});
+void computer_t::register_debug_display_handler(std::string name, uint64_t id, DebugDisplayHandler handler,
+                                              DebugDisplayHandler native_handler) {
+    debug_display_handlers.push_back({name, id, handler, native_handler});
 }
 
 DebugFormatter *computer_t::call_debug_display_handler(std::string name) {

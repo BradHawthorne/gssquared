@@ -105,6 +105,8 @@ void SoundEffect::put_mono_as_stereo(SoundInfo_t *si, const Uint8 *mono, Uint32 
     // Observed AFTER expansion, so the probe sees the placement that actually
     // reaches SDL rather than the mono source that went in.
     probe_sfx(expand_scratch.data(), stereo_len, si->wav_format, 2);
+    if(si->wav_format==SDL_AUDIO_S16LE)audio_capture::note(1,(const int16_t*)expand_scratch.data(),num_samples,2,0,0,si->wav_rate);
+    else audio_capture::unread(1);
     audio_system->put_stream_data(si->stream, expand_scratch.data(), stereo_len);
 }
 
@@ -127,6 +129,7 @@ SoundInfo_t *SoundEffect::load(const char *fname, uint64_t key)
 
     si->wav_channels = spec.channels;
     si->wav_format = spec.format;
+    si->wav_rate = spec.freq;
 
     if (spec.channels != 1) {
         SDL_Log("Sound effect '%s' is not mono (%d channels); stereo placement requires mono PCM",

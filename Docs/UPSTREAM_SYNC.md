@@ -1014,3 +1014,27 @@ exercised in those modes is still owed.
 - **C, serial:** `0f774f48`, `58751766`, `63f1717c` and `643e6c21`, with `uartbaudtest`.
 - **D, the clock domains:** five commits, accepted only if unarmedhash reproduces unchanged.
 - **E, battery RAM and keys:** `4a14e989` with pin precedence kept, and `c7046029` reconciled with `a96dbb0c`.
+
+## 24. Upstream observation methods audited and exposed (2026-10-15)
+
+Network refresh confirms main at `643e6c21`; the separate development branch
+`1.1/ntscshader` is `0aed0214`. Compared the debugger server, trace/monitor,
+device formatting and Python client against the fork's current working tree,
+including its recent native/MCP tools. Main adds no unported telemetry protocol.
+
+Reused the already inherited GET_TRACE, READMEM and VIDEO_TEXT interfaces in
+four structured MCP/Python observations. Masked search uses a paused memory
+snapshot plus readability, excluding I/O placeholders. Fixed the fork's
+stateful trace-formatting delta and its fixed-speed video estimate: extended
+text now reports recorded DBR/DP/NClock cycles repeatably. No cherry-pick was
+needed, and no native wire type/verb was added. The MCP catalog grows to 79.
+
+The development branch's actual GPU-readback comparison harness is an upstream
+validation advantage. Its new packed-frame/NTSC/GS-composite pipeline is not in
+this fork; the new GPU implementations currently target Metal, with Windows
+DXIL and Linux SPIR-V builds absent. Carry that harness with a future renderer
+port; current reference PNG observations do not prove GPU equivalence.
+
+Drift B–E, the local engine merge and consumer-binary replacement remain their
+separate decisions. Details, before-failure evidence and final validation:
+[`gssquared-upstream-observability-20261015`](reports/gssquared-upstream-observability-20261015/README.md).

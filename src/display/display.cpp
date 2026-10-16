@@ -696,7 +696,7 @@ bool display_A2GSPU_restore(display_state_t *ds, FILE *f, uint32_t version) {
         if (fread(&to_edge, 8, 1, f) != 1) return false;
         if (to_edge && ds->clock && ds->computer && ds->computer->event_timer) {
             ds->onesec_next_14m = ds->clock->get_c14m() + to_edge;
-            ds->computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds);
+            ds->computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds, "display.rtc_pram_1sec_interrupt", "src/display/display.cpp");
         }
     }
     // The IRQ lines follow the registers, as they would after the writes that set them.
@@ -786,7 +786,7 @@ void rtc_pram_1sec_interrupt(uint64_t instanceID, void *context) {
     uint64_t trigger_cycle = ds->onesec_next_14m + period;
     if (trigger_cycle <= now) trigger_cycle = now + period;   // fell behind (a long stop): no burst
     ds->onesec_next_14m = trigger_cycle;
-    ds->computer->event_timer->scheduleEvent(trigger_cycle, rtc_pram_1sec_interrupt, instanceID, ds);
+    ds->computer->event_timer->scheduleEvent(trigger_cycle, rtc_pram_1sec_interrupt, instanceID, ds, "display.rtc_pram_1sec_interrupt", "src/display/display.cpp");
 }
 
 void display_write_c032(void *context, uint32_t address, uint8_t value) {
@@ -1106,13 +1106,24 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
         }
         // set the 14M timer to the number of ticks
         ds->onesec_next_14m = ds->clock->get_c14m() + ticks_14m;
-        computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds);
+        computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds, "display.rtc_pram_1sec_interrupt", "src/display/display.cpp");
     }
     computer->register_debug_display_handler(
         "display",
         DH_DISPLAY, // unique ID for this, need to have in a header.
         [ds]() -> DebugFormatter * {
             return display_debug(ds);
+        },
+        [ds]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();df->unsignedField("scanner_type",ds->video_scanner_type,32);
+            df->unsignedField("graphics_mode",ds->display_graphics_mode,32);
+            df->unsignedField("display_mode",ds->display_mode,32);
+            df->unsignedField("page",ds->display_page_num,32);
+            df->boolField("80col",ds->f_80col);df->boolField("double_graphics",ds->f_double_graphics);
+            df->boolField("shr",ds->new_video&0x80);
+            df->unsignedField("inten",ds->f_INTEN,8);df->unsignedField("vgcint",ds->f_VGCINT,8);df->unsignedField("intflag",ds->f_INTFLAG,8);
+            if(ds->video_scanner){df->unsignedField("horizontal",ds->video_scanner->get_hcount(),32,"scanner-ticks");df->unsignedField("vertical",ds->video_scanner->get_vcount(),32,"lines");}
+            return df;
         }
     );
 }

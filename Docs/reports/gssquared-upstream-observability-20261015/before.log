@@ -1,0 +1,11 @@
+PASS observation MCP lifecycle 3: 
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\observabilitycheck.py", line 60, in <module>
+    parser=argparse.ArgumentParser();parser.add_argument('--exe',type=Path,required=True);run(parser.parse_args().exe.resolve())
+                                                                                          ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\observabilitycheck.py", line 42, in run
+    check({'gs2_trace_read','gs2_memory_read','gs2_memory_search','gs2_video_text_read'}<=names,'upstream structured observations discoverable through MCP')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: upstream structured observations discoverable through MCP

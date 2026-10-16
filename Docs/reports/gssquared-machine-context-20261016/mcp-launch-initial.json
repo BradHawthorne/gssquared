@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "gssquared": {
+      "command": "C:\\Users\\X99\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "args": [
+        "-I",
+        "D:\\projects\\gssquared-fork\\tools\\a2rail\\mcpserver.py",
+        "--exe",
+        "D:\\gsqs\\coherency-20261015\\build\\GSSquared-context.exe",
+        "--platform",
+        "5",
+        "--out-root",
+        "D:/gsqs/agent-sessions"
+      ],
+      "env": {
+        "PATH": "C:/msys64/ucrt64/bin;D:\\gsqs\\coherency-20261015\\build;C:/Windows/System32;C:\\msys64\\ucrt64\\bin;C:\\Users\\X99\\AppData\\Local\\Programs\\Python\\Python313;C:\\msys64\\mingw64\\bin;C:\\msys64\\usr\\local\\bin;C:\\msys64\\usr\\bin;C:\\msys64\\usr\\bin;C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\msys64\\usr\\bin\\site_perl;C:\\msys64\\usr\\bin\\vendor_perl;C:\\msys64\\usr\\bin\\core_perl"
+      }
+    }
+  }
+}

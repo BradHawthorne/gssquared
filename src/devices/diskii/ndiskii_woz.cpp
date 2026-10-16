@@ -135,6 +135,9 @@ void init_slot_ndiskII_woz(computer_t *computer, SlotType_t slot) {
         DH_DISKII,
         [diskII_d]() -> DebugFormatter * {
             return diskII_d->dc->debug();
+        },
+        [diskII_d]() -> DebugFormatter * {
+            return diskII_d->dc->debug(true);
         }
     );
 

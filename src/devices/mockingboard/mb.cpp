@@ -259,7 +259,7 @@ void mb_t1_timer_callback(uint64_t instanceID, void *user_data) {
             next_counter = 65536;
         } */
         tc->t1_triggered_cycles += next_counter; // TODO: testing.
-        mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + next_counter+1, mb_t1_timer_callback, instanceID , mb_d);
+        mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + next_counter+1, mb_t1_timer_callback, instanceID , mb_d, "mockingboard.mb_t1_timer_callback", "src/devices/mockingboard/mb.cpp");
     } else {         // one-shot mode
         // if a T1 oneshot was pending, set interrupt status.
         if (tc->t1_oneshot_pending) {
@@ -293,7 +293,7 @@ void mb_t2_timer_callback(uint64_t instanceID, void *user_data) {
             counter = 65536;
         } */
         
-        mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + counter + 1, mb_t2_timer_callback, instanceID , mb_d);
+        mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + counter + 1, mb_t2_timer_callback, instanceID , mb_d, "mockingboard.mb_t2_timer_callback", "src/devices/mockingboard/mb.cpp");
 #endif
     if (1) { // one-shot mode (T2 only has one-shot mode?)
         // TODO: "after timing out, the counter will continue to decrement."
@@ -387,7 +387,7 @@ void mb_write_Cx00(void *context, uint32_t addr, uint8_t data) {
             tc->t1_triggered_cycles = vid_cycles + next_counter + 1; // TODO: testing. this is icky. This might be 6502 cycle timing plus 6522 counter timing.
             tc->t1_oneshot_pending = 1;
             //if (tc->ier.bits.timer1) {
-                mb_d->event_timer->scheduleEvent(tc->t1_triggered_cycles, mb_t1_timer_callback, 0x10000000 | (slot << 8) | chip , mb_d);
+                mb_d->event_timer->scheduleEvent(tc->t1_triggered_cycles, mb_t1_timer_callback, 0x10000000 | (slot << 8) | chip , mb_d, "mockingboard.mb_t1_timer_callback", "src/devices/mockingboard/mb.cpp");
             /* } else {
                 mb_d->event_timer->cancelEvents(0x10000000 | (slot << 8) | chip);
             } */
@@ -406,7 +406,7 @@ void mb_write_Cx00(void *context, uint32_t addr, uint8_t data) {
             tc->t2_triggered_cycles = vid_cycles + next_counter2 + 1;
             tc->t2_oneshot_pending = 1;
             //if (tc->ier.bits.timer2) {
-                mb_d->event_timer->scheduleEvent(tc->t2_triggered_cycles, mb_t2_timer_callback, 0x10010000 | (slot << 8) | chip , mb_d);
+                mb_d->event_timer->scheduleEvent(tc->t2_triggered_cycles, mb_t2_timer_callback, 0x10010000 | (slot << 8) | chip , mb_d, "mockingboard.mb_t2_timer_callback", "src/devices/mockingboard/mb.cpp");
             /* } else {
                 mb_d->event_timer->cancelEvents(0x10010000 | (slot << 8) | chip);
             } */
@@ -453,7 +453,7 @@ void mb_write_Cx00(void *context, uint32_t addr, uint8_t data) {
                 /* if (counter == 0) { // if they enable interrupts before setting the counter (and it's zero) set it to 65535 to avoid infinite loop.
                     counter = 65536;
                 } */
-                mb_d->event_timer->scheduleEvent(cycle_base + counter+1, mb_t1_timer_callback, instanceID , mb_d);
+                mb_d->event_timer->scheduleEvent(cycle_base + counter+1, mb_t1_timer_callback, instanceID , mb_d, "mockingboard.mb_t1_timer_callback", "src/devices/mockingboard/mb.cpp");
                                 
                 instanceID = 0x10010000 | (slot << 8) | chip;
                 /* if (!tc->ier.bits.timer2) {
@@ -464,7 +464,7 @@ void mb_write_Cx00(void *context, uint32_t addr, uint8_t data) {
                     /* if (counter == 0) { // if they enable interrupts before setting the counter (and it's zero) set it to 65535 to avoid infinite loop.
                         counter = 65536;
                     } */
-                    mb_d->event_timer->scheduleEvent(cycle_base + counter+1, mb_t2_timer_callback, instanceID , mb_d);
+                    mb_d->event_timer->scheduleEvent(cycle_base + counter+1, mb_t2_timer_callback, instanceID , mb_d, "mockingboard.mb_t2_timer_callback", "src/devices/mockingboard/mb.cpp");
                 }
             }
             break;
@@ -769,11 +769,11 @@ void init_slot_mockingboard(computer_t *computer, SlotType_t slot) {
     insert_empty_mockingboard_frame(mb_d);
 
     // Set up Timer T1 on both chips
-    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t1_timer_callback, 0x10000000 | (slot << 8) | 0 , mb_d);
-    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t1_timer_callback, 0x10000000 | (slot << 8) | 1 , mb_d);
+    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t1_timer_callback, 0x10000000 | (slot << 8) | 0 , mb_d, "mockingboard.mb_t1_timer_callback", "src/devices/mockingboard/mb.cpp");
+    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t1_timer_callback, 0x10000000 | (slot << 8) | 1 , mb_d, "mockingboard.mb_t1_timer_callback", "src/devices/mockingboard/mb.cpp");
     // Set up Timer T2 on both chips
-    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t2_timer_callback, 0x10010000 | (slot << 8) | 0 , mb_d);
-    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t2_timer_callback, 0x10010000 | (slot << 8) | 1 , mb_d);
+    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t2_timer_callback, 0x10010000 | (slot << 8) | 0 , mb_d, "mockingboard.mb_t2_timer_callback", "src/devices/mockingboard/mb.cpp");
+    mb_d->event_timer->scheduleEvent(mb_d->clock->get_vid_cycles() + 65536, mb_t2_timer_callback, 0x10010000 | (slot << 8) | 1 , mb_d, "mockingboard.mb_t2_timer_callback", "src/devices/mockingboard/mb.cpp");
 
 
     // set up a reset handler to reset the chips on mockingboard

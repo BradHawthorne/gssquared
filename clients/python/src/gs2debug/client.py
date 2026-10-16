@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import socket
+import json
 import struct
 import time
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .errors import ProtocolError
+from .errors import ProtocolError,RequestPending
 from .frame import HEADER_SIZE, Frame, pack_frame, unpack_header
 from .keys import KMOD_LSHIFT, SCANCODE_LSHIFT, ascii_to_key
+from .unix_socket import connect_unix
 from .types import (
+    AGENT_TOOLS,
+    AGENT_COMMAND,
     BP_ACCESS_NONE,
     BP_ACCESS_R,
     BP_ACCESS_RW,
@@ -43,6 +48,9 @@ from .types import (
     PASTE_TEXT,
     PAUSE,
     PING,
+    MANIFEST,
+    SUBSCRIBE,
+    EVT_AGENT_RECORD,
     PROTOCOL_VERSION,
     QUIT,
     READMEM,
@@ -149,15 +157,17 @@ class Client:
         self._handshaked = False
         self._event_handler: EventHandler | None = None
         self._busy = False
+        self._pending = None
+        self._rx = bytearray()
 
     def connect(self, path: str) -> None:
         if self._sock is not None:
             raise RuntimeError("already connected")
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(path)
-        self._sock = sock
+        self._sock = connect_unix(path)
         self._handshaked = False
         self._next_seq = 1
+        self._pending = None
+        self._rx.clear()
 
     def close(self) -> None:
         if self._sock is not None:
@@ -166,6 +176,8 @@ class Client:
             finally:
                 self._sock = None
                 self._handshaked = False
+                self._pending = None
+                self._rx.clear()
 
     def on_event(self, handler: EventHandler | None) -> None:
         self._event_handler = handler
@@ -179,12 +191,97 @@ class Client:
         self._handshaked = True
         return HelloInfo(version=ver, flags=flags, max_payload=max_payload)
 
+    def manifest(self) -> dict:
+        """Discover this fork's socket types after HELLO (protocol v1 extension)."""
+        if not self._handshaked:
+            raise RuntimeError("hello() required before manifest()")
+        value = json.loads(self.request(MANIFEST, b"").decode("utf-8"))
+        if not isinstance(value, dict) or value.get("schema") != "gs2-debug-manifest-v1":
+            raise ProtocolError(0, "unrecognised socket manifest")
+        return value
+
     def ping(self) -> None:
         if not self._handshaked:
             raise RuntimeError("hello() required before ping()")
         reply = self.request(PING, b"")
         if reply:
             raise ProtocolError(0, f"PING reply not empty ({len(reply)} bytes)")
+
+    def agent_tools(self) -> dict:
+        """Discover the live shared tool catalog and explicit control policy."""
+        if not self._handshaked:raise RuntimeError('hello() required before agent tools')
+        value=json.loads(self.request(AGENT_TOOLS,b'').decode('utf-8'))
+        if not isinstance(value,dict) or value.get('schema')!='a2agent-tools-v1':raise ProtocolError(0,'agent tool catalog unavailable: '+str(value))
+        return value
+
+    def agent_command(self,command: str,*,check: bool=True,timeout: float|None=None) -> dict:
+        """Invoke a shared CTRL handler on the machine thread.
+
+        Commands may write guest/host state. Read agent_tools() before use.
+        A transport timeout is not cancellation: never blindly retry a mutation.
+        QUIT uses quit(); explicit resume leaves the machine running.
+        Native context read queries also work while running at a machine-thread
+        boundary; other ordinary tools require explicit pause.
+        """
+        if not self._handshaked:raise RuntimeError('hello() required before agent command')
+        if not isinstance(command,str) or not command or any(ord(c)<32 or ord(c)==127 for c in command):raise ValueError('invalid agent command')
+        raw=command.encode('utf-8')
+        if len(raw)>2047:raise ValueError('agent command exceeds 2047 UTF8 bytes')
+        return self._decode_agent_reply(command,self.request(AGENT_COMMAND,raw,timeout=timeout),check)
+
+    @staticmethod
+    def _decode_agent_reply(command,reply,check):
+        value=json.loads(reply.decode('utf-8'))
+        if not isinstance(value,dict) or value.get('schema')!='a2ctrl-reply-v2' or type(value.get('ok')) is not bool or value.get('command')!=command:
+            raise ProtocolError(0,'invalid native agent command reply')
+        if check and not value['ok']:raise ProtocolError(0,str(value.get('text','agent command failed')))
+        return value
+
+    def wait_agent_command(self,*,check=True,timeout=None):
+        """Recover the original timed-out AGENT_COMMAND result without resending."""
+        if self._pending is None or self._pending[1]!=AGENT_COMMAND:raise RuntimeError('no pending agent command')
+        command=self._pending[2].decode('utf-8')
+        return self._decode_agent_reply(command,self.wait_response(timeout=timeout),check)
+
+    @property
+    def pending_request(self):
+        return None if self._pending is None else {'sequence':self._pending[0],'type':self._pending[1],'effect':'unknown until original response; timeout is not cancellation'}
+
+    def _subscription(self,action: int,cap: int=0,kinds: tuple[str,...]=()) -> dict:
+        if not self._handshaked:raise RuntimeError('hello() required before subscription')
+        filters=','.join(kinds).encode('utf-8')
+        value=json.loads(self.request(SUBSCRIBE,struct.pack('<II',action,cap)+filters).decode('utf-8'))
+        if not isinstance(value,dict) or value.get('schema')!='a2socket-subscription-v1' or type(value.get('complete')) is not bool:
+            raise ProtocolError(0,'unrecognised subscription status')
+        return value
+
+    def subscribe(self,kinds: tuple[str,...]=('all',),*,queue_cap: int=1024) -> dict:
+        """Subscribe to native records (EVENT id 3); consume through on_event.
+
+        Query status/off for loss. Retained counts enqueued records, not client
+        consumption. This is an event subset, not full-machine replay.
+        """
+        if type(queue_cap) is not int or not 1<=queue_cap<=4096 or not kinds or any(not isinstance(k,str) or not k or ',' in k or '\0' in k for k in kinds):
+            raise ValueError('invalid subscription filters/cap')
+        return self._subscription(1,queue_cap,tuple(kinds))
+
+    def subscription_status(self) -> dict:return self._subscription(0)
+
+    def unsubscribe(self) -> dict:
+        """Stop producing, then flush queued records through the event handler."""
+        value=self._subscription(2);self.ping();return value
+
+    def wait_agent_record(self,*,timeout: float|None=5.0) -> dict:
+        self._validate_timeout(timeout)
+        deadline=None if timeout is None else time.monotonic()+timeout
+        while True:
+            remaining=None if deadline is None else deadline-time.monotonic()
+            if remaining is not None and remaining<=0:raise TimeoutError('wait_agent_record timed out')
+            event_id,_sequence,data=self.wait_event(timeout=remaining)
+            if event_id!=EVT_AGENT_RECORD:continue
+            value=json.loads(data.decode('utf-8'))
+            if not isinstance(value,dict) or value.get('schema')!='a2subscription-v1':raise ProtocolError(0,'invalid agent event schema')
+            return value
 
     def quit(self) -> None:
         """Force-quit the emulator (skips QuitModal / dirty-disk prompts).
@@ -427,8 +524,9 @@ class Client:
 
     def wait_event(self, *, timeout: float | None = 5.0) -> tuple[int, int, bytes]:
         """Block until an EVENT frame arrives. Returns (event_id, seq, data)."""
-        if self._busy:
+        if self._busy or self._pending is not None:
             raise RuntimeError("cannot wait_event while a request is outstanding")
+        self._validate_timeout(timeout)
         deadline = None if timeout is None else time.monotonic() + timeout
         while True:
             remaining = None
@@ -450,8 +548,12 @@ class Client:
 
     def wait_stopped(self, *, timeout: float | None = 5.0) -> StoppedEvent:
         """Wait for EVT_STOPPED and parse the payload."""
+        self._validate_timeout(timeout)
+        deadline=None if timeout is None else time.monotonic()+timeout
         while True:
-            event_id, _seq, data = self.wait_event(timeout=timeout)
+            remaining=None if deadline is None else deadline-time.monotonic()
+            if remaining is not None and remaining<=0:raise TimeoutError('wait_stopped timed out')
+            event_id, _seq, data = self.wait_event(timeout=remaining)
             if event_id != EVT_STOPPED:
                 continue
             if len(data) < 32:
@@ -662,14 +764,53 @@ class Client:
         *,
         timeout: float | None = None,
     ) -> bytes:
+        """Send once; a reply timeout retains framing and blocks new requests.
+
+        RequestPending is a TimeoutError. Recover using wait_response(); a
+        send failure closes the connection because partial publication cannot
+        be recovered safely. Neither case proves cancellation or permits retry.
+        """
+        self._validate_timeout(timeout)
         sock = self._require_sock()
         if self._busy:
             raise RuntimeError("only one outstanding request allowed")
+        if self._pending is not None:raise RequestPending(self._pending[0],self._pending[1])
         seq = self._alloc_seq()
+        wire=pack_frame(type_word,seq,payload)
+        deadline=None if timeout is None else time.monotonic()+timeout
         self._busy = True
         try:
-            self._send_all(pack_frame(type_word, seq, payload))
-            deadline = None if timeout is None else time.monotonic() + timeout
+            sock.settimeout(timeout)
+            self._send_all(wire)
+            self._pending=(seq,type_word,bytes(payload))
+        except BaseException:
+            self.close()  # A partly sent frame cannot be resumed or replayed.
+            raise
+        finally:
+            self._busy=False
+            if self._sock is not None:sock.settimeout(None)
+        remaining=None if deadline is None else deadline-time.monotonic()
+        if remaining is not None and remaining<=0:raise RequestPending(seq,type_word)
+        return self.wait_response(timeout=remaining)
+
+    @staticmethod
+    def _validate_timeout(timeout):
+        if timeout is not None and (type(timeout) not in (int,float) or not math.isfinite(timeout) or timeout<=0):raise ValueError('timeout must be None or a positive finite number')
+
+    def wait_response(self,*,timeout=None):
+        """Wait for the already-published request; never send another frame.
+
+        Returns raw protocol bytes. wait_agent_command() additionally validates
+        and decodes a pending native agent reply. Client use is synchronous.
+        """
+        self._validate_timeout(timeout)
+        sock=self._require_sock()
+        if self._busy:raise RuntimeError('only one outstanding reader allowed')
+        if self._pending is None:raise RuntimeError('no pending request')
+        seq,type_word,_=self._pending
+        deadline=None if timeout is None else time.monotonic()+timeout
+        self._busy=True
+        try:
             while True:
                 remaining = None
                 if deadline is not None:
@@ -681,19 +822,27 @@ class Client:
                     self._dispatch_event(frame)
                     continue
                 if frame.seq != seq:
+                    self.close()
                     raise ProtocolError(0, f"seq mismatch: got {frame.seq}, want {seq}")
+                self._pending=None
                 if frame.type == ERROR:
                     code, message = self._parse_error(frame.payload)
                     raise ProtocolError(code, message)
                 if frame.type != type_word:
+                    self.close()
                     raise ProtocolError(
                         0,
                         f"type mismatch: got 0x{frame.type:08x}, want 0x{type_word:08x}",
                     )
                 return frame.payload
+        except TimeoutError as error:
+            raise RequestPending(seq,type_word) from error
+        except (OSError,ValueError):
+            self.close()
+            raise
         finally:
             self._busy = False
-            sock.settimeout(None)
+            if self._sock is not None:sock.settimeout(None)
 
     def _alloc_seq(self) -> int:
         seq = self._next_seq
@@ -714,25 +863,22 @@ class Client:
                 raise ConnectionError("socket closed during send")
             view = view[n:]
 
-    def _recv_exact(self, n: int, timeout: float | None) -> bytes:
-        sock = self._require_sock()
-        if timeout is not None:
-            sock.settimeout(timeout)
-        buf = bytearray()
-        while len(buf) < n:
-            chunk = sock.recv(n - len(buf))
-            if not chunk:
-                raise ConnectionError("socket closed during recv")
-            buf.extend(chunk)
-        return bytes(buf)
-
     def _recv_frame(self, timeout: float | None) -> Frame:
-        header = self._recv_exact(HEADER_SIZE, timeout)
-        type_word, seq, length = unpack_header(header)
-        payload = b""
-        if length:
-            # Remaining time after header read is approximate; pass timeout again.
-            payload = self._recv_exact(length, timeout)
+        # Keep the entire partial frame across timeouts, including its header.
+        # Only remove bytes after a complete validated frame is available.
+        sock=self._require_sock();deadline=None if timeout is None else time.monotonic()+timeout
+        def fill(size):
+            while len(self._rx)<size:
+                remaining=None if deadline is None else deadline-time.monotonic()
+                if remaining is not None and remaining<=0:raise TimeoutError('frame timed out')
+                sock.settimeout(remaining)
+                chunk=sock.recv(size-len(self._rx))
+                if not chunk:raise ConnectionError('socket closed during recv; request effects may be unknown')
+                self._rx.extend(chunk)
+        fill(HEADER_SIZE)
+        type_word,seq,length=unpack_header(self._rx[:HEADER_SIZE])
+        fill(HEADER_SIZE+length)
+        payload=bytes(self._rx[HEADER_SIZE:HEADER_SIZE+length]);del self._rx[:HEADER_SIZE+length]
         return Frame(type=type_word, seq=seq, payload=payload)
 
     def _dispatch_event(self, frame: Frame) -> None:

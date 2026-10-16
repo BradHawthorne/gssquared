@@ -610,7 +610,7 @@ class MMU_IIgs : public MMU {
 
         virtual void init_map();
         virtual void reset(bool cold_start = false) override;
-        void debug_dump(DebugFormatter *df);
+        void debug_dump(DebugFormatter *df,bool native_only=false);
 
         inline void set_clock(NClockII *clock) { this->clock = clock; }
         inline void set_clock_mode(clock_mode_t mode) { clock->set_clock_mode(mode); }

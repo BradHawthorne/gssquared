@@ -133,7 +133,7 @@ void Floppy35_woz::schedule_motor_off() {
     // within the first ~80 ms of emulation, so use 14M units here.
 
     event_timer->scheduleEvent(clock->get_c14m() + clock->get_c14m_per_second()*0.5,
-                               motor_off_callback, instanceID, this);
+                               motor_off_callback, instanceID, this, "floppy.motor_off_callback", "src/devices/floppy/Floppy35_woz.cpp");
 }
 
 // ─── 16-way status decode (CA2|CA1|CA0|SEL) ────────────────────────────────

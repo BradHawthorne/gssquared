@@ -100,6 +100,9 @@ void init_slot_rtc_pram(computer_t *computer, SlotType_t slot) {
         DH_RTC_PRAM, // unique ID for this, need to have in a header.
         [st]() -> DebugFormatter * {
             return rtc_pram_debug_display(st);
+        },
+        [st]() -> DebugFormatter * {
+            return st->rtc->debug_display(true);
         }
     );
 

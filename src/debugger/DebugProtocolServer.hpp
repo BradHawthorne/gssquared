@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <functional>
 
 #include <SDL3/SDL.h>
 
@@ -37,6 +38,8 @@ public:
 
     /** Non-blocking. Call once per frame from the main / SDL iterate thread. */
     void process_main_thread(computer_t *computer);
+    // Configure at app initialization; invoked only by the main-thread bridge.
+    void set_agent_handler(std::function<std::string(bool,const std::string&)> handler){agent_handler_=std::move(handler);}
 
     /** Enqueue an unsolicited EVENT (main thread only; no socket I/O). */
     void enqueue_event(uint32_t event_id, const std::vector<uint8_t> &data);
@@ -46,6 +49,7 @@ public:
     /** After an instructions_left batch completes (STOP_STEP + post-insn trace). */
     void emit_stopped_step(computer_t *computer);
     void emit_run_state(uint32_t new_mode, uint32_t prev_mode);
+    void emit_agent_record(const char *kind,const std::string &payload);
 
     const std::string& socket_path() const { return socket_path_; }
 
@@ -107,9 +111,17 @@ private:
     std::string bridge_error_text_;
     std::vector<uint8_t> bridge_request_;
     std::vector<uint8_t> bridge_reply_;
+    std::function<std::string(bool,const std::string&)> agent_handler_;
 
     // Outbound EVENT queue (main enqueues; protocol thread drains)
     std::mutex event_mu_;
     std::deque<std::vector<uint8_t>> event_queue_; // each: event_id(u32 LE) + data
     uint32_t event_seq_{1};
+    std::atomic<bool> agent_subscription_{false};
+    std::atomic<bool> agent_disconnect_pending_{false};
+    bool agent_listener_installed_=false;
+    computer_t *agent_computer_=nullptr; // main-thread observation owner
+    std::vector<std::string> agent_filters_;
+    uint64_t agent_sequence_=0,agent_retained_=0,agent_dropped_=0;
+    size_t agent_cap_=1024,agent_queued_bytes_=0;
 };

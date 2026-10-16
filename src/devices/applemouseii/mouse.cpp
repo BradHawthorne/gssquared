@@ -264,7 +264,7 @@ void mouse_vbl_interrupt(uint64_t instanceID, void *user_data) {
         fprintf(stdout, "Mouse vbl cycle is before current cycle: %llu < %llu\n", u64_t(ds->vbl_cycle), u64_t(ds->clock->get_c14m()));
         return;
     }
-    ds->event_timer->scheduleEvent(ds->vbl_cycle, mouse_vbl_interrupt, instanceID, ds);
+    ds->event_timer->scheduleEvent(ds->vbl_cycle, mouse_vbl_interrupt, instanceID, ds, "applemouseii.mouse_vbl_interrupt", "src/devices/applemouseii/mouse.cpp");
 }
 
 DebugFormatter * debug_mouse(mouse_state_t *ds) {
@@ -351,7 +351,7 @@ void init_mouse(computer_t *computer, SlotType_t slot) {
     );
     
     // schedule timer for vbl to start during vbl of next frame.
-    ds->event_timer->scheduleEvent(computer->get_frame_start_cycle() /* + ds->vbl_offset */, mouse_vbl_interrupt, 0x10000000 | (slot << 8) | 0, ds);
+    ds->event_timer->scheduleEvent(computer->get_frame_start_cycle() /* + ds->vbl_offset */, mouse_vbl_interrupt, 0x10000000 | (slot << 8) | 0, ds, "applemouseii.mouse_vbl_interrupt", "src/devices/applemouseii/mouse.cpp");
 
 
     if (DEBUG(DEBUG_MOUSE)) fprintf(stdout, "Mouse initialized\n");

@@ -1,0 +1,16 @@
+
+railparity: 161 rail(s) read by src/, 161 declared in the registry
+
+carve-outs this PASS does not cover:
+  record contract  a2gspu_coverage.hpp    A2COV1/A2COV2 and a2profile-v1 are standalone coverage artifacts, not NDJSON rail events; profile.py validates the JSON document
+  record contract  a2gspu_ctrl_json.hpp   the CTRL reply envelope is protocol, not a rail record
+  record contract  a2record.hpp           the writer itself
+  record contract  wiz5_config.hpp        title-specific streams (WIZ5_EC19_OUT, WIZ5_DISKWR_OUT, WIZ5_CSP6_OUT) predate the contract, and all three build their records piecemeal; they convert when their readers do
+  rail catalogue   (none)                every declared rail is described
+
+railparity: PASS - every rail the code reads is discoverable, every declared rail
+                   exists and has a row of its own under its registry family in
+                   Docs/A2GSPU_RAILS.md with a whole synopsis, no non-exempt file
+                   prints a JSON record or writes to any of the 15 rail sinks itself,
+                   all 24 declared readers and all 70 live-settable rails are registered
+                   by their rails, and all 74 CTRL verbs are both dispatched and listed.

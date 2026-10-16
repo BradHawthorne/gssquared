@@ -85,7 +85,7 @@ int set_intlog(const char *v, char *m, size_t n) {
 }
 int set_traceext(const char *v, char *m, size_t n) {
     g_a2gspu_trace_ext = (v != nullptr);
-    snprintf(m, n, "IIGS TRACE_EXT: %s (DBR/DP/dcyc/scanline columns)", g_a2gspu_trace_ext ? "enabled" : "disabled");
+    snprintf(m, n, "IIGS TRACE_EXT: %s (recorded DBR/DP/NClock cycles; no inferred video phase)", g_a2gspu_trace_ext ? "enabled" : "disabled");
     return SET_OK;
 }
 int set_modetrace(const char *v, char *m, size_t n) {

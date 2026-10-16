@@ -69,6 +69,9 @@ void init_iwm_slot(computer_t *computer, SlotType_t slot) {
         DH_IWM, // unique ID for this, need to have in a header.
         [st]() -> DebugFormatter * {
             return debug_iwm(st);
+        },
+        [st]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();st->iwm->debug_output(df,true);return df;
         }
     );
 

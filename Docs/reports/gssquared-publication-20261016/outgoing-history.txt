@@ -1,0 +1,68 @@
+834028cd 2026-10-15 Docs: the north star - the definitive partner tool for full agentic closed-loop development alongside Rosetta (owner)
+d933c77b 2026-10-15 Docs: the agentic gap proposal (both surfaces inventoried from code, 20 gaps neither has, phases P0-P7 with drift stages slotted) in Docs/reports; AGENTIC_ROADMAP section 4 summarises it
+e9b03d1f 2026-10-15 Docs: HANDOFF.md for the next agent (state, branches, build and gates, rules, ready-next items, open owner questions); AGENTS.md points to it
+9a62b013 2026-10-15 Docs: track the fork's reports in Docs/reports (assessment, engine model and drift stage A, upstream crosswalk); naming the private projects is OK'd by the owner
+59e06ee2 2026-10-15 Docs: AGENTIC_ROADMAP.md - the fork's tracked task list (drift stages A-E with status, device models, Phase 0 agentic quick wins, the phased proposal to come); detailed reports mirrored locally in Docs/local (excluded)
+053a4e14 2026-10-15 docs: upstream sync stage A, nine take-now commits of d380e055..643e6c21 (section 23)
+854e40b7 2026-10-15 support .hda bluescsi images
+a0936b0e 2026-10-15 add windows build info
+cd2e4508 2026-10-15 allow either gamepad face button to act as fire on joyport
+9dcb330e 2026-10-15 support both legacy and modern glyph locations
+6cbc3395 2026-10-15 implement ss 80x50 and 132x60 text modes.
+fa62f107 2026-10-15 fix adbtest link
+8def93c6 2026-10-15 fix issue #194
+07f8efea 2026-10-15 fix gh issue #191
+7481a130 2026-10-15 fix GSIRC intro ensoniq playback bug we pulled in from MAME reference in last push. (same issue affects mame,crossrunner,kegs)
+e6462493 2026-09-17 a2gspu: the card model's budget follows emulated frames; snapshot block a2gspu
+a96dbb0c 2026-09-17 input: SW0/SW1 follow the machine's Apple keys, not the host's modifiers
+0fa2f56c 2026-09-17 snapshot: block mb, every Mockingboard's 6522s and AY registers
+6dd2a05c 2026-09-17 diskii: switches answer any access; $C08D clears the latch; stalled writes land
+0842d584 2026-09-17 gates: mbaudit, two Mockingboards against MB-Audit v1.61
+e8d539fa 2026-09-17 storage: the Disk II read chain as the WOZ reference models the MC3470
+f620da82 2026-09-17 storage: media identified by content; a IIgs boot no longer writes on 5.25 disks
+f3d943e6 2026-09-17 iigs: A2GSPU_DISK_TIMING, the disk timing the hardware has (opt-in)
+69835606 2026-09-16 cpu: the 65C02 abs,X shifts take 7 cycles again; the part datasheets disagree
+16a60c37 2026-09-16 docs: what documents settle without a real IIgs (section 18)
+9c4841f5 2026-09-16 slots: the motherboard's $C800 ROM maps again; unarmedhash boots the pinned Finder image
+7bf8b405 2026-09-16 mmu: $C037 answers; $C035 resets to $00
+c93a9ea5 2026-09-16 cpu: 65C02 abs,X shifts take 6 cycles; emulation-mode (d,X) wraps only with DL=0
+fe7ffe13 2026-09-16 cpu: decimal-mode flags per Clark's Appendix A, checked exhaustively
+7a00d873 2026-09-16 hwtruth: IWM register corners, the clock chip, and whether I/O sees VDA=VPA=0 cycles
+4978614e 2026-09-16 rtc: z010ab01 reaches BRAM $10-$13; write-protect and test registers; a snapshot block
+7d07dde9 2026-09-16 iwm: registers as the IWM specification gives them; 1.17 s holdover
+9a5f93fb 2026-09-16 ssc: the 6551 behaves as its datasheet says
+aa103ba7 2026-09-16 snapshot: the IIgs SCC has a block
+4d4f72a1 2026-09-16 scc: clocks as WR11/WR14 route them; External/Status and the modem lines, both ways
+c31353b6 2026-09-16 slots: each card owns its $C800 flip-flop; contention is counted; $CFFF releases after its byte
+f69c16ac 2026-09-16 rail: replies say what the command did, and the run says which machine it was
+5dea3041 2026-09-16 docs: the long-term answers, acted on
+70fd55a2 2026-09-16 parallel: an emulator-side spill queue replaces the wait on host time
+2dceb087 2026-09-16 slot bus: format 2 drops the cycles a card never sees, marks fast-mode cycles, and gets a comparator
+b1d83471 2026-09-16 hwtruth: one program answers the hardware questions on a real IIgs and on the emulator
+575e1703 2026-09-16 iigs: the slot register chooses between a card and the built-in port
+90b19ae8 2026-09-16 pins: a ticking time pin says so in the run's identity
+1895a1bc 2026-09-16 docs: correct section 15's intcheck claim
+cd0bbe96 2026-09-16 docs: the fidelity study's second pass, recorded
+aa30b820 2026-09-16 snapshot: a drive's image is identified by its content, not its file name
+ef506b39 2026-09-16 time: the pinned clock can tick in emulated time; a guest-set time sticks
+10b82f97 2026-09-16 modem: a dial can be aborted, and a shutdown never waits for it
+cfb84ce5 2026-09-16 scc: a continuous receiver with the 3-byte FIFO; a two-stage transmitter
+e483676c 2026-09-16 host i/o: device rings are thread-safe, threads start complete, nothing drops silently
+e5524f13 2026-09-16 rail: E0:/E1: reads and pokes land where the CPU's do
+ea674b6b 2026-09-16 slot bus: an opt-in format 2 that follows what the card actually sees
+be1d5ea1 2026-09-16 docs: the fidelity study's first pass, recorded
+70b6e8f3 2026-09-16 scc: the Z8530 interrupt block as the datasheet lays it out
+99da5915 2026-09-16 doc: the Ensoniq runs on emulated time, with or without a host stream
+e9b4daf4 2026-09-16 vgc/megaii: an enable write recomputes the IRQ line
+7f8ebbdb 2026-09-16 secondsight: guest ranges stay inside VRAM; GetVGAReg completes
+e28fd89b 2026-09-16 floppy: a user's disk image is never destroyed
+6e70691b 2026-09-16 capture: an automated run names its capture files so a harness can find them
+72f67619 2026-09-16 docs: the fidelity study -- the ideal shape of each subsystem
+7ab0d02c 2026-09-16 bram: an automated run keeps battery RAM in its working directory
+b96f1c3d 2026-09-16 debugger: looking at memory is not a bus access
+d41bcce1 2026-09-16 secondsight: snapshot block, and SetPaletteEntry's fourth byte
+53b5fb95 2026-09-16 snapshot: the Apple Mouse card, the VOC and the Super Serial Card
+a3b13b1d 2026-09-16 clocks: every guest-visible clock under the time pin, and no tick drift
+25c787d2 2026-09-16 uthernet2: the fused W5100 card
+6083b03c 2026-09-16 upstream port, stage 2: bring in 29dadbbb..d380e055 by hand
+edb4ddb6 2026-09-16 upstream port, stage 1: bring in c4b1fa69..29dadbbb by hand

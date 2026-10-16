@@ -1,0 +1,51 @@
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS nmi entry is not counted as a completed opcode step
+PASS nmi entry cycles native=False
+PASS interrupt vector and stack width: expected PC=3fb state={'processor_type': 1, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 1019, 'a': 0, 'x': 0, 'y': 0, 'sp': 508, 'p': 52}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS non-boundary deadline reports one-cycle lateness
+PASS IIe refuses ABORT
+PASS independent IRQ line asserted with release queued
+PASS clear releases only injector state
+PASS clear refuses no-op
+PASS session exits cleanly
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS nmi entry is not counted as a completed opcode step
+PASS nmi entry cycles native=False
+PASS interrupt vector and stack width: expected PC=3fb state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 1019, 'a': 0, 'x': 0, 'y': 0, 'sp': 508, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': True}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS abort entry is not counted as a completed opcode step
+PASS abort entry cycles native=False
+PASS interrupt vector and stack width: expected PC=c079 state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 49273, 'a': 0, 'x': 0, 'y': 0, 'sp': 508, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': True}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS nmi entry is not counted as a completed opcode step
+PASS nmi entry cycles native=True
+PASS interrupt vector and stack width: expected PC=3fb state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 1019, 'a': 0, 'x': 0, 'y': 0, 'sp': 507, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': False}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS abort entry is not counted as a completed opcode step
+PASS abort entry cycles native=True
+PASS interrupt vector and stack width: expected PC=c079 state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 49273, 'a': 0, 'x': 0, 'y': 0, 'sp': 507, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': False}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS non-boundary deadline reports one-cycle lateness
+PASS independent IRQ line asserted with release queued
+PASS clear releases only injector state
+PASS clear refuses no-op
+PASS session exits cleanly

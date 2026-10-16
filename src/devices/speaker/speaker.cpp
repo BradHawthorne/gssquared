@@ -230,6 +230,15 @@ void init_mb_speaker(computer_t *computer,  SlotType_t slot) {
         DH_SPEAKER, // unique ID for this, need to have in a header.
         [speaker_state]() -> DebugFormatter * {
             return debug_speaker(speaker_state);
+        },
+        [speaker_state]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();auto *sp=speaker_state->sp;
+            df->unsignedField("polarity",sp->polarity,64);
+            df->unsignedField("polarity_impulse",sp->polarity_impulse,64);
+            df->unsignedField("last_event",sp->last_event_time,64,"14M-ticks");
+            df->unsignedField("rect_remaining",sp->rect_remain,64,"fixed-point");
+            df->boolField("started",sp->started());
+            return df;
         }
     );
 

@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+gs2-mcp = "gs2debug.mcp:main"
+
 [project.optional-dependencies]
 dev = ["pytest"]
 

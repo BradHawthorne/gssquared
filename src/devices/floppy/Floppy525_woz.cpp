@@ -87,7 +87,7 @@ void Floppy525_woz::set_phase(uint8_t phase, uint8_t onoff) {
     // already past and the settle fired at once. With A2GSPU_DISK_TIMING the settle is 520
     // 1 MHz cycles of 14M time; unset keeps the pinned (immediate) behaviour.
     event_timer->scheduleEvent(real_time ? clock->get_c14m() + 520 * 14 : clock->get_cycles() + 520, phase_change_callback,
-                               instanceID, this);
+                               instanceID, this, "floppy.phase_change_callback", "src/devices/floppy/Floppy525_woz.cpp");
 }
 
 uint8_t Floppy525_woz::read_sense() {

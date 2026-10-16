@@ -1,0 +1,10 @@
+{"bytes": 21, "first_c_pc": 2056, "link_map": {"linker": "LinkIIgs v3.0.0", "output": "D:\\gsqs\\machine-context-20261016\\c-source\\answer.bin", "base_address": "0x000800", "cpu_target": "65816", "segments": [{"name": "~MAIN", "start": "0x00000800", "end": "0x00000800", "size": 0}, {"name": "answer", "start": "0x00000800", "end": "0x00000814", "size": 21}], "symbols": [{"name": "answer", "value": "0x00000800", "type": "export"}]}}
+PASS session exits cleanly
+PASS session exits cleanly
+Rosetta C -> assembler sidecar -> byte-bound stopped PC -> returned value 66: PASS
+vectors=103 identical=100 state-diff=3 cycle-only-diff=0
+STATE COP 12 native            S,PC,P MEM CYC ros=7 gsq=8
+STATE BRK native               S,PC,P MEM CYC ros=7 gsq=8
+STATE BRK emulation            S,PC,P MEM
+
+Machine-context final evidence: PASS D:\gsqs\coherency-20261015\build\GSSquared-context.exe 46251820eaf9d51ea20dff8bf6e9ae5960224eeeaf8376b726c61f628abf5866

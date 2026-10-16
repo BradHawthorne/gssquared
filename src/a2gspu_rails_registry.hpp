@@ -42,6 +42,10 @@ struct Rail {
 
 inline const Rail *rails(int &n) {
     static const Rail r[] = {
+    {"A2GSPU_AGENT", "ctrl", "0 or 1 (default off): shared CTRL instrumentation bootstrap for --debug with an explicit machine; start paused, suppress host preferences/input; incompatible with CTRL/COPILOT/SPIKE_FRAMES; no fixed-frame verdict loop; native bootstrap readback via rail read"},
+    {"A2GSPU_SCC_A", "observe", "SCC A TX-wire capture: file:<path> or pipe:<existing endpoint>; launch or live capture scc-a, completed bytes excluding loopback; fatal on startup/sink failure; checked live arm failure"},
+    {"A2GSPU_SCC_B", "observe", "SCC B TX-wire capture: file:<path> or pipe:<existing endpoint>; launch or live capture scc-b, completed bytes excluding loopback; fatal on startup/sink failure; checked live arm failure"},
+    {"A2GSPU_WDM_CONSOLE", "observe", "65816 debug console: file:<path> or pipe:<existing endpoint>; WDM FE writes A.low; WDM FD writes Y bytes (max 4096) at X.low:A, using observation-free reads; preserves registers; operands unhandled when unset; Host FST FF stays separate"},
     {"A2GSPU_ASSERT",              "assert",      ";/,-separated name OP value checks (OP == != <= >= < >); the spike exits non-zero if any fails OR cannot be evaluated. Fields: scb_mode, qd_carry/qd_err, lt_carry, cs_carry/pr_carry, gsos_err, nonzero/distinct, idxN (N=0..15), and peek:HHHHHH (observation-free 24-bit byte read; refused on a handler-backed page). VALUES ARE DECIMAL unless prefixed $ or 0x (0d forces decimal; a bare LEADING ZERO makes it octal), and a peek: comparand must carry an explicit base -- a bare hex-shaped literal is refused, not guessed. A clause with no comparison operator is counted, warned and failed; a non-empty spec that yields 0 checks FAILS; a spec set to empty/whitespace arms no gate at all (gate=none). SAME evaluator as the live CTRL `assert` verb -- they were two implementations behind one name and disagreed five ways; assertparity.ps1 keeps them honest"},
     {"A2GSPU_BREAK",               "break",       "headless breakpoint at a 24-bit PC"},
     {"A2GSPU_BRKDUMP",             "break",       "dump CPU registers on BRK (crash under GS/OS) + a SPIKE-END register dump"},
@@ -159,7 +163,7 @@ inline const Rail *rails(int &n) {
     {"A2GSPU_TBTRACE_BANK",        "trace",       "scope TBTRACE to a single bank"},
     {"A2GSPU_TEXT40",              "observe",     "at spike end, ASCII-decode the 40-col text page ($E0:0400-07FF) to stdout"},
     {"A2GSPU_TEXTDUMP",            "observe",     "dump text page 1 (2KB): main $0400-07FF via probe_peek (no $C0xx side effects) + aux $0400-07FF (80-col even columns)"},
-    {"A2GSPU_TRACE_EXT",           "trace",       "append DBR/DP/cycle-delta/scanline columns to 65816 trace lines"},
+    {"A2GSPU_TRACE_EXT",           "trace",       "append recorded DBR/DP/NClock-cycle columns to trace lines; no inferred video phase"},
     {"A2GSPU_TRACE_FROM",          "trace",       "arm tracing only once full_pc first hits this 24-bit PC"},
     {"A2GSPU_TRAP",                "break",       "traps from configuration: ';'-separated specs of trigger (at=PC[-PC] with exit=PC, store=ADDR[-ADDR] for a byte written there, read=ADDR[-ADDR] for a byte read as data, sp=LO-HI for S entering a range), condition (when=), policy (once|every|first=N/key), payload (do=/heavy=/xdo=/xheavy= regs,ring,zp,stack,mem,field,text,scan) and sink (out=). NDJSON. The general form of PCTRAP and the wiz5 traps; grammar in Docs/A2GSPU_TRAP.md"},
     {"A2GSPU_TRAPDUMP",            "break",       "extra memory region (hex) dumped by PCTRAP (default 48 bytes)"},
@@ -290,6 +294,10 @@ inline const SetterReg *setter_find(const char *rail) {
 
 inline const Reach *reach(int &n) {
     static const Reach r[] = {
+    {"A2GSPU_AGENT", "", "fn"},
+    {"A2GSPU_SCC_A", "capture", "fn"},
+    {"A2GSPU_SCC_B", "capture", "fn"},
+    {"A2GSPU_WDM_CONSOLE", "capture", "fn"},
     {"A2GSPU_ASSERT",              "assert",        ""},
     {"A2GSPU_BRAM",                "",              "fn"},
     {"A2GSPU_BREAK",               "bp",            "verb:bp"},

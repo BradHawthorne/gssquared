@@ -38,6 +38,7 @@ struct SoundInfo_t {
     // it does not understand instead of reporting them as silence.
     int wav_channels = 1;
     SDL_AudioFormat wav_format = SDL_AUDIO_S16LE;
+    int wav_rate = 0;
 };
 
 struct SoundEffectContainer_t {

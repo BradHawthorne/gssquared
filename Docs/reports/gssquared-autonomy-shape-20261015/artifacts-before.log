@@ -1,0 +1,28 @@
+FFF..............                                                        [100%]
+================================== FAILURES ===================================
+_______________ test_artifact_roundtrip_ranges_and_create_once ________________
+
+    def test_artifact_roundtrip_ranges_and_create_once():
+>       from gs2debug.artifacts import Artifacts
+E       ModuleNotFoundError: No module named 'gs2debug.artifacts'
+
+clients\python\tests\test_artifacts.py:8: ModuleNotFoundError
+________________ test_artifact_scope_limits_and_missing_paths _________________
+
+    def test_artifact_scope_limits_and_missing_paths():
+>       from gs2debug.artifacts import Artifacts,MAX_READ
+E       ModuleNotFoundError: No module named 'gs2debug.artifacts'
+
+clients\python\tests\test_artifacts.py:26: ModuleNotFoundError
+____________ test_text_and_corrupt_image_are_not_plausible_success ____________
+
+    def test_text_and_corrupt_image_are_not_plausible_success():
+>       from gs2debug.artifacts import Artifacts
+E       ModuleNotFoundError: No module named 'gs2debug.artifacts'
+
+clients\python\tests\test_artifacts.py:45: ModuleNotFoundError
+=========================== short test summary info ===========================
+FAILED clients\python\tests\test_artifacts.py::test_artifact_roundtrip_ranges_and_create_once
+FAILED clients\python\tests\test_artifacts.py::test_artifact_scope_limits_and_missing_paths
+FAILED clients\python\tests\test_artifacts.py::test_text_and_corrupt_image_are_not_plausible_success
+3 failed, 14 passed in 0.34s

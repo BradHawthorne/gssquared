@@ -1,4 +1,5 @@
 """GSSquared external debug protocol client."""
+from .ctrl import CtrlClient, ControlError, CommandPending, CommandFailed
 
 from .client import (
     BpInfo,
@@ -9,7 +10,7 @@ from .client import (
     TraceWindow,
     VideoText,
 )
-from .errors import ProtocolError
+from .errors import ProtocolError,RequestPending
 from .keys import (
     KMOD_CTRL,
     KMOD_LCTRL,
@@ -46,6 +47,7 @@ from .types import (
     ERROR,
     EVENT,
     EVT_RUN_STATE,
+    EVT_AGENT_RECORD,
     EVT_STOPPED,
     EXEC_NORMAL,
     EXEC_PAUSED,
@@ -56,6 +58,10 @@ from .types import (
     GET_STATUS,
     GET_TRACE,
     HELLO,
+    MANIFEST,
+    SUBSCRIBE,
+    AGENT_TOOLS,
+    AGENT_COMMAND,
     KEYEVENT,
     PASTE_TEXT,
     MEM_ADBMICRO,
@@ -126,6 +132,7 @@ PLATFORM_APPLE_IIE_65816 = 4
 PLATFORM_APPLE_IIGS = 5
 
 __all__ = [
+    "CtrlClient", "ControlError", "CommandPending", "CommandFailed",
     "Client",
     "HelloInfo",
     "StatusInfo",
@@ -134,7 +141,12 @@ __all__ = [
     "TraceWindow",
     "VideoText",
     "ProtocolError",
+    "RequestPending",
     "HELLO",
+    "MANIFEST",
+    "SUBSCRIBE",
+    "AGENT_TOOLS",
+    "AGENT_COMMAND",
     "PING",
     "QUIT",
     "ERROR",
@@ -214,6 +226,7 @@ __all__ = [
     "BP_FLAG_DATA_MATCH",
     "EVT_STOPPED",
     "EVT_RUN_STATE",
+    "EVT_AGENT_RECORD",
     "STOP_BP_EXEC",
     "STOP_BP_DATA",
     "STOP_BP_IO",

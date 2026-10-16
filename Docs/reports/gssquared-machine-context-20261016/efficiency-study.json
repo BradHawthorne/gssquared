@@ -1,0 +1,375 @@
+{
+  "schema": "a2efficiency-study-v1",
+  "cases": [
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-00"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "112",
+          "candidate": "84",
+          "delta": "-28",
+          "reduction_percent": 25.0
+        },
+        "video_cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    },
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-7f"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "112",
+          "candidate": "84",
+          "delta": "-28",
+          "reduction_percent": 25.0
+        },
+        "video_cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    },
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-80"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "112",
+          "candidate": "84",
+          "delta": "-28",
+          "reduction_percent": 25.0
+        },
+        "video_cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    },
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-ff"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "112",
+          "candidate": "84",
+          "delta": "-28",
+          "reduction_percent": 25.0
+        },
+        "video_cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    },
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-00"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "45",
+          "candidate": "30",
+          "delta": "-15",
+          "reduction_percent": 33.333333333333336
+        },
+        "video_cycles": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    },
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-7f"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "45",
+          "candidate": "30",
+          "delta": "-15",
+          "reduction_percent": 33.333333333333336
+        },
+        "video_cycles": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    },
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-80"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "45",
+          "candidate": "30",
+          "delta": "-15",
+          "reduction_percent": 33.333333333333336
+        },
+        "video_cycles": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    },
+    {
+      "schema": "a2efficiency-comparison-v1",
+      "ok": true,
+      "workload": {
+        "id": "store-one-byte",
+        "case": "input-ff"
+      },
+      "metrics": {
+        "cycles": {
+          "baseline": "8",
+          "candidate": "6",
+          "delta": "-2",
+          "reduction_percent": 25.0
+        },
+        "instructions": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        },
+        "image_bytes": {
+          "baseline": 6,
+          "candidate": 5,
+          "delta": -1
+        },
+        "master_14m_ticks": {
+          "baseline": "45",
+          "candidate": "30",
+          "delta": "-15",
+          "reduction_percent": 33.333333333333336
+        },
+        "video_cycles": {
+          "baseline": "3",
+          "candidate": "2",
+          "delta": "-1",
+          "reduction_percent": 33.333333333333336
+        }
+      },
+      "bounds": {
+        "kind": "observed-pair",
+        "proven_floor": false,
+        "proven_ceiling": false
+      },
+      "hardware_status": "emulator measurements; no physical-IIgs result implied",
+      "model": "same declared workload/results, emulator, platform, pins and clock setup; correctness and negative controls required"
+    }
+  ],
+  "source": "Rosetta asmiigs --format bin",
+  "claim": "controlled redundant-NOP removal demonstration across boundary inputs; no production-project gain or hardware optimum established"
+}

@@ -1,0 +1,9 @@
+src\devices\applemouseii\mouse.cpp 2
+src\devices\applemouseiii\applemouseiii.cpp 2
+src\devices\floppy\Floppy35_woz.cpp 1
+src\devices\floppy\Floppy525_woz.cpp 1
+src\devices\mockingboard\mb.cpp 10
+src\devices\scc8530\Z85C30.hpp 6
+src\devices\ssc\MOS6551.hpp 6
+src\devices\thunderclock_plus\thunderclockplus.cpp 4
+src\display\display.cpp 3

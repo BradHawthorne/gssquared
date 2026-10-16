@@ -1,0 +1,13 @@
+PASS session exits cleanly
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\contextcheck.py", line 103, in <module>
+    run(parser.parse_args().exe.resolve())
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\contextcheck.py", line 19, in run
+    overview = call('overview')
+  File "D:\Projects\gssquared-fork\tools\a2rail\contextcheck.py", line 16, in call
+    check(reply['ok'] == ok, 'context verdict ' + arguments)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: context verdict overview

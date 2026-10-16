@@ -46,7 +46,7 @@ void applemouseiii_vbl_interrupt(uint64_t instanceID, void *user_data) {
         ds->vbl_timer_armed = false;
         return;
     }
-    ds->event_timer->scheduleEvent(ds->vbl_cycle, applemouseiii_vbl_interrupt, instanceID, ds);
+    ds->event_timer->scheduleEvent(ds->vbl_cycle, applemouseiii_vbl_interrupt, instanceID, ds, "applemouseiii.applemouseiii_vbl_interrupt", "src/devices/applemouseiii/applemouseiii.cpp");
     ds->vbl_timer_armed = true;
 }
 
@@ -60,7 +60,7 @@ void applemouseiii_schedule_vbl(applemouseiii_state_t *ds) {
     const uint64_t when = ds->computer->get_frame_start_cycle() + ds->clock->get_c14m_per_frame()
                           + ds->clock->get_c14m_per_scanline() * 192;
     const uint64_t instance = 0x11000000ull | (static_cast<uint64_t>(ds->_slot) << 8);
-    ds->event_timer->scheduleEvent(when, applemouseiii_vbl_interrupt, instance, ds);
+    ds->event_timer->scheduleEvent(when, applemouseiii_vbl_interrupt, instance, ds, "applemouseiii.applemouseiii_vbl_interrupt", "src/devices/applemouseiii/applemouseiii.cpp");
     ds->vbl_timer_armed = true;
 }
 
@@ -222,6 +222,13 @@ void init_applemouseiii(computer_t *computer, SlotType_t slot) {
     computer->register_debug_display_handler(
         "mouse", DH_APPLEMOUSEIII, [ds]() -> DebugFormatter * {
             return debug_applemouseiii(ds);
+        },[ds]()->DebugFormatter* {
+            auto *df=new DebugFormatter();const auto &c=ds->controller;
+            df->unsignedField("slot",ds->_slot,8);df->unsignedField("mode",c.operating_mode(),8);df->unsignedField("interrupt_state",c.int_state(),8);
+            df->boolField("irq",c.irq_asserted());df->signedField("x",c.x(),16);df->signedField("y",c.y(),16);
+            df->signedField("clamp_min_x",c.clamp_min_x(),16);df->signedField("clamp_min_y",c.clamp_min_y(),16);
+            df->signedField("clamp_max_x",c.clamp_max_x(),16);df->signedField("clamp_max_y",c.clamp_max_y(),16);
+            df->boolField("button0",c.button0());df->boolField("button1",c.button1());df->unsignedField("rom_bank",c.rom_bank(),8);return df;
         });
 
     computer->register_device_debug(

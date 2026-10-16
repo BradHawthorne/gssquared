@@ -111,6 +111,16 @@ void init_slot_uthernet2(computer_t *computer, SlotType_t slot) {
         g_u2_debug_registered_for = computer;
         computer->register_debug_display_handler("uthernet2", DH_UTHERNET2, []() -> DebugFormatter * {
             return debug_uthernet2();
+        },[]()->DebugFormatter* {
+            auto *df=new DebugFormatter();
+            for(auto *card:g_u2_cards)if(card && card->chip) {
+                const auto p="slot"+std::to_string(card->chip->slot())+".";
+                df->unsignedField(p+"mode",card->chip->mode(),8);df->unsignedField(p+"address",card->chip->address_latch(),16);
+                uint8_t common[48];for(int i=0;i<48;i++)common[i]=card->chip->peek(i);df->bytesField(p+"common_registers",common,48);
+                for(int s=0;s<4;s++) {uint8_t regs[48];for(int i=0;i<48;i++)regs[i]=card->chip->peek(0x400+s*0x100+i);df->bytesField(p+"socket"+std::to_string(s)+".registers",regs,48);}
+                df->boolField(p+"host_connections_restorable",false);
+            }
+            return df;
         });
     }
 

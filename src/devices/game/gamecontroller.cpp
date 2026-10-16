@@ -646,6 +646,14 @@ void init_mb_game_controller(computer_t *computer, SlotType_t slot) {
         DH_GAMECONTROLLER, // unique ID for this, need to have in a header.
         [ds]() -> DebugFormatter * {
             return debug_gamecontroller(ds);
+        },
+        [ds]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();df->unsignedField("joystick_mode",ds->joystick_mode,32);
+            df->boolField("paddle_injection",ds->inject_active);
+            df->bytesField("paddles",ds->inject_paddle,4);
+            for(int i=0;i<3;i++)df->boolField("button."+std::to_string(i),ds->game_switch[i]);
+            for(int i=0;i<4;i++)df->boolField("annunciator."+std::to_string(i),ds->annunciators[i]);
+            return df;
         }
     );
 

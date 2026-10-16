@@ -875,6 +875,11 @@ class KeyGloo
         // An instrument that has to eat a keypress to report one is not an
         // instrument, so the ack reads this instead.
         int any_key_down() const { return keysdown; }
+        bool can_inject_agent_key() const {
+            if(key_intercept || keysdown)return false;
+            if(!keyboard_buffer_enabled())return !(key_latch.keycode&0x80);
+            return (vars.outpt+1)%16!=vars.inpt;
+        }
 
         uint8_t a2gspu_hold = 0;   // ctrl-rail sticky force-key (see read_key_latch)
         void hold_key(uint8_t ascii) { a2gspu_hold = ascii ? (uint8_t)((ascii & 0x7F) | 0x80) : 0; }
@@ -1185,6 +1190,7 @@ class KeyGloo
                                          // and one axis is lost (pascal W-5).
             update_interrupt_status();
         }
+        bool can_inject_mouse() const { return !mouse_data_full; }
 
         // A2GSPU: accessor for the ADB mouse device (keygloo SHR-cursor path).
         ADB_Mouse *get_adb_mouse() {
@@ -1336,7 +1342,23 @@ class KeyGloo
             }
         }
 
-        void debug_display(DebugFormatter *df) {
+        void debug_display(DebugFormatter *df,bool native_only=false) {
+            if(native_only) {
+            df->unsignedField("mode",modes_byte,8);
+            df->unsignedField("status",status,8);
+            df->unsignedField("data",datareg,8);
+            df->boolField("keyboard_mouse_irq",interrupt_asserted);
+            df->boolField("data_irq",data_interrupt_asserted);
+            df->unsignedField("command_index",cmd_index,32,"bytes");
+            df->unsignedField("command_length",cmd_bytes,32,"bytes");
+            df->unsignedField("response_index",response_index,32,"bytes");
+            df->unsignedField("response_remaining",response_bytes,32,"bytes");
+            df->unsignedField("keys_down",keysdown,32,"keys");
+            df->boolField("mouse_data_full",mouse_data_full);
+            df->bytesField("mouse_data",mouse_data,2);
+            df->unsignedField("motion_queue_length",motion_queue.size(),64,"entries");
+            return;
+            }
             df->addLine("uC Mode: %02X", modes_byte);
             df->addLine("C027 Status: %02X DataReg: %02X", status, datareg);
 

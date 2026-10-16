@@ -197,6 +197,7 @@ public:
     inline void adjust_c14m(uint64_t amount) { c_14M += amount; }
     inline uint64_t get_frame_start_c14M() { return frame_start_c14M; }
     inline uint64_t get_frame_end_c14M() { return frame_end_c14M; }
+    inline uint64_t get_frame_count() const { return frame_count; }
     inline void next_frame() {
         frame_start_c14M = frame_end_c14M;
         frame_end_c14M += current.c14M_per_frame;

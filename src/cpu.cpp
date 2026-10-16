@@ -53,6 +53,7 @@ void cpu_state::reset() {
     //ICHANGE = false;
     //EFFI = 0;
     rdy = false;
+    nmi_pending=false;boundary_abort_pending=false;
     //pc = read_word(RESET_VECTOR);
     core->reset(this);
 }

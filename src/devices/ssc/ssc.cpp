@@ -206,6 +206,9 @@ void init_slot_ssc(computer_t *computer, SlotType_t slot) {
                 st->acia->debug_output(df);
             }
             return df;
+        },[st]()->DebugFormatter* {
+            auto *df=new DebugFormatter();df->unsignedField("slot",st->_slot,8);df->unsignedField("dipsw1",st->dipsw1,8);df->unsignedField("dipsw2",st->dipsw2,8);
+            if(st->acia)st->acia->debug_output(df,true);return df;
         });
 
     computer->register_reset_handler([st](bool /*cold_start*/) {

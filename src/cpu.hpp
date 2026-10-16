@@ -191,9 +191,14 @@ struct cpu_state {
     bool clock_stopped = false; /* if set, the clock is stopped */
 
     uint8_t halt = 0; /* == 1 is HLT instruction halt; == 2 is user halt */
+    // Host observation total: monotonic through resets/restores, not guest state.
+    uint64_t executed_instructions = 0;
+    bool count_instructions = false; // CTRL execution arms only for that command
 
     bool irq_asserted = 0; /** bits 0-7 correspond to various IRQ sources */
     uint8_t irq_pipe = 0;
+    bool nmi_pending = false;
+    bool boundary_abort_pending = false; // pre-instruction model, no mid-bus rollback
     uint64_t reset_asserted = 0; /** bits 0-10 correspond to various RESET sources. */
     
 

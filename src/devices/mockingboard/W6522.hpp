@@ -555,6 +555,14 @@ public:
             sr, acr, pcr, ifr.value, ier.value|0x80);
 //        df->addLine("T1 Int Timer: %08lld  T2 Int Timer: %08lld", t1_trigger_at, t2_trigger_at);
     }
+    void native_state(DebugFormatter *df,const std::string &p) const {
+        df->unsignedField(p+"ora",ora,8);df->unsignedField(p+"ira",ira,8);df->unsignedField(p+"orb",orb,8);df->unsignedField(p+"irb",irb,8);
+        df->unsignedField(p+"ddra",ddra,8);df->unsignedField(p+"ddrb",ddrb,8);df->unsignedField(p+"sr",sr,8);df->unsignedField(p+"acr",acr,8);df->unsignedField(p+"pcr",pcr,8);
+        df->unsignedField(p+"ifr",ifr.value,8);df->unsignedField(p+"ier",ier.value,8);
+        df->unsignedField(p+"t1_latch",t1_latch,16);df->unsignedField(p+"t1_counter",t1_counter,16);
+        df->unsignedField(p+"t2_latch",t2_latch,16);df->unsignedField(p+"t2_counter",t2_counter,16);
+        df->boolField(p+"t1_oneshot_pending",t1_oneshot_pending);df->boolField(p+"t2_oneshot_pending",t2_oneshot_pending);
+    }
 
     void debug_one() {
         printf("DDRA %02X DDRB %02X ORA %02X ORB %02X IRA %02X IRB %02X T1[L %04X C: %04X] T2[L %02X C %04X] SR %02X ACR %02X PCR %02X IFR %02X IER %02X\n",

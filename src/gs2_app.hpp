@@ -166,12 +166,14 @@ struct GS2AppState {
     // A2GSPU_SPIKE_FRAMES is set). Runs N deterministic frames, dumps a
     // renderer-free $E1 oracle + a backbuffer screenshot, then exits.
     bool headless = false;
+    bool agent_socket_mode = false;
     int  spike_frames = 0;
 };
 
 // ---- defined in gs2.cpp, used by the control plane ------------------------
 extern OSD *osd;
 bool run_one_frame(computer_t *computer);
+void a2gspu_device_events(computer_t *computer);
 void a2record_register(NClock *clk);
 
 #include "a2gspu_snapshot.hpp"

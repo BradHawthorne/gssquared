@@ -1,0 +1,6 @@
+PASS selected-file diff whitespace: gssquared-fork
+PASS selected-file diff whitespace: rosetta_v3
+PASS added local Markdown destinations and fragments: 12
+PASS curation and acceptance section headings are unique
+PASS paired agent direction is identical
+PASS standing direction and pending implementation are explicit

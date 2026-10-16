@@ -1,0 +1,29 @@
+PASS observation MCP lifecycle 3: 
+PASS upstream structured observations discoverable through MCP
+PASS observation succeeds 11
+PASS trace decodes actual instructions, access direction, data and addresses
+PASS trace deltas use adjacent retained records
+PASS observation succeeds 12
+PASS memory domain byte values retained
+PASS observation succeeds 13
+PASS masked search finds independent fixture
+PASS observation succeeds 14
+PASS observation succeeds 14
+PASS I/O placeholders cannot become false zero-pattern hits
+PASS observation succeeds 15
+PASS observation succeeds 15
+PASS search reports truncated hit list
+PASS observation succeeds 17
+PASS text includes native page metadata, raw bytes and decoded lines
+PASS invalid inputs and running session explicitly refuse
+PASS IIgs-only domain fails honestly on IIe
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\observabilitycheck.py", line 60, in <module>
+    parser=argparse.ArgumentParser();parser.add_argument('--exe',type=Path,required=True);run(parser.parse_args().exe.resolve())
+                                                                                          ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\observabilitycheck.py", line 55, in run
+    check(first.read_bytes()==second.read_bytes(),'decoding the same trace twice is stable')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: decoding the same trace twice is stable

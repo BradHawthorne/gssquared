@@ -1,0 +1,11 @@
+{
+  "schema": "a2mcp-launch-proof-v1",
+  "pass": true,
+  "tools": 82,
+  "native_commands": 73,
+  "rails": 161,
+  "return_code": 0,
+  "descriptor": "D:\\gsqs\\autonomy-shape-20261015\\mcp-launch.json",
+  "executable": "D:\\gsqs\\coherency-20261015\\build\\GSSquared-autonomy.exe",
+  "model": "actual stdio initialize/list/native catalog/digest-bound artifact upload and read, IIgs, owned EOF exit zero with native bootstrap and binary identity"
+}

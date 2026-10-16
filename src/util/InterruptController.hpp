@@ -6,6 +6,7 @@
 #include "device_irq_id.hpp"
 #include "util/DebugFormatter.hpp"
 #include "obs_signal.hpp"   // Observatory: IRQ_EDGE timeline (who interrupted whom, when)
+#include "a2gspu_events.hpp"
 
 /**
  * @class InterruptController
@@ -103,6 +104,7 @@ class InterruptController {
         irq_asserted = 0;
         if (old != irq_asserted) {
             notify_irq_receiver();
+            for(uint8_t source=0;source<64;source++)if(old&(1ULL<<source))obs_emit_irq(source,false);
         }
     }
     
@@ -129,6 +131,11 @@ class InterruptController {
     // Observatory: emit one IRQ_EDGE record (gated, pure observation). Keyed by the
     // device id, stamped on the master timeline; aux carries the new pending bitfield.
     inline void obs_emit_irq(uint8_t irq, bool asserted) {
+        if(a2events::enabled()) {
+            a2record::Record event("irq","edge",a2record::frame_now(),a2record::cycles_now());
+            event.u("source",irq).raw("asserted",asserted?"true":"false").str("pending_mask",std::to_string(irq_asserted).c_str())
+                .raw("source_clock_available",a2record::g_cycles_fn?"true":"false");event.done();
+        }
         obs_note(g_obs_now_cycle, obs_sigid(OBS_SUB_IRQ, irq, 0), OBS_K_IRQ_EDGE,
                  irq, asserted ? 1 : 0, (uint32_t)(irq_asserted & 0xFFFFFFFFu),
                  OBS_F_INTERNAL_ONLY);

@@ -13,7 +13,9 @@
                 artifacts selftest   the one artifact reader refuses what it should
                 gdiff selftest       the differential tools against real captures
                 buscompare selftest  the slot-bus comparator finds gaps, extras and field mismatches
+                bisect selftest      real scratch builds find a planted revision, reversions and inconclusive failures
       emulator  dualsmoke            ctest + railcheck/execcheck/altzpcheck on IIe AND IIgs
+                agentic              SCC capture, WDM console, counts/profiles, socket manifest, snapshot diffs (positive and negative cases)
                 personalitycheck     every built-in machine configuration cold-starts
                 protocolcheck        protocol v2, discovery, JSON replies, ownership, SHR golden
                 copilotcheck         the windowed agent rail (starts a window that cannot take focus)
@@ -30,7 +32,7 @@
     seven minutes on the development machine.
 
       .\tools\a2rail\gates.ps1                  # everything
-      .\tools\a2rail\gates.ps1 -Offline         # the four offline gates only (seconds)
+      .\tools\a2rail\gates.ps1 -Offline         # the five offline gates (bisect compiles tiny fixtures)
       .\tools\a2rail\gates.ps1 -Skip copilot    # name suites to leave out; they are REPORTED as skipped
       .\tools\a2rail\gates.ps1 -SkipCorpus      # unarmedhash without the GS/OS image (PARTIAL), mbaudit skipped
 
@@ -64,6 +66,8 @@ $suites = [ordered]@{
     'artifacts'    = @{ offline = $true;  run = { python (Join-Path $here 'artifacts.py') selftest } }
     'gdiff'        = @{ offline = $true;  run = { python (Join-Path $root 'tools\gdiff\selftest.py') } }
     'buscompare'   = @{ offline = $true;  run = { python (Join-Path $here 'buscompare.py') selftest } }
+    'bisect'       = @{ offline = $true;  run = { & (Join-Path $here 'bisect.ps1') -SelfTest } }
+    'agentic'      = @{ offline = $false; run = { python -I (Join-Path $here 'p0check.py') --exe (Get-GSSquaredExe) } }
     'dualsmoke'    = @{ offline = $false; run = { & (Join-Path $here 'dualsmoke.ps1') } }
     'personality'  = @{ offline = $false; run = { & (Join-Path $here 'personalitycheck.ps1') } }
     'protocol'     = @{ offline = $false; run = { & (Join-Path $here 'protocolcheck.ps1') } }

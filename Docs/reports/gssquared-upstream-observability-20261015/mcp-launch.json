@@ -1,0 +1,16 @@
+{
+  "command": "C:/Users/X99/AppData/Local/Programs/Python/Python313/python.exe",
+  "args": [
+    "-I",
+    "D:/projects/gssquared-fork/tools/a2rail/mcpserver.py",
+    "--exe",
+    "D:/gsqs/coherency-20261015/build/GSSquared-observability.exe",
+    "--platform",
+    "5",
+    "--out-root",
+    "D:/gsqs/agent-sessions"
+  ],
+  "env": {
+    "PATH": "C:\\msys64\\ucrt64\\bin;D:\\gsqs\\coherency-20261015\\build;C:\\Windows\\System32"
+  }
+}

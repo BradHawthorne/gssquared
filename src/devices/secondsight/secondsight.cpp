@@ -90,6 +90,8 @@ void init_secondsight(computer_t *computer, SlotType_t slot) {
         DebugFormatter *df = new DebugFormatter();
         st->secondsight->debug(df);
         return df;
+    }, [st]() -> DebugFormatter * {
+        auto *df=new DebugFormatter();st->secondsight->debug(df,true);return df;
     });
 
 }

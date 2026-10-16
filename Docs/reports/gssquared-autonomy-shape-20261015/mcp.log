@@ -1,0 +1,366 @@
+PASS all one-shot tail getenv rails are classified as batch-only
+PASS MCP framing/observation fixture: test_notifications_never_execute_tools
+PASS MCP framing/observation fixture: test_native_errors_remain_visible
+PASS MCP framing/observation fixture: test_bad_ids_arguments_and_unadvertised_tasks
+PASS MCP framing/observation fixture: test_bounded_lines_recover_without_stdout_noise
+PASS MCP framing/observation fixture: test_batch_has_explicit_structured_parameters
+PASS MCP framing/observation fixture: test_trace_wire_offsets_and_u64_precision
+PASS MCP framing/observation fixture: test_trace_backward_clock_is_not_a_duration
+PASS MCP framing/observation fixture: test_read_observations_refuse_bad_types_ranges_and_parameters
+PASS MCP framing/observation fixture: test_artifact_roundtrip_ranges_and_create_once
+PASS MCP framing/observation fixture: test_artifact_scope_limits_and_missing_paths
+PASS MCP framing/observation fixture: test_text_and_corrupt_image_are_not_plausible_success
+PASS MCP framing/observation fixture: test_file_client_rejects_controls_before_publishing
+PASS MCP framing/observation fixture: test_partial_reply_timeout_recovers_without_resending
+PASS MCP framing/observation fixture: test_partial_event_timeout_preserves_framing
+PASS MCP framing/observation fixture: test_bad_timeout_has_no_wire_effect
+PASS MCP framing/observation fixture: test_unrelated_events_do_not_restart_stop_deadline
+PASS MCP owned process and emulator close on EOF: 
+PASS stdout contains only one JSON-RPC reply per request; notifications silent
+PASS MCP initialization order enforced
+PASS MCP tools include complete runtime catalog, debugger observations and artifacts
+PASS MCP executes real guest code and returns native values
+PASS structured and text evidence agree
+PASS MCP presentation tool reaches native handler
+PASS execution, unknown tool and injection failures distinguished
+PASS rejected newline cannot execute reset
+PASS managed startup actually applies requested pacing
+PASS managed startup actually arms requested coverage
+PASS independent batch uses native positive memory assertion
+PASS independent batch preserves planted wrong assertion failure
+PASS batch validation and jobs leave current machine untouched
+PASS batch artifacts and verdicts retained independently
+PASS invalid JSON fails as protocol error
+PASS retained owner receipt proves startup configuration and clean emulator exit
+PASS native bootstrap proof retained; launch is not inferred from environment
+PASS existing output directory refuses without overwriting its receipt
+PASS unknown startup rail refuses and closes owned child
+PASS conflicting transport rail refuses before creating a session
+PASS one-shot rail redirects explicitly instead of silently ignoring it
+PASS invalid artifact root refuses before launch or output directory creation
+PASS MCP owned process and emulator close on EOF: 
+PASS stdout contains only one JSON-RPC reply per request; notifications silent
+PASS MCP initialization order enforced
+PASS MCP tools include complete runtime catalog, debugger observations and artifacts
+PASS MCP executes real guest code and returns native values
+PASS structured and text evidence agree
+PASS MCP presentation tool reaches native handler
+PASS execution, unknown tool and injection failures distinguished
+PASS rejected newline cannot execute reset
+PASS managed startup actually applies requested pacing
+PASS managed startup actually arms requested coverage
+PASS independent batch uses native positive memory assertion
+PASS independent batch preserves planted wrong assertion failure
+PASS batch validation and jobs leave current machine untouched
+PASS batch artifacts and verdicts retained independently
+PASS invalid JSON fails as protocol error
+PASS retained owner receipt proves startup configuration and clean emulator exit
+PASS native bootstrap proof retained; launch is not inferred from environment
+PASS existing output directory refuses without overwriting its receipt
+PASS observation MCP lifecycle 3: 
+PASS upstream structured observations discoverable through MCP
+PASS observation succeeds 11
+PASS trace decodes actual instructions, access direction, data and addresses
+PASS trace deltas use adjacent retained records
+PASS observation succeeds 12
+PASS memory domain byte values retained
+PASS observation succeeds 13
+PASS masked search finds independent fixture
+PASS observation succeeds 14
+PASS observation succeeds 14
+PASS I/O placeholders cannot become false zero-pattern hits
+PASS observation succeeds 15
+PASS observation succeeds 15
+PASS search reports truncated hit list
+PASS observation succeeds 17
+PASS text includes native page metadata, raw bytes and decoded lines
+PASS invalid inputs and running session explicitly refuse
+PASS IIgs-only domain fails honestly on IIe
+PASS decoding the same trace twice is stable
+PASS extended trace names recorded clock without false fixed-speed scanlines
+PASS observation MCP lifecycle 5: 
+PASS upstream structured observations discoverable through MCP
+PASS observation succeeds 11
+PASS trace decodes actual instructions, access direction, data and addresses
+PASS trace deltas use adjacent retained records
+PASS observation succeeds 12
+PASS memory domain byte values retained
+PASS observation succeeds 13
+PASS masked search finds independent fixture
+PASS observation succeeds 14
+PASS observation succeeds 14
+PASS I/O placeholders cannot become false zero-pattern hits
+PASS observation succeeds 15
+PASS observation succeeds 15
+PASS search reports truncated hit list
+PASS observation succeeds 17
+PASS text includes native page metadata, raw bytes and decoded lines
+PASS invalid inputs and running session explicitly refuse
+PASS IIgs-only domain fails honestly on IIe
+PASS decoding the same trace twice is stable
+PASS extended trace names recorded clock without false fixed-speed scanlines
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP response identity
+PASS MCP request accepted
+PASS all native/observation/artifact tools discoverable
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict agent_tools
+PASS native inventory retained
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pause
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict setreg
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict step
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict inspect
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP consumes native typed state artifact without filesystem access
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pngc
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS native PNG delivered as viewable MCP image content
+PASS image content is bound to returned digest and completeness
+PASS transported 4dot image independently decodes to expected doubled-height raster
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS uploaded input can be inspected byte-for-byte
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict batch
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS cold batch evidence is accessible through same artifact root
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_list
+PASS artifact discovery includes outputs and excludes rejected upload
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS agent can retrieve exact emulator binary identity
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict quit
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS evidence remains readable after guest quit
+PASS MCP owned process closes cleanly
+PASS native owned emulator closes cleanly
+PASS blocked mutation allocates no new wire sequence
+PASS real timed-out run recovers original native evidence
+PASS recovery leaves paused machine usable
+PASS recovered session exits normally
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP response identity
+PASS MCP request accepted
+PASS all native/observation/artifact tools discoverable
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict agent_tools
+PASS native inventory retained
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pause
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict setreg
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict step
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict inspect
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP consumes native typed state artifact without filesystem access
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pngc
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS native PNG delivered as viewable MCP image content
+PASS image content is bound to returned digest and completeness
+PASS transported 4dot image independently decodes to expected doubled-height raster
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS uploaded input can be inspected byte-for-byte
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict batch
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS cold batch evidence is accessible through same artifact root
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_list
+PASS artifact discovery includes outputs and excludes rejected upload
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS agent can retrieve exact emulator binary identity
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict quit
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS evidence remains readable after guest quit
+PASS MCP owned process closes cleanly
+PASS native owned emulator closes cleanly
+PASS blocked mutation allocates no new wire sequence
+PASS real timed-out run recovers original native evidence
+PASS recovery leaves paused machine usable
+PASS recovered session exits normally
+PASS invalid execution request has no work: step 0
+PASS invalid execution preserves CPU: step 0
+PASS invalid execution request has no work: step -1
+PASS invalid execution preserves CPU: step -1
+PASS invalid execution request has no work: step 1junk
+PASS invalid execution preserves CPU: step 1junk
+PASS invalid execution request has no work: step 1 extra
+PASS invalid execution preserves CPU: step 1 extra
+PASS invalid execution request has no work: run 0
+PASS invalid execution preserves CPU: run 0
+PASS invalid execution request has no work: run -1
+PASS invalid execution preserves CPU: run -1
+PASS invalid execution request has no work: run 1junk
+PASS invalid execution preserves CPU: run 1junk
+PASS invalid execution request has no work: run 1 extra
+PASS invalid execution preserves CPU: run 1 extra
+PASS invalid execution request has no work: run-until 0800 0
+PASS invalid execution preserves CPU: run-until 0800 0
+PASS invalid execution request has no work: run-until 0800 -1
+PASS invalid execution preserves CPU: run-until 0800 -1
+PASS invalid execution request has no work: run-until 0800 1junk
+PASS invalid execution preserves CPU: run-until 0800 1junk
+PASS invalid execution request has no work: run-until 0800 1 extra
+PASS invalid execution preserves CPU: run-until 0800 1 extra
+PASS already-satisfied PC goal does not execute another instruction
+PASS already-satisfied goal preserves the unexecuted memory effect
+PASS PC goal reached on final instruction is success
+PASS target execution produces exactly one known memory effect
+PASS budget exhaustion is not goal completion
+PASS valid step completes its explicit instruction goal
+PASS session exits cleanly
+PASS invalid execution request has no work: step 0
+PASS invalid execution preserves CPU: step 0
+PASS invalid execution request has no work: step -1
+PASS invalid execution preserves CPU: step -1
+PASS invalid execution request has no work: step 1junk
+PASS invalid execution preserves CPU: step 1junk
+PASS invalid execution request has no work: step 1 extra
+PASS invalid execution preserves CPU: step 1 extra
+PASS invalid execution request has no work: run 0
+PASS invalid execution preserves CPU: run 0
+PASS invalid execution request has no work: run -1
+PASS invalid execution preserves CPU: run -1
+PASS invalid execution request has no work: run 1junk
+PASS invalid execution preserves CPU: run 1junk
+PASS invalid execution request has no work: run 1 extra
+PASS invalid execution preserves CPU: run 1 extra
+PASS invalid execution request has no work: run-until 0800 0
+PASS invalid execution preserves CPU: run-until 0800 0
+PASS invalid execution request has no work: run-until 0800 -1
+PASS invalid execution preserves CPU: run-until 0800 -1
+PASS invalid execution request has no work: run-until 0800 1junk
+PASS invalid execution preserves CPU: run-until 0800 1junk
+PASS invalid execution request has no work: run-until 0800 1 extra
+PASS invalid execution preserves CPU: run-until 0800 1 extra
+PASS already-satisfied PC goal does not execute another instruction
+PASS already-satisfied goal preserves the unexecuted memory effect
+PASS PC goal reached on final instruction is success
+PASS target execution produces exactly one known memory effect
+PASS budget exhaustion is not goal completion
+PASS valid step completes its explicit instruction goal
+PASS session exits cleanly
+PASS attached MCP EOF leaves externally owned emulator alive
+PASS attached session has no implicit artifact filesystem scope
+PASS explicit artifact root works on attach without taking emulator ownership
+PASS attached emulator remains controllable after MCP disconnect
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': 'invalid'}
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': '1'}
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': '1', 'A2GSPU_CTRL': 'C:\\msys64\\tmp\\a2agent-rejections-4f_kih1g\\ctrl'}
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': '1', 'A2GSPU_SPIKE_FRAMES': '1'}
+PASS stable MCP configuration can launch again without deleting evidence
+PASS stable MCP configuration can launch again without deleting evidence
+PASS repeat launches retain separate closed ownership receipts

@@ -81,6 +81,9 @@ void init_scc8530_slot(computer_t *computer, SlotType_t slot) {
             DebugFormatter *df = new DebugFormatter();
             st->scc->debug_output(df);
             return df;
+        },
+        [st]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();st->scc->debug_output(df,true);return df;
         }
     );
 

@@ -170,6 +170,7 @@ if ($undocumented.Count -or $phantom.Count) {
 $recordExempt = @{
     'a2record.hpp'         = 'the writer itself'
     'a2gspu_ctrl_json.hpp' = 'the CTRL reply envelope is protocol, not a rail record'
+    'a2gspu_coverage.hpp' = 'A2COV1/A2COV2 and a2profile-v1 are standalone coverage artifacts, not NDJSON rail events; profile.py validates the JSON document'
     'wiz5_config.hpp'      = 'title-specific streams (WIZ5_EC19_OUT, WIZ5_DISKWR_OUT, WIZ5_CSP6_OUT) predate the contract, and all three build their records piecemeal; they convert when their readers do'
 }
 

@@ -134,6 +134,31 @@ A green product suite (e.g. a2engine `validate.ps1` / `gscheck.ps1`) is
 
 ## How this pairs with Rosetta
 
+### Corpus-informed architectural refinement (owner direction, 2026-10-16)
+
+The shared foundation also supports a reasoning loop: CIDAR recovers and
+distils understanding; agents question historical implementations; Rosetta
+builds alternatives; this emulator exposes execution; adversarial experiments
+return evidence to the specifications and primitive libraries. The long-horizon
+feedstock includes Asimov and Internet Archive material. Archive-scale ingestion
+is a future programme, not a capability established by the current gates.
+
+Occurrence counts measure prevalence, never optimality. Repeated boilerplate
+and shared ancestry must not become independent confirmations. An idealized
+form is a contract and an implementation justified under named hardware,
+workload and compatibility constraints; several measured tradeoffs can coexist.
+Agents should refine, fuse, specialize or replace forms when evidence supports
+it, preserving the historical reference and the reasoning behind the change.
+
+This fork owns general machine visibility and execution evidence; Rosetta owns
+build provenance, recovery and library curation; consumers own their layouts
+and workload contracts. Review new emulator features against
+[`AGENTIC_ORACLE.md` section 10](AGENTIC_ORACLE.md#10-design-review-for-architectural-understanding).
+Rosetta's companion rules live in `docs/SHARED_FOUNDATION.md` and
+`stdlib/primitives/CURATION.md` in that tree. Existing dual-platform,
+observe-without-disturbing and default-off requirements remain the acceptance
+bar for instrumentation.
+
 ```
 edit source  →  Rosetta (asmiigs / cciigs / linkiigs / diskiigs / …)
                     ↓

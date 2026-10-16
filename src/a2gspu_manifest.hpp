@@ -7,6 +7,8 @@
 #pragma once
 #include <cstdio>
 #include <cstring>
+#include <sstream>
+#include "a2gspu_ctrl_json.hpp"
 #include "systemconfig.hpp"
 #include "a2gspu_rails_registry.hpp"
 
@@ -22,7 +24,7 @@ inline const char *oracle_banner() {
         "cycles= on run/step/run-until/keys is IN-COMMAND (that command's cycles), not absolute: add them, never subtract across acks; `cycles` is the absolute counter.\n"
         "  colour= always named profile (pngc profile=4dot|mono). shot/SDL is human-only.\n"
         "  memory observe= probe_peek / flat-image paths; never toggle RAMRD to look.\n"
-        "  snapshot= CPU+MMU+softswitches+RAM, plus the ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device's RAM-disk overlay on a IIgs; plus the scanner, written disk tracks and whichever card blocks the machine has; the manifest names what is excluded (rtc, clock -- the cycle counter and run hash do not continue across a restore).\n"
+        "  snapshot= CPU+MMU+softswitches+RAM and the device blocks present in that file. The file's included=/excluded= lists are authoritative; RTC state is saved when present. The session clock and run hash do not continue across restore; host connections and some synthesis/GPU state cannot be replayed.\n"
         "  dual-mode= no A2GSPU_* env => stock windowed emulator.\n"
         "discover: help | help <file> | manifest <file> | oracle\n"
         "docs: Docs/AGENTIC_ORACLE.md Docs/A2GSPU_RAILS.md Docs/DoubleHiRes.md\n";
@@ -58,10 +60,11 @@ inline const char *verb_when(const char *name) {
         {"bp",         "stop at a PC you can name. A hit HALTS in front of that instruction (not yet executed) -- run/step/resume execute it once and continue"},
         {"callstream", "capture toolbox/GS-OS calls as NDJSON while software runs (toolbox ABI work)"},
         {"copilot",    "discover the windowed agent rail (observe + pause/key/mount/quit); instrumentation stays off"},
-        {"cov",        "which addresses executed AT ALL -- dead code, unreached branches, coverage of a run"},
+        {"cov",        "executed-byte coverage; counts on|off|write <file> adds per-PC instruction and cycle counts"},
         {"cpu",        "registers and halt state. The first thing to read when execution went somewhere unexpected"},
         {"cycles",     "the machine's clock rate, before trusting any timing a test assumes"},
         {"devstate",   "what devices actually exist and in what state, before assuming a slot is populated"},
+        {"diff",       "compare saved CPU, memory, page maps and device bytes without restoring or disturbing the live machine"},
         {"dis",        "disassemble where a PC landed. Needs a filename -- it will not name a file after the address"},
         {"help",       "enumerate verbs from the RUNNING process rather than from documentation that may have drifted"},
         {"hgr",        "a coarse ASCII view of an HGR page: 'is anything drawn'. Not pixel-exact -- see pngc"},
@@ -127,16 +130,19 @@ inline const char *verb_when(const char *name) {
 inline const Verb *verbs(int *count) {
     static const Verb v[] = {
         {"assert", "observe", "assert peek:ADDR==VAL[;…] — probe_peek checks; status=PASS|FAIL", "memory-peek"},
-        {"audio", "observe", "audio [status]|doc|sfx|on|off|reset — generated sample streams per SOURCE (doc = Ensoniq, sfx = drive sounds; never summed): count, non-silent, min/max, average level, and the same broken out per channel (ch=/l_*/r_*) so a dropped side is visible", "sample-stream"},
+        {"audio", "observe", "audio [status]|doc|sfx|on|off|reset | capture doc|sfx <file> [maxframes] | capture off|status — source-specific generated samples and aggregates; bounded a2audio-v1 signed-int16 content, DOC c14m timing, SFX rate; host mix/speaker excluded; overflow and errors explicit", "sample-stream|generated-source-before-host-resampling"},
         {"boot", "run", "boot <slot> — enter slot firmware at $Cs00 (slot 1-7), as autoboot would", "enter-slot-firmware"},
         {"bp", "manipulate", "bp [addr|off] — interactive breakpoint; bare reports state. A hit halts before the instruction executes; run/step/resume execute it once and continue", "force-control"},
         {"callstream", "trace", "callstream on <file>|off|status — LIVE NDJSON toolbox stream", "tool_locator"},
         {"copilot", "meta", "copilot — windowed agent rail contract (A2GSPU_COPILOT)", "discover"},
-        {"cov", "observe", "cov [status] | cov on <LO-HI|BANK:LO-HI> | cov map <A2MAP1-file> | cov off | cov reset | cov write <file> — coverage: raw A2COV1 or source-bound A2COV2; map/reset starts an overlay generation, mismatched executed bytes refuse write", "coverage"},
+        {"cov", "observe", "cov [status] | cov on <LO-HI|BANK:LO-HI> | cov map <A2MAP1-file> | cov off | cov reset | cov write <file> | cov counts on|off|write <file> — A2COV1/A2COV2 byte coverage plus optional a2profile-v1 per-PC instruction counts/cycles; arm range/map before counts; reset clears both; stale maps refuse both writes", "coverage"},
         {"cpu", "observe", "cpu — PBR:PC A X Y SP P E HALT STP RDY KBD AKD", "cpu-state"},
         {"cycles", "observe", "cycles — guest cycle counter NOW (absolute). "
          "Deltas only valid inside run/step/run-until acks.", "cycles-absolute-warn"},
         {"devstate", "observe", "devstate [name|all <file>] — per-device state the emulator already computes (ADB regs, disk head, mouse clamp, DOC, memory map); bare lists handlers", "device-debug"},
+        {"capture", "instrument", "capture scc-a|scc-b|wdm status|off|on <file:path|pipe:endpoint> — live explicit TX/console sink binding; quote bindings with spaces; failed arm preserves existing capture; no active rebind; WDM FD/FE ownership checked", "scc-tx-wire|wdm-byte-string"},
+        {"diff", "observe", "diff <snapshotA> <snapshotB> <report.json> — checked GSPS v1 CPU/MMU/physical RAM/page-map/device-block comparison; quote paths with spaces; manifest metadata reported separately; no live state changes", "serialized-saved-state"},
+        {"fault", "manipulate", "fault schedule <delay-cycles-decimal> nmi|abort|irq-on|irq-off | status | clear — deliberate instruction-boundary source; ABORT requires 65816 and does not roll back mid-instruction bus writes; actual/lateness stamps in events; independent IRQ source; active fault state blocks snapshots", "instruction-boundary-injection"},
         {"dhgr-calibrate", "calibrate", "dhgr-calibrate — solid LORES 4-dot self-test", "colour-4dot"},
         {"dhgr-export", "calibrate", "dhgr-export <dir> — write GSDHGR4D+GSNTSC01 for a2tile", "profile-export"},
         {"dhgr-golden", "calibrate",
@@ -146,11 +152,14 @@ inline const Verb *verbs(int *count) {
         {"hgr", "observe", "hgr [page] [file] — coarse ASCII 'is anything drawn' view of an HGR page (not pixel-exact)", "hgr-ascii-coarse"},
         {"holdkey", "manipulate", "holdkey <hex> — sticky IIgs hold key", "inject-key"},
         {"iolog", "observe", "iolog [on [cap]|off|dump <f>|reset] — $C0xx R/W ring", "io-trace"},
+        {"inspect", "observe", "inspect cpu|devices|signals|capabilities <file> [signal-glob] | memory <file> <hex-address> <decimal-length> — native a2inspect-v1 JSON; typed state/capabilities and memory bytes with readability flags; quote paths with spaces; unknown/unavailable state is explicit", "internal-state-observation|memory-peek"},
+        {"context", "mixed", "context overview | topology [offset] | device <id> | address <hex> | irq | stop | pixel <x> <y> | schedule [offset] | on [capacity] | off | history [after-id] [count] | mark [hex-address decimal-length] | changes <mark-id> [offset] | snapshot <file> — synchronized a2context-v1 machine graph, explanations, causal events and field deltas; reads work while running on machine-thread boundaries; on/off/mark change observer state and require socket pause; snapshot writes host file; no guest execution", "machine-context"},
+        {"input", "manipulate", "input keydown <ASCII-hex> [modifier-hex] | keyup | mouse adb|card <dx-decimal> <dy-decimal> <buttons-mask-decimal> | status — immediate edges without running guest time; owned held-key release, unread ADB packet refuses overwrite; consumption unproved; paddle/pbutton remain independent", "immediate-device-injection"},
         {"itrace", "trace", "itrace from <pc>|now|n <c>|clear|status — LIVE per-instr trace", "execute"},
         {"json", "meta", "json <command> — execute any CTRL command and wrap its reply as a2ctrl-reply-v2 JSON", "structured-reply"},
         {"key", "manipulate", "key <hex> [maxf] — inject key and wait for consume receipt", "inject-key"},
         {"keys", "manipulate", "keys <str> — paste buffer (no consume proof)", "inject-key"},
-        {"load", "manipulate", "load <addr> <file> — splice binary into RAM via mmu->write", "inject-ram"},
+        {"load", "manipulate", "load <addr> <file> — splice binary into RAM via mmu->write; quote paths with spaces; malformed or extra arguments refuse before writing", "inject-ram"},
         {"limitations", "meta", "limitations [file] — machine-readable known fidelity gaps and status", "discover"},
         {"manifest", "meta", "manifest <file> — full capability dump for agents", "discover"},
         {"memvu", "observe", "memvu [status]|store|load|report <file>|reset — live memory-visibility counters (MEMVU_STOREVIS / MEMVU_LOADVIS); report writes every armed MEMVU report (BLAME, OPMIX, SEAM...) now. Refuses rather than reporting zeros when a rail is unarmed", "memory-visibility"},
@@ -187,20 +196,22 @@ inline const Verb *verbs(int *count) {
         {"reset", "manipulate", "reset — guest reset path", "force-control"},
         {"restore", "snapshot", "restore <file> — transactional snapshot load; ack carries the manifest, or FAIL stage= rolled-back=", "time-travel"},
         {"resume", "manipulate", "resume — clear a user halt (breakpoint/save-at) so the CPU advances again; refuses to paper over a jammed CPU", "force-control"},
-        {"run", "run", "run <frames> — advance N frames; ack includes cycles= IN-COMMAND", "cycles-in-cmd"},
-        {"run-until", "run", "run-until <addr> [max_instr] — stop at PC; cycles= IN-COMMAND", "cycles-in-cmd"},
+        {"run", "run", "run <frames> — decimal 1..1000000 frames; validate before effects; native completed/stop_reason plus IN-COMMAND cycles/instructions", "cycles-in-cmd"},
+        {"run-until", "run", "run-until <addr> [max_attempts] — check current PC before execution; positive decimal boundary-attempt budget (default 2000000, max 2147483647); native target_reached/completed/stop_reason; IN-COMMAND cycles and actual instructions; idle/interrupt-only attempts consume budget", "cycles-in-cmd"},
         {"save", "snapshot", "save <file> — CPU+MMU+RAM snapshot plus the machine's device blocks; class= is derived from what was written", "time-travel"},
         {"screen", "observe", "screen — screen/text helper", "text-page"},
         {"setreg", "manipulate", "setreg <reg> <hex> — force CPU register", "force-control"},
         {"shot", "observe", "shot <file> — SDL backbuffer BMP (HUMAN eyeball; not art oracle)", "sdl-human"},
         {"speaker", "observe", "speaker — $C030 toggle count and c14m stamp of the last one; sound is WHEN, not whether", "speaker-toggles"},
         {"stack", "observe", "stack [n] — bytes above SP bank0", "cpu-state"},
-        {"step", "run", "step [n] — execute N instructions; cycles= IN-COMMAND", "cycles-in-cmd"},
+        {"step", "run", "step [n] — positive decimal instruction request (default 1, max 2147483647), bounded by n boundary attempts; invalid requests have no effects; native completed/stop_reason distinguishes HALT/BUDGET; IN-COMMAND cycles and actual instructions; idle waits/pre-instruction stops count zero", "cycles-in-cmd"},
         {"systems", "meta", "systems [file] — list platform/config/ROM/device maps; file form is TSV", "discover"},
+        {"subscribe", "observe", "subscribe on <kinds> <file> [max-records] | kinds | status | off — ordered a2subscription-v1 JSONL; kinds lists available filters; explicit overflow/loss counters; CTRL/co-pilot only", "ordered-event-subset"},
         {"tbtrace", "trace", "tbtrace on|off|status|bank <hex>|all — LIVE toolbox/GSOS trace", "tool_locator"},
         {"tbuf", "trace", "tbuf [status]|on|off|clear|dump <file> [n] — CPU trace ring: per-instruction regs, effective address and R/W", "instr-ring"},
         {"text", "observe", "text <file> — text page main+aux dump", "text-page"},
         {"trap", "break", "trap [status]|add <spec>|list|clear [<name>] — A2GSPU_TRAP armed LIVE: at=/store=/read=/sp= triggers, when= conditions, policies and payloads; a malformed spec fails the ack and arms nothing", "records"},
+        {"ui", "manipulate", "ui [status] | monitor composite|rgb|green|amber|white | crt on|off | speed free|1.024|2.8|7.159|14.3 — native presentation/window/clock settings; typed availability and before/after readback; speed applies at next normal frame; no host dialogs/clipboard/fullscreen/pointer capture", "native-presentation-and-clock-settings"},
         {"valtrap", "break", "valtrap set <hex>[:w]|clear|status — LIVE value-provenance trap", "bus_write"},
         {"vid", "observe", "vid — TEXT/MIXED/PAGE2/HIRES/80COL/80STORE/ALTCHAR/DHIRES", "softswitch"},
         {"vram", "observe", "vram <file> [page] — 8K AUX + 8K MAIN raw", "vram-raw"},
@@ -341,6 +352,9 @@ inline void write_manifest(FILE *f) {
     fprintf(f, "snapshot_class: derived-per-file (A=cpu+mmu+softswitches+ram, B=+video/scanner, C=+adb/ensoniq/iwm)\n");
     fprintf(f, "snapshot_contract: the manifest's devices=/included=/excluded= lists, not the letter; read it from the save file's GSPM trailer or the restore ack\n");
     fprintf(f, "dual_mode: no-A2GSPU-env-is-stock-emulator\n");
+    fprintf(f, "native_inspection: inspect cpu|devices|signals|capabilities <file> [signal-glob]; schema=a2inspect-v1; incomplete coverage and unavailable values are explicit\n");
+    fprintf(f, "native_replies: json cpu (a2cpu-v1); json run|step|run-until (a2execution-v1); other commands may have data=null\n");
+    fprintf(f, "subscriptions: subscribe kinds; schema=a2subscription-v1; event=subscription.started|event|overflow|stopped; fields=frame,cycles,sequence,payload; event-payload=kind,clock_available,data; status includes retained,dropped,complete\n");
     fprintf(f, "\n## observation_models\n");
     fprintf(f, "bits-mono,colour-4dot,colour-ntsc560,vram-raw,text-page,softswitch,");
     fprintf(f, "cpu-state,cycles-in-cmd,cycles-absolute-warn,shr-window,memory-peek,sdl-human\n");
@@ -479,23 +493,44 @@ inline void write_env_only_rails(FILE *f) {
 }
 
 
+struct Limitation {const char *kind,*id,*component,*status,*details;};
+inline const Limitation *limitations(int &count) {
+    static const Limitation rows[]={
+        {"limitation","adb-receive-bytes","ADB","unimplemented","command=$48\treason=argument-and-response-contract-unverified\trisk=command-stream-desync"},
+        {"limitation","w5100-pppoe","Uthernet-II","unimplemented","registers=accepted-readable\tsession=none"},
+        {"capability","w5100-listen","Uthernet-II","implemented","gate=listencheck"},
+        {"limitation","w5100-send-mac","Uthernet-II","unimplemented","command=$21\treport=stderr-once\trecord=u2.cmd-not-emulated"},
+        {"limitation","w5100-send-keep","Uthernet-II","partial","command=$22\tguest-visible=SEND_OK-on-ESTABLISHED\tpacket=none\tnat-binding=not-refreshed"},
+        {"limitation","w5100-retransmit-timers","Uthernet-II","stored-not-applied","registers=RTR,RCR\ttiming=host-stack"},
+        {"limitation","w5100-event-latency","Uthernet-II","by-design","delivery=video-frame-boundary\tlatency=up-to-one-frame"},
+        {"limitation","w5100-snapshot-connections","Uthernet-II","unsaveable","restore=CLOSED+DISCON\treport=warning-with-count"},
+        {"limitation","w5100-int-line","Uthernet-II","not-modelled","reason=card-wiring-unverified"},
+        {"limitation","w5100-mr-ind","Uthernet-II","open-decision","behaviour=IND-held-set\treason=card-evidence-owed"},
+        {"limitation","ssc-host-queue-snapshot","Super-Serial-Card","unsaveable","state=bytes-queued-in-host-serial-device\trestore=chip-only"},
+        {"limitation","secondsight-gpu-snapshot","SecondSight","unsaveable","state=GPU-mode-textures-are-host-GPU-objects\trestore=card-reset-with-VRAM-and-SRAM+warning"},
+        {"limitation","vidhd","VidHD","detection-only","functionality=none"},
+        {"limitation","prodos-block-dead","prodos_block","not-in-any-build-config",""}
+    };
+    count=(int)(sizeof rows/sizeof *rows);return rows;
+}
+inline int limitation_count(const char *kind) {
+    int n=0,total=0;auto *rows=limitations(n);for(int i=0;i<n;i++)if(!std::strcmp(rows[i].kind,kind))++total;return total;
+}
+inline std::string limitations_json() {
+    int n=0;auto *rows=limitations(n);std::ostringstream out;out<<'[';
+    for(int i=0;i<n;i++) {
+        if(i)out<<',';const auto &r=rows[i];
+        out<<"{\"kind\":"<<a2ctrljson::quote(r.kind)<<",\"id\":"<<a2ctrljson::quote(r.id)<<",\"component\":"<<a2ctrljson::quote(r.component)<<",\"status\":"<<a2ctrljson::quote(r.status)<<",\"details\":{";
+        std::istringstream fields(r.details);std::string field;bool comma=false;
+        while(std::getline(fields,field,'\t')) {auto at=field.find('=');if(at==std::string::npos)continue;if(comma)out<<',';comma=true;out<<a2ctrljson::quote(field.substr(0,at))<<':'<<a2ctrljson::quote(field.substr(at+1));}
+        out<<"}}";
+    }
+    return out.str()+"]";
+}
 inline void write_limitations(FILE *f) {
-    fprintf(f,"# a2gspu known limitations\n");
-    fprintf(f,"schema\ta2limitations-v1\n");
-    fprintf(f,"limitation\tid=adb-receive-bytes\tcomponent=ADB\tcommand=$48\tstatus=unimplemented\treason=argument-and-response-contract-unverified\trisk=command-stream-desync\n");
-    fprintf(f,"limitation\tid=w5100-pppoe\tcomponent=Uthernet-II\tstatus=unimplemented\tregisters=accepted-readable\tsession=none\n");
-    fprintf(f,"capability\tid=w5100-listen\tcomponent=Uthernet-II\tstatus=implemented\tgate=listencheck\n");
-    fprintf(f,"limitation\tid=w5100-send-mac\tcomponent=Uthernet-II\tcommand=$21\tstatus=unimplemented\treport=stderr-once\trecord=u2.cmd-not-emulated\n");
-    fprintf(f,"limitation\tid=w5100-send-keep\tcomponent=Uthernet-II\tcommand=$22\tstatus=partial\tguest-visible=SEND_OK-on-ESTABLISHED\tpacket=none\tnat-binding=not-refreshed\n");
-    fprintf(f,"limitation\tid=w5100-retransmit-timers\tcomponent=Uthernet-II\tregisters=RTR,RCR\tstatus=stored-not-applied\ttiming=host-stack\n");
-    fprintf(f,"limitation\tid=w5100-event-latency\tcomponent=Uthernet-II\tstatus=by-design\tdelivery=video-frame-boundary\tlatency=up-to-one-frame\n");
-    fprintf(f,"limitation\tid=w5100-snapshot-connections\tcomponent=Uthernet-II\tstatus=unsaveable\trestore=CLOSED+DISCON\treport=warning-with-count\n");
-    fprintf(f,"limitation\tid=w5100-int-line\tcomponent=Uthernet-II\tstatus=not-modelled\treason=card-wiring-unverified\n");
-    fprintf(f,"limitation\tid=w5100-mr-ind\tcomponent=Uthernet-II\tstatus=open-decision\tbehaviour=IND-held-set\treason=card-evidence-owed\n");
-    fprintf(f,"limitation\tid=ssc-host-queue-snapshot\tcomponent=Super-Serial-Card\tstatus=unsaveable\tstate=bytes-queued-in-host-serial-device\trestore=chip-only\n");
-    fprintf(f,"limitation\tid=secondsight-gpu-snapshot\tcomponent=SecondSight\tstatus=unsaveable\tstate=GPU-mode-textures-are-host-GPU-objects\trestore=card-reset-with-VRAM-and-SRAM+warning\n");
-    fprintf(f,"limitation\tid=vidhd\tcomponent=VidHD\tstatus=detection-only\tfunctionality=none\n");
-    fprintf(f,"limitation\tid=prodos-block-dead\tcomponent=prodos_block\tstatus=not-in-any-build-config\n");
+    fprintf(f,"# a2gspu known limitations\nschema\ta2limitations-v1\n");
+    int n=0;auto *rows=limitations(n);
+    for(int i=0;i<n;i++) {const auto &r=rows[i];fprintf(f,"%s\tid=%s\tcomponent=%s\tstatus=%s%s%s\n",r.kind,r.id,r.component,r.status,*r.details?"\t":"",r.details);}
 }
 
 inline void format_rail_ack(char *buf, size_t bufsz) {

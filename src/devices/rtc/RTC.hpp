@@ -476,9 +476,21 @@ public:
         return "UNKNOWN";
     }
 
-    DebugFormatter *debug_display() {
+    DebugFormatter *debug_display(bool native_only=false) {
         //update_seconds();
         DebugFormatter *df = new DebugFormatter();
+        if(native_only) {
+        df->stringField("transaction_state",state_to_string(state));
+        df->bytesField("command_registers",command_reg,2);
+        df->unsignedField("control",ctl_reg_byte,8);
+        df->unsignedField("data",data_reg,8);
+        df->unsignedField("seconds_at_last_command",seconds,32,"seconds-since-1904");
+        df->unsignedField("test_register",test_reg,8);
+        df->boolField("write_protect",write_protect);
+        df->unsignedField("busy_reads_remaining",transaction_step_count,32,"reads");
+        df->bytesField("bram",bram,256);
+        return df;
+        }
         df->addLine("state: %s cmd0: %02X cmd1: %02X ", state_to_string(state), command_reg[0], command_reg[1]);
         df->addLine("ctl_reg C034 (7-5): %02X data_reg C033: %02X", ctl_reg_byte, data_reg);
         df->addLine("seconds: %08X (at the last command)", seconds);

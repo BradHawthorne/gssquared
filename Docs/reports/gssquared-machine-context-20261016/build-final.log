@@ -1,0 +1,12 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/GSSquared.dir/src/a2gspu_ctrl_cmds.cpp.obj
+In file included from D:/Projects/gssquared-fork/src/devices/scc8530/scc8530.hpp:4,
+                 from D:/Projects/gssquared-fork/src/a2gspu_ctrl_cmds.cpp:25:
+D:/Projects/gssquared-fork/src/devices/scc8530/Z85C30.hpp: In constructor 'Z85C30::Z85C30(InterruptController*, EventTimer*, NClockII*, uint64_t)':
+D:/Projects/gssquared-fork/src/devices/scc8530/Z85C30.hpp:859:19: warning: 'void* memset(void*, int, size_t)' clearing an object of non-trivial type 'struct Z85C30::scc_channel_state_t'; use assignment or value-initialization instead [-Wclass-memaccess]
+  859 |             memset(registers, 0, sizeof(registers));
+      |             ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/Projects/gssquared-fork/src/devices/scc8530/Z85C30.hpp:94:12: note: 'struct Z85C30::scc_channel_state_t' declared here
+   94 |     struct scc_channel_state_t {
+      |            ^~~~~~~~~~~~~~~~~~~
+[2/3] Linking CXX executable GSSquared.exe

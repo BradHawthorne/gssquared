@@ -718,7 +718,21 @@ class IWM : public StorageDevice {
             }
         }
 
-        void debug_output(DebugFormatter *df) {
+        void debug_output(DebugFormatter *df,bool native_only=false) {
+            if(native_only) {
+                df->unsignedField("disk_register",disk_register,8);
+                df->unsignedField("mode",reg_mode,8);
+                df->unsignedField("handshake_storage",reg_handshake,8);
+                df->unsignedField("write_state",write_state,32);
+                df->boolField("underrun_latched",underrun_latched);
+                df->unsignedField("underrun_count",underrun_count,64,"events");
+                df->unsignedField("wrreq_off_bits",wrreq_off_bits,64,"bits");
+                df->boolField("enable",iwm_enable);df->boolField("select",iwm_select);
+                df->boolField("q6",iwm_q6);df->boolField("q7",iwm_q7);
+                df->unsignedField("async_clear_at",async_clear_at,64,"14M-ticks");
+                df->unsignedField("motor_turnoff_at",mark_cycles_turnoff,64,"14M-ticks");
+                return;
+            }
             df->addLine("CA0: %d, CA1: %d, CA2: %d, LSTRB: %d, ENABLE: %d, SELECT: %d, Q6: %d, Q7: %d",
                 iwm_ca0, iwm_ca1, iwm_ca2, iwm_lstrb, iwm_enable, iwm_select, iwm_q6, iwm_q7);
             df->addLine("Disk Register: %02X  (EN35=%d SEL=%d)",

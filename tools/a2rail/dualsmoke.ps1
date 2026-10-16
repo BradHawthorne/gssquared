@@ -169,7 +169,9 @@ Write-SuiteEvent @{event='run-start';suite='dualsmoke';report=$Report;wrapper_pi
 try { $null = Write-ToolPin -Label "GSSquared" -Exe (Get-GSSquaredExe) -RepoHint "gssquared" } catch {}
 
 if (-not $SkipOffline) {
-    $gsBuild = Join-Path (Get-GssquaredRoot) "build"
+    # The executable override may select an out-of-tree build. Test that build,
+    # rather than silently running stale ctest binaries from <source>/build.
+    $gsBuild = Split-Path (Get-GSSquaredExe) -Parent
     Run-One "gssquared ctest (offline)" {
         Push-Location $gsBuild
         & ctest --output-on-failure

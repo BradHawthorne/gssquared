@@ -311,7 +311,7 @@ public:
         if (tx_in_progress) {
             if (q[0] && event_timer && clock) {
                 tx_due_14m = now + q[0];
-                event_timer->scheduleEvent(tx_due_14m, tx_complete_callback, timer_base_id + 0, this);
+                event_timer->scheduleEvent(tx_due_14m, tx_complete_callback, timer_base_id + 0, this, "ssc.tx_complete_callback", "src/devices/ssc/MOS6551.hpp");
             } else {
                 tx_complete();
             }
@@ -319,7 +319,7 @@ public:
         if (rx_in_progress) {
             if (q[1] && event_timer && clock) {
                 rx_due_14m = now + q[1];
-                event_timer->scheduleEvent(rx_due_14m, rx_complete_callback, timer_base_id + 1, this);
+                event_timer->scheduleEvent(rx_due_14m, rx_complete_callback, timer_base_id + 1, this, "ssc.rx_complete_callback", "src/devices/ssc/MOS6551.hpp");
             } else {
                 rx_complete();
             }
@@ -330,7 +330,14 @@ public:
         return true;
     }
 
-    void debug_output(DebugFormatter *df) {
+    void debug_output(DebugFormatter *df,bool native_only=false) {
+        if(native_only) {
+            df->unsignedField("status",status|(irq_flag?ST_IRQ:0),8);df->unsignedField("command",command,8);df->unsignedField("control",control,8);
+            df->unsignedField("rx_data",rx_data,8);df->unsignedField("tx_data",tx_data,8);
+            df->boolField("tx_busy",tx_in_progress);df->boolField("rx_busy",rx_in_progress);df->boolField("irq",irq_flag);
+            df->boolField("dcd",dcd_in);df->boolField("dsr",dsr_in);df->boolField("cts",cts_in);df->boolField("dip_irq",dip_irq_enabled);
+            return;
+        }
         df->addLine("6551 Status:  %02X  Command: %02X  Control: %02X", status | (irq_flag ? ST_IRQ : 0), command, control);
         df->addLine("6551 RX: %02X  TX: %02X  baud: %.2f  bits/char: %.1f", rx_data, tx_data, baud_rate,
                     (double)half_bits_per_char() / 2.0);
@@ -480,7 +487,7 @@ private:
         if (cycles > 0 && event_timer && clock) {
             uint64_t when = clock->get_c14m() + cycles;
             rx_due_14m = when;
-            event_timer->scheduleEvent(when, rx_complete_callback, timer_base_id + 1, this);
+            event_timer->scheduleEvent(when, rx_complete_callback, timer_base_id + 1, this, "ssc.rx_complete_callback", "src/devices/ssc/MOS6551.hpp");
         } else {
             rx_complete();
         }
@@ -499,7 +506,7 @@ private:
         if (cycles > 0 && event_timer && clock) {
             uint64_t when = clock->get_c14m() + cycles;
             tx_due_14m = when;
-            event_timer->scheduleEvent(when, tx_complete_callback, timer_base_id + 0, this);
+            event_timer->scheduleEvent(when, tx_complete_callback, timer_base_id + 0, this, "ssc.tx_complete_callback", "src/devices/ssc/MOS6551.hpp");
         } else {
             tx_complete();
         }
@@ -527,7 +534,7 @@ private:
         const uint64_t ticks = tx_ticks();
         if (!ticks) return;
         tx_idle_scheduled = true;
-        event_timer->scheduleEvent(clock->get_c14m() + ticks, tx_idle_callback, timer_base_id + 3, this);
+        event_timer->scheduleEvent(clock->get_c14m() + ticks, tx_idle_callback, timer_base_id + 3, this, "ssc.tx_idle_callback", "src/devices/ssc/MOS6551.hpp");
     }
     void tx_idle_cancel() {
         if (tx_idle_scheduled && event_timer) event_timer->cancelEvents(timer_base_id + 3);
@@ -561,7 +568,7 @@ private:
     void rx_poll_arm() {
         if (!event_timer || !clock || device == nullptr || rx_poll_scheduled) return;
         rx_poll_scheduled = true;
-        event_timer->scheduleEvent(clock->get_c14m() + ACIA_MASTER_CLOCK / 1000, rx_poll_callback, timer_base_id + 2, this);
+        event_timer->scheduleEvent(clock->get_c14m() + ACIA_MASTER_CLOCK / 1000, rx_poll_callback, timer_base_id + 2, this, "ssc.rx_poll_callback", "src/devices/ssc/MOS6551.hpp");
     }
     void rx_poll() {
         rx_poll_scheduled = false;

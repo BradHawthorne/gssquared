@@ -1,0 +1,11 @@
+PASS session exits cleanly
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\executionshapecheck.py", line 33, in <module>
+    parser=argparse.ArgumentParser();parser.add_argument('--exe',type=Path,required=True);run(parser.parse_args().exe.resolve())
+                                                                                          ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\executionshapecheck.py", line 17, in run
+    check(not result['ok'] and result['data']['instructions']=='0' and result['data']['cycles']=='0','invalid execution request has no work: '+command)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\p0check.py", line 33, in check
+    raise AssertionError(label)
+AssertionError: invalid execution request has no work: step 0

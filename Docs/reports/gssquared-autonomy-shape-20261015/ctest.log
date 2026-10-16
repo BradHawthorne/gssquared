@@ -1,0 +1,33 @@
+Test project D:/gsqs/coherency-20261015/build
+      Start  1: cpu_conformance
+ 1/14 Test  #1: cpu_conformance ..................   Passed    0.06 sec
+      Start  2: cpu_coverage
+ 2/14 Test  #2: cpu_coverage .....................   Passed    0.05 sec
+      Start  3: cpu_cycles_6502
+ 3/14 Test  #3: cpu_cycles_6502 ..................   Passed    0.02 sec
+      Start  4: cpu_cycles_65816
+ 4/14 Test  #4: cpu_cycles_65816 .................   Passed    0.02 sec
+      Start  5: cpu_cycles_65c02
+ 5/14 Test  #5: cpu_cycles_65c02 .................   Passed    0.02 sec
+      Start  6: via_6522_t6
+ 6/14 Test  #6: via_6522_t6 ......................   Passed    0.02 sec
+      Start  7: via_6522_t7
+ 7/14 Test  #7: via_6522_t7 ......................   Passed    0.02 sec
+      Start  8: via_6522_t8
+ 8/14 Test  #8: via_6522_t8 ......................   Passed    0.02 sec
+      Start  9: via_6522_t9
+ 9/14 Test  #9: via_6522_t9 ......................   Passed    0.02 sec
+      Start 10: diskid_apm
+10/14 Test #10: diskid_apm .......................   Passed    0.04 sec
+      Start 11: systemconfigtest
+11/14 Test #11: systemconfigtest .................   Passed    0.04 sec
+      Start 12: ssgputexttest
+12/14 Test #12: ssgputexttest ....................   Passed    0.02 sec
+      Start 13: snapshot_diff
+13/14 Test #13: snapshot_diff ....................   Passed    0.02 sec
+      Start 14: interface_contract
+14/14 Test #14: interface_contract ...............   Passed    0.02 sec
+
+100% tests passed out of 14
+
+Total Test time (real) =   0.41 sec

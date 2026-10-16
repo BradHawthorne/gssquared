@@ -1,0 +1,4 @@
+PASS final fork matrix: 14/14, no skips
+PASS Rosetta targeted documentation CTests: 3/3
+PASS executed and preserved alias bytes match; protected consumer matches prior identity
+PASS selected document identities and repository heads retained

@@ -1,0 +1,14 @@
+{
+  "schema": "a2upstream-observability-validation-v1",
+  "upstream_main": "643e6c21",
+  "upstream_development": "0aed0214",
+  "gates_passed": 14,
+  "ctest_passed": 14,
+  "mcp_tools": 79,
+  "native_verbs": 73,
+  "rails": 161,
+  "wire_types": 32,
+  "executable": "D:\\gsqs\\coherency-20261015\\build\\GSSquared-observability.exe",
+  "sha256": "121e1f18fc0d4e770acb6053485c0bd75a08239e6d099a4ea446bbad79f5158a",
+  "protected_consumer_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c"
+}

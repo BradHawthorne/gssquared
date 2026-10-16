@@ -866,7 +866,18 @@ void MMU_IIgs::reset(bool cold_start) {
     }
 }
 
-void MMU_IIgs::debug_dump(DebugFormatter *df) {
+void MMU_IIgs::debug_dump(DebugFormatter *df,bool native_only) {
+    if(native_only) {
+        df->unsignedField("shadow",reg_shadow,8);df->unsignedField("slot",reg_slot,8);
+        df->unsignedField("state",reg_state,8);df->unsignedField("speed",reg_speed,8);
+        df->boolField("intcxrom",g_intcxrom);df->boolField("rombank",g_rombank);
+        df->boolField("lcbank2",g_lcbnk2);df->boolField("rdrom",g_rdrom);
+        df->boolField("ramwrt",g_ramwrt);df->boolField("ramrd",g_ramrd);
+        df->boolField("page2",g_page2);df->boolField("altzp",g_altzp);
+        df->boolField("80store",g_80store);df->boolField("hires",g_hires);
+        df->boolField("motor_detect",motor_detect);df->boolField("machine_fast",machine_fast());
+        return;
+    }
     df->addLine("LC: BANK_1: %d, READ_ENABLE: %d, PRE_WRITE: %d, /WRITE_ENABLE: %d", ll.FF_BANK_1, ll.FF_READ_ENABLE, ll.FF_PRE_WRITE, ll._FF_WRITE_ENABLE);
     df->addLine("Shadow: %02X: ![IOLC: %d T2: %d AUXH: %d SHR: %d H2: %d H1: %d T1: %d]",
         reg_shadow,

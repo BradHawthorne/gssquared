@@ -1,0 +1,42 @@
+PASS observation MCP lifecycle 3: 
+PASS upstream structured observations discoverable through MCP
+PASS observation succeeds 11
+PASS trace decodes actual instructions, access direction, data and addresses
+PASS trace deltas use adjacent retained records
+PASS observation succeeds 12
+PASS memory domain byte values retained
+PASS observation succeeds 13
+PASS masked search finds independent fixture
+PASS observation succeeds 14
+PASS observation succeeds 14
+PASS I/O placeholders cannot become false zero-pattern hits
+PASS observation succeeds 15
+PASS observation succeeds 15
+PASS search reports truncated hit list
+PASS observation succeeds 17
+PASS text includes native page metadata, raw bytes and decoded lines
+PASS invalid inputs and running session explicitly refuse
+PASS IIgs-only domain fails honestly on IIe
+PASS decoding the same trace twice is stable
+PASS extended trace names recorded clock without false fixed-speed scanlines
+PASS observation MCP lifecycle 5: 
+PASS upstream structured observations discoverable through MCP
+PASS observation succeeds 11
+PASS trace decodes actual instructions, access direction, data and addresses
+PASS trace deltas use adjacent retained records
+PASS observation succeeds 12
+PASS memory domain byte values retained
+PASS observation succeeds 13
+PASS masked search finds independent fixture
+PASS observation succeeds 14
+PASS observation succeeds 14
+PASS I/O placeholders cannot become false zero-pattern hits
+PASS observation succeeds 15
+PASS observation succeeds 15
+PASS search reports truncated hit list
+PASS observation succeeds 17
+PASS text includes native page metadata, raw bytes and decoded lines
+PASS invalid inputs and running session explicitly refuse
+PASS IIgs-only domain fails honestly on IIe
+PASS decoding the same trace twice is stable
+PASS extended trace names recorded clock without false fixed-speed scanlines

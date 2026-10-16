@@ -1,0 +1,11 @@
+{
+  "schema": "a2mcp-launch-proof-v1",
+  "pass": true,
+  "tools": 79,
+  "native_commands": 73,
+  "rails": 161,
+  "return_code": 0,
+  "descriptor": "D:\\gsqs\\upstream-observability-20261015\\mcp-launch.json",
+  "executable": "D:\\gsqs\\coherency-20261015\\build\\GSSquared-observability.exe",
+  "model": "actual stdio initialize/list/catalog/structured memory observation, IIgs, owned EOF shutdown"
+}

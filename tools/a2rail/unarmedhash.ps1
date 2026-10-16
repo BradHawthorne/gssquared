@@ -116,6 +116,9 @@ function Get-ArmedEnv([string]$runDir, [int]$platform) {
         A2GSPU_SNAP_OUT      = (Join-Path $runDir 'snap.ndjson')
     }
     if ($platform -eq 5) {
+        $e.A2GSPU_SCC_A = 'file:' + (Join-Path $runDir 'scc-a.bin')
+        $e.A2GSPU_SCC_B = 'file:' + (Join-Path $runDir 'scc-b.bin')
+        $e.A2GSPU_WDM_CONSOLE = 'file:' + (Join-Path $runDir 'wdm.bin')
         $e.A2GSPU_TBTRACE = '1'; $e.A2GSPU_DUMP += ',E1/0000-003F,FF/4100-41FF'
         $e.A2GSPU_LOADMAP = (Join-Path $runDir 'loadmap.ndjson')
         # One landing in each GS/OS kernel region, for the names check below.
@@ -238,6 +241,20 @@ foreach ($r in $rows) {
         -not (Test-Path $f) -or (Get-Item $f).Length -eq 0
     })
     Check ("{0}: armed rails all recorded" -f $r.name) ($quiet.Count -eq 0) $(if ($quiet.Count) { "empty or missing: " + ($quiet -join ', ') } else { "$($sinks.Count) sinks" })
+    if ($r.platform -eq 5) {
+        # Boot firmware need not print on these consoles. Require real binding
+        # and a close-out whose count matches the file, allowing an honest 0.
+        # p0check supplies guest output and proves empty/wrong-channel rejection.
+        $captureLog = [IO.File]::ReadAllText((Join-Path $a.dir 'stderr.log'))
+        foreach ($capture in @(@('SCC_A','scc-a.bin'),@('SCC_B','scc-b.bin'),@('WDM_CONSOLE','wdm.bin'))) {
+            $captureFile = Join-Path $a.dir $capture[1]
+            $closeout = [regex]::Match($captureLog, ('A2GSPU ' + $capture[0] + ': closed bytes=(\d+)'))
+            $bound = $captureLog.Contains('A2GSPU ' + $capture[0] + ': armed binding=')
+            $matchesFile = (Test-Path $captureFile) -and $closeout.Success -and
+                ([int64]$closeout.Groups[1].Value -eq (Get-Item $captureFile).Length)
+            Check ("{0}: {1} bound and accounted" -f $r.name,$capture[0]) ($bound -and $matchesFile) 'capture bytes match close-out (zero allowed)'
+        }
+    }
     if ($expectNames.ContainsKey($r.name)) {
         $tf = Join-Path $a.dir 'trap.ndjson'
         $tt = if (Test-Path $tf) { [IO.File]::ReadAllText($tf) } else { '' }

@@ -1,0 +1,15 @@
+warning: in the working copy of 'Docs/DebugProtocol.md', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'clients/python/src/gs2debug/__init__.py', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'clients/python/src/gs2debug/types.py', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/a2gspu_manifest.hpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/a2gspu_rail_setters.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/a2gspu_run_kind.hpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/debugger/DebugProtocolServer.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/devices/a2gspu/a2gspu.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/devices/rtc/RTC.hpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/devices/rtc/rtc_pram.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/devices/secondsight/secondsight.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/devices/ssc/ssc.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/devices/voc/voc.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/gs2_app.hpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/mmus/mmu_iigs.cpp', CRLF will be replaced by LF the next time Git touches it

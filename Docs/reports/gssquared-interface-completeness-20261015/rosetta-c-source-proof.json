@@ -1,0 +1,237 @@
+{
+  "schema": "a2rosetta-c-source-proof-v1",
+  "model": "C-marker-to-assembler-sidecar-to-loaded-65816-bytes",
+  "platforms": "IIe with 65816 (p4), IIgs (p5); native C is not run on a 65C02",
+  "binary_sha256": "8b40d2642e0f1a44b043d68dd40a211adcc8225c4e2420bafb44bae7203b1fdf",
+  "mapping": {
+    "schema": "a2source-map-v1",
+    "model": "explicit-segment-placement",
+    "regions": [
+      {
+        "segment": "2",
+        "start": 2048,
+        "length": 21,
+        "sha256": "8b40d2642e0f1a44b043d68dd40a211adcc8225c4e2420bafb44bae7203b1fdf",
+        "lines": [
+          {
+            "offset": 0,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+            "line": 12,
+            "column": 1
+          },
+          {
+            "offset": 1,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+            "line": 13,
+            "column": 1
+          },
+          {
+            "offset": 2,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+            "line": 14,
+            "column": 1
+          },
+          {
+            "offset": 5,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+            "line": 15,
+            "column": 1
+          },
+          {
+            "offset": 6,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+            "line": 16,
+            "column": 1
+          },
+          {
+            "offset": 7,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+            "line": 17,
+            "column": 1
+          },
+          {
+            "offset": 8,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 19,
+              "column": 1
+            }
+          },
+          {
+            "offset": 11,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 20,
+              "column": 1
+            }
+          },
+          {
+            "offset": 12,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 22,
+              "column": 1
+            }
+          },
+          {
+            "offset": 13,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 23,
+              "column": 1
+            }
+          },
+          {
+            "offset": 14,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 24,
+              "column": 1
+            }
+          },
+          {
+            "offset": 15,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 25,
+              "column": 1
+            }
+          },
+          {
+            "offset": 18,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 26,
+              "column": 1
+            }
+          },
+          {
+            "offset": 19,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 27,
+              "column": 1
+            }
+          },
+          {
+            "offset": 20,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 28,
+              "column": 1
+            }
+          }
+        ]
+      }
+    ],
+    "compiler_assemblies": [
+      {
+        "path": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+        "sha256": "8eb9a1074b6d409fc418b66106efa381047ed9ccf256e08f1163126e63f179fc",
+        "hash_model": "provided UTF8 bytes; str input reencoded as UTF8",
+        "marker_model": "rosetta-source-v1",
+        "source_text_verified": false
+      }
+    ],
+    "source_text_verified": false,
+    "ignored_sections": [
+      ".debug_symbols"
+    ],
+    "debug_sha256": "d11c32f1986c613238440cea2a303b6062dd87d8caae79e0433db9e89dac8e57",
+    "debug_hash_model": "provided UTF8 bytes; str input reencoded as UTF8"
+  },
+  "results": [
+    {
+      "platform": 4,
+      "a": 66,
+      "source_pc": 2056,
+      "location": {
+        "schema": "a2source-location-v1",
+        "pc": 2056,
+        "locations": [
+          {
+            "offset": 8,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 19,
+              "column": 1
+            },
+            "segment": "2",
+            "instruction_offset": 0
+          }
+        ],
+        "ambiguous": false,
+        "binding_verified": true,
+        "binding_reason": null
+      }
+    },
+    {
+      "platform": 5,
+      "a": 66,
+      "source_pc": 2056,
+      "location": {
+        "schema": "a2source-location-v1",
+        "pc": 2056,
+        "locations": [
+          {
+            "offset": 8,
+            "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.c",
+            "line": 2,
+            "column": 0,
+            "column_model": "unavailable-statement-line-only",
+            "origin_assembly": {
+              "file": "D:\\gsqs\\interface-completeness-20261015\\rosetta\\answer.s",
+              "line": 19,
+              "column": 1
+            },
+            "segment": "2",
+            "instruction_offset": 0
+          }
+        ],
+        "ambiguous": false,
+        "binding_verified": true,
+        "binding_reason": null
+      }
+    }
+  ]
+}

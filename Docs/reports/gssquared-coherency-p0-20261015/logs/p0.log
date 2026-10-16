@@ -1,0 +1,54 @@
+profile selftest: PASS (roll-up, unassigned PCs, malformed counts, duplicates, stale symbols)
+PASS counts refuses unarmed coverage
+PASS platform 3 independent loop instruction/cycle totals: status=OK instr=7 cycles=16 (in-command) [cleared RESET] PC=00:0805 A=00 X=00 Y=00 SP=0029 P=36 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module instructions=7
+PASS per-function roll-up includes repeated PCs
+PASS planted off-by-one expectation fails
+PASS step reports actual instructions
+PASS reset clears per-PC counts
+PASS mapped profile identity and symbol roll-up
+PASS stale binary plan rejected by profile reader
+PASS executed-code mismatch refuses mapped counts
+PASS unarmed counts write refuses success
+PASS zero-frame run refuses success and reports zero work
+PASS session exits cleanly
+PASS counts refuses unarmed coverage
+PASS platform 5 independent loop instruction/cycle totals: status=OK instr=7 cycles=16 (in-command) PC=00:0805 A=00 X=00 Y=00 SP=0129 P=36 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch instructions=7
+PASS per-function roll-up includes repeated PCs
+PASS planted off-by-one expectation fails
+PASS step reports actual instructions
+PASS reset clears per-PC counts
+PASS mapped profile identity and symbol roll-up
+PASS stale binary plan rejected by profile reader
+PASS executed-code mismatch refuses mapped counts
+PASS unarmed counts write refuses success
+PASS zero-frame run refuses success and reports zero work
+PASS session exits cleanly
+PASS WDM runs via existing operand handlers
+PASS WDM output matches when armed; absent when disabled
+PASS WDM is two cycles and preserves A
+PASS console readback counts output
+PASS session exits cleanly
+PASS WDM runs via existing operand handlers
+PASS WDM output matches when armed; absent when disabled
+PASS WDM is two cycles and preserves A
+PASS session exits cleanly
+PASS frame run reports actual opcode executions
+PASS completed SCC A TX bytes captured exactly
+PASS wrong SCC channel stays empty (negative capture oracle)
+PASS SCC readback names emitted bytes
+PASS local SCC loopback does not appear on TX wire capture
+PASS session exits cleanly
+PASS invalid/unsupported binding fails loud: 3 {'A2GSPU_SCC_A': 'file:a.out'}
+PASS invalid/unsupported binding fails loud: 3 {'A2GSPU_WDM_CONSOLE': 'file:w.out'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_SCC_A': 'bad-binding'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_WDM_CONSOLE': 'file:missing-directory/out'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_SCC_A': 'pipe:missing-endpoint'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_SCC_A': 'file:a.out', 'A2GSPU_SCC_B': 'file:./a.out'}
+PASS named-pipe fixture created
+PASS console named-pipe output reaches reader
+PASS session exits cleanly
+PASS socket manifest covers all 28 existing types plus MANIFEST
+PASS planted missing socket type fails discovery oracle
+PASS MANIFEST refuses nonempty payload
+PASS socket quit exits cleanly
+P0 checks: ALL GREEN

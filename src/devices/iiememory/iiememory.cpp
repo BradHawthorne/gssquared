@@ -511,6 +511,18 @@ void init_iiememory(computer_t *computer, SlotType_t slot) {
         DH_IIEMEMORY, // unique ID for this, need to have in a header.
         [iiememory_d]() -> DebugFormatter * {
             return debug_iiememory(iiememory_d);
+        },
+        [iiememory_d]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();df->boolField("text",iiememory_d->s_text);
+            df->boolField("mixed",iiememory_d->s_mixed);df->boolField("page2",iiememory_d->s_page2);
+            df->boolField("hires",iiememory_d->s_hires);
+            df->boolField("80store",iiememory_d->f_80store);df->boolField("ramrd",iiememory_d->f_ramrd);
+            df->boolField("ramwrt",iiememory_d->f_ramwrt);df->boolField("altzp",iiememory_d->f_altzp);
+            df->boolField("lc_bank1",iiememory_d->ll.FF_BANK_1);
+            df->boolField("lc_read",iiememory_d->ll.FF_READ_ENABLE);
+            df->boolField("lc_write_inhibit",iiememory_d->ll._FF_WRITE_ENABLE);
+            if(auto *mmu=dynamic_cast<MMU_IIe *>(iiememory_d->mmu))df->unsignedField("slot_register",mmu->get_slot_register(),8);
+            return df;
         }
     );
 }

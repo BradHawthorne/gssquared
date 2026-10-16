@@ -395,23 +395,14 @@ char *system_trace_buffer::decode_trace_entry(system_trace_entry_t *entry) {
                                entry->operand, entry->f_op_sz, &branch_target);
     emit_mem(buffer, this, entry, layout, da, is_65816, branch_target);
 
-    // A2GSPU_TRACE_EXT: append DBR / DP / cycle-delta / (derived) scanline. All
-    // fields are already recorded in the entry (db/d/cycle); the scanline is a
-    // deterministic function of the recorded cycle using the IIgs 2.8MHz timing
-    // (47684 CPU cycles/frame, 182/scanline, 262 lines incl. VBL) — informational.
-    // Placed after the label column so the upstream layout is untouched.
+    // Recorded fields only. Formatting history must not depend on which line
+    // was decoded last. NClock CPU cycles do not determine video phase across
+    // machine types and speed changes, so do not invent a scanline from them.
     if (g_a2gspu_trace_ext) {
-        static uint64_t s_last_cycle = 0;
-        uint64_t dcyc = entry->cycle - s_last_cycle;
-        s_last_cycle = entry->cycle;
-        uint64_t line = (entry->cycle % 47684) / 182;   // 0..261
-        bool vbl = (line >= 200);
         buffer.pos(layout.label + layout.label_w + 1);
         buffer.put("DBR=");  buffer.put((uint8_t) entry->db);
         buffer.put(" DP=");  buffer.put((uint16_t) entry->d);
-        buffer.put(" dcy="); buffer.put((uint64_t) dcyc, 6);
-        buffer.put(" sl=");  buffer.put((uint64_t) line, 3);
-        if (vbl) buffer.put("V");
+        buffer.put(" clock="); buffer.put((uint64_t) entry->cycle, 1);
     }
 
     return buffer.get();

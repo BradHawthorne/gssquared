@@ -17,6 +17,7 @@ enum device_irq_id {
     IRQ_ID_VGC = 11, 
     IRQ_ID_SCC = 12,
     IRQ_ID_MEGAII = 13,
+    IRQ_ID_AGENT = 14,        // explicit fault injector; never borrows a device bit
 };
 
 typedef void (*device_irq_handler_t)(void *context, VideoScannerEvent event);

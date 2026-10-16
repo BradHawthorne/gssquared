@@ -17,6 +17,14 @@ the emulator is stock.
 
 ## The development layer — what makes this fork different
 
+**Exposed machine context.** Discover installed and absent models, inspect live
+state while execution continues, explain mappings/IRQs/stops/reference pixels,
+and follow retained command, timer and interrupt evidence into implementation
+sources. Synchronized snapshots and typed changes connect those observations
+to Rosetta experiment results and cycle/instruction/code-size comparisons.
+See [Machine context](Docs/MACHINE_CONTEXT.md) for the interfaces and explicit
+coverage limits.
+
 **Headless GS/OS bring-up diagnostics.** An env-gated, stdout-only suite (`A2GSPU_*`): toolbox +
 GS/OS-dispatch + error-code traces, a per-scanline SCB video-mode / palette / pixel-index summary and
 an ASCII screen map, memory-range hexdump, BRK CPU-state dump, headless breakpoints, and symbol
@@ -35,6 +43,17 @@ GS/OS behavior on the actual ROM.
 ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device) — for a
 fast edit→run loop that skips the cold boot. Every file carries a manifest of what it holds; a restore
 that does not fit is rolled back, never half-applied.
+
+**Native agent tools.** CTRL and the debug socket share the same instrument
+handlers, with typed JSON state/results and live capability discovery.
+`AGENT_TOOLS`/`AGENT_COMMAND` expose the tool catalog and deliberate calls;
+`ui` gives native presentation/clock settings with availability and readback.
+The stdlib MCP adapter (`tools/a2rail/mcpserver.py`, or installed `gs2-mcp`)
+generates its tools from the running emulator and can launch or attach to a
+session. Its 85 tools include live machine context, scoped, digest-checked input uploads and evidence
+reads, with native PNGs delivered as MCP images. Socket timeouts can recover
+the original reply without resending a mutation. See [`Docs/DebugClient.md`](Docs/DebugClient.md) for the pause,
+ownership, startup-rail and MCP configuration contracts.
 
 **Expanded ROM personalities.** Size-agnostic Apple IIgs ROM 01 / 03 / 04.
 

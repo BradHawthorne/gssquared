@@ -6,6 +6,13 @@ This document is the source of truth for the wire format. Exploratory notes in `
 
 ## Goals
 
+The shared `AGENT_COMMAND` context read queries are an explicit exception to
+the ordinary paused-tool rule: they observe on the machine thread while the
+machine runs. `context on/off/mark` still require socket pause. Query results
+are `a2context-v1`; expanded snapshot receipts are `a2context-ref-v1` with
+closed-producer length/content witnesses. `SUBSCRIBE` also accepts `context`,
+`scheduler` and `interrupt`. See [MACHINE_CONTEXT.md](MACHINE_CONTEXT.md).
+
 - Host-driven, imperative commands only — no DSL, Lua, or expression language inside GS2.
 - Opaque binary payloads — no JSON encode/decode in the emulator.
 - Transport-agnostic framing that works on Unix domain sockets first, TCP later.
@@ -1281,3 +1288,68 @@ This is “step off the breakpoint” / continue-from-breakpoint. It applies to 
 7. ~~Events beyond stop~~ → **decided:** `EVT_RUN_STATE` including started/running after continue.
 8. ~~Re-hit policy~~ → **decided: Policy A.**
 9. ~~Trace blob on stop?~~ → **decided: yes** — append 40-byte `system_trace_entry_t` image on `EVT_STOPPED`.
+
+## Fork extension: socket discovery
+
+After HELLO, request `MANIFEST` (type `0x00000006`) with an empty payload.
+The reply has the same type and sequence and contains UTF-8 JSON with schema
+`gs2-debug-manifest-v1`: protocol version, framing, byte order, payload limit,
+all type IDs/names/kinds, event IDs, and accepted subscription filters. There are
+32 types in this fork: the 28 original wire types plus MANIFEST, SUBSCRIBE,
+AGENT_TOOLS and AGENT_COMMAND.
+ERROR and EVENT are output kinds,
+not requests. Existing IDs and protocol version 1 are unchanged. A nonempty
+request is rejected with the usual bad-length ERROR; HELLO is still required.
+The Python client exposes `Client.manifest()`.
+
+`src/a2gspu_debug_manifest.hpp` supplies both server constants and discovery.
+The foundation's `agentic` gate checks the complete live type set and rejects
+a planted omission. This extension describes the socket; CTRL's `manifest`
+continues to describe the file rail and environment instrumentation.
+
+## Fork extension: native event subscription
+
+After HELLO, `SUBSCRIBE` (`0x00000007`) takes two little-endian u32 words:
+action (`0=status`, `1=on`, `2=off`) and queue capacity (`1..4096` for on,
+zero otherwise). Only on appends UTF-8 comma-separated kinds; accepted values
+come from MANIFEST. Duplicate arm, unknown/duplicate kinds, malformed lengths
+and invalid capacity fail. The reply is UTF-8 `a2socket-subscription-v1` JSON.
+
+`EVENT` id 3 (`agent-record`) carries UTF-8 `a2subscription-v1` JSON after the
+existing event-id prefix. Records include an independent sequence, cycle/frame
+stamps, kind and native payload. The pending queue has both the requested record
+cap and a 4 MiB cap; individual frames keep the 1 MiB protocol limit. Status/off
+reports retained (enqueued), dropped, error and complete. Check final completeness
+and sequence gaps; delivery and application consumption are separate facts.
+The Python client's `unsubscribe()` sends off then PING to drain queued records
+through its event callback. Disconnect disarms only that connection's observer.
+File-rail subscriptions remain independent.
+
+Kinds cover central rail records, commands/stops, console TX, injected faults,
+IRQ edges and armed audio samples. Device fields are sampled at commands and
+video frames, with explicit baseline/change records; transient changes between
+samples can be missed. These streams do not establish full-machine replay.
+
+## Fork extension: shared agent tools
+
+`AGENT_TOOLS` (`0x00000008`, empty payload) runs on the machine thread and
+returns UTF-8 `a2agent-tools-v1` JSON. It contains the current command registry,
+rails, installed device coverage, companion-tool entry points, limitations and
+control policy. All 74 current verbs are discoverable. `quit` routes through
+the existing native QUIT request so shutdown can acknowledge before closing.
+
+`AGENT_COMMAND` (`0x00000009`) takes one command as 1–2047 UTF-8 bytes. Empty,
+overlong, invalid UTF-8 or control-containing strings fail before dispatch;
+there is no truncation, shell expansion or multi-command framing. Results use
+the file rail's native `a2ctrl-reply-v2` envelope, including full command
+identity, verdict, status, diagnostic text and typed data where available.
+Unknown tools and bad arguments return explicit negative tool verdicts.
+
+The file rail and this socket request use one dispatcher. Ordinary commands
+require EXEC_PAUSED with no pending step batch. Agents explicitly send PAUSE
+or invoke `pause`; discovery itself never takes control. Explicit run/step/key
+waits temporarily execute and return paused; `resume` intentionally stays
+running. Co-pilot retains its separate allow-list and splice restrictions.
+Calls are serialized on the existing main-thread bridge. A completed operation
+keeps its result even when it exceeds the bridge's queue-wait deadline. A client
+transport timeout is not cancellation: never blindly retry a mutation.

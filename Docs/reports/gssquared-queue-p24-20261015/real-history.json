@@ -1,0 +1,335 @@
+{
+  "schema": "a2bisect-report-v1",
+  "result": "none",
+  "repo": "D:\\Projects\\gssquared-fork",
+  "before": "d933c77be4236c2b807a5325fa13fd6326f06b92",
+  "after": "834028cd5ab3d553a9398e0ca88f5ec72de63b68",
+  "history_model": "first-parent; binary boundary plus exhaustive earlier-prefix verification",
+  "scenario_sha256": "6496bb92446300cdfc526a816499018252b115781e7c04e1fcf56d384f094731",
+  "scenario": {
+    "schema": "a2bisect-scenario-v1",
+    "frames": 30,
+    "repeats": 2,
+    "max_revisions": 16,
+    "configure": [
+      "C:/msys64/ucrt64/bin/cmake.exe",
+      "-S",
+      "{source}",
+      "-B",
+      "{build}",
+      "-G",
+      "Ninja",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe",
+      "-DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe",
+      "-DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe"
+    ],
+    "build": [
+      "C:/msys64/ucrt64/bin/cmake.exe",
+      "--build",
+      "{build}",
+      "--parallel",
+      "8"
+    ],
+    "checks": [
+      [
+        "C:/msys64/ucrt64/bin/ctest.exe",
+        "--test-dir",
+        "{build}",
+        "--output-on-failure"
+      ]
+    ],
+    "executable": "GSSquared.exe",
+    "arguments": [
+      "-p",
+      "5",
+      "-n"
+    ],
+    "build_timeout_seconds": 900,
+    "check_timeout_seconds": 900,
+    "run_timeout_seconds": 120,
+    "accepted_exit_codes": [
+      0
+    ],
+    "env": {},
+    "inputs": []
+  },
+  "revisions": [
+    "d933c77be4236c2b807a5325fa13fd6326f06b92",
+    "834028cd5ab3d553a9398e0ca88f5ec72de63b68"
+  ],
+  "observations": {
+    "d933c77be4236c2b807a5325fa13fd6326f06b92": {
+      "revision": "d933c77be4236c2b807a5325fa13fd6326f06b92",
+      "tree": "c480aa7581ad2856f2d1992d43baeb983fcb5998",
+      "checks": [
+        {
+          "argv": [
+            "C:/msys64/ucrt64/bin/ctest.exe",
+            "--test-dir",
+            "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\build",
+            "--output-on-failure"
+          ],
+          "returncode": 0,
+          "seconds": 0.861,
+          "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\check-0.log"
+        }
+      ],
+      "runs": [
+        {
+          "argv": [
+            "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\build\\GSSquared.exe",
+            "-p",
+            "5",
+            "-n"
+          ],
+          "returncode": 0,
+          "seconds": 1.37,
+          "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\run-0\\output.log",
+          "witness": {
+            "status": "OK",
+            "hash": "6D9886E3B3EE0383",
+            "cycles": 594890,
+            "run": "1B83AC4DB8C39F65"
+          },
+          "pins": {
+            "seed": "1",
+            "faketime": "1780000000",
+            "ramdisk": "1",
+            "bram": "default/16D173BDFCDAE583",
+            "pace": "fast",
+            "platform": "5",
+            "frames": "30",
+            "rom": "131072/4E6B6EE5B32F63CF",
+            "machine": "8/p5",
+            "slots": "3:second_sight,7:bazfast3"
+          }
+        },
+        {
+          "argv": [
+            "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\build\\GSSquared.exe",
+            "-p",
+            "5",
+            "-n"
+          ],
+          "returncode": 0,
+          "seconds": 0.994,
+          "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\run-1\\output.log",
+          "witness": {
+            "status": "OK",
+            "hash": "6D9886E3B3EE0383",
+            "cycles": 594890,
+            "run": "1B83AC4DB8C39F65"
+          },
+          "pins": {
+            "seed": "1",
+            "faketime": "1780000000",
+            "ramdisk": "1",
+            "bram": "default/16D173BDFCDAE583",
+            "pace": "fast",
+            "platform": "5",
+            "frames": "30",
+            "rom": "131072/4E6B6EE5B32F63CF",
+            "machine": "8/p5",
+            "slots": "3:second_sight,7:bazfast3"
+          }
+        }
+      ],
+      "configure": {
+        "argv": [
+          "C:/msys64/ucrt64/bin/cmake.exe",
+          "-S",
+          "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\source",
+          "-B",
+          "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\build",
+          "-G",
+          "Ninja",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe",
+          "-DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe",
+          "-DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe"
+        ],
+        "returncode": 0,
+        "seconds": 83.736,
+        "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\configure.log"
+      },
+      "build": {
+        "argv": [
+          "C:/msys64/ucrt64/bin/cmake.exe",
+          "--build",
+          "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\build",
+          "--parallel",
+          "8"
+        ],
+        "returncode": 0,
+        "seconds": 64.184,
+        "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\d933c77be4236c2b807a5325fa13fd6326f06b92\\build.log"
+      },
+      "executable_sha256": "c5ef07e9d261e6407207fb39a1259186ea8df576201bcde102dc07b2c8b33828",
+      "witness": {
+        "status": "OK",
+        "hash": "6D9886E3B3EE0383",
+        "cycles": 594890,
+        "run": "1B83AC4DB8C39F65"
+      }
+    },
+    "834028cd5ab3d553a9398e0ca88f5ec72de63b68": {
+      "revision": "834028cd5ab3d553a9398e0ca88f5ec72de63b68",
+      "tree": "43f59aa2a905efdaa73d4bd2cf016e35f74bd9b1",
+      "checks": [
+        {
+          "argv": [
+            "C:/msys64/ucrt64/bin/ctest.exe",
+            "--test-dir",
+            "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\build",
+            "--output-on-failure"
+          ],
+          "returncode": 0,
+          "seconds": 0.832,
+          "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\check-0.log"
+        }
+      ],
+      "runs": [
+        {
+          "argv": [
+            "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\build\\GSSquared.exe",
+            "-p",
+            "5",
+            "-n"
+          ],
+          "returncode": 0,
+          "seconds": 1.341,
+          "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\run-0\\output.log",
+          "witness": {
+            "status": "OK",
+            "hash": "6D9886E3B3EE0383",
+            "cycles": 594890,
+            "run": "1B83AC4DB8C39F65"
+          },
+          "pins": {
+            "seed": "1",
+            "faketime": "1780000000",
+            "ramdisk": "1",
+            "bram": "default/16D173BDFCDAE583",
+            "pace": "fast",
+            "platform": "5",
+            "frames": "30",
+            "rom": "131072/4E6B6EE5B32F63CF",
+            "machine": "8/p5",
+            "slots": "3:second_sight,7:bazfast3"
+          }
+        },
+        {
+          "argv": [
+            "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\build\\GSSquared.exe",
+            "-p",
+            "5",
+            "-n"
+          ],
+          "returncode": 0,
+          "seconds": 0.991,
+          "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\run-1\\output.log",
+          "witness": {
+            "status": "OK",
+            "hash": "6D9886E3B3EE0383",
+            "cycles": 594890,
+            "run": "1B83AC4DB8C39F65"
+          },
+          "pins": {
+            "seed": "1",
+            "faketime": "1780000000",
+            "ramdisk": "1",
+            "bram": "default/16D173BDFCDAE583",
+            "pace": "fast",
+            "platform": "5",
+            "frames": "30",
+            "rom": "131072/4E6B6EE5B32F63CF",
+            "machine": "8/p5",
+            "slots": "3:second_sight,7:bazfast3"
+          }
+        }
+      ],
+      "configure": {
+        "argv": [
+          "C:/msys64/ucrt64/bin/cmake.exe",
+          "-S",
+          "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\source",
+          "-B",
+          "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\build",
+          "-G",
+          "Ninja",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe",
+          "-DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe",
+          "-DCMAKE_MAKE_PROGRAM=C:/msys64/ucrt64/bin/ninja.exe"
+        ],
+        "returncode": 0,
+        "seconds": 82.398,
+        "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\configure.log"
+      },
+      "build": {
+        "argv": [
+          "C:/msys64/ucrt64/bin/cmake.exe",
+          "--build",
+          "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\build",
+          "--parallel",
+          "8"
+        ],
+        "returncode": 0,
+        "seconds": 63.781,
+        "log": "D:\\gsqs\\queue-p24-20261015\\real-history\\revisions\\834028cd5ab3d553a9398e0ca88f5ec72de63b68\\build.log"
+      },
+      "executable_sha256": "06f931c93e3bc570822e73e79c165044d83a36f5321c2207c49481ed062aa85e",
+      "witness": {
+        "status": "OK",
+        "hash": "6D9886E3B3EE0383",
+        "cycles": 594890,
+        "run": "1B83AC4DB8C39F65"
+      }
+    }
+  },
+  "dependencies": {
+    "vendored/SDL": {
+      "gitlink": "536126fdcf6b507074f9a9240c0630e748658e1f",
+      "checkout_head": "536126fdcf6b507074f9a9240c0630e748658e1f",
+      "sha256": "1589eeb664661e8b5266c8182ce7b834a17199345de5c085903818a879471683",
+      "files": 2126,
+      "model": "actual local bytes, including local changes, excluding Git metadata; fixed across revisions"
+    },
+    "vendored/SDL_image": {
+      "gitlink": "0891a7f1d4f8ee5c7336a102713a2ceee03db357",
+      "checkout_head": "0891a7f1d4f8ee5c7336a102713a2ceee03db357",
+      "sha256": "919b353b94460b5fb2f8722d6123646f0b57234c0fc6d836f556edb79efb8118",
+      "files": 7123,
+      "model": "actual local bytes, including local changes, excluding Git metadata; fixed across revisions"
+    },
+    "vendored/SDL_net": {
+      "gitlink": "92022dc5f604b435e346cf6d56cd80cf05271815",
+      "checkout_head": "92022dc5f604b435e346cf6d56cd80cf05271815",
+      "sha256": "c4a38e673bdcb9725796ff3be023daa8aa3826cd7a74874223c762d6e42f0815",
+      "files": 227,
+      "model": "actual local bytes, including local changes, excluding Git metadata; fixed across revisions"
+    },
+    "vendored/SDL_ttf": {
+      "gitlink": "b9e7e9381bc8a3e816de8a2b2b76b0749238e69a",
+      "checkout_head": "b9e7e9381bc8a3e816de8a2b2b76b0749238e69a",
+      "sha256": "7b3de7fcc988eaf015c5694133e0f2b438955ccaea345d5ec2d4b8e7403ba498",
+      "files": 4697,
+      "model": "actual local bytes, including local changes, excluding Git metadata; fixed across revisions"
+    },
+    "vendored/libslirp": {
+      "gitlink": "dd76415fce457e319d665eb8210d05c5731360ba",
+      "checkout_head": "dd76415fce457e319d665eb8210d05c5731360ba",
+      "sha256": "2a2d8c729b1ffbf4648873e51eead90f6e6e2c201aebcc51b39a048418f7db9f",
+      "files": 151,
+      "model": "actual local bytes, including local changes, excluding Git metadata; fixed across revisions"
+    }
+  },
+  "inputs": [],
+  "source_fingerprint_before": "97948e53fa0495b1cd98bd47efe6eabad40aa6f921e1582972f122e7d0ddffba",
+  "source_unchanged": true,
+  "endpoint_equal": true,
+  "earlier_revisions_verified": true,
+  "source_fingerprint_after": "97948e53fa0495b1cd98bd47efe6eabad40aa6f921e1582972f122e7d0ddffba",
+  "dependency_inputs_unchanged": true
+}

@@ -37,6 +37,7 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <map>
 
 // ---- state -------------------------------------------------------------------
 // C++17 inline variables (the idiom already used by iigs_toolbox.hpp's g_* rail
@@ -50,6 +51,13 @@ inline uint32_t  g_cov_hi      = 0;
 inline uint8_t  *g_cov_bits    = nullptr;
 inline size_t    g_cov_nbytes  = 0;
 inline uint64_t  g_cov_marked  = 0;   // distinct bytes marked (stats only)
+struct A2PCCount { uint64_t instructions = 0, cycles = 0; };
+inline bool g_cov_counts_on = false;
+inline std::map<uint32_t, A2PCCount> g_cov_counts;
+inline bool a2gspu_cov_counts_on() {
+    if (!g_cov_on) return false;
+    g_cov_counts.clear(); g_cov_counts_on = true; return true;
+}
 
 struct a2cov_map {
     uint32_t index, base;
@@ -179,6 +187,7 @@ static inline bool a2gspu_cov_init(const char *spec) {
     // Re-arming must not leak the previous bitmap, and a failed re-arm must not
     // leave the old range live and collecting: disarm first, then commit.
     g_cov_maps.clear();g_cov_plan.clear();g_cov_map_order.clear();g_cov_map_error[0]=0;
+    g_cov_counts.clear(); g_cov_counts_on = false;
     free(g_cov_bits);
     g_cov_bits = nullptr;
     g_cov_on = false;
@@ -203,6 +212,7 @@ inline void a2gspu_cov_reset() {
     if (!g_cov_on || !g_cov_bits) return;
     memset(g_cov_bits, 0, g_cov_nbytes);
     g_cov_marked = 0;
+    g_cov_counts.clear();
     for(auto &m:g_cov_maps) { std::fill(m.bits.begin(),m.bits.end(),0);std::fill(m.starts.begin(),m.starts.end(),0); }
     g_cov_map_error[0]=0;
     ++g_cov_generation;
@@ -211,12 +221,38 @@ inline void a2gspu_cov_reset() {
 // Disarm and release the bitmap.  Symmetric with cov_init so that arm/disarm
 // cycles across a long session don't leak one bitmap per arm.
 inline void a2gspu_cov_off() {
+    g_cov_counts.clear(); g_cov_counts_on = false;
     g_cov_maps.clear();g_cov_plan.clear();g_cov_map_order.clear();g_cov_map_error[0]=0;
     free(g_cov_bits);
     g_cov_bits = nullptr;
     g_cov_nbytes = 0;
     g_cov_marked = 0;
     g_cov_on = false;
+}
+
+// Separate JSON artifact: existing A2COV1/A2COV2 bytes stay compatible.
+static inline bool a2gspu_cov_counts_write(const char *path) {
+    if (!g_cov_on || !g_cov_counts_on || g_cov_map_error[0] || !path || !*path) return false;
+    uint64_t total_instructions=0,total_cycles=0;
+    for (const auto &item : g_cov_counts) {
+        if (UINT64_MAX-total_instructions < item.second.instructions || UINT64_MAX-total_cycles < item.second.cycles) return false;
+        total_instructions+=item.second.instructions; total_cycles+=item.second.cycles;
+    }
+    FILE *f = fopen(path, "wb");
+    if (!f) return false;
+    uint64_t map_hash = g_cov_plan.empty() ? 0 : HOUSE_FNV_BASIS;
+    for (uint8_t b : g_cov_plan) { map_hash ^= b; map_hash *= HOUSE_FNV_PRIME; }
+    bool ok = fprintf(f,"{\"schema\":\"a2profile-v1\",\"model\":\"instruction-cycles\",\"lo\":%u,\"hi\":%u,\"generation\":%llu,\"map_hash\":\"%016llX\",\"total_instructions\":%llu,\"total_cycles\":%llu,\"pcs\":[",
+        g_cov_lo,g_cov_hi,(unsigned long long)g_cov_generation,(unsigned long long)map_hash,
+        (unsigned long long)total_instructions,(unsigned long long)total_cycles) >= 0;
+    bool first = true;
+    for (const auto &item : g_cov_counts) {
+        ok = (fprintf(f,"%s{\"pc\":%u,\"instructions\":%llu,\"cycles\":%llu}",first?"":",",item.first,
+            (unsigned long long)item.second.instructions,(unsigned long long)item.second.cycles) >= 0) && ok;
+        first = false;
+    }
+    ok = (fprintf(f,"]}\n") >= 0) && ok;
+    return fclose(f) == 0 && ok;
 }
 
 // On-disk format (little-endian), deliberately trivial so any consumer can read it:

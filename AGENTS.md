@@ -2,9 +2,18 @@
 
 Guidance for coding agents working in this repository.
 
-> **Current handoff (2026-10-15): read `Docs/HANDOFF.md` first.** It covers the state, branches, the rules (never push;
-> drift stages need the owner's yes), and what's ready next. The task list is `Docs/AGENTIC_ROADMAP.md`, and the
+> **Current handoff (2026-10-16): read `Docs/HANDOFF.md` first.** It covers the state, branches, the rules (commit and
+> sync completed, reviewed, validated phases to `origin/a2gspu`; drift stages need
+> the owner's yes), and what's ready next. The task list is `Docs/AGENTIC_ROADMAP.md`, and the
 > reports are in `Docs/reports/`.
+
+**Owner direction, 2026-10-16:** keep the GitHub fork current at coherent task-phase
+completion points. Normal phase-completion commits and fast-forward pushes to the
+existing `origin/a2gspu` are authorized; use `Docs/HANDOFF.md` section 7 for the
+closeout procedure. This supersedes the earlier blanket no-push instruction for
+that scope. Never push upstream, change remotes or rewrite published history
+under this standing authorization. Catch up the reviewed local backlog before
+starting another major feature phase; do not publish an unreviewed dirty tree.
 
 ## What this repo is
 

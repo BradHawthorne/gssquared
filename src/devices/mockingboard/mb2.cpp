@@ -275,8 +275,13 @@ public:
     }
     static constexpr size_t A2GSPU_RECORD = 2 * N6522::A2GSPU_RECORD + AY8910s::A2GSPU_RECORD;
 
-    DebugFormatter *debug() {
+    DebugFormatter *debug(bool native_only=false) {
         DebugFormatter *df = new DebugFormatter();
+        if(native_only) {
+            df->unsignedField("slot",slot,8);n6522[0]->native_state(df,"via0.");n6522[1]->native_state(df,"via1.");
+            for(int c=0;c<2;c++)for(int r=0;r<16;r++)df->unsignedField("ay"+std::to_string(c)+".r"+std::to_string(r),ay8910s->read_register(c,r),8);
+            df->boolField("audio_phase_snapshot_complete",false);return df;
+        }
         n6522[0]->debug(df);
         n6522[1]->debug(df);
         // TODO: add AY-8910s debug
@@ -390,6 +395,6 @@ void init_slot_mockingboard(computer_t *computer, SlotType_t slot) {
             return df;
             //return debug_registers_6522(mb_d);
             //return nullptr;
-        }
+        },[mb_d]()->DebugFormatter* {return mb_d->mockingboard->debug(true);}
     );
 }

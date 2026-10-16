@@ -1,0 +1,591 @@
+{
+  "schema": "a2feature-shape-review-v1",
+  "native_verbs": 73,
+  "mcp_tools": 82,
+  "verbs": [
+    {
+      "name": "assert",
+      "native_kind": "observe",
+      "review_family": "assertion-calibration",
+      "current_shape": "Measured verdicts, named rendering profiles, negative fixtures and digest-bound evidence.",
+      "remaining_limit": "Calibration success does not prove guest success or real-hardware equivalence; blessing remains deliberate.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "audio",
+      "native_kind": "observe",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "boot",
+      "native_kind": "run",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "bp",
+      "native_kind": "manipulate",
+      "review_family": "break-fault",
+      "current_shape": "Native stop/fault boundary contracts, timestamps, source ownership and explicit fault limitations.",
+      "remaining_limit": "No mid-bus ABORT rollback; provenance traps and memory watches are distinct tools; not exhaustive device-event coverage.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "callstream",
+      "native_kind": "trace",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "capture",
+      "native_kind": "instrument",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "copilot",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "cov",
+      "native_kind": "observe",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "cpu",
+      "native_kind": "observe",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "cycles",
+      "native_kind": "observe",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "devstate",
+      "native_kind": "observe",
+      "review_family": "device-state",
+      "current_shape": "Native typed fields, coverage declarations and explicit availability/effect receipts.",
+      "remaining_limit": "Typed device state is incomplete where declared; physical host UI and actual GPU equivalence remain separate evidence.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "dhgr-calibrate",
+      "native_kind": "calibrate",
+      "review_family": "assertion-calibration",
+      "current_shape": "Measured verdicts, named rendering profiles, negative fixtures and digest-bound evidence.",
+      "remaining_limit": "Calibration success does not prove guest success or real-hardware equivalence; blessing remains deliberate.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "dhgr-export",
+      "native_kind": "calibrate",
+      "review_family": "assertion-calibration",
+      "current_shape": "Measured verdicts, named rendering profiles, negative fixtures and digest-bound evidence.",
+      "remaining_limit": "Calibration success does not prove guest success or real-hardware equivalence; blessing remains deliberate.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "dhgr-golden",
+      "native_kind": "calibrate",
+      "review_family": "assertion-calibration",
+      "current_shape": "Measured verdicts, named rendering profiles, negative fixtures and digest-bound evidence.",
+      "remaining_limit": "Calibration success does not prove guest success or real-hardware equivalence; blessing remains deliberate.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "diff",
+      "native_kind": "observe",
+      "review_family": "checkpoint",
+      "current_shape": "Transactional restore, per-file block manifests and semantic diff/checkpoint companions.",
+      "remaining_limit": "Clock/host state/synthesis exclusions prevent full replay or exact branching; never infer completeness from a save succeeding.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "dis",
+      "native_kind": "observe",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "fault",
+      "native_kind": "manipulate",
+      "review_family": "break-fault",
+      "current_shape": "Native stop/fault boundary contracts, timestamps, source ownership and explicit fault limitations.",
+      "remaining_limit": "No mid-bus ABORT rollback; provenance traps and memory watches are distinct tools; not exhaustive device-event coverage.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "help",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "hgr",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "holdkey",
+      "native_kind": "manipulate",
+      "review_family": "input",
+      "current_shape": "Owned edges, bounded injection, native readback/consumption labels; macro timeline available.",
+      "remaining_limit": "Queue acceptance, consumption and intended guest behavior are different outcomes; not full-machine replay.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "input",
+      "native_kind": "manipulate",
+      "review_family": "input",
+      "current_shape": "Owned edges, bounded injection, native readback/consumption labels; macro timeline available.",
+      "remaining_limit": "Queue acceptance, consumption and intended guest behavior are different outcomes; not full-machine replay.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "inspect",
+      "native_kind": "observe",
+      "review_family": "device-state",
+      "current_shape": "Native typed fields, coverage declarations and explicit availability/effect receipts.",
+      "remaining_limit": "Typed device state is incomplete where declared; physical host UI and actual GPU equivalence remain separate evidence.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "iolog",
+      "native_kind": "observe",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "itrace",
+      "native_kind": "trace",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "joymode",
+      "native_kind": "manipulate",
+      "review_family": "device-state",
+      "current_shape": "Native typed fields, coverage declarations and explicit availability/effect receipts.",
+      "remaining_limit": "Typed device state is incomplete where declared; physical host UI and actual GPU equivalence remain separate evidence.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "json",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "key",
+      "native_kind": "manipulate",
+      "review_family": "input",
+      "current_shape": "Owned edges, bounded injection, native readback/consumption labels; macro timeline available.",
+      "remaining_limit": "Queue acceptance, consumption and intended guest behavior are different outcomes; not full-machine replay.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "keys",
+      "native_kind": "manipulate",
+      "review_family": "input",
+      "current_shape": "Owned edges, bounded injection, native readback/consumption labels; macro timeline available.",
+      "remaining_limit": "Queue acceptance, consumption and intended guest behavior are different outcomes; not full-machine replay.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "limitations",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "load",
+      "native_kind": "manipulate",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "manifest",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "memvu",
+      "native_kind": "observe",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "mount",
+      "native_kind": "manipulate",
+      "review_family": "media",
+      "current_shape": "Explicit input path and runtime mount verdict; uploaded inputs can be passed deliberately.",
+      "remaining_limit": "Configured media and external endpoints can be shared across cold jobs; no automatic storage isolation or per-operation typed effect schema.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "oracle",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "paddle",
+      "native_kind": "manipulate",
+      "review_family": "input",
+      "current_shape": "Owned edges, bounded injection, native readback/consumption labels; macro timeline available.",
+      "remaining_limit": "Queue acceptance, consumption and intended guest behavior are different outcomes; not full-machine replay.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "pause",
+      "native_kind": "manipulate",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "pause-status",
+      "native_kind": "observe",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "pbutton",
+      "native_kind": "manipulate",
+      "review_family": "input",
+      "current_shape": "Owned edges, bounded injection, native readback/consumption labels; macro timeline available.",
+      "remaining_limit": "Queue acceptance, consumption and intended guest behavior are different outcomes; not full-machine replay.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "png",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "pngc",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "poke",
+      "native_kind": "manipulate",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "press",
+      "native_kind": "manipulate",
+      "review_family": "input",
+      "current_shape": "Owned edges, bounded injection, native readback/consumption labels; macro timeline available.",
+      "remaining_limit": "Queue acceptance, consumption and intended guest behavior are different outcomes; not full-machine replay.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "protocol",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "quit",
+      "native_kind": "run",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "rail",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "read",
+      "native_kind": "observe",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "reset",
+      "native_kind": "manipulate",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "restore",
+      "native_kind": "snapshot",
+      "review_family": "checkpoint",
+      "current_shape": "Transactional restore, per-file block manifests and semantic diff/checkpoint companions.",
+      "remaining_limit": "Clock/host state/synthesis exclusions prevent full replay or exact branching; never infer completeness from a save succeeding.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "resume",
+      "native_kind": "manipulate",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "run",
+      "native_kind": "run",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "run-until",
+      "native_kind": "run",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "save",
+      "native_kind": "snapshot",
+      "review_family": "checkpoint",
+      "current_shape": "Transactional restore, per-file block manifests and semantic diff/checkpoint companions.",
+      "remaining_limit": "Clock/host state/synthesis exclusions prevent full replay or exact branching; never infer completeness from a save succeeding.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "screen",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "session",
+      "native_kind": "meta",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "setreg",
+      "native_kind": "manipulate",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "shot",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "shr",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "shr-golden",
+      "native_kind": "calibrate",
+      "review_family": "assertion-calibration",
+      "current_shape": "Measured verdicts, named rendering profiles, negative fixtures and digest-bound evidence.",
+      "remaining_limit": "Calibration success does not prove guest success or real-hardware equivalence; blessing remains deliberate.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "speaker",
+      "native_kind": "observe",
+      "review_family": "device-state",
+      "current_shape": "Native typed fields, coverage declarations and explicit availability/effect receipts.",
+      "remaining_limit": "Typed device state is incomplete where declared; physical host UI and actual GPU equivalence remain separate evidence.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "stack",
+      "native_kind": "observe",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "step",
+      "native_kind": "run",
+      "review_family": "execution",
+      "current_shape": "Validated counts before effects; PC predicate before execution; native completion/reason/work receipts; original reply recovery.",
+      "remaining_limit": "Instruction-boundary attempts are a budget, not instruction counts or a wall-clock cancellation guarantee. General predicates still belong to host workflows.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "subscribe",
+      "native_kind": "observe",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "systems",
+      "native_kind": "meta",
+      "review_family": "discovery",
+      "current_shape": "Runtime native inventory plus MCP adapter discovery; no inference of effects from kind alone.",
+      "remaining_limit": "Operation-level typed arguments/preconditions/effect declarations remain incomplete for mixed native verbs.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "tbtrace",
+      "native_kind": "trace",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "tbuf",
+      "native_kind": "trace",
+      "review_family": "instrumentation",
+      "current_shape": "Explicit arm/status/close, bounded streams and loss counters, scoped artifact retrieval.",
+      "remaining_limit": "A file read is not producer-finalization proof; close producers before assertions. Events cover a named subset and sampled device boundaries.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "text",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "trap",
+      "native_kind": "break",
+      "review_family": "break-fault",
+      "current_shape": "Native stop/fault boundary contracts, timestamps, source ownership and explicit fault limitations.",
+      "remaining_limit": "No mid-bus ABORT rollback; provenance traps and memory watches are distinct tools; not exhaustive device-event coverage.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "ui",
+      "native_kind": "manipulate",
+      "review_family": "device-state",
+      "current_shape": "Native typed fields, coverage declarations and explicit availability/effect receipts.",
+      "remaining_limit": "Typed device state is incomplete where declared; physical host UI and actual GPU equivalence remain separate evidence.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "valtrap",
+      "native_kind": "break",
+      "review_family": "break-fault",
+      "current_shape": "Native stop/fault boundary contracts, timestamps, source ownership and explicit fault limitations.",
+      "remaining_limit": "No mid-bus ABORT rollback; provenance traps and memory watches are distinct tools; not exhaustive device-event coverage.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "verify",
+      "native_kind": "observe",
+      "review_family": "cpu-memory",
+      "current_shape": "Named CPU/MMU views and readability; deliberate writes; quoted load inputs; byte-level verification.",
+      "remaining_limit": "Many native verbs still use the legacy arguments string and file artifacts; exact decoder/source assumptions must be inspected.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "vid",
+      "native_kind": "observe",
+      "review_family": "device-state",
+      "current_shape": "Native typed fields, coverage declarations and explicit availability/effect receipts.",
+      "remaining_limit": "Typed device state is incomplete where declared; physical host UI and actual GPU equivalence remain separate evidence.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "vram",
+      "native_kind": "observe",
+      "review_family": "screen-evidence",
+      "current_shape": "Named RAM/reference rasters and raw text; complete native PNGs become viewable MCP images.",
+      "remaining_limit": "Reference pixels are not actual GPU output; SDL BMP remains binary transport without preview; configured glyph extraction is not universal OCR.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    },
+    {
+      "name": "watch",
+      "native_kind": "observe",
+      "review_family": "break-fault",
+      "current_shape": "Native stop/fault boundary contracts, timestamps, source ownership and explicit fault limitations.",
+      "remaining_limit": "No mid-bus ABORT rollback; provenance traps and memory watches are distinct tools; not exhaustive device-event coverage.",
+      "review_scope": "interface/model inventory; deeper new code changes and fixtures are identified in README, not an exhaustive proof of every implementation branch"
+    }
+  ]
+}

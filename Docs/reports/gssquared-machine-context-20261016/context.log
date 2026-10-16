@@ -1,0 +1,186 @@
+PASS context verdict overview
+PASS native context schema
+PASS history is explicitly off by default
+PASS context verdict address 000800
+PASS RAM explains actual probe value
+PASS context verdict address 00C030
+PASS I/O explanation never returns placeholder as truth
+PASS context verdict overview
+PASS observation consumes no guest cycles
+PASS context verdict topology 0
+PASS context verdict topology 8
+PASS context verdict topology 16
+PASS context verdict topology 24
+PASS context verdict topology 32
+PASS absent models are discoverable
+PASS context verdict device 1
+PASS absent model cannot borrow another installed model observer
+PASS CPU participates in topology
+PASS topology links implementation sources
+PASS context verdict on 0
+PASS context verdict overview
+PASS invalid arm does not change history
+PASS context verdict on 128
+PASS context verdict on 128
+PASS context verdict mark 000900 1
+PASS context verdict changes 1 0
+PASS context verdict changes 1 8
+PASS instruction store joins marked memory delta
+PASS CPU register delta is typed
+PASS context verdict changes 999999
+PASS context verdict address 1000000
+PASS context verdict history 999999 4
+PASS context verdict irq
+PASS IRQ explains independent asserted source
+PASS context verdict history 0 8
+PASS context verdict history 68 8
+PASS context verdict history 76 8
+PASS context verdict history 84 8
+PASS context verdict history 92 8
+PASS context verdict history 100 8
+PASS context verdict history 108 8
+PASS context verdict history 116 8
+PASS context verdict history 124 8
+PASS context verdict history 132 8
+PASS context verdict history 139 8
+PASS context verdict history 146 8
+PASS context verdict history 151 8
+PASS context verdict history 159 8
+PASS context verdict history 164 8
+PASS context verdict history 169 8
+PASS context verdict history 177 8
+PASS context verdict history 184 8
+PASS accepted NMI has exact transition evidence
+PASS resolved vector links its actual interrupt entry
+PASS IRQ edge retained without separate subscription
+PASS context verdict stop
+PASS stop explanation links execution receipt
+PASS event clocks are explicit
+PASS command completion refers to its actual begin event
+PASS context verdict schedule
+PASS scheduler clocks are separate domains
+PASS context verdict snapshot "C:/msys64/tmp/a2p0-fv3lqcx_/context snapshot.json"
+PASS full snapshot and reference have identical observation identity
+PASS producer receipt binds closed snapshot bytes
+PASS snapshot contains native device and signal observations
+PASS capture overhead is measured in host time
+PASS context verdict pixel 0 0
+PASS pixel explanation names its model and implementation
+PASS context verdict pixel 640 0
+PASS context verdict off
+PASS context verdict on 4
+PASS context verdict history 0 8
+PASS overwritten history reports loss
+PASS context verdict off
+PASS context verdict off
+PASS session exits cleanly
+PASS context MCP lifecycle: 
+PASS native and typed context tools discoverable
+PASS typed context result 4
+PASS MCP arms native history
+PASS typed context result 7
+PASS typed context result 7
+PASS live context reads while machine runs
+PASS typed context result 10
+PASS typed context result 5
+PASS live context carries native monotonic counters
+PASS observer mutation and malformed query refuse
+PASS session exits cleanly
+PASS session exits cleanly
+PASS armed context preserves actual instruction/CPU/cycle witnesses on platform 3
+PASS context verdict overview
+PASS native context schema
+PASS history is explicitly off by default
+PASS context verdict address 000800
+PASS RAM explains actual probe value
+PASS context verdict address 00C030
+PASS I/O explanation never returns placeholder as truth
+PASS context verdict overview
+PASS observation consumes no guest cycles
+PASS context verdict topology 0
+PASS context verdict topology 8
+PASS context verdict topology 16
+PASS context verdict topology 24
+PASS context verdict topology 32
+PASS absent models are discoverable
+PASS context verdict device 1
+PASS absent model cannot borrow another installed model observer
+PASS CPU participates in topology
+PASS topology links implementation sources
+PASS context verdict on 0
+PASS context verdict overview
+PASS invalid arm does not change history
+PASS context verdict on 128
+PASS context verdict on 128
+PASS context verdict mark 000900 1
+PASS context verdict changes 1 0
+PASS context verdict changes 1 8
+PASS instruction store joins marked memory delta
+PASS CPU register delta is typed
+PASS context verdict changes 999999
+PASS context verdict address 1000000
+PASS context verdict history 999999 4
+PASS context verdict irq
+PASS IRQ explains independent asserted source
+PASS context verdict history 0 8
+PASS context verdict history 335 8
+PASS context verdict history 343 8
+PASS context verdict history 351 8
+PASS context verdict history 359 8
+PASS context verdict history 366 8
+PASS context verdict history 374 8
+PASS context verdict history 382 8
+PASS context verdict history 390 8
+PASS context verdict history 398 8
+PASS context verdict history 406 8
+PASS context verdict history 413 8
+PASS context verdict history 421 8
+PASS context verdict history 427 8
+PASS context verdict history 435 8
+PASS context verdict history 440 8
+PASS context verdict history 448 8
+PASS context verdict history 453 8
+PASS accepted NMI has exact transition evidence
+PASS resolved vector links its actual interrupt entry
+PASS IRQ edge retained without separate subscription
+PASS context verdict stop
+PASS stop explanation links execution receipt
+PASS event clocks are explicit
+PASS command completion refers to its actual begin event
+PASS context verdict schedule
+PASS scheduler clocks are separate domains
+PASS context verdict snapshot "C:/msys64/tmp/a2p0-7du2n3yn/context snapshot.json"
+PASS full snapshot and reference have identical observation identity
+PASS producer receipt binds closed snapshot bytes
+PASS snapshot contains native device and signal observations
+PASS capture overhead is measured in host time
+PASS context verdict pixel 0 0
+PASS pixel explanation names its model and implementation
+PASS context verdict pixel 640 0
+PASS context verdict pixel 0 0
+PASS SHR explanation follows physical interleaving and RGB nibbles
+PASS context verdict pixel 0 0
+PASS unreconstructed fill history refuses a false RGB
+PASS context verdict pixel 0 0
+PASS 640-mode split palette group is explicit
+PASS context verdict off
+PASS context verdict on 4
+PASS context verdict history 0 8
+PASS overwritten history reports loss
+PASS context verdict off
+PASS context verdict off
+PASS session exits cleanly
+PASS context MCP lifecycle: 
+PASS native and typed context tools discoverable
+PASS typed context result 4
+PASS MCP arms native history
+PASS typed context result 7
+PASS typed context result 7
+PASS live context reads while machine runs
+PASS typed context result 10
+PASS typed context result 5
+PASS live context carries native monotonic counters
+PASS observer mutation and malformed query refuse
+PASS session exits cleanly
+PASS session exits cleanly
+PASS armed context preserves actual instruction/CPU/cycle witnesses on platform 5

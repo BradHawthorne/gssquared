@@ -9,6 +9,13 @@ nearly did, in that week.
 
 ## Status at a glance
 
+**2026-10-16 context layer:** [`MACHINE_CONTEXT.md`](MACHINE_CONTEXT.md)
+connects the mechanisms below through one observation identity, live topology,
+named explanations, scheduler labels, bounded parented events and state marks.
+The Rosetta experiment companion binds correctness and native execution to
+measured efficiency. Complete device data flow, presentation and replay remain
+open rather than implied by this interface.
+
 The Status paragraph under each mechanism is the detail; this table is the summary, and it
 is kept to what the code does now. Items listed as open are real work, not wording.
 
@@ -18,10 +25,10 @@ is kept to what the code does now. Items listed as open are real work, not wordi
 | M2 attribution in summaries | done | — |
 | M3 unhonourable inputs are fatal | done | a few "skipped" paths remain counted warnings by choice |
 | M4 liveness | done | — |
-| M5 snapshot manifests + device blocks | partial | adb, ensoniq, vgcint, scanner (Class B), iwm, diskii, media and pdblock are saved; the clock, the RTC and serial are not |
+| M5 snapshot manifests + device blocks | partial | CPU/MMU plus per-device blocks include scanner, storage, RTC/ThunderClock, SCC/SSC, network and several cards; the session clock, host connections and some synthesis phases remain outside the snapshot. The file's included/excluded manifest is authoritative |
 | M6 artifact discipline | done | — |
 | M7 names by default | done | segments loaded later by `LoadSegNum`, and loads that happen before the call tracker runs, are not named |
-| M8 reachability + readback | done | launch-only rails are declared by absence from the reach table; 42 are also armable live (`rail set`) |
+| M8 reachability + readback | done | the reach table declares control and readback separately; `rail live` lists live setters and launch-only bindings (70 live setters as of 2026-10-15) |
 | M9 determinism asserted | done | — |
 | M10 configuration over code | done, one standing exception | the WIZ5 title traps stand until their readers move (AGENTS.md rule 2) |
 | M11 a peek that works everywhere | done | — |

@@ -220,7 +220,7 @@ void schedule_tp(thunderclock_state *st, bool from_due) {
         next = now + period;   // fell behind (a long stop): resume the cadence, do not burst
     }
     st->next_tp_14m = next;
-    st->event_timer->scheduleEvent(next, thunderclock_tp_tick, timer_id_tp(st->_slot), st);
+    st->event_timer->scheduleEvent(next, thunderclock_tp_tick, timer_id_tp(st->_slot), st, "thunderclock_plus.thunderclock_tp_tick", "src/devices/thunderclock_plus/thunderclockplus.cpp");
 }
 
 void schedule_1hz(thunderclock_state *st, bool from_due) {
@@ -234,7 +234,7 @@ void schedule_1hz(thunderclock_state *st, bool from_due) {
         next = now + period;
     }
     st->next_1hz_14m = next;
-    st->event_timer->scheduleEvent(next, thunderclock_1hz_tick, timer_id_1hz(st->_slot), st);
+    st->event_timer->scheduleEvent(next, thunderclock_1hz_tick, timer_id_1hz(st->_slot), st, "thunderclock_plus.thunderclock_1hz_tick", "src/devices/thunderclock_plus/thunderclockplus.cpp");
 }
 
 void start_tp(thunderclock_state *st, uint32_t hz) {
@@ -458,6 +458,11 @@ void init_slot_thunderclock(computer_t *computer, SlotType_t slot) {
 
     computer->register_debug_display_handler("thunderclock", DH_THUNDERCLOCK, [st]() {
         return debug_thunderclock(st);
+    },[st]()->DebugFormatter* {
+        auto *df=new DebugFormatter();df->unsignedField("slot",st->_slot,8);df->unsignedField("command",st->latched_cmd,8);
+        df->unsignedField("last_write",st->last_write,8);df->unsignedField("shift_register",st->shift_reg,64);
+        df->unsignedField("time_counter",st->time_counter,64);df->boolField("irq_enabled",st->irqen);df->boolField("irq",st->irq_status);
+        df->unsignedField("tp_frequency",st->tp_hz,32,"Hz");df->boolField("time_set_active",st->time_set_active);return df;
     });
 
     fprintf(stdout, "ThunderClock Plus init slot %d ($C0%02X)\n", static_cast<int>(slot),
@@ -519,12 +524,12 @@ bool thunderclock_A2GSPU_restore(FILE *f, int *absent) {
         const uint64_t now = st->clock ? st->clock->get_c14m() : 0;
         if (st->time_set_active && st->event_timer && st->clock) {
             st->next_1hz_14m = now + (q[2] ? q[2] : st->clock->get_c14m_per_second());
-            st->event_timer->scheduleEvent(st->next_1hz_14m, thunderclock_1hz_tick, timer_id_1hz(st->_slot), st);
+            st->event_timer->scheduleEvent(st->next_1hz_14m, thunderclock_1hz_tick, timer_id_1hz(st->_slot), st, "thunderclock_plus.thunderclock_1hz_tick", "src/devices/thunderclock_plus/thunderclockplus.cpp");
         }
         st->tp_hz = hz;
         if (hz && st->event_timer && st->clock) {
             st->next_tp_14m = now + (q[3] ? q[3] : st->clock->get_c14m_per_second() / hz);
-            st->event_timer->scheduleEvent(st->next_tp_14m, thunderclock_tp_tick, timer_id_tp(st->_slot), st);
+            st->event_timer->scheduleEvent(st->next_tp_14m, thunderclock_tp_tick, timer_id_tp(st->_slot), st, "thunderclock_plus.thunderclock_tp_tick", "src/devices/thunderclock_plus/thunderclockplus.cpp");
         }
         update_irq(st);
     }

@@ -337,6 +337,11 @@ void init_mb_iie_keyboard(computer_t *computer, SlotType_t slot) {
             DebugFormatter *df = new DebugFormatter;
             df->addLine("key_down_count: %d", kb_state->key_down_count);
             return df;
+        },
+        [kb_state]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();df->unsignedField("keys_down",kb_state->key_down_count,32,"keys");
+            df->unsignedField("key_latch",kb_state->kb_key_strobe,8);
+            df->unsignedField("paste_remaining",kb_state->paste_buffer.size(),64,"bytes");return df;
         }
     );
     // set up the keyboard message.

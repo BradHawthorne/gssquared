@@ -1,0 +1,55 @@
+{
+  "schema": "a2rosetta-source-proof-v1",
+  "binary_sha256": "f1c0040e1aa2c235dc74891bea8d5aac08f215c1060a643e69c7597b536ddda6",
+  "debug_sha256": "aef4608cef28e5159049364c381bbe016e20631843471e66996de1476168b005",
+  "results": [
+    {
+      "platform": 3,
+      "register_a": 66,
+      "pc": 2053,
+      "instructions": "2",
+      "location": {
+        "schema": "a2source-location-v1",
+        "pc": 2053,
+        "locations": [
+          {
+            "offset": 5,
+            "file": "D:/gsqs/interface-completeness-20261015/rosetta/linefixture.s",
+            "line": 5,
+            "column": 1,
+            "segment": "2",
+            "instruction_offset": 0
+          }
+        ],
+        "ambiguous": false,
+        "binding_verified": true,
+        "binding_reason": null
+      }
+    },
+    {
+      "platform": 5,
+      "register_a": 66,
+      "pc": 2053,
+      "instructions": "2",
+      "location": {
+        "schema": "a2source-location-v1",
+        "pc": 2053,
+        "locations": [
+          {
+            "offset": 5,
+            "file": "D:/gsqs/interface-completeness-20261015/rosetta/linefixture.s",
+            "line": 5,
+            "column": 1,
+            "segment": "2",
+            "instruction_offset": 0
+          }
+        ],
+        "ambiguous": false,
+        "binding_verified": true,
+        "binding_reason": null
+      }
+    }
+  ],
+  "planted_byte_change_refused": true,
+  "c_source_status": "cciigs -g output requires producer work; no C-line claim made by this assembly proof"
+}

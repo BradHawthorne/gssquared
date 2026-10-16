@@ -1,0 +1,53 @@
+{
+  "schema": "a2machine-context-validation-v1",
+  "date": "2026-10-16",
+  "gates_passed": 14,
+  "ctest_passed": 14,
+  "python_tests_passed": 21,
+  "native_verbs": 74,
+  "mcp_tools": 85,
+  "rails": 161,
+  "wire_types": 32,
+  "timer_label_sites": 35,
+  "rosetta_efficiency_cases": 8,
+  "rosetta_cpu": {
+    "total": 103,
+    "identical": 100,
+    "known_stop_policy_differences": 3,
+    "cycle_only": 0
+  },
+  "rosetta_c_source_platforms": [
+    4,
+    5
+  ],
+  "executable": "D:\\gsqs\\coherency-20261015\\build\\GSSquared-context.exe",
+  "sha256": "46251820eaf9d51ea20dff8bf6e9ae5960224eeeaf8376b726c61f628abf5866",
+  "protected_consumer_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "experiment_directory": "D:\\gsqs\\machine-context-20261016\\rosetta-final",
+  "source_sha256": {
+    "src/a2gspu_context.hpp": "e07e5b5533b1b227929536b23e7335d7ad866549f11963536b17ce00a55a42c3",
+    "src/a2gspu_events.hpp": "a342c0fce7fe8c670390766f51cce33c73a9c65aadb91e4a0039b2c607ff8556",
+    "src/cpus/base_6502.cpp": "e721f52c089f788b0d8c69ac96e84a8c20abaa8c8ee1277c829b1cf900469783",
+    "src/util/EventTimer.hpp": "d648647e032a4673ae685edb4c9901da801ac2d2b501208456ef057dad894c83",
+    "src/util/EventTimer.cpp": "211f743556973f9be8c976873379bba9e2eaef667ab72d9da809feda7324d5aa",
+    "src/mmus/mmu.hpp": "e2cc90b59c21d48ef4488017ac2c719eda0e9d673de1abb00fe7add2f3a28db9",
+    "src/util/InterruptController.hpp": "09db3c8b0abca83d4703062e2351f5c00c5cfcce1cf386d2e7d0c380eca7c9b4",
+    "src/a2gspu_ctrl.cpp": "3181747904fb0c6be435ff0696aa34f7ac2953b371e385a00b12164f51ebb50b",
+    "src/a2gspu_ctrl_cmds.cpp": "4f96ad83b4408df0aed4c4aa729c3439becac70489800dd0e8ae07df5c1ef5dd",
+    "tools/a2rail/experiment.py": "c77ea081f93e0a9d557556d92e21f7ba684fcb8b6c21ea69d5928c7ff93a6b96",
+    "tools/a2rail/experimentcheck.py": "8622acb1746eaec13352af3c604c5b467d9a6b052908c5c50c4963f8ff4da9c2",
+    "clients/python/src/gs2debug/__init__.py": "2576de116f98c72f0aa71744b91f8988c1d8b86cb6648e682ee3a3207806c418",
+    "clients/python/src/gs2debug/artifacts.py": "58fe6e83b3cd4503312a7813f174c947249c7b94d566e78be2e977864d0533d0",
+    "clients/python/src/gs2debug/client.py": "897001e7be9ac2029c920fe9c21e3d08d8b1baab4a75365dbef8a56187eb11d1",
+    "clients/python/src/gs2debug/context.py": "9e49c0f4b643f47a205824c41d6eeccce75e9690633cf69c92653c8356850044",
+    "clients/python/src/gs2debug/ctrl.py": "dab16a5e5bd7d24fe0ce27783d8fc9b1779d391632d734d32cb9c612bbe1d7e8",
+    "clients/python/src/gs2debug/errors.py": "6b42f01bedf0121732b93bc99ce45cbd73ed771de69414b90e5dc47c97114ccd",
+    "clients/python/src/gs2debug/frame.py": "94d7df108e46511c8a0a2483e8600551f87c138a4474f1c75e5b0b30a67edf13",
+    "clients/python/src/gs2debug/keys.py": "3584160112d446de7cadda19e0ae81fd35893bf1dfdc178d62c45caedc72bfe1",
+    "clients/python/src/gs2debug/mcp.py": "6f9cc38c953a51385d58aa64a9fde31cad00e9b0c1ae9dd8f4aef78d1af0d9f4",
+    "clients/python/src/gs2debug/observations.py": "c1658b1828733abb924e51e3b14c58d61a3c6169bc0c6ffa75a0c598ee42bae9",
+    "clients/python/src/gs2debug/types.py": "a1735e5f910b7d14a26961474150ced808766e63ab20f58da3e695624a6c9005",
+    "clients/python/src/gs2debug/unix_socket.py": "baf14e59253b390adef81bc83656d6365f16db2dc4cef988dd17ee5fa314c0a8"
+  },
+  "model": "working-checkout inputs; no complete replay, hardware optimum, physical GUI proof or frozen distribution implied"
+}

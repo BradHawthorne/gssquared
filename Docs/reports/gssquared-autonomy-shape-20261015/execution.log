@@ -1,0 +1,62 @@
+PASS invalid execution request has no work: step 0
+PASS invalid execution preserves CPU: step 0
+PASS invalid execution request has no work: step -1
+PASS invalid execution preserves CPU: step -1
+PASS invalid execution request has no work: step 1junk
+PASS invalid execution preserves CPU: step 1junk
+PASS invalid execution request has no work: step 1 extra
+PASS invalid execution preserves CPU: step 1 extra
+PASS invalid execution request has no work: run 0
+PASS invalid execution preserves CPU: run 0
+PASS invalid execution request has no work: run -1
+PASS invalid execution preserves CPU: run -1
+PASS invalid execution request has no work: run 1junk
+PASS invalid execution preserves CPU: run 1junk
+PASS invalid execution request has no work: run 1 extra
+PASS invalid execution preserves CPU: run 1 extra
+PASS invalid execution request has no work: run-until 0800 0
+PASS invalid execution preserves CPU: run-until 0800 0
+PASS invalid execution request has no work: run-until 0800 -1
+PASS invalid execution preserves CPU: run-until 0800 -1
+PASS invalid execution request has no work: run-until 0800 1junk
+PASS invalid execution preserves CPU: run-until 0800 1junk
+PASS invalid execution request has no work: run-until 0800 1 extra
+PASS invalid execution preserves CPU: run-until 0800 1 extra
+PASS already-satisfied PC goal does not execute another instruction
+PASS already-satisfied goal preserves the unexecuted memory effect
+PASS PC goal reached on final instruction is success
+PASS target execution produces exactly one known memory effect
+PASS budget exhaustion is not goal completion
+PASS valid step completes its explicit instruction goal
+PASS session exits cleanly
+PASS invalid execution request has no work: step 0
+PASS invalid execution preserves CPU: step 0
+PASS invalid execution request has no work: step -1
+PASS invalid execution preserves CPU: step -1
+PASS invalid execution request has no work: step 1junk
+PASS invalid execution preserves CPU: step 1junk
+PASS invalid execution request has no work: step 1 extra
+PASS invalid execution preserves CPU: step 1 extra
+PASS invalid execution request has no work: run 0
+PASS invalid execution preserves CPU: run 0
+PASS invalid execution request has no work: run -1
+PASS invalid execution preserves CPU: run -1
+PASS invalid execution request has no work: run 1junk
+PASS invalid execution preserves CPU: run 1junk
+PASS invalid execution request has no work: run 1 extra
+PASS invalid execution preserves CPU: run 1 extra
+PASS invalid execution request has no work: run-until 0800 0
+PASS invalid execution preserves CPU: run-until 0800 0
+PASS invalid execution request has no work: run-until 0800 -1
+PASS invalid execution preserves CPU: run-until 0800 -1
+PASS invalid execution request has no work: run-until 0800 1junk
+PASS invalid execution preserves CPU: run-until 0800 1junk
+PASS invalid execution request has no work: run-until 0800 1 extra
+PASS invalid execution preserves CPU: run-until 0800 1 extra
+PASS already-satisfied PC goal does not execute another instruction
+PASS already-satisfied goal preserves the unexecuted memory effect
+PASS PC goal reached on final instruction is success
+PASS target execution produces exactly one known memory effect
+PASS budget exhaustion is not goal completion
+PASS valid step completes its explicit instruction goal
+PASS session exits cleanly

@@ -20,6 +20,9 @@
 
 #include "gs2_app.hpp"
 #include "a2gspu_run_kind.hpp"   // a2gspu_automated_run(): the preferences gate
+#include "a2gspu_console.hpp"
+#include "a2gspu_scc_capture.hpp"
+#include "devices/scc8530/scc8530.hpp"
 
 // The record contract's clock and frame, registered at arm so a rail that holds
 // only a cpu_state (WATCH, CALLSTREAM) can still stamp every record.
@@ -268,6 +271,13 @@ void register_clock_debug(computer_t *computer) {
                 f->addLine("Ludicrous Cal: %s", cal);
             }
             return f;
+        },
+        [computer]() -> DebugFormatter * {
+            auto *df=new DebugFormatter();
+            df->unsignedField("cycles",computer->clock->get_cycles(),64,"NClock-cycles");
+            df->unsignedField("c14m",computer->clock->get_c14m(),64,"14M-ticks");
+            df->unsignedField("mode",computer->clock->get_clock_mode(),32);
+            return df;
         }
     );
 
@@ -405,6 +415,7 @@ bool run_one_frame(computer_t *computer) {
 
         /* Execute Device Frames - 60 fps */
         MEASURE(computer->device_times, computer->device_frame_dispatcher->dispatch());
+        a2gspu_device_events(computer);
 
         /* Emit Video Frame */
         // set flag to force full frame draw instead of cycle based draw.
@@ -529,6 +540,7 @@ bool run_one_frame(computer_t *computer) {
 
             /* Execute Device Frames - 60 fps */
             MEASURE(computer->device_times, computer->device_frame_dispatcher->dispatch());
+    a2gspu_device_events(computer);
 
             /* Emit Video Frame */
             if (computer->execution_mode != EXEC_STEP_INTO) {
@@ -931,6 +943,7 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
             continue;
         }
         device->power_on(computer, SLOT_NONE);
+        computer->installed_devices.emplace_back((int)device->id,(int)SLOT_NONE);
     }
 
     std::string slot_error;
@@ -951,10 +964,14 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
             continue;
         } 
         device->power_on(computer, (SlotType_t)i);
+        computer->installed_devices.emplace_back((int)device->id,i);
 
         computer->slot_manager->register_slot(device, (SlotType_t)i);
     }
 
+    // Fork-owned launch bindings. Explicit requests fail on unsupported machines.
+    a2_scc_capture_init(scc_A2GSPU_present());
+    a2_wdm_init(computer);
     register_clock_debug(computer);
 
     computer->cpu->reset();
@@ -1015,6 +1032,9 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
             DH_MMUGS, // unique ID for this, need to have in a header.
             [state]() -> DebugFormatter * {
                 return debug_mmu_iigs(state->mmu_iigs);
+            },
+            [state]() -> DebugFormatter * {
+                auto *df=new DebugFormatter();state->mmu_iigs->debug_dump(df,true);return df;
             }
         );
 
@@ -1034,6 +1054,7 @@ void transition_to_emulation(GS2AppState *state, const SystemConfig_t *system_co
         vs->set_crt_shader_enabled(true, true);
     }
     state->phase = PHASE_EMULATION;
+    if(state->agent_socket_mode)run_headless_spike(state);
 }
 
 /*
@@ -1325,6 +1346,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         }
     }
 
+    state->agent_socket_mode=a2gspu_agent_socket_enabled();
+    if(state->agent_socket_mode) {
+        if(debug_socket_path.empty() || (!platform_explicit && config_path.empty()) || SDL_getenv("A2GSPU_CTRL") || SDL_getenv("A2GSPU_COPILOT") || SDL_getenv("A2GSPU_SPIKE_FRAMES")) {
+            std::cerr<<"A2GSPU_AGENT: FAIL requires --debug and an explicit machine; cannot combine CTRL/COPILOT/SPIKE_FRAMES\n";
+            delete state;return SDL_APP_FAILURE;
+        }
+        gs2_app_values.no_input=true;
+    }
     if (!config_path.empty()) {
         std::string error;
         if (!apply_system_config_file(state, config_path, error)) {
@@ -1373,6 +1402,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     // Start debug protocol after computer exists so GET_STATUS can read execution_mode.
     if (!debug_socket_path.empty()) {
         state->debug_protocol = std::make_unique<DebugProtocolServer>(debug_socket_path);
+        state->debug_protocol->set_agent_handler([state,frame=0](bool discovery,const std::string &command)mutable{
+            return a2gspu_agent_request(state,discovery,command,frame);
+        });
         if (!state->debug_protocol->start()) {
             std::cerr << "Failed to start debug protocol server on " << debug_socket_path << "\n";
             delete state->computer;

@@ -13,9 +13,8 @@
 #define TRACE_FLAG_X   0x10
 #define TRACE_FLAG_M   0x20 */
 
-// A2GSPU_TRACE_EXT: append DBR / DP / cycle-delta / (derived) scanline to each
-// decoded 65816 trace line. Default OFF => the trace text is byte-identical to
-// before (a provable no-op); the fields are all already recorded in the entry.
+// A2GSPU_TRACE_EXT: append recorded DBR / DP / NClock cycle count to decoded
+// trace lines. No formatter state or inferred video phase. Default OFF.
 inline bool g_a2gspu_trace_ext = false;
 
 // minimum of 8 byte chonkiness

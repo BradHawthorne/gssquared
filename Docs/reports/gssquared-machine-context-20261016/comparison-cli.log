@@ -1,0 +1,3 @@
+PASS: retained real Rosetta pair accepted
+PASS: changed retained image refused
+experiment: retained experiment artifact identity mismatch

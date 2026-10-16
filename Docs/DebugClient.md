@@ -1,5 +1,224 @@
 # External Debug Client
 
+## Connected machine context
+
+`gs2debug.context.call(client, "gs2_context_read", {"kind":"overview"})`
+uses native `context` replies and also works while running, sampled on the
+machine thread. `gs2_context_track` changes observer state (`on`, `off`, `mark`)
+and requires explicit pause. Source-linked explanations, topology, changes,
+history, clocks and snapshot receipts are documented in
+[MACHINE_CONTEXT.md](MACHINE_CONTEXT.md). The same adapters are exposed by MCP;
+native `Client.agent_command("context ...")` remains available directly.
+
+## Python file-rail client
+
+`gs2debug.CtrlClient(directory, owner=None, timeout=20)` drives an existing CTRL
+or co-pilot session using native JSON replies. It is separate from the socket
+`Client`. Use it as a context manager; `close()` releases its writer lease and
+an explicit `command('quit')` ends the emulator. Do not mix writers on a session.
+
+```python
+from gs2debug import CtrlClient, CommandPending
+with CtrlClient(control_directory) as emu:
+    print(emu.cpu())
+    capabilities = emu.inspect('capabilities')['data']
+    memory = emu.inspect('memory', '000800', '32')
+    result = emu.command('step 1')['data']
+```
+
+Commands are published atomically without overwriting another sequence. An
+optional owner must match `session.json`. A timeout raises `CommandPending`
+while retaining the pending sequence: call `wait()` without reissuing the
+command. `CommandFailed.reply` retains a negative native verdict, including
+typed counts when available; `command(..., check=False)` returns it directly.
+Acknowledgements must have the expected schema, command identity and boolean
+verdict. Inspection validates the artifact reference and schema and retains the
+artifact in the session directory. A stale lease requires explicit cleanup by
+the session owner; the client never guesses that another writer is dead.
+
+The package is under `clients/python/src`, or can be installed from
+`clients/python`. Runtime `inspect capabilities` also names the client library.
+
+## Shared socket agent tools
+
+`Client.agent_tools()` discovers the live command/capability registry.
+`Client.agent_command(command, check=True, timeout=None)` invokes the same
+handler as CTRL and returns its native JSON envelope. A negative verdict raises
+`ProtocolError`; `check=False` retains it for inspection. Commands carry their
+full identity and typed data where the handler supplies it. These are deliberate
+tools: a command may change guest state, arm a rail or write host artifacts.
+
+```python
+client.hello()
+catalog = client.agent_tools()
+client.pause()
+state = client.agent_command('cpu')['data']['state']
+client.agent_command('ui monitor green')
+result = client.agent_command('step 1')['data']
+```
+
+Ordinary tools require a paused machine. Explicit `pause` also works while
+running; execution/key waits return paused, while `resume` intentionally runs.
+Native context read queries also work while running at a machine-thread
+boundary; `context on/off/mark` require socket pause.
+Use `quit()` for acknowledged shutdown. Transport timeout is not cancellation
+and does not authorize retrying a mutation. No command is evaluated by a shell.
+
+## MCP entry point
+
+The source-checkout adapter is `python -I tools/a2rail/mcpserver.py`; installing
+the Python package also supplies `gs2-mcp`. It implements a bounded stdio tools
+profile of MCP version `2025-11-25`, using newline-delimited JSON-RPC and both
+structured/text results. The profile follows the official
+[stdio transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
+and [tool result/error contracts](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
+It advertises tools only; HTTP, tasks and cancellation are not implemented.
+
+Launch an owned machine with `--exe <tested-executable> --platform 5 --out-root
+<runs-directory>`, or use `--config <file.gs2>` instead of `--platform`.
+Each launch creates a fresh child directory, so a fixed MCP client configuration
+can restart without deleting evidence. `--out-dir <fresh-directory>` instead
+chooses one explicit new session directory and refuses an existing directory.
+Attach with `--socket <endpoint>`. The emulator's runtime DLL directory must
+be on PATH, as for a normal launch. Managed launch pins seed 1, fake time and
+default BRAM, enables `A2GSPU_AGENT=1`, verifies native bootstrap completion,
+retains logs/ownership receipts and never overwrites an existing
+output directory. `--seed` and repeatable `--rail NAME=value` customize startup;
+rail names are checked against live discovery before serving tools. Transport,
+background-window and output-root rails are reserved by the managed lifecycle.
+
+`tools/list` generates 73 `gs2_<verb>` tools from the live catalog plus
+`gs2_agent_tools`, `gs2_batch` and four structured debugger observations
+(82 total, including three artifact adapters). Hyphens become underscores; each native tool accepts an optional
+`arguments` string containing only the verb's arguments. `gs2_pause` explicitly
+pauses; ordinary tools never pause implicitly. Unknown methods/tools and
+malformed requests are protocol errors, while execution refusals retain native
+evidence with `isError=true`. Stdio diagnostics go only to stderr. EOF quits
+only an emulator the adapter launched; an attached emulator stays alive.
+
+Structured observations take named JSON fields, rather than the native
+`arguments` string. All require explicit pause and exclusive ownership of the
+session during the call:
+
+| Tool | Fields and result |
+| --- | --- |
+| `gs2_trace_read` | `ago` (default 0), `count` (1..512, default 100); oldest-to-newest decoded native records, ring availability, window bounds and adjacent clock deltas |
+| `gs2_memory_read` | `domain`, integer `address`, `length` (1..65536); byte values plus readability, with null for unreadable I/O |
+| `gs2_memory_search` | Same memory fields, `pattern_hex`, optional equal-size `mask_hex`, `max_hits` (1..512, default 16); masked matches, capped-hit truncation and unreadable-byte count |
+| `gs2_video_text_read` | `page` (0 current, 1, 2), `mode` (0 current, 1 text40, 2 text80); resolved metadata, raw characters and ASCII-ish display lines |
+
+Memory domains are `main`, `megaii`, `ensoniq`, `adbmicro`, `main_raw` and
+`megaii_raw`, with the protocol's machine/device restrictions. Bus-read domains
+are deliberately excluded from read-only adapters. Probe data and readability
+require separate bridge calls; exclusive paused ownership supplies consistency.
+Search operates on that bounded host snapshot and never counts unreadable
+placeholder bytes as matches, even under a wildcard mask. `truncated=true`
+means an additional match exists beyond the returned cap.
+
+Trace clocks are `NClock.get_cycles()` recorded at instruction entry, retained
+as decimal strings to preserve uint64 precision. The first record and backward
+clock transitions have no delta. Trace collection must first be armed with
+`gs2_tbuf` arguments `on`. Availability describes the retained ring, not total
+execution coverage; overwritten history and unarmed periods are not counted.
+Neither trace clocks nor the extended text formatter
+infer video phase; scanline/VBL need independent video observations. Text page
+bytes preserve high-bit glyph codes; decoded lines are a convenience and do
+not represent graphics pixels. These adapters add no new socket types or CTRL
+verbs. Trace data/effective-address/write fields describe the native record's
+last operand access; they are not a complete bus-cycle trace.
+
+## Evidence and input transport
+
+An MCP-only agent can now complete the file-based parts of the development
+loop without a separate filesystem tool:
+
+1. `gs2_artifact_put` accepts `path`, required `sha256`, and exactly one
+   `text` or strict `base64` value. It creates a new input file atomically,
+   at most 512 KiB decoded, and refuses overwrite or a digest mismatch.
+2. Pass its returned path explicitly to `gs2_load`, `gs2_mount`, or another
+   native command. `load` supports quoted paths with spaces and rejects extra
+   or malformed arguments before writing guest memory.
+3. Run, then gate on `gs2_assert` or another measured verdict. An emulator
+   command succeeding is distinct from the guest satisfying its goal.
+4. `gs2_artifact_list` discovers files and batch directories. It lists one
+   directory at a time, with `offset`/`limit` pagination (maximum 256 results,
+   4096 directory entries); it never follows links while listing.
+5. `gs2_artifact_read` returns bounded bytes, SHA256, range/completeness and
+   provenance metadata. Native 8-bit noninterlaced PNGs become actual MCP
+   `image` content; strict UTF-8 becomes text; binary can use `mode=base64`.
+   `sha256` optionally requires an expected digest of the returned bytes.
+
+Managed launch defaults artifact access to its own new output directory,
+including cold-batch subdirectories. Attach has no implicit filesystem scope;
+use `--artifact-root <existing-directory>` explicitly. A supplied artifact root
+also overrides the managed default. Paths can be relative or absolute inside
+that selected root; parent traversal/outside-root resolution and alternate
+data streams refuse. This is the artifact adapter's scope; native commands
+continue to honor their explicitly supplied paths.
+
+Reads are limited to 1 MiB. For larger files choose an explicit integer
+`offset` and `length`; the digest then covers only that returned range.
+`complete` means the entire file **at that read**, not proof its producer has
+finished. Stable metadata during a read is checked; active sinks may append
+later. Close capture/subscription producers before final assertions. Image
+preview validates chunks/CRC, bounded deflate length and filter tags, and
+supports at most four million pixels; other formats can be retrieved as
+base64. That validation does not prove display color-model equivalence.
+
+Artifacts remain accessible after `gs2_quit` while the stdio adapter is alive.
+The managed `mcp-session.json` receipt includes the selected executable's
+launch-time SHA256 and native bootstrap proof. It does not capture every
+runtime asset, disk or external endpoint, and is not a replay capsule.
+
+## Recovering a timed-out socket command
+
+`RequestPending` (a `TimeoutError`) means a complete request was sent and its
+original outcome remains unknown. Partial headers/payloads are retained, and
+new requests are blocked without allocating or sending another sequence.
+Inspect `Client.pending_request`, then call `wait_agent_command(timeout=...)`
+for a native agent command or `wait_response(timeout=...)` for raw reply bytes.
+The original command identity is checked on agent recovery. These methods
+never resend the mutation. Event waits preserve partial framing as well;
+unrelated events do not restart a stop/record wait's deadline.
+
+During request/reply handling, a send failure or terminal receive/framing error
+closes the socket because a
+partly published frame cannot be resumed safely. Disconnect still does not
+prove cancellation; reconnect and inspect evidence before deciding what to do.
+The SDK is synchronous, with one reader/request owner. This is not a remote
+transaction, automatic reconnect, cancellation, or mutation-retry facility.
+The file client likewise rejects control characters before publication and
+keeps its existing pending-sequence recovery through `wait()`.
+
+The agent bootstrap reuses interactive CTRL instrument initialization, starts
+paused and suppresses host preferences/input. Pacing/coverage startup effects
+and native mode proof are tested; launch success is not inferred from an
+environment variable. One-shot-only rails (assert/golden, boot-load/run, final
+dumps and microtests) refuse interactive `--rail` with a redirect to `gs2_batch`.
+
+`gs2_batch` takes structured `frames` (1..1,000,000), optional `rails` string
+map, `platform` or `config`, and `timeout_seconds` (1..300; default 60). It runs
+a separate cold one-shot child in a fresh directory and returns native exit
+status, timeout, retained log/artifact paths and explicit excerpt completeness.
+Exit zero means emulator completion; supply assertion/golden rails to establish
+guest behavior. Batch jobs leave the current machine untouched and require a
+managed `--exe` server. They are not checkpoint branches or replay.
+CPU/RAM is separate; disks and host endpoints follow the selected configuration.
+
+Configure the command/arguments above in the chosen MCP client. Shipping this
+adapter does not silently install or change an AI application's configuration.
+
+## Socket event streams
+
+After `Client.connect()` and `hello()`, `manifest()` discovers requests and
+subscription kinds. Use `subscribe(('stop', 'irq', 'device'), queue_cap=1024)`
+and an `on_event` callback to collect `EVT_AGENT_RECORD` payloads (UTF-8 JSON).
+`wait_agent_record()` also reads a record synchronously. `subscription_status()`
+and `unsubscribe()` return native loss/completeness counts; unsubscribe drains
+queued events through the callback before returning. Retained means enqueued,
+so compare received sequences/counts as well. See the protocol contract for
+sampling limits. This is independent of `CtrlClient` and file subscriptions.
+
 Host-side client library for [DebugProtocol.md](DebugProtocol.md). Wire format lives in the protocol doc; this document covers language choice, library shape, API, and client-side concerns so agents and scripts do not re-implement framing from scratch.
 
 Python package lives under [`clients/python/`](../clients/python/) (`gs2debug`). Wire format: [DebugProtocol.md](DebugProtocol.md).
@@ -15,7 +234,8 @@ Why:
 - Stdlib `socket` covers AF_UNIX (macOS / Linux) and TCP with no dependencies; Windows AF_UNIX works on recent Python + Windows 10+.
 - Agents and CI scripts already default to Python; extending framing with `struct` / `socket` is straightforward.
 - No build step — drop a script next to the package and call `Client`.
-- Matches the protocol direction: host-driven tools, opaque binary on the wire, no JSON in the emulator.
+- Matches the protocol direction: host-driven tools with typed binary commands
+  and native JSON discovery/agent records.
 
 A later TypeScript (or other) client can share the same wire rules from the protocol doc (e.g. for MCP). This sketch does not define those APIs.
 
@@ -292,7 +512,8 @@ Implementers and agents must handle these; do not reinvent per script:
 
 ## Non-goals (v1 client)
 
-- MCP wrapper, async API, pipelining, TCP connect
+- Async API, pipelining, TCP connect. The stdio MCP adapter is a separate
+  companion described above; it is implemented.
 - Expression-language breakpoints (host owns policy; emu is typed stops only)
 
 ## Flow
