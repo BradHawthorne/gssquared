@@ -1,0 +1,201 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "case": "p3-valid",
+      "payload": "spike_mmu_truth.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "p3-valid",
+      "payload": "spike_slot.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "p3-valid",
+      "payload": "spike_trace.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "p3-valid",
+      "guest_diagnostic_equal": true,
+      "diagnostic": "GSDIAG: status=OK rc=0 gate=none gsos_err=$0000 brk=0 scb=0 hash=92F1E19D6FE2A383 warnings=0 cycles=17030 insns=0 stores=0 run=710ADFDBA3644A83"
+    },
+    {
+      "case": "tap-p3-valid",
+      "payload": "hgr_dump_periodic_t001.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 16384,
+      "content_hash": "92F1E19D6FE2A383"
+    },
+    {
+      "case": "tap-p3-valid",
+      "payload": "ram_dump_periodic_t001.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 48128,
+      "content_hash": "6C13BE3A342EBD58"
+    },
+    {
+      "case": "tap-p3-valid",
+      "payload": "ram_full_periodic_t001.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 131072,
+      "content_hash": "C26C831E08EEE5A3"
+    },
+    {
+      "case": "tap-p3-valid",
+      "payload": "spike_mmu_truth.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "tap-p3-valid",
+      "payload": "spike_slot.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "tap-p3-valid",
+      "payload": "spike_trace.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "tap-p3-valid",
+      "guest_diagnostic_equal": true,
+      "diagnostic": "GSDIAG: status=OK rc=0 gate=none gsos_err=$0000 brk=0 scb=0 hash=92F1E19D6FE2A383 warnings=0 cycles=1192102 insns=430799 stores=8626 run=ADC2141D4BCC0FBD"
+    },
+    {
+      "case": "p5-valid",
+      "payload": "spike_e1.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 65536,
+      "content_hash": "6D9886E3B3EE0383"
+    },
+    {
+      "case": "p5-valid",
+      "payload": "spike_e1_init.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 32768,
+      "content_hash": "6D9886E3B3EE0383"
+    },
+    {
+      "case": "p5-valid",
+      "payload": "spike_mmu_truth.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 2,
+      "content_hash": "B88DB812DE65E1D2"
+    },
+    {
+      "case": "p5-valid",
+      "payload": "spike_slot.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 2547,
+      "content_hash": "3A3F62AC91F108AA"
+    },
+    {
+      "case": "p5-valid",
+      "payload": "spike_trace.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "p5-valid",
+      "guest_diagnostic_equal": true,
+      "diagnostic": "GSDIAG: status=OK rc=0 gate=none gsos_err=$0000 brk=0 scb=640 hash=6D9886E3B3EE0383 warnings=0 cycles=35572 insns=10982 stores=2482 run=5209E64AA343E9E7"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "hgr_dump_periodic_t001.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 16384,
+      "content_hash": "BE7FB0911BE00383"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "ram_dump_periodic_t001.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 48128,
+      "content_hash": "8AB18EC6BA548EFB"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "ram_full_periodic_t001.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 49152,
+      "content_hash": "5B3F8145466FB250"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "spike_e1.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 65536,
+      "content_hash": "6D9886E3B3EE0383"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "spike_e1_init.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 32768,
+      "content_hash": "6D9886E3B3EE0383"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "spike_mmu_truth.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 302,
+      "content_hash": "FF36202A7E6640AD"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "spike_slot.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 108176,
+      "content_hash": "3B57F3FEA395861B"
+    },
+    {
+      "case": "tap-p5-valid",
+      "payload": "spike_trace.bin",
+      "stable_metadata_equal": true,
+      "payload_bytes_equal": true,
+      "count": 0,
+      "content_hash": "14650FB0739D0383"
+    },
+    {
+      "case": "tap-p5-valid",
+      "guest_diagnostic_equal": true,
+      "diagnostic": "GSDIAG: status=OK rc=0 gate=none gsos_err=$0000 brk=0 scb=640 hash=6D9886E3B3EE0383 warnings=0 cycles=1856249 insns=553374 stores=145782 run=E82B79F657372A75"
+    }
+  ]
+}

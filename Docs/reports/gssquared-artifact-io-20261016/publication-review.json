@@ -1,0 +1,96 @@
+{
+  "implementation_files": [
+    {
+      "path": "apps/interfacecontracttest/artifact_io_checks.hpp",
+      "frozen_sha256": "25d7be2bac89bcb7f4abe0b59b43680842679d3b44096e9253a87d85eb6f2d9c",
+      "git_blob_sha256": "25d7be2bac89bcb7f4abe0b59b43680842679d3b44096e9253a87d85eb6f2d9c",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "apps/interfacecontracttest/main.cpp",
+      "frozen_sha256": "1a9c8f934178031c582ec0ee2ea5057c6e41cdae70eee0179a35fdcd7be8b2f6",
+      "git_blob_sha256": "1a9c8f934178031c582ec0ee2ea5057c6e41cdae70eee0179a35fdcd7be8b2f6",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_artifact_io.hpp",
+      "frozen_sha256": "1143691dadf93d7c124ca3936ace28c25a3ec0c9431ad63173829b4095d97f3d",
+      "git_blob_sha256": "1143691dadf93d7c124ca3936ace28c25a3ec0c9431ad63173829b4095d97f3d",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_artifact_meta.hpp",
+      "frozen_sha256": "00200b2aec9639cd91ddb2e668aa7d4c40f58a74649721d6761a5911ab5780eb",
+      "git_blob_sha256": "00200b2aec9639cd91ddb2e668aa7d4c40f58a74649721d6761a5911ab5780eb",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_ctrl_cmds.cpp",
+      "frozen_sha256": "e2a27d047fdfdd16c0ed9348451d877af901f81de880dd1aee6dc63f5368162e",
+      "git_blob_sha256": "e2a27d047fdfdd16c0ed9348451d877af901f81de880dd1aee6dc63f5368162e",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_spike.cpp",
+      "frozen_sha256": "824540c7d6431cfe6567048d501b01ea42200a4be9e70739e607de8c0789dc62",
+      "git_blob_sha256": "824540c7d6431cfe6567048d501b01ea42200a4be9e70739e607de8c0789dc62",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2record.hpp",
+      "frozen_sha256": "85e810f8994b7c43ba4668e086194725db71855e7a6c986585836a3fc598f00c",
+      "git_blob_sha256": "85e810f8994b7c43ba4668e086194725db71855e7a6c986585836a3fc598f00c",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/bus_trace.hpp",
+      "frozen_sha256": "da211ddd9e4dec2e5cee59812dba7077c08725a0b13480a4b79dc79eae928fa6",
+      "git_blob_sha256": "da211ddd9e4dec2e5cee59812dba7077c08725a0b13480a4b79dc79eae928fa6",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/devices/slot_bus/slot_bus.hpp",
+      "frozen_sha256": "77bb142d8dcaa1e07483afeeb90d5da3d4d36fb324a1a08083a05da287492b10",
+      "git_blob_sha256": "42f18aec1f3815636b7c0f42ec8213c3d5197d417741c697bac1676b1f6f8e58",
+      "byte_identical": false,
+      "crlf_to_lf_only": true
+    },
+    {
+      "path": "src/generic_tap.hpp",
+      "frozen_sha256": "33c7b06536ef64e378c56560f4f1fc00ed105c822be72f5bd607c93eb218d5aa",
+      "git_blob_sha256": "33c7b06536ef64e378c56560f4f1fc00ed105c822be72f5bd607c93eb218d5aa",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/mmu_state_trace.hpp",
+      "frozen_sha256": "cd8952bd75575d4b5db4f2f277e4c271ae413e6e2e7ea2c4cd82a792a57e1194",
+      "git_blob_sha256": "cd8952bd75575d4b5db4f2f277e4c271ae413e6e2e7ea2c4cd82a792a57e1194",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "tools/a2rail/artifactiocheck.py",
+      "frozen_sha256": "68957cf42cd9fb2c7af1a2dde446d22fe8b55bb7925382b78362ee2f04548269",
+      "git_blob_sha256": "68957cf42cd9fb2c7af1a2dde446d22fe8b55bb7925382b78362ee2f04548269",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "tools/a2rail/p0check.py",
+      "frozen_sha256": "f1ad2b3923439a5d31c15a3dbc8f948015e8d34636e5b1770614422b78e90972",
+      "git_blob_sha256": "f1ad2b3923439a5d31c15a3dbc8f948015e8d34636e5b1770614422b78e90972",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    }
+  ],
+  "git_eol_policy": "core.autocrlf=input; only CRLF-to-LF normalization accepted"
+}

@@ -75,6 +75,7 @@
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <vector>
 #include "cpu.hpp"
 #include "a2gspu_observe.hpp"   // a2obs_peek: observer reads never take the CPU path (M11)
 #include "a2gspu_progress_taps.hpp"   // g_tap_key_event / g_tap_disk_write_event
@@ -167,15 +168,16 @@ inline void gtap_page_json(cpu_state *cpu, std::string &s) {
 
 // A bank-$00 range as the CPU sees it now, through the observer read, with its sidecar.
 inline void gtap_write_cpu_view(cpu_state *cpu, const char *path, uint32_t lo, uint32_t hi, const char *what) {
-    FILE *f = fopen(path, "wb");
-    if (!f) return;
+    try {
     uint64_t h = HOUSE_FNV_BASIS;
-    for (uint32_t a = lo; a <= hi; a++) { const uint8_t v = a2obs_peek(cpu->mmu, a); fputc(v, f); h ^= v; h *= HOUSE_FNV_PRIME; }
-    fclose(f);
+    std::vector<uint8_t> bytes;
+    for (uint32_t a = lo; a <= hi; a++) { const uint8_t v = a2obs_peek(cpu->mmu, a); bytes.push_back(v); h ^= v; h *= HOUSE_FNV_PRIME; }
+    a2artifact::write_file(path,bytes.data(),bytes.size());
     char layout[160];
     snprintf(layout, sizeof layout, "u8 x %u: $%04X-$%04X as the CPU sees it (observer read; $C000-$CFFF from the probe), %s",
              (unsigned)(hi - lo + 1), (unsigned)lo, (unsigned)hi, what);
-    a2gspu_artifact_meta(path, "cpu-view-v1", 1, hi - lo + 1, layout, "house-FNV-1a-64 over the file bytes", h);
+    a2gspu_artifact_require_meta(path, "cpu-view-v1", 1, hi - lo + 1, layout, "house-FNV-1a-64 over the file bytes", h);
+    } catch(const a2artifact::Error &error) {a2artifact::fatal(error);}
 }
 
 // Full RAM. A IIe or IIc keeps main and aux RAM in one 128K array; that array is
@@ -188,17 +190,16 @@ inline void gtap_write_full_ram(cpu_state *cpu, const char *tag) {
     snprintf(p, sizeof(p), "%s/ram_full_%s.bin", g_gtap.dir.c_str(), tag);
     MMU_IIe *iie = a2obs_is_iigs(cpu->mmu) ? nullptr : dynamic_cast<MMU_IIe *>(cpu->mmu);
     if (iie && iie->get_memory_base()) {
-        if (FILE *f = fopen(p, "wb")) {
+        try {
             const uint8_t *ram = iie->get_memory_base();
-            fwrite(ram, 1, 0x20000, f);
-            fclose(f);
+            a2artifact::write_file(p,ram,0x20000);
             uint64_t h = HOUSE_FNV_BASIS;
             for (size_t i = 0; i < 0x20000; i++) { h ^= ram[i]; h *= HOUSE_FNV_PRIME; }
-            a2gspu_artifact_meta(p, "iie-ram-array-v1", 1, 0x20000,
+            a2gspu_artifact_require_meta(p, "iie-ram-array-v1", 1, 0x20000,
                                  "u8 x 131072: the IIe MMU's RAM array as stored -- main $0000-$BFFF; language card bank-1 $D000-$DFFF at $C000, bank-2 at $D000, $E000-$FFFF; aux the same at +$10000",
                                  "house-FNV-1a-64 over the file bytes", h);
             printf("A2GSPU_TAP: full RAM dump (128K, main+aux) -> %s\n", p);
-        }
+        } catch(const a2artifact::Error &error) {a2artifact::fatal(error);}
         return;
     }
     gtap_write_cpu_view(cpu, p, 0x0000, 0xBFFF, "a full dump on a machine without a IIe RAM array");

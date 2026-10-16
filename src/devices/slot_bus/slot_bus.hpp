@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "../../a2gspu_artifact_io.hpp"
 
 // One slot-visible bus cycle, as a slot-3 card's pins latch it.
 struct slot_bus_cycle_t {
@@ -102,12 +103,7 @@ inline void slot_bus_reset() { g_slot_bus.clear(); }
 // Dump the stream to a flat file; return an FNV-1a content hash over
 // (addr, data, ctl) — the snoop invariant (cycle excluded).
 inline uint64_t slot_bus_dump(const char *path, uint64_t *out_count) {
-    FILE *f = fopen(path, "wb");
-    if (f) {
-        if (!g_slot_bus.empty())
-            fwrite(g_slot_bus.data(), sizeof(slot_bus_cycle_t), g_slot_bus.size(), f);
-        fclose(f);
-    }
+    a2artifact::write_file(path,g_slot_bus.data(),sizeof(slot_bus_cycle_t)*g_slot_bus.size());
     uint64_t h = HOUSE_FNV_BASIS;
     for (const slot_bus_cycle_t &c : g_slot_bus) {
         uint8_t b[5] = { (uint8_t)(c.addr & 0xFF), (uint8_t)(c.addr >> 8), c.data, c.ctl, 0 };

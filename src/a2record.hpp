@@ -146,16 +146,18 @@ struct Record {
 
     // One whole line to the sink. flush for low-rate rails whose reader may be
     // tailing the file; not for streams.
-    void write(FILE *f, bool flush = true) {
+    bool write_checked(FILE *f, bool flush = true) {
         s += "}\n";
-        fputs(s.c_str(), f);
-        if (flush) fflush(f);
+        if (!f || fputs(s.c_str(), f)==EOF) return false;
+        if (flush && fflush(f)!=0) return false;
         // WHICH file, not just that a write happened: sink(own) returns the
         // rail's own FILE* when it has one, so f == g_global is the only
         // evidence that this line landed in the global sink.
         count(rail, f == g_global);
         if(g_observer)g_observer(rail,s);
+        return true;
     }
+    void write(FILE *f, bool flush = true) { (void)write_checked(f,flush); }
 };
 
 // The two numbers can never be read as one: <rail>=Nsink+Mown when a global

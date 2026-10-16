@@ -1,0 +1,61 @@
+#pragma once
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <stdexcept>
+#include <string>
+
+namespace a2artifact {
+class Error : public std::runtime_error {
+public:
+    Error(const char *operation,const char *path,int code=errno)
+        :std::runtime_error(std::string(operation)+" '"+(path?path:"")+"'"+(code?std::string(": ")+std::strerror(code):"")){}
+};
+
+// Explicit injection for native contract tests; production always uses stdio.
+// No environment variable or runtime fault knob changes these operations.
+struct WriteOps {
+    size_t (*write)(const void*,size_t,size_t,FILE*)=std::fwrite;
+    int (*flush)(FILE*)=std::fflush;
+    int (*close)(FILE*)=std::fclose;
+};
+
+class Output {
+    std::string path_;
+    WriteOps ops_;
+    FILE *file_=nullptr;
+public:
+    explicit Output(const char *path,WriteOps ops={}):path_(path?path:""),ops_(ops) {
+        errno=0;file_=path && *path?std::fopen(path,"wb"):nullptr;
+        if(!file_)throw Error("open",path);
+    }
+    Output(const Output&)=delete;
+    Output& operator=(const Output&)=delete;
+    ~Output(){if(file_)ops_.close(file_);}
+    FILE *get() const {return file_;}
+    void write(const void *data,size_t bytes) {
+        if(!file_ || (bytes && !data))throw Error("invalid-write",path_.c_str(),0);
+        errno=0;
+        if(bytes && ops_.write(data,1,bytes,file_)!=bytes)throw Error("write",path_.c_str());
+    }
+    void finish() {
+        if(!file_)return;
+        FILE *file=file_;file_=nullptr;
+        errno=0;const bool flush_failed=ops_.flush(file)!=0 || std::ferror(file)!=0;
+        const int flush_error=errno;
+        errno=0;const bool close_failed=ops_.close(file)!=0;
+        const int close_error=errno;
+        if(flush_failed || close_failed)throw Error(flush_failed?"flush":"close",path_.c_str(),flush_failed?flush_error:close_error);
+    }
+};
+
+inline void write_file(const char *path,const void *data,size_t bytes) {
+    Output out(path);out.write(data,bytes);out.finish();
+}
+
+[[noreturn]] inline void fatal(const Error &error) {
+    std::fprintf(stderr,"A2GSPU ARTIFACT: status=FAIL artifact-io %s\n",error.what());
+    std::exit(2);
+}
+}

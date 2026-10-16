@@ -1,0 +1,36 @@
+PASS p3 valid payloads/sidecars pass checked reader
+PASS p3 rejects blocked spike_trace.bin
+PASS p3 rejects blocked spike_slot.bin
+PASS p3 rejects blocked spike_mmu_truth.bin
+PASS p3 rejects blocked spike_trace.bin.meta.json
+PASS p3 rejects blocked spike_slot.bin.meta.json
+PASS p3 rejects blocked spike_mmu_truth.bin.meta.json
+PASS p3 CTRL vram refuses sidecar failure
+PASS p3 CTRL remains usable after failed artifact
+PASS p3 CTRL vram succeeds after refusal
+PASS session exits cleanly
+PASS p3 tap CPU/RAM payloads pass checked reader
+PASS p3 tap rejects blocked ram_dump_periodic_t001.bin
+PASS p3 tap rejects blocked ram_dump_periodic_t001.bin.meta.json
+PASS p3 tap rejects blocked ram_full_periodic_t001.bin
+PASS p3 tap rejects blocked ram_full_periodic_t001.bin.meta.json
+PASS p5 valid payloads/sidecars pass checked reader
+PASS p5 rejects blocked spike_trace.bin
+PASS p5 rejects blocked spike_slot.bin
+PASS p5 rejects blocked spike_mmu_truth.bin
+PASS p5 rejects blocked spike_e1_init.bin
+PASS p5 rejects blocked spike_e1.bin
+PASS p5 rejects blocked spike_trace.bin.meta.json
+PASS p5 rejects blocked spike_slot.bin.meta.json
+PASS p5 rejects blocked spike_mmu_truth.bin.meta.json
+PASS p5 rejects blocked spike_e1_init.bin.meta.json
+PASS p5 rejects blocked spike_e1.bin.meta.json
+PASS p5 CTRL vram refuses sidecar failure
+PASS p5 CTRL remains usable after failed artifact
+PASS p5 CTRL vram succeeds after refusal
+PASS session exits cleanly
+PASS p5 tap CPU/RAM payloads pass checked reader
+PASS p5 tap rejects blocked ram_dump_periodic_t001.bin
+PASS p5 tap rejects blocked ram_dump_periodic_t001.bin.meta.json
+PASS p5 tap rejects blocked ram_full_periodic_t001.bin
+PASS p5 tap rejects blocked ram_full_periodic_t001.bin.meta.json

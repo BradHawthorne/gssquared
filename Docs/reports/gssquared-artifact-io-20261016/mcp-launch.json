@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "gssquared": {
+      "command": "C:\\Users\\X99\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "args": [
+        "-I",
+        "D:\\gsqs\\artifactio-20261016\\src\\tools\\a2rail\\mcpserver.py",
+        "--exe",
+        "D:\\gsqs\\artifactio-20261016\\build\\GSSquared.exe",
+        "--platform",
+        "5",
+        "--read-only-media",
+        "--out-root",
+        "D:\\gsqs\\artifactio-20261016\\mcp-runs"
+      ],
+      "env": {
+        "PATH": "C:/msys64/ucrt64/bin;D:\\gsqs\\artifactio-20261016\\build;C:/Windows/System32",
+        "TEMP": "D:/gsqs/tmp",
+        "TMP": "D:/gsqs/tmp",
+        "TMPDIR": "D:/gsqs/tmp"
+      }
+    }
+  }
+}

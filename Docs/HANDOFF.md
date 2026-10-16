@@ -22,6 +22,15 @@ build is preserved at `D:\gsqs\consumer-20261016\build-rollback`.
 Exact hashes, tested descriptor and scratch-space maintenance:
 `Docs/reports/gssquared-consumer-refresh-20261016/README.md`.
 
+**Raw artifact I/O continuation, 2026-10-16:** SPIKE, CTRL VRAM and generic
+tap raw writers now refuse payload/sidecar I/O failures while retaining valid
+empty streams. Fresh exported Release: 14/14 gates, 14/14 native CTests,
+26 Python tests, 34 capture cases, 19 I/O contract checks, 42 unchanged boot
+checks and two MCP launches. Captures/guest diagnostics match the previous
+binary in 26 comparisons. The protected consumer remains unchanged; the
+tested candidate is `D:\gsqs\artifactio-20261016\build\GSSquared.exe`.
+Scope and evidence: `reports/gssquared-artifact-io-20261016/README.md`.
+
 **MCP close-out continuation, 2026-10-16:** the host adapter now bounds closing
 QUIT/exit waits and records pending identities, unknown effects and owned
 termination. Six native IIe/IIgs lifecycle cases, 26 Python tests, all 14 gates,

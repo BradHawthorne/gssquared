@@ -26,19 +26,23 @@
 #include <string>
 #include "a2record.hpp"
 #include "house_fnv.hpp"
+#include "a2gspu_artifact_io.hpp"
+#include <limits>
 
 inline uint64_t a2gspu_artifact_file_fnv(const char *path, uint64_t &bytes) {
     uint64_t h = HOUSE_FNV_BASIS;
     bytes = 0;
-    FILE *f = fopen(path, "rb");
-    if (!f) return 0;
+    errno=0;FILE *f = fopen(path, "rb");
+    if (!f) throw a2artifact::Error("read-open",path);
     uint8_t buf[65536];
     size_t n;
-    while ((n = fread(buf, 1, sizeof buf, f)) > 0) {
+    while ((errno=0, n = fread(buf, 1, sizeof buf, f)) > 0) {
         for (size_t i = 0; i < n; i++) { h ^= buf[i]; h *= HOUSE_FNV_PRIME; }
         bytes += n;
     }
-    fclose(f);
+    const bool failed=ferror(f)!=0;const int read_error=errno;
+    errno=0;const int closed=fclose(f);const int close_error=errno;
+    if(failed || closed!=0)throw a2artifact::Error(failed?"read":"read-close",path,failed?read_error:close_error);
     return h;
 }
 
@@ -50,17 +54,16 @@ inline uint64_t a2gspu_artifact_file_fnv(const char *path, uint64_t &bytes) {
 // prevent, so it is not a silent case.
 inline bool a2gspu_artifact_meta(const char *path, const char *format, unsigned record_size, uint64_t count,
                                  const char *layout, const char *hash_covers, uint64_t content_hash,
-                                 int page = -1) {
+                                 int page = -1, a2artifact::WriteOps ops = {}) {
+    const std::string mp = std::string(path) + ".meta.json";
+    bool opened=false;
+    try {
+    if(!record_size || count>(std::numeric_limits<uint64_t>::max)()/record_size)
+        throw a2artifact::Error("invalid-record-size-or-count",path,0);
     uint64_t bytes = 0;
     const uint64_t fh = a2gspu_artifact_file_fnv(path, bytes);
-    std::string mp = std::string(path) + ".meta.json";
-    FILE *mf = fopen(mp.c_str(), "wb");
-    if (!mf || bytes != (uint64_t)record_size * count) {
-        printf("SPIKE ARTIFACT: %s NO-DESCRIPTION -- %s\n", path,
-               !mf ? "the sidecar could not be opened" : "the file on disk is not count x record_size bytes");
-        if (mf) fclose(mf);
-        return false;
-    }
+    if(bytes!=(uint64_t)record_size*count)throw a2artifact::Error("length-not-count-times-record-size",path,0);
+    a2artifact::Output meta(mp.c_str(),ops);opened=true;
     char h1[20], h2[20];
     snprintf(h1, sizeof h1, "%016llX", (unsigned long long)content_hash);
     snprintf(h2, sizeof h2, "%016llX", (unsigned long long)fh);
@@ -70,9 +73,21 @@ inline bool a2gspu_artifact_meta(const char *path, const char *format, unsigned 
        .str("layout", layout).str("content_hash", h1).str("content_hash_covers", hash_covers)
        .str("file_hash", h2).str("file_hash_covers", "house-FNV-1a-64 over every byte of the file");
     if (page >= 0) rec.i("page", page);
-    rec.write(mf, true);
-    fclose(mf);
+    if(!rec.write_checked(meta.get(),true))throw a2artifact::Error("sidecar-write-or-flush",mp.c_str());
+    meta.finish();
     printf("SPIKE ARTIFACT: %s format=%s count=%llu bytes=%llu content-hash=%s file-hash=%s meta=%s\n",
            path, format, (unsigned long long)count, (unsigned long long)bytes, h1, h2, mp.c_str());
     return true;
+    } catch(const a2artifact::Error &error) {
+        if(opened && std::remove(mp.c_str())!=0)
+            std::fprintf(stderr,"SPIKE ARTIFACT: cannot remove failed sidecar %s\n",mp.c_str());
+        printf("SPIKE ARTIFACT: %s NO-DESCRIPTION -- %s\n",path,error.what());
+        return false;
+    }
+}
+
+inline void a2gspu_artifact_require_meta(const char *path,const char *format,unsigned record_size,uint64_t count,
+                                        const char *layout,const char *hash_covers,uint64_t content_hash,int page=-1) {
+    if(!a2gspu_artifact_meta(path,format,record_size,count,layout,hash_covers,content_hash,page))
+        throw a2artifact::Error("description",path,0);
 }

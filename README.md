@@ -105,6 +105,10 @@ and [Python package](clients/python/README.md).
 For file-based sessions, use [`session.ps1`](tools/a2rail/session.ps1) and
 [`ctl.ps1`](tools/a2rail/ctl.ps1), one command and acknowledgement at a time.
 One-shot headless runs use `A2GSPU_SPIKE_FRAMES`, `A2GSPU_ASSERT` and optional goldens.
+Raw SPIKE, VRAM and tap captures now refuse failed payload or sidecar I/O;
+real empty streams remain valid. Require a successful run/command and the
+[checked artifact reader](Docs/INSTRUMENTATION_SHAPE.md#m6--artifact-discipline-and-a-shared-reader--p4--s)
+before using captures as evidence.
 The [rail reference](Docs/A2GSPU_RAILS.md) gives detailed launch recipes,
 including windowed co-pilot. Keep each driven run's outputs in its own directory.
 

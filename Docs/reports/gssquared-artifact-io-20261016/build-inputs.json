@@ -1,0 +1,98 @@
+{
+  "base_commit": "ec08da7c3ff76713d0772b201117425468a14f26",
+  "overlay": [
+    {
+      "path": "apps/interfacecontracttest/artifact_io_checks.hpp",
+      "sha256": "25d7be2bac89bcb7f4abe0b59b43680842679d3b44096e9253a87d85eb6f2d9c"
+    },
+    {
+      "path": "apps/interfacecontracttest/main.cpp",
+      "sha256": "1a9c8f934178031c582ec0ee2ea5057c6e41cdae70eee0179a35fdcd7be8b2f6"
+    },
+    {
+      "path": "src/a2gspu_artifact_io.hpp",
+      "sha256": "1143691dadf93d7c124ca3936ace28c25a3ec0c9431ad63173829b4095d97f3d"
+    },
+    {
+      "path": "src/a2gspu_artifact_meta.hpp",
+      "sha256": "00200b2aec9639cd91ddb2e668aa7d4c40f58a74649721d6761a5911ab5780eb"
+    },
+    {
+      "path": "src/a2gspu_ctrl_cmds.cpp",
+      "sha256": "e2a27d047fdfdd16c0ed9348451d877af901f81de880dd1aee6dc63f5368162e"
+    },
+    {
+      "path": "src/a2gspu_spike.cpp",
+      "sha256": "824540c7d6431cfe6567048d501b01ea42200a4be9e70739e607de8c0789dc62"
+    },
+    {
+      "path": "src/a2record.hpp",
+      "sha256": "85e810f8994b7c43ba4668e086194725db71855e7a6c986585836a3fc598f00c"
+    },
+    {
+      "path": "src/bus_trace.hpp",
+      "sha256": "da211ddd9e4dec2e5cee59812dba7077c08725a0b13480a4b79dc79eae928fa6"
+    },
+    {
+      "path": "src/devices/slot_bus/slot_bus.hpp",
+      "sha256": "77bb142d8dcaa1e07483afeeb90d5da3d4d36fb324a1a08083a05da287492b10"
+    },
+    {
+      "path": "src/generic_tap.hpp",
+      "sha256": "33c7b06536ef64e378c56560f4f1fc00ed105c822be72f5bd607c93eb218d5aa"
+    },
+    {
+      "path": "src/mmu_state_trace.hpp",
+      "sha256": "cd8952bd75575d4b5db4f2f277e4c271ae413e6e2e7ea2c4cd82a792a57e1194"
+    },
+    {
+      "path": "tools/a2rail/artifactiocheck.py",
+      "sha256": "68957cf42cd9fb2c7af1a2dde446d22fe8b55bb7925382b78362ee2f04548269"
+    },
+    {
+      "path": "tools/a2rail/p0check.py",
+      "sha256": "f1ad2b3923439a5d31c15a3dbc8f948015e8d34636e5b1770614422b78e90972"
+    }
+  ],
+  "source_model": "exported commit plus digest-bound reviewed overlays; compiled revision names base",
+  "vendored_snapshot": {
+    "sha256": "f270afdb4c093769509a3dc278cfe7b7df5fad3e9372ac689488e3cd1a47d647",
+    "files": 7459
+  },
+  "dependency_origin": "unchanged verified publication export",
+  "local_inputs": {
+    "assets/roms/apple2gs3/main.rom": {
+      "sha256": "4e606469961649381216b2a61334ccb29af4da90c630df19214b08ff7fdb9bc5",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs3/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "assets/roms/apple2gs4/main.rom": {
+      "sha256": "565d8ca073e5c46367ca56d4b12827020e76e6a0bf6c2300da0989161aa34ad9",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs4/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "corpus/DOS3.3_MASTER.dsk": {
+      "sha256": "eac550ddb65ef9b8ae34f6fe3523ec6572a5672e7ae07becc950acfdd185dbb1",
+      "bytes": 143360
+    },
+    "corpus/gsos601.po": {
+      "sha256": "ae7ca90bab81f379c9ff5770d50565e0cbec4f9b633872c2119282e4a0e2778e",
+      "bytes": 33554432
+    },
+    "corpus/_finder.po": {
+      "sha256": "4f440bacbdbe8a0180479c7ebac853d41f2777042cb46343f2f14322c31b024e",
+      "bytes": 33553920
+    },
+    "corpus/mb-audit-v1.61.po": {
+      "sha256": "d1d94dd3d1254dc46c5aa3c943c9d67cd3cc77a199df5c6738ee3c78a7a38f8a",
+      "bytes": 143360
+    }
+  },
+  "protected_consumer_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e"
+}

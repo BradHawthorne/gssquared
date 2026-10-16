@@ -336,11 +336,11 @@ Event D is closed for the machine the corpus measures.
 
 ### M6 — Artifact discipline and a shared reader  (P4) — S
 
-Every binary artifact (`A2COV1`, snapshots, `spike_*.bin`, `vram-raw`) has a
-header with magic, version and its parameters; the writer prints the count
-and an FNV hash of the body; `tools/a2rail/artifacts.py` is the one reader
-the harnesses import, and it refuses unknown magic and re-derives the count.
-A consumer's sweep harness grew this check by hand this week; it belongs in the fork.
+Binary artifacts (`A2COV1`/`A2COV2`, snapshots, `spike_*.bin`, `vram-raw`)
+declare their format through a header or a raw-file sidecar.
+`tools/a2rail/artifacts.py` is the shared reader the harnesses import. It
+checks the format-specific layout, counts and integrity fields described
+below; snapshot checks are narrower than raw-stream hash validation.
 
 *Would have prevented E.*
 
@@ -368,6 +368,32 @@ missing sidecar, an unknown format, a length that is not count x record size, an
 either hash failing to re-derive (the content hash is recomputed from the records
 by the layout), and its self-test trips each refusal. `spike_frame.bmp` is a BMP
 and describes itself.
+
+**Raw write failures (2026-10-16).** The raw SPIKE, CTRL `vram` and generic
+tap CPU-view/full-RAM writers check open, complete write, flush and close.
+Sidecar generation first checks that the payload exists, can be read and has
+exactly `count * record_size` bytes; a missing file cannot impersonate a valid
+zero-record capture. A real empty stream remains valid. Invalid sizes and
+overflow refuse before opening the sidecar. Failed sidecar finalization removes
+the sidecar opened by that attempt and reports any removal failure.
+
+SPIKE and generic tap failures print `status=FAIL artifact-io` and exit 2;
+CTRL `vram` returns `status=FAIL vram-artifact-io` and keeps the session usable.
+Only finalized payloads and sidecars receive a successful artifact receipt.
+The raw bytes, record layouts and content hashes remain compatible.
+`artifactiocheck.py` runs dual-platform positive/refusal cases in the agentic
+gate; native interface-contract checks inject short-write, flush and close
+failures without production fault rails. Evidence:
+`reports/gssquared-artifact-io-20261016/README.md`.
+
+This checks C stdio completion, not `fsync`, power-loss durability or atomic
+publication of a payload/sidecar pair. A failed attempt may leave a partial
+payload; use fresh run directories and require both a successful command/run
+and the checked reader. Existing files can survive a refusal before opening
+them. Record observer notifications can precede a later close failure, so they
+are not final publication receipts. General NDJSON sink lifecycle, screenshots,
+coverage and snapshot writer hardening are separate paths and are not covered
+by this raw-writer guarantee.
 
 ### M7 — Symbols by default  (P10) — M
 

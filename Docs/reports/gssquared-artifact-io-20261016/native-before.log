@@ -1,0 +1,44 @@
+PASS p3 valid payloads/sidecars pass checked reader
+FAIL p3 rejects blocked spike_trace.bin
+FAIL p3 rejects blocked spike_slot.bin
+FAIL p3 rejects blocked spike_mmu_truth.bin
+FAIL p3 rejects blocked spike_trace.bin.meta.json
+FAIL p3 rejects blocked spike_slot.bin.meta.json
+FAIL p3 rejects blocked spike_mmu_truth.bin.meta.json
+FAIL p3 CTRL vram refuses sidecar failure
+PASS p3 CTRL remains usable after failed artifact
+PASS p3 CTRL vram succeeds after refusal
+PASS session exits cleanly
+PASS p3 tap CPU/RAM payloads pass checked reader
+FAIL p3 tap rejects blocked ram_dump_periodic_t001.bin
+FAIL p3 tap rejects blocked ram_dump_periodic_t001.bin.meta.json
+FAIL p3 tap rejects blocked ram_full_periodic_t001.bin
+FAIL p3 tap rejects blocked ram_full_periodic_t001.bin.meta.json
+PASS p5 valid payloads/sidecars pass checked reader
+FAIL p5 rejects blocked spike_trace.bin
+FAIL p5 rejects blocked spike_slot.bin
+FAIL p5 rejects blocked spike_mmu_truth.bin
+FAIL p5 rejects blocked spike_e1_init.bin
+FAIL p5 rejects blocked spike_e1.bin
+FAIL p5 rejects blocked spike_trace.bin.meta.json
+FAIL p5 rejects blocked spike_slot.bin.meta.json
+FAIL p5 rejects blocked spike_mmu_truth.bin.meta.json
+FAIL p5 rejects blocked spike_e1_init.bin.meta.json
+FAIL p5 rejects blocked spike_e1.bin.meta.json
+FAIL p5 CTRL vram refuses sidecar failure
+PASS p5 CTRL remains usable after failed artifact
+PASS p5 CTRL vram succeeds after refusal
+PASS session exits cleanly
+PASS p5 tap CPU/RAM payloads pass checked reader
+FAIL p5 tap rejects blocked ram_dump_periodic_t001.bin
+FAIL p5 tap rejects blocked ram_dump_periodic_t001.bin.meta.json
+FAIL p5 tap rejects blocked ram_full_periodic_t001.bin
+FAIL p5 tap rejects blocked ram_full_periodic_t001.bin.meta.json
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\artifactiocheck.py", line 59, in <module>
+    args=p.parse_args();run(args.exe.resolve(),args.out)
+                        ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\artifactiocheck.py", line 52, in run
+    assert all(row['ok'] for row in rows),'artifact I/O failures were reported as success; see checks.json'
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: artifact I/O failures were reported as success; see checks.json

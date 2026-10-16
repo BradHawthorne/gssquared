@@ -18,6 +18,7 @@
 #include <cstdint>
 #include "house_fnv.hpp"
 #include <cstdio>
+#include "a2gspu_artifact_io.hpp"
 
 struct BusTraceRecord {
     uint64_t cycle;    // CPU cycle count at the write (NClock::get_cycles)
@@ -53,12 +54,7 @@ inline void bus_trace_reset() { g_bus_trace.clear(); }
 // but excluded from the hash so it stays valid across clock-rate changes
 // (e.g. a down-clock reclock writes the same bytes at different cycles).
 inline uint64_t bus_trace_dump(const char *path, uint64_t *out_count) {
-    FILE *f = fopen(path, "wb");
-    if (f) {
-        if (!g_bus_trace.empty())
-            fwrite(g_bus_trace.data(), sizeof(BusTraceRecord), g_bus_trace.size(), f);
-        fclose(f);
-    }
+    a2artifact::write_file(path,g_bus_trace.data(),sizeof(BusTraceRecord)*g_bus_trace.size());
     uint64_t hash = HOUSE_FNV_BASIS; // FNV-1a 64 offset basis
     for (const BusTraceRecord &r : g_bus_trace) {
         uint8_t b[5] = {

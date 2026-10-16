@@ -16,6 +16,7 @@
 #include "house_fnv.hpp"
 #include <vector>
 #include <cstdio>
+#include "a2gspu_artifact_io.hpp"
 
 struct MMUStateRecord {
     uint64_t cycle;          // NClock cycle (same oracle slot_bus_note stamps with)
@@ -60,12 +61,7 @@ inline void mmu_state_trace_note(uint64_t cycle, uint8_t st, uint8_t sh, uint8_t
 }
 
 inline uint64_t mmu_state_trace_dump(const char *path, uint64_t *out_count) {
-    FILE *f = fopen(path, "wb");
-    if (f) {
-        if (!g_mmu_state_trace.empty())
-            fwrite(g_mmu_state_trace.data(), sizeof(MMUStateRecord), g_mmu_state_trace.size(), f);
-        fclose(f);
-    }
+    a2artifact::write_file(path,g_mmu_state_trace.data(),sizeof(MMUStateRecord)*g_mmu_state_trace.size());
     uint64_t h = HOUSE_FNV_BASIS;   // FNV-1a 64 over the changed-state bytes (a determinism check)
     for (auto &r : g_mmu_state_trace) {
         uint8_t b[5] = { r.reg_state, r.reg_shadow, r.reg_new_video, r.reg_speed, r.flags };

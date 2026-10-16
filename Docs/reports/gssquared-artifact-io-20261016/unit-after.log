@@ -1,0 +1,49 @@
+UpdateCTestConfiguration  from :D:/gsqs/artifactio-20261016/build/DartConfiguration.tcl
+Test project D:/gsqs/artifactio-20261016/build
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 14
+    Start 14: interface_contract
+
+14: Test command: D:\gsqs\artifactio-20261016\build\interfacecontracttest.exe
+14: Working Directory: D:/gsqs/artifactio-20261016/build/apps/interfacecontracttest
+14: Test timeout computed to be: 10000000
+14: PASS real zero-record trace is valid
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-370675685434800\empty.bin format=bus-trace-v1 count=0 bytes=0 content-hash=14650FB0739D0383 file-hash=14650FB0739D0383 meta=D:\gsqs\tmp\a2artifact-370675685434800\empty.bin.meta.json
+14: PASS empty payload can receive a sidecar
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-370675685434800\missing.bin NO-DESCRIPTION -- read-open 'D:\gsqs\tmp\a2artifact-370675685434800\missing.bin': No such file or directory
+14: PASS missing payload is not a zero-record capture
+14: PASS missing payload does not publish metadata
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-370675685434800\mismatch.bin NO-DESCRIPTION -- length-not-count-times-record-size 'D:\gsqs\tmp\a2artifact-370675685434800\mismatch.bin'
+14: PASS wrong payload length refuses before sidecar publication
+14: PASS invalid payload does not truncate an existing sidecar
+14: PASS SHR dump refuses failed open without a valid count
+14: PASS slot dump refuses failed open without a valid count
+14: PASS MMU dump refuses failed open without a valid count
+14: PASS short write refuses and closes
+14: PASS flush failure refuses and closes
+14: PASS close failure refuses without a double close
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-370675685434800\empty.bin NO-DESCRIPTION -- flush 'D:\gsqs\tmp\a2artifact-370675685434800\empty.bin.meta.json': No space left on device
+14: PASS failed sidecar finalization refuses
+14: PASS failed sidecar is removed
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-370675685434800\empty.bin NO-DESCRIPTION -- close 'D:\gsqs\tmp\a2artifact-370675685434800\empty.bin.meta.json': Input/output error
+14: PASS failed sidecar finalization refuses
+14: PASS failed sidecar is removed
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-370675685434800\empty.bin NO-DESCRIPTION -- invalid-record-size-or-count 'D:\gsqs\tmp\a2artifact-370675685434800\empty.bin'
+14: PASS zero record size refuses
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-370675685434800\empty.bin NO-DESCRIPTION -- invalid-record-size-or-count 'D:\gsqs\tmp\a2artifact-370675685434800\empty.bin'
+14: PASS record length overflow refuses
+14: PASS failed record write does not publish a successful observer event
+14: interface contract: 60 checks passed
+1/1 Test #14: interface_contract ...............   Passed    0.05 sec
+
+The following tests passed:
+	interface_contract
+
+100% tests passed out of 1
+
+Total Test time (real) =   0.17 sec

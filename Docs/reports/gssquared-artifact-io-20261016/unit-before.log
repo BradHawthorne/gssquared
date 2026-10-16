@@ -1,0 +1,9 @@
+PASS real zero-record trace is valid
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-369971020073100\empty.bin format=bus-trace-v1 count=0 bytes=0 content-hash=14650FB0739D0383 file-hash=14650FB0739D0383 meta=D:\gsqs\tmp\a2artifact-369971020073100\empty.bin.meta.json
+PASS empty payload can receive a sidecar
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-369971020073100\missing.bin format=bus-trace-v1 count=0 bytes=0 content-hash=14650FB0739D0383 file-hash=0000000000000000 meta=D:\gsqs\tmp\a2artifact-369971020073100\missing.bin.meta.json
+FAIL missing payload is not a zero-record capture
+FAIL missing payload does not publish metadata
+FAIL SHR dump refuses failed open without a valid count
+FAIL slot dump refuses failed open without a valid count
+FAIL MMU dump refuses failed open without a valid count

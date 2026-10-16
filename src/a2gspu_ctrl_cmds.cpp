@@ -638,19 +638,18 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
             if (page != 2) page = 1;
             uint32_t base = (page == 2) ? 0x4000u : 0x2000u;
             const uint8_t *flat = rail_video_base(computer);
-            FILE *vf = flat ? fopen(fbuf, "wb") : nullptr;
             if (!flat) {
                 snprintf(result, rsz, "status=FAIL vram-no-flat-image");
-            } else if (!vf) {
-                snprintf(result, rsz, "status=FAIL vram-open-fail %s", fbuf);
             } else {
-                fwrite(flat + 0x10000 + base, 1, 0x2000, vf);
-                fwrite(flat + base, 1, 0x2000, vf);
-                fclose(vf);
+                try {
+                a2artifact::Output output(fbuf);
+                output.write(flat+0x10000+base,0x2000);
+                output.write(flat+base,0x2000);
+                output.finish();
                 uint64_t vh = HOUSE_FNV_BASIS;   // the same bytes, in file order
                 for (uint32_t k = 0; k < 0x2000; k++) { vh ^= flat[0x10000 + base + k]; vh *= HOUSE_FNV_PRIME; }
                 for (uint32_t k = 0; k < 0x2000; k++) { vh ^= flat[base + k]; vh *= HOUSE_FNV_PRIME; }
-                a2gspu_artifact_meta(fbuf, "vram-raw-v1", 1, 0x4000,
+                a2gspu_artifact_require_meta(fbuf, "vram-raw-v1", 1, 0x4000,
                                      "u8 x 16384: 8192 bytes aux then 8192 bytes main, the HGR page named by page",
                                      "house-FNV-1a-64 over all 16384 bytes", vh, page);
                 /* 16384, not 8192: two 0x2000 halves are written, and the ack
@@ -662,6 +661,9 @@ bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer
                          "status=OK vram profile=vram-raw page%d 16384 "
                          "(8192 aux + 8192 main) -> %s",
                          page, fbuf);
+                } catch(const a2artifact::Error &error) {
+                    snprintf(result,rsz,"status=FAIL vram-artifact-io %s",error.what());
+                }
             }
         } else {
             snprintf(result, rsz, "status=FAIL vram-parse-fail");

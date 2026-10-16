@@ -35,11 +35,12 @@ static const char *a2gspu_out_path(const char *name, char *buf, size_t bufsz) {
     bool absolute = name[0] == '/' || name[0] == '\\' ||
                     (name[0] != '\0' && name[1] == ':');   // Windows drive-letter (C:...)
     if (absolute) return name;
-    snprintf(buf, bufsz, "%s/%s", dir, name);
+    const int n=snprintf(buf, bufsz, "%s/%s", dir, name);
+    if(n<0 || (size_t)n>=bufsz)throw a2artifact::Error("output-path-too-long",dir,0);
     return buf;
 }
 
-void run_headless_spike(GS2AppState *state) {
+static void run_headless_spike_impl(GS2AppState *state) {
     computer_t *computer = state->computer;
     char a2gspu_outbuf[1024];   // scratch for a2gspu_out_path() (A2GSPU_OUT_DIR)
 
@@ -400,12 +401,11 @@ void run_headless_spike(GS2AppState *state) {
         const uint8_t *m2i = state->mmu_iigs ? state->mmu_iigs->megaii_cpu_view() : nullptr;   // CPU order
         if (m2i) {
             const std::string ip = a2gspu_out_path("spike_e1_init.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
-            FILE *fi = fopen(ip.c_str(), "wb");
-            if (fi) {
-                fwrite(m2i + 0x12000, 1, 0x8000, fi); fclose(fi); // $E1:$2000-$9FFF
+            {
+                a2artifact::write_file(ip.c_str(),m2i+0x12000,0x8000);
                 uint64_t h = HOUSE_FNV_BASIS;
                 for (int a = 0; a < 0x8000; a++) { h ^= m2i[0x12000 + a]; h *= HOUSE_FNV_PRIME; }
-                a2gspu_artifact_meta(ip.c_str(), "megaii-e1-shr-window-v1", 1, 0x8000,
+                a2gspu_artifact_require_meta(ip.c_str(), "megaii-e1-shr-window-v1", 1, 0x8000,
                                      "u8 x 32768: Mega II bank $E1 $2000-$9FFF at trace arm",
                                      "house-FNV-1a-64 over all 32768 bytes", h);
             }
@@ -679,9 +679,7 @@ void run_headless_spike(GS2AppState *state) {
     if (m2) {
         const uint8_t *e1 = m2 + 0x10000;          // Mega II bank $E1 (64 KB), as the CPU addresses it
         const std::string e1p = a2gspu_out_path("spike_e1.bin", a2gspu_outbuf, sizeof a2gspu_outbuf);
-        FILE *f = fopen(e1p.c_str(), "wb");
-        const bool e1_written = (f != nullptr);
-        if (f) { fwrite(e1, 1, 0x10000, f); fclose(f); }
+        a2artifact::write_file(e1p.c_str(),e1,0x10000);
         uint64_t hash = HOUSE_FNV_BASIS;    // FNV-1a 64
         int nonzero = 0; uint8_t seen[256] = {0}; int ndist = 0;
         for (int a = 0x2000; a <= 0x9FFF; a++) {
@@ -696,8 +694,7 @@ void run_headless_spike(GS2AppState *state) {
         printf("SPIKE E1: SCB[0..7]@$9D00 = %02X %02X %02X %02X %02X %02X %02X %02X\n",
                e1[0x9D00], e1[0x9D01], e1[0x9D02], e1[0x9D03],
                e1[0x9D04], e1[0x9D05], e1[0x9D06], e1[0x9D07]);
-        if (e1_written)
-            a2gspu_artifact_meta(e1p.c_str(), "megaii-e1-64k-v1", 1, 0x10000,
+        a2gspu_artifact_require_meta(e1p.c_str(), "megaii-e1-64k-v1", 1, 0x10000,
                                  "u8 x 65536: Mega II bank $E1 $0000-$FFFF at spike end",
                                  "house-FNV-1a-64 over file bytes $2000-$9FFF (the SHR window; the SPIKE E1 hash)", hash);
         // Headless SHR/video-state summary (mode/palette/pixel histogram).
@@ -719,7 +716,7 @@ void run_headless_spike(GS2AppState *state) {
         uint64_t c1 = g_bus_trace.empty() ? 0 : g_bus_trace.back().cycle;
         printf("SPIKE TRACE: wrote spike_trace.bin (%llu SHR writes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)th);
-        a2gspu_artifact_meta(tp.c_str(), "bus-trace-v1", (unsigned)sizeof(BusTraceRecord), n,
+        a2gspu_artifact_require_meta(tp.c_str(), "bus-trace-v1", (unsigned)sizeof(BusTraceRecord), n,
                              "u64 cycle, u32 addr17 (bit16 = bank $E1), u8 data, u8 rw (1=write), u8 src (0 direct $E1, 1 shadowed), u8 pad",
                              "house-FNV-1a-64 over each record's addr17 low 3 bytes (LE), data, rw, in file order", th);
         printf("SPIKE TRACE: cycle span [%llu .. %llu]\n",
@@ -753,7 +750,7 @@ void run_headless_spike(GS2AppState *state) {
         uint64_t sh = slot_bus_dump(slp.c_str(), &n);
         printf("SPIKE SLOT: wrote spike_slot.bin (%llu Mega-II writes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)sh);
-        a2gspu_artifact_meta(slp.c_str(), "slot-bus-v1", (unsigned)sizeof(slot_bus_cycle_t), n,
+        a2gspu_artifact_require_meta(slp.c_str(), "slot-bus-v1", (unsigned)sizeof(slot_bus_cycle_t), n,
                              "u64 cycle, u16 addr, u8 data, u8 ctl (SLOT_CTL_* bits), then padding to the record size",
                              "house-FNV-1a-64 over each record's addr low byte, addr high byte, data, ctl and a zero byte, in file order", sh);
     }
@@ -770,7 +767,7 @@ void run_headless_spike(GS2AppState *state) {
         uint64_t mh = mmu_state_trace_dump(mp.c_str(), &n);
         printf("SPIKE MMU: wrote spike_mmu_truth.bin (%llu mapping-state changes) content-hash=%016llX\n",
                (unsigned long long)n, (unsigned long long)mh);
-        a2gspu_artifact_meta(mp.c_str(), "mmu-state-v1", (unsigned)sizeof(MMUStateRecord), n,
+        a2gspu_artifact_require_meta(mp.c_str(), "mmu-state-v1", (unsigned)sizeof(MMUStateRecord), n,
                              "u64 cycle, u8 reg_state ($C068), u8 reg_shadow ($C035), u8 reg_new_video ($C029), u8 reg_speed ($C036), u8 flags (bit0 80STORE, bit1 HIRES, bit2 TEXT, bit3 MIXED), u8 reg_slot ($C02D), u8 disp_vmode, u8 disp_mode, u8 pad x7",
                              "house-FNV-1a-64 over each record's reg_state, reg_shadow, reg_new_video, reg_speed, flags, in file order", mh);
     }
@@ -1127,3 +1124,7 @@ void run_headless_spike(GS2AppState *state) {
 /* ========================================================================
    SDL3 App Callback Entry Points
    ======================================================================== */
+void run_headless_spike(GS2AppState *state) {
+    try {run_headless_spike_impl(state);}
+    catch(const a2artifact::Error &error) {a2artifact::fatal(error);}
+}

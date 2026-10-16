@@ -1,0 +1,170 @@
+{
+  "checks": [
+    {
+      "ok": true,
+      "label": "p3 valid payloads/sidecars pass checked reader",
+      "exit_code": 0
+    },
+    {
+      "ok": true,
+      "label": "p3 rejects blocked spike_trace.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 rejects blocked spike_slot.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 rejects blocked spike_mmu_truth.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 rejects blocked spike_trace.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 rejects blocked spike_slot.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 rejects blocked spike_mmu_truth.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 CTRL vram refuses sidecar failure",
+      "reply": "status=FAIL vram-artifact-io description 'D:\\gsqs\\artifactio-20261016\\native-after\\vram-p3.bin'\n"
+    },
+    {
+      "ok": true,
+      "label": "p3 CTRL remains usable after failed artifact"
+    },
+    {
+      "ok": true,
+      "label": "p3 CTRL vram succeeds after refusal"
+    },
+    {
+      "ok": true,
+      "label": "p3 tap CPU/RAM payloads pass checked reader",
+      "exit_code": 0
+    },
+    {
+      "ok": true,
+      "label": "p3 tap rejects blocked ram_dump_periodic_t001.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 tap rejects blocked ram_dump_periodic_t001.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 tap rejects blocked ram_full_periodic_t001.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p3 tap rejects blocked ram_full_periodic_t001.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 valid payloads/sidecars pass checked reader",
+      "exit_code": 0
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_trace.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_slot.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_mmu_truth.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_e1_init.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_e1.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_trace.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_slot.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_mmu_truth.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_e1_init.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 rejects blocked spike_e1.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 CTRL vram refuses sidecar failure",
+      "reply": "status=FAIL vram-artifact-io description 'D:\\gsqs\\artifactio-20261016\\native-after\\vram-p5.bin'\n"
+    },
+    {
+      "ok": true,
+      "label": "p5 CTRL remains usable after failed artifact"
+    },
+    {
+      "ok": true,
+      "label": "p5 CTRL vram succeeds after refusal"
+    },
+    {
+      "ok": true,
+      "label": "p5 tap CPU/RAM payloads pass checked reader",
+      "exit_code": 0
+    },
+    {
+      "ok": true,
+      "label": "p5 tap rejects blocked ram_dump_periodic_t001.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 tap rejects blocked ram_dump_periodic_t001.bin.meta.json",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 tap rejects blocked ram_full_periodic_t001.bin",
+      "exit_code": 2
+    },
+    {
+      "ok": true,
+      "label": "p5 tap rejects blocked ram_full_periodic_t001.bin.meta.json",
+      "exit_code": 2
+    }
+  ]
+}
