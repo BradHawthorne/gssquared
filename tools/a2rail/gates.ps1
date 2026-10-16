@@ -67,7 +67,13 @@ $suites = [ordered]@{
     'gdiff'        = @{ offline = $true;  run = { python (Join-Path $root 'tools\gdiff\selftest.py') } }
     'buscompare'   = @{ offline = $true;  run = { python (Join-Path $here 'buscompare.py') selftest } }
     'bisect'       = @{ offline = $true;  run = { & (Join-Path $here 'bisect.ps1') -SelfTest } }
-    'agentic'      = @{ offline = $false; run = { python -I (Join-Path $here 'p0check.py') --exe (Get-GSSquaredExe) } }
+    'agentic'      = @{ offline = $false; run = {
+        & (Join-Path $here 'sessionidentitycheck.ps1') -Exe (Get-GSSquaredExe)
+        if ($LASTEXITCODE -ne 0) { throw 'Session identity fixture failed' }
+        & (Join-Path $root 'tools/scout/scoutcheck.ps1') -Exe (Get-GSSquaredExe)
+        if ($LASTEXITCODE -ne 0) { throw 'Scout isolation fixture failed' }
+        python -I (Join-Path $here 'p0check.py') --exe (Get-GSSquaredExe)
+    } }
     'dualsmoke'    = @{ offline = $false; run = { & (Join-Path $here 'dualsmoke.ps1') } }
     'personality'  = @{ offline = $false; run = { & (Join-Path $here 'personalitycheck.ps1') } }
     'protocol'     = @{ offline = $false; run = { & (Join-Path $here 'protocolcheck.ps1') } }

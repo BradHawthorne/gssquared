@@ -41,6 +41,17 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'runtime.ps1')
+
+# Reusing a live directory would clear another run's commands and acknowledgements.
+$existingReceipt = Join-Path $Dir 'session.json'
+if (Test-Path -LiteralPath $existingReceipt) {
+    try { $previous = Get-Content -LiteralPath $existingReceipt -Raw | ConvertFrom-Json }
+    catch { throw "Invalid existing session receipt; choose a fresh directory: $Dir" }
+    if ($previous.pid -and (Get-Process -Id ([int]$previous.pid) -ErrorAction SilentlyContinue)) {
+        throw "Session directory records a live pid; choose a fresh directory: $Dir"
+    }
+}
 
 # A stale command/ack pair would be picked up as if it belonged to this session, so
 # the PROTOCOL files are cleared -- but only those.
@@ -70,11 +81,8 @@ if (Test-Path $Dir) {
 $a2railOldCtrl        = $env:A2GSPU_CTRL
 $a2railOldCtrlTimeout = $env:A2GSPU_CTRL_TIMEOUT
 $a2railOldCtrlAtomic  = $env:A2GSPU_CTRL_ATOMIC
-$env:A2GSPU_CTRL         = $Dir
-$env:A2GSPU_CTRL_TIMEOUT = "$TimeoutS"
 # ctl.ps1 writes cmd.N as a temp file and renames it into place, so the rail can
 # skip the re-read guard it keeps for clients that write in place.
-$env:A2GSPU_CTRL_ATOMIC  = "1"
 
 # libstdc++-6.dll and friends must be discoverable before launch. Keep this in
 # one shared preflight so ctest, personality gates and sessions cannot drift.
@@ -84,6 +92,7 @@ $null = Initialize-A2RailRuntime
 . (Join-Path $PSScriptRoot "toolpin.ps1")
 if (-not $Exe) { $Exe = Get-GSSquaredExe }
 if (-not (Test-Path $Exe)) { throw "GSSquared not found: $Exe" }
+$Exe = (Resolve-Path -LiteralPath $Exe).Path
 $pinFile = Join-Path $Dir "toolpin.txt"
 # One pin line per session start (overwrite). cmd/ack were already cleared above.
 if (Test-Path $pinFile) { Remove-Item $pinFile -Force -ErrorAction SilentlyContinue }
@@ -108,15 +117,28 @@ if ($ConfigFile) {
 # discoverable from the rail at all. Pinning it to the session directory puts
 # every emulator-produced artifact next to the session log, with the rest of the
 # evidence.
-$proc = Start-Process -FilePath $Exe -ArgumentList $launchArgs -WorkingDirectory $Dir `
+$env:A2GSPU_CTRL         = $Dir
+$env:A2GSPU_CTRL_TIMEOUT = "$TimeoutS"
+$env:A2GSPU_CTRL_ATOMIC  = "1"
+try {
+  $proc = Start-Process -FilePath $Exe -ArgumentList $launchArgs -WorkingDirectory $Dir `
               -RedirectStandardOutput $log `
               -RedirectStandardError (Join-Path $Dir "session.err") `
               -WindowStyle Hidden -PassThru
 
-# The child has inherited them; put the caller's environment back.
-$env:A2GSPU_CTRL         = $a2railOldCtrl
-$env:A2GSPU_CTRL_TIMEOUT = $a2railOldCtrlTimeout
-$env:A2GSPU_CTRL_ATOMIC  = $a2railOldCtrlAtomic
+# The child has inherited them; restore even when process creation fails.
+} finally {
+  $env:A2GSPU_CTRL         = $a2railOldCtrl
+  $env:A2GSPU_CTRL_TIMEOUT = $a2railOldCtrlTimeout
+  $env:A2GSPU_CTRL_ATOMIC  = $a2railOldCtrlAtomic
+}
+try {
+    # MainModule/Path can be unavailable until Windows finishes loading the image.
+    $identity = Get-A2RailProcessReceipt $proc -WaitMs 2000
+} catch {
+    if (-not $proc.HasExited) { Stop-Process -InputObject $proc -Force -ErrorAction SilentlyContinue }
+    throw
+}
 
 @{
     schema = "a2rail-session-v1"
@@ -124,6 +146,8 @@ $env:A2GSPU_CTRL_ATOMIC  = $a2railOldCtrlAtomic
     owner = $Owner
     pid = $proc.Id
     exe = $Exe
+    process_identity_model = $identity.process_identity_model
+    process_start_utc_ticks = $identity.process_start_utc_ticks
     platform = $Platform
     config = $Config
     config_file = $ConfigFile

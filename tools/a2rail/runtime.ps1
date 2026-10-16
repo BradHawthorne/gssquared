@@ -76,3 +76,64 @@ function Read-AckText([string]$path) {
         }
     }
 }
+
+<# One process-identity contract for file-session clients and gate cleanup.
+   Exact executable path + native process start ticks; no process-name guesses.
+   Receipts identify a process instance, not cryptographic authority or replay.
+#>
+function Get-A2RailProcessReceipt([Diagnostics.Process]$Process, [int]$WaitMs = 0) {
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        try {
+            $Process.Refresh()
+            if ($Process.HasExited) { throw 'Cannot record an exited rail process' }
+            $path = $Process.Path
+            if (-not $path) { throw 'Cannot resolve rail process executable path' }
+            break
+        } catch {
+            if ($clock.ElapsedMilliseconds -ge $WaitMs -or $Process.HasExited) { throw }
+            Start-Sleep -Milliseconds 25
+        }
+    }
+    return @{
+        exe = [IO.Path]::GetFullPath($path)
+        process_identity_model = 'executable-path-and-start-utc-ticks-v1'
+        process_start_utc_ticks = $Process.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)
+    }
+}
+
+function Get-A2RailSessionProcessStatus($Session) {
+    if (-not $Session) { return [pscustomobject]@{ alive=$false; reason='no-session-json' } }
+    $sessionPid = 0
+    if (-not [int]::TryParse([string]$Session.pid, [ref]$sessionPid) -or $sessionPid -le 0) {
+        return [pscustomobject]@{ alive=$false; reason='session-json-has-no-valid-pid' }
+    }
+    $process = Get-Process -Id $sessionPid -ErrorAction SilentlyContinue
+    if (-not $process) { return [pscustomobject]@{ alive=$false; reason='pid-gone' } }
+    if ($Session.process_identity_model -ne 'executable-path-and-start-utc-ticks-v1' -or
+        -not $Session.exe -or -not $Session.process_start_utc_ticks) {
+        return [pscustomobject]@{ alive=$false; reason='identity-metadata-missing' }
+    }
+    $ticks = 0L
+    if ([string]$Session.process_start_utc_ticks -notmatch '^[0-9]+$' -or
+        -not [long]::TryParse([string]$Session.process_start_utc_ticks, [ref]$ticks) -or $ticks -le 0) {
+        return [pscustomobject]@{ alive=$false; reason='identity-metadata-invalid' }
+    }
+    try {
+        $actual = Get-A2RailProcessReceipt $process
+        $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+        if (-not [string]::Equals([IO.Path]::GetFullPath([string]$Session.exe), $actual.exe, $comparison)) {
+            return [pscustomobject]@{ alive=$false; reason='identity-executable-mismatch' }
+        }
+        if ($ticks -ne [long]$actual.process_start_utc_ticks) {
+            return [pscustomobject]@{ alive=$false; reason='identity-start-mismatch' }
+        }
+        return [pscustomobject]@{ alive=$true; reason='matched'; pid=$sessionPid; exe=$actual.exe }
+    } catch {
+        return [pscustomobject]@{ alive=$false; reason='identity-unavailable' }
+    }
+}
+
+function Test-A2RailSessionProcess($Session) {
+    return (Get-A2RailSessionProcessStatus $Session).alive
+}

@@ -86,28 +86,8 @@ if ($Owner -and $session -and $session.owner -ne $Owner) {
 # nobody to read. session.ps1 always writes session.json before it launches
 # anything, so an absent file means no session here, full stop; there is no case
 # where the name fallback was right and the pid was not available.
-# A PID IS NOT A SESSION. Windows reuses process ids, and a gate run launches
-# emulators back to back: a session.json left by an earlier run named a pid that
-# another process -- often the next suite's emulator -- now held, so the suite
-# "quit" a session that did not exist and waited out the 180 s ack timeout
-# (measured: IIgs railcheck 184 s, every command in its last 2 s). The pid counts
-# only if it is a GSSquared that started within 30 s of this session's
-# started_utc, which session.ps1 writes just before it launches.
-function Test-A2RailSessionProcess($s) {
-    if (-not $s -or -not $s.pid) { return $false }
-    $p = Get-Process -Id ([int]$s.pid) -ErrorAction SilentlyContinue
-    if (-not $p -or $p.ProcessName -ne 'GSSquared') { return $false }
-    if ($s.started_utc) {
-        try {
-            # ConvertFrom-Json (PowerShell 7) already made it a DateTime; a [string]
-            # cast would drop its UTC kind and shift it by the zone offset.
-            $t0 = if ($s.started_utc -is [DateTime]) { $s.started_utc.ToUniversalTime() }
-                  else { [DateTime]::Parse([string]$s.started_utc, $null, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime() }
-            if ([Math]::Abs(($p.StartTime.ToUniversalTime() - $t0).TotalSeconds) -gt 30) { return $false }
-        } catch { }
-    }
-    return $true
-}
+# Process receipts bind exact executable path and native start ticks.
+. (Join-Path $PSScriptRoot 'runtime.ps1')
 function Test-SessionAlive {
   return (Test-A2RailSessionProcess $session)
 }
@@ -160,7 +140,8 @@ function Read-AckText([string]$path) {
   }
 }
 
-if (-not (Test-SessionAlive)) {
+$identityStatus = Get-A2RailSessionProcessStatus $session
+if (-not $identityStatus.alive) {
   # Say WHICH of the two it is. "GSSquared is not running" was a guess dressed as
   # a fact -- it was printed both when this directory had never had a session and
   # when one had died, and those need different actions (start one here; or look
@@ -171,6 +152,10 @@ if (-not (Test-SessionAlive)) {
   } elseif (-not $session.pid) {
     Write-RailEvent 'refused' @{ reason='no-session'; detail='session-json-has-no-pid'; command=$Cmd }
     "[--] NO SESSION: $sessionFile records no pid. Start one with tools\session.ps1"
+  } elseif ($identityStatus.reason -ne 'pid-gone') {
+    Write-RailEvent 'refused' @{ reason='session-identity'; detail=$identityStatus.reason; pid=$session.pid; command=$Cmd }
+    "[--] SESSION IDENTITY / METADATA REFUSED: $($identityStatus.reason); pid=$($session.pid). Command not issued."
+    "     (restart with a fresh session receipt; a live PID alone is not a session)."
   } else {
     Write-RailEvent 'refused' @{ reason='no-session'; detail='pid-gone'; pid=$session.pid; command=$Cmd }
     "[--] NO SESSION: session pid $($session.pid) is gone. Start one with tools\session.ps1"
@@ -223,6 +208,7 @@ if (Wait-Ack $ack $TimeoutMs) {
   Write-RailEvent 'ack' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); command=$Cmd; reply=$reply }
   "[$seq] $Cmd"
   "     -> " + $reply
+  exit 0
 } elseif (-not (Test-SessionAlive)) {
   # THE EMULATOR DIED WITH THE COMMAND PENDING. Wait-Ack gives up within ~2s when
   # the session pid is gone, and this used to fall into the stall text below:
@@ -230,10 +216,17 @@ if (Wait-Ack $ack $TimeoutMs) {
   # all false, printed about a process that had crashed in the first two seconds
   # (a heap corruption on a breakpoint hit, found exactly this way). Nothing will
   # ever ack it; say that, and exit 2 like any other absent session.
-  Write-RailEvent 'died' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); reason='pid-gone-while-pending'; command=$Cmd }
-  "[$seq] $Cmd"
-  "     -> SESSION DIED: pid $(if($session){$session.pid}else{'?'}) exited with cmd.$seq pending; it will never ack."
-  "        See $Dir\session.log and session.err for how it ended."
+  $status = Get-A2RailSessionProcessStatus $session
+  if ($status.reason -eq 'pid-gone') {
+    Write-RailEvent 'died' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); reason='pid-gone-while-pending'; command=$Cmd }
+    "[$seq] $Cmd"
+    "     -> SESSION DIED: pid $(if($session){$session.pid}else{'?'}) exited with cmd.$seq pending; it will never ack."
+    "        See $Dir\session.log and session.err for how it ended."
+  } else {
+    Write-RailEvent 'refused' @{ sequence=$seq; reason='session-identity'; detail=$status.reason; command=$Cmd }
+    "[$seq] $Cmd"
+    "     -> SESSION IDENTITY / METADATA REFUSED while pending: $($status.reason). Verify the original receipt before further commands."
+  }
   exit 2
 } else {
   Write-RailEvent 'stalled' @{ sequence=$seq; pid=$(if($session){$session.pid}else{$null}); reason='ack-timeout'; command=$Cmd }

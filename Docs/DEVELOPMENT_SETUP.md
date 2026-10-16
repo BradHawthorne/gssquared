@@ -36,8 +36,11 @@ it was removed. `.vscode/launch.json` is the maintained editor launch file.
 Set `A2_GSSQUARED` to the tested executable and `GSSQUARED_ROOT` to its source
 checkout before running `tools/a2rail/gates.ps1`. Native CTests come from the
 selected executable's build directory. Preserve run/corpus pins and identify
-the executable bytes in evidence. The file harness currently expects the
-process name `GSSquared`; renamed-process support remains a roadmap task.
+the executable bytes in evidence. File-session receipts bind exact executable
+path and native UTC process-start ticks, including renamed executables. A
+recycled/unrelated PID or incomplete receipt refuses before publication. Restart
+old sessions whose receipts predate these identity fields; PID/name guesses are
+not a fallback.
 
 `scripts/release/gs2-release` and its local skill target only the owner's fork:
 the default ref is `origin/a2gspu`, host commands refuse non-fork origins and

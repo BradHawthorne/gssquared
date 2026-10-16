@@ -1,0 +1,27 @@
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS synthetic unreachable milestones report no observed advance
+PASS caller instrumentation environment is restored
+PASS closed receipt declares its outcome/model
+PASS bounded baseline retains one native pins/diagnostic pair
+PASS child owns a separate working/output directory
+PASS child pins are independent from inherited rails
+PASS staged media and producer logs are retained
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS existing output refuses without replacing evidence
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS synthetic unreachable milestones report no observed advance
+PASS caller instrumentation environment is restored
+PASS closed receipt declares its outcome/model
+PASS bounded baseline retains one native pins/diagnostic pair
+PASS child owns a separate working/output directory
+PASS child pins are independent from inherited rails
+PASS staged media and producer logs are retained
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS existing output refuses without replacing evidence
+PASS repeated invocations never share a run root
+PASS source image remains byte-identical
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS explicit provider setup cannot leak instrumentation environment to caller
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS missing declared input refuses before output or execution
+ALL GREEN -- isolated scout checks=20 evidence=C:\msys64\tmp\scout-check-55f78a91d7d341bc8a62de653cd3fcc7

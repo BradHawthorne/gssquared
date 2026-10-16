@@ -47,9 +47,16 @@ param(
   [switch] $NoBaseline,                       # skip the baseline run (wall already known)
   [string] $Kernel     = $env:GDIFF_KERNEL,          # dir holding kernel.sym.dbg + kernel.milestones.txt
   [string] $Gss        = "",                          # default: this repo's build, via toolpin.ps1
-  [string] $Manifest   = $env:GDIFF_ORACLE_ENV        # optional Set-OracleEnv script
+  [string] $Manifest   = $env:GDIFF_ORACLE_ENV,       # optional Set-OracleEnv script
+  [string] $Symbols    = "",
+  [string] $Milestones = "",
+  [string] $OutDir     = "",                          # explicit new directory, never reused
+  [string] $OutRoot    = (Join-Path ([IO.Path]::GetTempPath()) 'scout-runs')
 )
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
+$callerRails=@{}
+Get-ChildItem Env: | Where-Object Name -Match '^(A2GSPU_|MEMVU_|WIZ5_)' | ForEach-Object { $callerRails[$_.Name]=$_.Value }
+try {
 $PSNativeCommandUseErrorActionPreference = $false
 $HERE = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $HERE '..\a2rail\toolpin.ps1')
@@ -58,15 +65,49 @@ $null = Initialize-A2RailRuntime
 if (-not $Gss) { $Gss = Get-GSSquaredExe }
 if (-not $Img -or -not (Test-Path $Img)) { Write-Host "scout: FAIL - boot image '$Img' not found (pass -Img or set GDIFF_IMG)" -ForegroundColor Red; exit 2 }
 if (-not (Test-Path $Gss)) { Write-Host "scout: FAIL - emulator '$Gss' not found (build it, or pass -Gss / set A2_GSSQUARED)" -ForegroundColor Red; exit 2 }
-if (-not $Kernel -or -not (Test-Path $Kernel)) { Write-Host "scout: FAIL - kernel directory '$Kernel' not found (pass -Kernel or set GDIFF_KERNEL)" -ForegroundColor Red; exit 2 }
+if ($Frames -lt 1 -or $Frames -gt 1000000 -or $Repeat -lt 1 -or $Repeat -gt 256 -or $TimeoutSec -lt 1) { throw 'Invalid scout frame/repeat/timeout budget' }
+if (-not $Symbols -and $Kernel) { $Symbols = Join-Path $Kernel 'kernel.sym.dbg' }
+if (-not $Milestones -and $Kernel) { $Milestones = Join-Path $Kernel 'kernel.milestones.txt' }
+if (-not $Symbols -or -not (Test-Path -LiteralPath $Symbols)) { throw 'Explicit symbol input required: -Symbols or -Kernel' }
+if (-not $Milestones -or -not (Test-Path -LiteralPath $Milestones)) { throw 'Explicit milestone input required: -Milestones or -Kernel' }
+if ($Manifest -and -not (Test-Path -LiteralPath $Manifest)) { throw 'Explicit oracle manifest is missing' }
 $SYMPY = "$HERE/scout_sym.py"
-$SYM   = "$Kernel/kernel.sym.dbg"
-$MILE  = "$Kernel/kernel.milestones.txt"
-$SP = Join-Path ([System.IO.Path]::GetTempPath()) 'scout'
-New-Item -ItemType Directory -Force -Path $SP | Out-Null
+$SYM = (Resolve-Path -LiteralPath $Symbols).Path
+$MILE = (Resolve-Path -LiteralPath $Milestones).Path
+$Img = (Resolve-Path -LiteralPath $Img).Path
+$Gss = (Resolve-Path -LiteralPath $Gss).Path
+if (-not $OutDir) { $OutDir = Join-Path $OutRoot ('scout-' + [guid]::NewGuid().ToString('N')) }
+$SP = [IO.Path]::GetFullPath($OutDir)
+if (Test-Path -LiteralPath $SP) { throw "Scout output directory exists; choose a fresh directory: $SP" }
+New-Item -ItemType Directory -Path (Split-Path $SP -Parent) -Force | Out-Null
+New-Item -ItemType Directory -Path $SP -ErrorAction Stop | Out-Null
+$sourceImageHash = (Get-FileHash -LiteralPath $Img -Algorithm SHA256).Hash.ToLowerInvariant()
+$scoutRuns = [Collections.Generic.List[object]]::new()
+$scoutReceipt = [ordered]@{ schema='a2scout-run-v1'; outcome='running'; source_image=$Img;
+    source_image_sha256=$sourceImageHash; executable=$Gss;
+    executable_sha256=(Get-FileHash -LiteralPath $Gss -Algorithm SHA256).Hash.ToLowerInvariant();
+    symbols_sha256=(Get-FileHash -LiteralPath $SYM -Algorithm SHA256).Hash.ToLowerInvariant();
+    milestones_sha256=(Get-FileHash -LiteralPath $MILE -Algorithm SHA256).Hash.ToLowerInvariant();
+    claim='bounded deliberate-control forecast, not faithful guest acceptance or replay'; runs=@() }
+function Save-ScoutReceipt {
+    $scoutReceipt.runs = @($scoutRuns.ToArray())
+    $scoutReceipt | ConvertTo-Json -Depth 9 | Set-Content -LiteralPath (Join-Path $SP 'scout-report.json') -Encoding utf8
+}
+Save-ScoutReceipt
+"SCOUT OUTPUT: $SP"
+trap {
+  $scoutReceipt.outcome='inconclusive'
+  $scoutReceipt.error=$_.Exception.Message
+  Save-ScoutReceipt
+  throw
+}
 if ($Manifest) {                              # G5: Set-OracleEnv / Assert-OracleEnv
   if (-not (Test-Path $Manifest)) { Write-Host "scout: FAIL - oracle manifest '$Manifest' not found" -ForegroundColor Red; exit 2 }
+  $Manifest=(Resolve-Path -LiteralPath $Manifest).Path
+  $scoutReceipt.oracle_manifest=$Manifest
+  $scoutReceipt.oracle_manifest_sha256=(Get-FileHash -LiteralPath $Manifest -Algorithm SHA256).Hash.ToLowerInvariant()
   . $Manifest
+  if (-not (Get-Command Set-OracleEnv -ErrorAction SilentlyContinue)) { throw 'Explicit oracle manifest did not provide Set-OracleEnv' }
 }
 
 # ---- milestones (name -> addr), in boot order ----
@@ -81,33 +122,45 @@ function Is-Death($n) { return ($n -match '(?i)death|fatal') }
 # ---- one bounded forward boot (the G3 run-until pattern; returns rich telemetry incl. the wall PC) ----
 function Invoke-ScoutBoot {
   param([int]$nframes, [string]$tag, [string]$poke)
-  # env hygiene: clear every arming/trace var so nothing leaks across runs (rb.ps1 discipline)
-  # Clean env slate: every instrumentation variable, by prefix, so no rail -- including
-  # ones added after this script was written -- leaks from the caller or a previous run.
-  # (This used to be a hand list of 28 names that had missed TRAP, TAP, RECORDS, BRAM,
-  # every MEMVU_* and every WIZ5_* rail while its README said "every arming var".)
-  Get-ChildItem Env: | Where-Object { $_.Name -match '^(A2GSPU_|MEMVU_|WIZ5_)' } |
-    ForEach-Object { Remove-Item ("Env:" + $_.Name) -ErrorAction SilentlyContinue }
-  # G5: pin the determinism manifest (Scout mode = allow the deliberate splice).
-  if (Get-Command Set-OracleEnv -ErrorAction SilentlyContinue) {
-    Set-OracleEnv -Mode Scout -Frames $nframes -Ndev $Ndev -Allow @("A2GSPU_POKE") -Quiet | Out-Null
-  } else {
-    $env:A2GSPU_SEED = "1"; $env:A2GSPU_FAKETIME = "1000000000"; $env:A2GSPU_SP_NDEV = "$Ndev"; $env:A2GSPU_SPIKE_FRAMES = "$nframes"; $env:A2GSPU_BRAM = "default"
+  $runDir = Join-Path $SP $tag
+  New-Item -ItemType Directory -Path $runDir -ErrorAction Stop | Out-Null
+  $imageCopy = Join-Path $runDir ('input' + [IO.Path]::GetExtension($Img))
+  Copy-Item -LiteralPath $Img -Destination $imageCopy
+  if ((Get-FileHash -LiteralPath $imageCopy -Algorithm SHA256).Hash.ToLowerInvariant() -ne $sourceImageHash) { throw 'Scout source image changed during staging' }
+  $stagedSymbols = Join-Path $runDir 'symbols.dbg'
+  $stagedMilestones = Join-Path $runDir 'milestones.txt'
+  Copy-Item -LiteralPath $SYM -Destination $stagedSymbols
+  Copy-Item -LiteralPath $MILE -Destination $stagedMilestones
+  if ((Get-FileHash -LiteralPath $stagedSymbols -Algorithm SHA256).Hash.ToLowerInvariant() -ne $scoutReceipt.symbols_sha256 -or
+      (Get-FileHash -LiteralPath $stagedMilestones -Algorithm SHA256).Hash.ToLowerInvariant() -ne $scoutReceipt.milestones_sha256) { throw 'Scout source metadata changed during staging' }
+  $savedEnv = @{}
+  Get-ChildItem Env: | Where-Object Name -Match '^(A2GSPU_|MEMVU_|WIZ5_)' | ForEach-Object { $savedEnv[$_.Name] = $_.Value }
+  $outf = Join-Path $runDir 'stdout.log'
+  $errf = Join-Path $runDir 'stderr.log'
+  try {
+    Get-ChildItem Env: | Where-Object Name -Match '^(A2GSPU_|MEMVU_|WIZ5_)' | ForEach-Object { Remove-Item ('Env:' + $_.Name) }
+    if ($Manifest) {
+      Set-OracleEnv -Mode Scout -Frames $nframes -Ndev $Ndev -Allow @('A2GSPU_POKE') -Quiet | Out-Null
+    } else {
+      $env:A2GSPU_SEED='1'; $env:A2GSPU_FAKETIME='1000000000'; $env:A2GSPU_SP_NDEV="$Ndev"; $env:A2GSPU_SPIKE_FRAMES="$nframes"; $env:A2GSPU_BRAM='default'
+    }
+    $env:A2GSPU_RAMDISK='1'; $env:A2GSPU_NO_WRITEBACK='1'; $env:A2GSPU_OUT_DIR=$runDir
+    $env:A2GSPU_BRKDUMP='1'; $env:A2GSPU_STOP_ON_FAULT='1'; $env:A2GSPU_BRKMEM='1'; $env:A2GSPU_SYM_BASE='0'
+    $env:A2GSPU_SYMBOLS=$stagedSymbols; $env:A2GSPU_MILESTONES=$stagedMilestones
+    if ($poke) { $env:A2GSPU_POKE=$poke; if ($Nth -gt 1) { $env:A2GSPU_POKE_NTH="$Nth" } }
+    $requestedRails = @{}
+    Get-ChildItem Env: | Where-Object Name -Match '^(A2GSPU_|MEMVU_|WIZ5_)' | ForEach-Object { $requestedRails[$_.Name]=$_.Value }
+    $p = Start-Process -FilePath $Gss -ArgumentList @('-p','5','-d',('"s7d1=' + $imageCopy + '"'),'-n','--no-quit-confirm') `
+      -WorkingDirectory $runDir -WindowStyle Hidden -PassThru -RedirectStandardOutput $outf -RedirectStandardError $errf
+  } finally {
+    Get-ChildItem Env: | Where-Object Name -Match '^(A2GSPU_|MEMVU_|WIZ5_)' | ForEach-Object { Remove-Item ('Env:' + $_.Name) }
+    foreach ($key in $savedEnv.Keys) { Set-Item ('Env:' + $key) $savedEnv[$key] }
   }
-  $env:A2GSPU_BRKDUMP = "1"; $env:A2GSPU_STOP_ON_FAULT = "1"; $env:A2GSPU_BRKMEM = "1"; $env:A2GSPU_SYM_BASE = "0"
-  if (Test-Path $SYM)  { $env:A2GSPU_SYMBOLS    = $SYM }
-  if (Test-Path $MILE) { $env:A2GSPU_MILESTONES = $MILE }
-  if ($poke) { $env:A2GSPU_POKE = $poke; if ($Nth -gt 1) { $env:A2GSPU_POKE_NTH = "$Nth" } }
-
-  $outf = "$SP/$tag.out"; $errf = "$SP/$tag.err"
-  Remove-Item $outf,$errf -ErrorAction SilentlyContinue
-  $p = Start-Process -FilePath $Gss -ArgumentList @("-p","5","-d","s7d1=$Img","-n") `
-         -WorkingDirectory $SP -NoNewWindow -PassThru `
-         -RedirectStandardOutput $outf -RedirectStandardError $errf
   $killed = $false
   Wait-Process -Id $p.Id -Timeout $TimeoutSec -ErrorAction SilentlyContinue
   $p.Refresh()
-  if (-not $p.HasExited) { $killed = $true; try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}; Start-Sleep -Milliseconds 300 }
+  if (-not $p.HasExited) { $killed=$true; Stop-Process -InputObject $p -Force; $p.WaitForExit() }
+  if ((Get-FileHash -LiteralPath $Img -Algorithm SHA256).Hash.ToLowerInvariant() -ne $sourceImageHash) { throw 'Scout source image identity changed' }
   $txt = ((Get-Content $outf -Raw -ErrorAction SilentlyContinue) + "`n" + (Get-Content $errf -Raw -ErrorAction SilentlyContinue))
 
   $r = @{ frames=$nframes; killed=$killed; tag=$tag; poke=$poke
@@ -130,6 +183,14 @@ function Invoke-ScoutBoot {
   if     ($txt -match 'IIGS CPU \[BRK\]: PC=([0-9A-Fa-f]{2})/([0-9A-Fa-f]{4})(?:\s+(?!A=)(\S+))?')      { $r.wallWhy='BRK';      $r.wallPc="$($Matches[1])/$($Matches[2])"; $r.wallSym=$Matches[3] }
   elseif ($txt -match 'IIGS CPU \[HANG\]: PC=([0-9A-Fa-f]{2})/([0-9A-Fa-f]{4})(?:\s+(?!A=)(\S+))?')     { $r.wallWhy='HANG';     $r.wallPc="$($Matches[1])/$($Matches[2])"; $r.wallSym=$Matches[3] }
   elseif ($txt -match 'IIGS CPU \[SPIKE-END\]: PC=([0-9A-Fa-f]{2})/([0-9A-Fa-f]{4})(?:\s+(?!A=)(\S+))?'){ $r.wallWhy='SPIKE-END'; $r.wallPc="$($Matches[1])/$($Matches[2])"; $r.wallSym=$Matches[3] }
+  $r.directory=$runDir; $r.stdout=$outf; $r.stderr=$errf; $r.exit_code=$p.ExitCode
+  $r.requested_rails=$requestedRails
+  $r.pins=@([regex]::Matches($txt,'(?m)^A2GSPU PINS:.*$') | ForEach-Object Value)
+  $r.diagnostics=@([regex]::Matches($txt,'(?m)^GSDIAG:.*$') | ForEach-Object Value)
+  $r.valid_capture=(-not $killed -and $r.pins.Count -eq 1 -and $r.diagnostics.Count -eq 1)
+  $scoutRuns.Add($r)
+  Save-ScoutReceipt
+  if (-not $r.valid_capture) { throw "Scout capture is inconclusive; inspect $runDir" }
   return $r
 }
 
@@ -138,7 +199,8 @@ function Name-Wall($r) {
   $tel = @{ status=$r.status; brk=$r.brk; hang=$r.hang; msReached=$r.msReached; msTotal=$r.msTotal
             wallPc=$r.wallPc; wallSym=$r.wallSym; wildPc=$r.wildPc
             reachedNames=@($r.reachedNames | ForEach-Object { $_.Name }) } | ConvertTo-Json -Compress
-  $out = $tel | & python $SYMPY classify --sym $SYM --milestones $MILE 2>&1
+  $out = $tel | & python -I $SYMPY classify --sym $SYM --milestones $MILE 2>&1
+  if ($LASTEXITCODE -ne 0) { throw 'Scout wall classifier failed' }
   return ($out | Out-String)
 }
 
@@ -194,7 +256,7 @@ for ($hop = 1; $hop -le $Repeat; $hop++) {
   "`n--- hop $hop splice: $spec   [$desc] ---"
   $run = Invoke-ScoutBoot -nframes $Frames -tag "scout_hop$hop" -poke $spec
   # echo the emulator's own DELIBERATE-splice banner + applied actions (proof it fired)
-  $errtxt = Get-Content "$SP/scout_hop$hop.err" -Raw -ErrorAction SilentlyContinue
+  $errtxt = Get-Content -LiteralPath $run.stderr -Raw -ErrorAction SilentlyContinue
   @($errtxt -split "`n" | Select-String 'IIGS POKE:') | Select-Object -First 6 | ForEach-Object { "    " + $_.ToString().Trim() }
   Fmt-Line $run
 
@@ -222,5 +284,11 @@ for ($hop = 1; $hop -le $Repeat; $hop++) {
   if (-not $advanced -and $hop -ge 1 -and -not $Splice -and -not $At) { "  (auto-spike did not advance -- stopping the path map.)"; break }
 }
 
+$scoutReceipt.outcome = $(if ($anyAdvance) { 'advanced' } else { 'no-observed-advance' })
+Save-ScoutReceipt
 "`n======== SCOUT DONE  (advanced=$anyAdvance) ========"
 if ($anyAdvance) { exit 0 } else { exit 3 }
+} finally {
+  Get-ChildItem Env: | Where-Object Name -Match '^(A2GSPU_|MEMVU_|WIZ5_)' | ForEach-Object { Remove-Item ('Env:' + $_.Name) }
+  foreach ($key in $callerRails.Keys) { Set-Item ('Env:' + $key) $callerRails[$key] }
+}

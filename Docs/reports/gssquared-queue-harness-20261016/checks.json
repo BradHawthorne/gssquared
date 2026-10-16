@@ -1,0 +1,35 @@
+{
+  "starting_commit": "379ef585248e01f0ef2a2f22d80b4d8c76bb3374",
+  "scope": "Host file harness and scout; native emulator sources unchanged",
+  "gates": {
+    "passed": 14,
+    "failed": 0
+  },
+  "native_ctest": {
+    "passed": 14,
+    "failed": 0
+  },
+  "session_identity_checks": 40,
+  "scout_checks": 20,
+  "boot_witness_checks": 42,
+  "native_executable": "D:/gsqs/pub-20261016/build/GSSquared.exe",
+  "native_executable_sha256": "9b6a866d851855d4f6fa49d47468a13ca295058ad218c47841c6fccefbfd7342",
+  "protected_consumer_sha256_unchanged": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "a2engine_copies_identical": {
+    "dualsmoke.ps1": "e72a4608060e9253671656f0c8ba5a47bc8461e80e7b35ad79535689d3c4eef7",
+    "toolpin.ps1": "47993ba06b93d0c45a7ab5c633ac9fe82fc1725cee430947ca67e304eab82292",
+    "ctl.ps1": "50fec3b76a8cb3e41416c14ee1cd37a554ca13c7b244d684d1ae1e1518021db6",
+    "session.ps1": "e1d241343a4b3f6d3362bc18de139d1e8cccee61e93075e765558b036a45fbf1",
+    "railcheck.ps1": "3342a6bb993a6bd9fb67786030f7469fa96898267843034e3f8de4fb0b427321",
+    "runtime.ps1": "f6f149c23b4eb5546d9afd319337ab8cad04af6c26f9944c42ea9224e7f31d20",
+    "gs816/execcheck.ps1": "7ed8a8bb0e9b422a967cd043cceab458c9978d3bb88cdf891a94bd8aa89036e3",
+    "gs816/altzpcheck.ps1": "93e6122d4f1aff66f534c8aa2335260323ae86d132252465327f139d8569c1d8",
+    "gs816/assertparity.ps1": "464e3627fa7b17c7eda8d6494334461d0a83d6e2aa4a99b466445d054b8c03d4"
+  },
+  "consumer_changes": "Existing backed-up sync script only; no consumer commit/push or binary replacement",
+  "limits": [
+    "No physical hardware witness",
+    "No complete replay claim",
+    "No full product suite rerun"
+  ]
+}

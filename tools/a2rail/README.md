@@ -39,6 +39,7 @@ machine-readable event for every command, acknowledgement, refusal and stall.
 | `buscompare.py selftest` | gates | offline | missing/extra slot-bus records and field mismatches are detected |
 | `revisionbisect.py --selftest` | gates | offline | tiny real CMake builds locate a planted change, reject a wrong boundary, check unchanged/reverted histories, build errors, nondeterminism and timeouts |
 | `p0check.py --exe <binary>` | gates (`agentic`) | 3 and 5 | exact counts/profiles, SCC capture, WDM console, pipes, socket discovery, plus `snapshotcheck.py` saved-state comparisons and refusals |
+| `sessionidentitycheck.ps1`, `../scout/scoutcheck.ps1` | gates (`agentic`, before p0check) | 3 and 5 identity; 5 scout | real renamed executable control, exact start/path refusals without command publication, explicit successful exit status, live-directory refusal; isolated scout media/output/pins/environment with synthetic local inputs |
 | `interfacecheck.py`, `guestlivecheck.py`, `capturecheck.py`, `contentcheck.py`, `faultcheck.py`, `inputcheck.py`, `devicecoveragecheck.py`, `socketstreamcheck.py`, `lifecyclecheck.py` | gates (`agentic`, through p0check) | 3 and 5 | native state/SDK, bound guest views, live sinks, semantic bundles, real DOC/SHR content, boundary interrupts, timed inputs, optional-card observation noninterference, bounded socket streams and active-output shutdown |
 | `sockettoolscheck.py`, `uicheck.py`, `mcpcheck.py` | gates (`agentic`, through p0check) | 3 and 5; long bridge wait on 3 | shared socket tool catalog/invocation, native presentation/clock settings on file/socket/co-pilot, MCP framing/lifecycle/native execution/startup configuration, and preservation of completed long-command replies |
 | `observabilitycheck.py` | gates (`agentic`, through mcpcheck) | 3 and 5 | structured upstream trace/memory/search/text adapters, unreadable-I/O exclusions, bounded/truncated results, platform refusals, stable repeated extended trace formatting |
@@ -143,6 +144,14 @@ search exits 2. No scratch directory is recursively deleted. `--selftest` needs
 Git, CMake, Ninja and a C++ compiler on PATH and compiles small real fixtures.
 
 ## Ownership
+
+`runtime.ps1` also owns file-session process identity. `session.ps1` records
+`process_identity_model=executable-path-and-start-utc-ticks-v1` plus the native
+`process_start_utc_ticks` decimal string and canonical executable path in its
+additive `a2rail-session-v1` receipt. All file harnesses and declared cleanup
+share that check. Missing identity, unreadable identity and path/start mismatch
+are explicit refusals; they do not mean the process exited. Old sessions must
+be restarted. A successful `ctl.ps1` acknowledgement explicitly exits zero.
 
 **The stack is owned here.** a2engine keeps a pulled copy of `dualsmoke`, `ctl`, `session`,
 `railcheck`, `runtime`, `toolpin`, `execcheck`, `altzpcheck` and `assertparity` for its

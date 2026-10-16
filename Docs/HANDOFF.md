@@ -89,12 +89,13 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 - **Out-of-tree gate selection:** set `A2_GSSQUARED` to the tested executable and
   `GSSQUARED_ROOT` to this source checkout. `dualsmoke` now runs ctest beside the
   selected executable, avoiding accidental validation of the stale in-tree build.
-- **File-harness filename constraint:** use
-  `D:\gsqs\pub-20261016\build\GSSquared.exe` for the latest PowerShell gate stack.
-  Existing file-harness liveness
-  checks reject a renamed process. The CIDAR design report retains that failure
-  and the roadmap tracks the identity/diagnostic fix. The Python/MCP launch
-  descriptor's preserved alias is a separate supported path.
+- **File-harness process identity:** receipts now bind the executable path and
+  exact native UTC start ticks in `runtime.ps1`. Owned renamed executables are
+  supported; wrong/missing identities refuse before command publication. Old
+  receipts without the new identity fields require a fresh session. The original
+  failure and current known-pass/negative evidence are retained in the harness
+  queue report. Use `D:\gsqs\pub-20261016\build\GSSquared.exe` for the current
+  native implementation; these queue changes are in the host harness.
 - **Windows shell:** invoke MSYS2 bash for commands, with UCRT64 tools on PATH for
   this fork's CMake build. Invoke `pwsh -File` from bash for the fork-mandated
   `.ps1` gates; the verbatim upstream shell guidance below AGENTS.md's fork section

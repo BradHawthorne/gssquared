@@ -1,0 +1,13 @@
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\pub-20261016\build\Agent identity b6dc4b32530a4e3d92995bafa4bb8342.exe | git ? | mtime 2026-10-16 04:41:15
+CTRL rail: C:\msys64\tmp\a2rail-identity-6d553c28df9f439fbd1283e08b88df61\p3
+log:       C:\msys64\tmp\a2rail-identity-6d553c28df9f439fbd1283e08b88df61\p3\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+PASS renamed executable starts on p3
+PASS baseline reproduces false dead-session report for a live alias
+[--] NO SESSION: session pid 85228 is gone. Start one with tools\session.ps1
+     (see C:\msys64\tmp\a2rail-identity-6d553c28df9f439fbd1283e08b88df61\p3\session.log for how the last one ended).
+     (the rail self-quits after A2GSPU_CTRL_TIMEOUT idle seconds).
+ALL GREEN -- session identity checks=2 baseline=True evidence=C:\msys64\tmp\a2rail-identity-6d553c28df9f439fbd1283e08b88df61

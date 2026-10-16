@@ -1,13 +1,19 @@
 # scout — the golden-splice-scout (gdiff G4)
 
 **Scope:** this is the retained owned-GS/OS campaign helper, not a generic
-primitive experiment runner. It requires an explicit image and kernel symbol/
-milestone inputs (`-Img` / `GDIFF_IMG`, `-Kernel` / `GDIFF_KERNEL`); the old
+primitive experiment runner. It requires an explicit image and symbol/milestone
+inputs (`-Symbols` / `-Milestones`, or `-Kernel` / `GDIFF_KERNEL`); the old
 `owned_boot.po` default described below is historical, not a current supplied
 input. An external oracle-env script is optional, so do not infer the complete
 G5 pin contract unless that script was explicitly supplied and its pins verified.
-It also uses a shared temporary `scout` directory; parallel-safe isolated-run
-generalization is still pending. For current general experiments, see
+Each invocation now owns a fresh directory under `-OutRoot`, or an explicitly
+new `-OutDir`; existing directories refuse. Each boot has its own working/output
+directory, staged image and metadata, RAM disk/no-writeback pins and retained
+stdout/stderr. Caller instrumentation environment is restored, including explicit
+provider setup. `scout-report.json` binds input/executable hashes, requested rails,
+native PINS/GSDIAG lines and outcomes. This is bounded control evidence, not full
+replay. `scoutcheck.ps1` checks isolation/refusals using generated raw media; it
+also accepts an explicit local image. For general primitive experiments, see
 [Machine context](../../Docs/MACHINE_CONTEXT.md) and `tools/a2rail/experiment.py`.
 
 The predictive control-forward superpower, **packaged**. Given a wall (a BRK/stall PC)
@@ -23,8 +29,9 @@ to frame 336). scout makes that repeatable.
 > env and launches `GSSquared.exe`. The splice is a control experiment — the emulator prints
 > a loud `IIGS POKE: *** DELIBERATE state injection ... NOT faithful HW behaviour ***` banner
 > that scout echoes, and scout's own header says the same. A splice-forward is a **forecast**,
-> not a boot solution. scout pins the G5 determinism manifest (`Set-OracleEnv -Mode Scout`)
-> so the forward boot rides the same oracle env as the floor, minus the deliberate splice.
+> not a boot solution. An explicitly supplied `-Manifest` can provide
+> `Set-OracleEnv -Mode Scout`; otherwise the helper uses its declared built-in
+> pins. The receipt records which inputs and rails were actually selected.
 
 ## Run
 
@@ -44,7 +51,9 @@ to frame 336). scout makes that repeatable.
 
 | param | meaning |
 |-------|---------|
-| `-Img` | boot image (default `owned_boot.po`) |
+| `-Img` | explicit boot image, or `GDIFF_IMG`; staged per run |
+| `-Symbols`, `-Milestones` | explicit source metadata; `-Kernel` retains the legacy filename convention |
+| `-OutRoot`, `-OutDir` | fresh per-invocation output under a reusable root, or an explicit new directory |
 | `-Splice "<pc>:<acts>"` | a raw `A2GSPU_POKE` spec (POKE golden's bytes / force a branch) |
 | `-At <pc> -Force "<acts>"` | convenience: builds `"<pc>:<acts>"` |
 | `-Nth <n>` | fire the splice on the **Nth** hit of the trigger PC (`A2GSPU_POKE_NTH`) — targets a "write-N" wall (e.g. the 24th queue write) |

@@ -43,6 +43,7 @@ param(
 )
 $ErrorActionPreference = "Continue"
 $here = $PSScriptRoot
+. (Join-Path $here 'runtime.ps1')
 $results = @()
 
 function Write-SuiteEvent([hashtable]$Event) {
@@ -82,7 +83,7 @@ function Get-SuiteEmulators([string]$suiteDir) {
             # through to the stray scan rather than aborting the whole run.
             try {
                 $s = Get-Content $sf -Raw | ConvertFrom-Json
-                if ($s.pid) { $declared[[int]$s.pid] = $true }
+            if (Test-A2RailSessionProcess $s) { $declared[[int]$s.pid] = $true }
             } catch { }
         }
     }

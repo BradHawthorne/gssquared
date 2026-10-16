@@ -1,0 +1,11 @@
+  pull  dualsmoke.ps1
+  same  toolpin.ps1
+  pull  ctl.ps1
+  pull  session.ps1
+  pull  railcheck.ps1
+  pull  runtime.ps1
+  pull  gs816\execcheck.ps1
+  pull  gs816\altzpcheck.ps1
+  same  gs816\assertparity.ps1
+replaced files backed up to C:\msys64\tmp\a2rail-sync-backup-20261016-062335
+pulled instrument stack <- D:/projects/gssquared-fork/tools/a2rail
