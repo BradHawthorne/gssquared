@@ -1,0 +1,35 @@
+FAIL p3 shot rejects blocked output
+FAIL p3 text rejects blocked output
+PASS p3 save rejects blocked output
+PASS p3 valid text contains both pages
+PASS p3 valid shot is BMP
+PASS p3 valid snapshot passes checked reader
+PASS p3 session usable after refusals
+PASS session exits cleanly
+FAIL p3 SPIKE refuses bmp output failure
+FAIL p3 SPIKE refuses coverage output failure
+FAIL p3 SPIKE refuses tap-text_pages.ndjson output failure
+FAIL p3 SPIKE refuses tap-keypress_events.ndjson output failure
+FAIL p3 SPIKE refuses tap-disk_writes.ndjson output failure
+FAIL p5 shot rejects blocked output
+FAIL p5 text rejects blocked output
+PASS p5 save rejects blocked output
+PASS p5 valid text contains both pages
+PASS p5 valid shot is BMP
+PASS p5 valid snapshot passes checked reader
+PASS p5 session usable after refusals
+PASS session exits cleanly
+FAIL p5 SPIKE refuses bmp output failure
+FAIL p5 SPIKE refuses coverage output failure
+FAIL p5 SPIKE refuses snapshot output failure
+FAIL p5 SPIKE refuses tap-text_pages.ndjson output failure
+FAIL p5 SPIKE refuses tap-keypress_events.ndjson output failure
+FAIL p5 SPIKE refuses tap-disk_writes.ndjson output failure
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\sinkiocheck.py", line 48, in <module>
+    a=p.parse_args();run(a.exe.resolve(),a.out)
+                     ~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\sinkiocheck.py", line 42, in run
+    assert all(r['ok'] for r in rows),'output sink failures reported success; see checks.json'
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: output sink failures reported success; see checks.json

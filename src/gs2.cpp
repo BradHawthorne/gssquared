@@ -1535,7 +1535,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppIterate(void *appstate) {
+static SDL_AppResult app_iterate_impl(void *appstate) {
     GS2AppState *state = (GS2AppState *)appstate;
 
     // a2gspu headless-boot spike: run once then exit, bypassing the GUI loop.
@@ -1686,6 +1686,11 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     return SDL_APP_CONTINUE;
 }
 
+SDL_AppResult SDL_AppIterate(void *appstate) {
+    try {return app_iterate_impl(appstate);}
+    catch(const a2artifact::Error &error){a2artifact::fatal(error);}
+}
+
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     //(void)result;
     GS2AppState *state = (GS2AppState *)appstate;
@@ -1719,5 +1724,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     delete state->select_system;
     delete state->aa;
     delete state;
+    try {generic_tap_close();a2record::close();}
+    catch(const a2artifact::Error &error){a2artifact::fatal(error);}
     // SDL_Quit() is called automatically by SDL after this returns.
 }

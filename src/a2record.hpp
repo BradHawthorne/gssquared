@@ -25,6 +25,7 @@
 // reached THAT sink and how many went to the rail's own sink or to stdout.
 #pragma once
 #include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
+#include "a2gspu_artifact_io.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -61,6 +62,12 @@ inline int frame_now() { return g_frame_fn ? g_frame_fn() : -1; }   // -1: no fr
 struct Count { const char *rail; unsigned long long to_sink, elsewhere; };
 inline Count g_counts[24] = {};
 inline int   g_ncounts = 0;
+inline void close();
+inline void flush() {
+    if(!g_global)return;
+    errno=0;
+    if(fflush(g_global)!=0 || ferror(g_global))throw a2artifact::Error("record-flush",g_global_path.c_str());
+}
 
 inline void count(const char *rail, bool to_sink) {
     for (int i = 0; i < g_ncounts; i++)
@@ -86,7 +93,7 @@ inline void arm() {
     g_global = fopen(p, "wb");
     if (!g_global) { fprintf(stderr, "A2GSPU_RECORDS: FAIL cannot open '%s' -- aborting (exit 2)\n", p); exit(2); }
     g_global_path = p;
-    atexit([] { if (g_global) { fflush(g_global); fclose(g_global); g_global = nullptr; } });
+    atexit([] {try {close();} catch(const a2artifact::Error &error){a2artifact::fatal_on_exit(error);} });
 }
 
 // The sink a rail writes to: its own if it has one, else the global one, else
@@ -94,8 +101,7 @@ inline void arm() {
 inline FILE *sink(FILE *own) { return own ? own : g_global; }
 
 inline void close() {
-    if (!g_global) return;
-    fflush(g_global); fclose(g_global); g_global = nullptr;
+    a2artifact::finish(g_global,g_global_path.c_str());
 }
 
 inline void escape(std::string &s, const char *v) {
@@ -148,8 +154,9 @@ struct Record {
     // tailing the file; not for streams.
     bool write_checked(FILE *f, bool flush = true) {
         s += "}\n";
-        if (!f || fputs(s.c_str(), f)==EOF) return false;
-        if (flush && fflush(f)!=0) return false;
+        errno=0;
+        if (!f || fputs(s.c_str(), f)==EOF || ferror(f)) return false;
+        if (flush && (fflush(f)!=0 || ferror(f))) return false;
         // WHICH file, not just that a write happened: sink(own) returns the
         // rail's own FILE* when it has one, so f == g_global is the only
         // evidence that this line landed in the global sink.
@@ -157,13 +164,16 @@ struct Record {
         if(g_observer)g_observer(rail,s);
         return true;
     }
-    void write(FILE *f, bool flush = true) { (void)write_checked(f,flush); }
+    void write(FILE *f, bool flush = true) {
+        if(!write_checked(f,flush))throw a2artifact::Error("record-write",rail);
+    }
 };
 
 // The two numbers can never be read as one: <rail>=Nsink+Mown when a global
 // sink exists, <rail>=Mown when it does not. A bare count beside sink= was
 // read as the sink's, which was the whole defect.
 inline void format_status(char *buf, size_t n) {
+    try {flush();} catch(const a2artifact::Error &error){snprintf(buf,n,"status=FAIL records-incomplete %s",error.what());return;}
     int m = snprintf(buf, n, "status=OK sink=%s rails=%d",
                      g_global ? g_global_path.c_str() : "none", g_ncounts);
     for (int i = 0; i < g_ncounts && m > 0 && (size_t)m < n; i++) {

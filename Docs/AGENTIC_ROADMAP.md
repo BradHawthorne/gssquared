@@ -34,6 +34,16 @@ real-hardware witnesses and the existing replay/drift prerequisites.
 file is the tracked summary. The owner's 2026-10-16 direction makes normal
 commit/sync part of validated phase closeout; the policy is `HANDOFF.md` section 7.
 
+**Output sink continuation, 2026-10-16:** central record errors propagate;
+global/tap/subscription finalization and screenshot/text/coverage/PNG/snapshot
+save outputs are checked. Fresh exported Release passes 14/14 gates, 14/14
+native CTests, 26 Python tests, 25 output cases, 43 I/O contract checks (24 new),
+42 unchanged boots and two MCP launches. Real-stdio fixtures retain two old
+false-success cases and their refusals. Consumer unchanged; tested candidate:
+`D:\gsqs\sinkio-20261016\build\GSSquared.exe`. The audit explicitly leaves
+per-rail closers, miscellaneous exports and ACK publication for the next slice.
+Evidence: `reports/gssquared-sink-io-20261016/README.md`.
+
 **Raw artifact I/O continuation, 2026-10-16:** SPIKE, CTRL VRAM and generic
 tap raw writers now refuse payload/sidecar I/O failures while retaining valid
 empty streams. Fresh exported Release: 14/14 gates, 14/14 native CTests,
@@ -102,7 +112,7 @@ Evidence and acceptance details:
 | Remove file-harness executable-name assumptions | Fork harness: exact native start ticks and executable path, explicit mismatch/metadata refusals without command publication, renamed executables on both platforms | Implemented; 40 focused checks plus full-stack evidence in `reports/gssquared-queue-harness-20261016/README.md`. Existing receipts without identity fields require a fresh session |
 | Bound managed close-out and preserve unknown outcomes | Fork MCP/SDK: bounded QUIT, pending identity before disconnect, only owned children reaped, attached machines left controllable, idempotent receipts | Implemented with six native lifecycle cases and 26 Python tests; full frozen-input validation passes all 14 gates, 14 native tests and 42 pinned boot checks, plus two stdio launches. `reports/gssquared-mcp-close-20261016/README.md` |
 | Verify raw artifact I/O failures | Fork artifact producers: missing/failed payload or sidecar writes must fail visibly; a real zero-record artifact remains valid | Implemented for SPIKE, CTRL VRAM and generic tap CPU-view/full-RAM payloads/sidecars: 34 native cases and 19 contract checks, full 14-gate validation, unchanged successful captures and pinned boots. Limits and evidence: `reports/gssquared-artifact-io-20261016/README.md` |
-| Audit remaining output sink lifecycles | Fork: inspect structured NDJSON sinks, screenshot/coverage/snapshot finalization and ensure failure receipts cannot imply complete evidence | Next independent hardening slice; raw writer completion does not establish these separate paths |
+| Audit remaining output sink lifecycles | Fork: inspect structured NDJSON sinks, screenshot/coverage/snapshot finalization and ensure failure receipts cannot imply complete evidence | Audited; central/global/tap/subscription and principal image/coverage/snapshot save paths are hardened with 25 native cases and 24 new contract checks. Per-rail closers, miscellaneous exports and ACK publication remain next. Evidence: `reports/gssquared-sink-io-20261016/README.md` |
 | Adapt inherited package-release tooling for this fork | Fork packaging: explicit fork branch/repository, non-fork origins and upload overrides refused, UCRT64 Windows recipe, no network in policy fixtures | Implemented in the stale audit under the owner's explicit no-upstream direction; see report for fixture results. Actual multi-host packages remain unbuilt and unuploaded; ordinary phase sync remains handoff section 7 |
 | Generalize retained campaign helpers | Fork tooling: isolated invocation/child directories, staged media/metadata, explicit pins/provider identities, restored caller environment and retained receipts | Implemented; 20 focused scout checks and current gate integration in the harness queue report |
 | Consolidate alternate implementation references | Fork source: active Mockingboard library/headers, compatibility declarations and disabled test/reference variants have explicit dependency dispositions before retirement | Complete reference consolidation in `MOCKINGBOARD_IMPLEMENTATIONS.md`; historical notebook points there. Active paths and disabled fixtures are preserved. Any later file removal remains a compatibility migration requiring named consumer evidence |

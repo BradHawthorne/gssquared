@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "a2gspu_artifact_io.hpp"
 
 namespace a2png {
 
@@ -69,7 +70,7 @@ inline void chunk(std::vector<uint8_t> &out, const char *type,
 }
 
 // 8-bit greyscale PNG. `pix` is h rows of w bytes, top-down.
-inline bool write_gray(const char *path, const uint8_t *pix, int w, int h) {
+inline bool write_gray(const char *path, const uint8_t *pix, int w, int h,a2artifact::WriteOps ops={}) {
     std::vector<uint8_t> png;
     static const uint8_t sig[8] = {0x89,'P','N','G',0x0D,0x0A,0x1A,0x0A};
     png.insert(png.end(), sig, sig + 8);
@@ -110,15 +111,12 @@ inline bool write_gray(const char *path, const uint8_t *pix, int w, int h) {
     chunk(png, "IDAT", z.data(), z.size());
     chunk(png, "IEND", nullptr, 0);
 
-    FILE *f = fopen(path, "wb");
-    if (!f) return false;
-    bool ok = fwrite(png.data(), 1, png.size(), f) == png.size();
-    fclose(f);
-    return ok;
+    try {a2artifact::Output output(path,ops);output.write(png.data(),png.size());output.finish();return true;}
+    catch(const a2artifact::Error &error){fprintf(stderr,"A2GSPU PNG: FAIL %s\n",error.what());return false;}
 }
 
 // 8-bit RGB PNG. `pix` is h rows of w*3 bytes (RGB), top-down.
-inline bool write_rgb(const char *path, const uint8_t *pix, int w, int h) {
+inline bool write_rgb(const char *path, const uint8_t *pix, int w, int h,a2artifact::WriteOps ops={}) {
     std::vector<uint8_t> png;
     static const uint8_t sig[8] = {0x89,'P','N','G',0x0D,0x0A,0x1A,0x0A};
     png.insert(png.end(), sig, sig + 8);
@@ -157,11 +155,8 @@ inline bool write_rgb(const char *path, const uint8_t *pix, int w, int h) {
     chunk(png, "IDAT", z.data(), z.size());
     chunk(png, "IEND", nullptr, 0);
 
-    FILE *f = fopen(path, "wb");
-    if (!f) return false;
-    bool ok = fwrite(png.data(), 1, png.size(), f) == png.size();
-    fclose(f);
-    return ok;
+    try {a2artifact::Output output(path,ops);output.write(png.data(),png.size());output.finish();return true;}
+    catch(const a2artifact::Error &error){fprintf(stderr,"A2GSPU PNG: FAIL %s\n",error.what());return false;}
 }
 
 // HGR byte address for row y (0..191), byte column cx (0..39):

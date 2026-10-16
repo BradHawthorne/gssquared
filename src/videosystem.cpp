@@ -654,13 +654,17 @@ void video_system_t::copy_screen() {
 // call returns, so a headless spike or a CTRL `shot` can read the file straight
 // after. The no-argument form below is upstream's UI screenshot (async writer,
 // generated path, toasts).
-void video_system_t::save_screenshot(const char *path) {
+bool video_system_t::save_screenshot(const char *path) {
     SDL_Surface *surface = SDL_RenderReadPixels(renderer, nullptr);
     if (surface) {
-        SDL_SaveBMP(surface, path);
+        const bool ok=SDL_SaveBMP(surface, path);
         SDL_DestroySurface(surface);
-        printf("A2GSPU: Screenshot saved to %s\n", path);
+        if(ok)printf("A2GSPU: Screenshot saved to %s\n", path);
+        else fprintf(stderr,"A2GSPU: Screenshot FAIL %s: %s\n",path,SDL_GetError());
+        return ok;
     }
+    fprintf(stderr,"A2GSPU: Screenshot readback FAIL: %s\n",SDL_GetError());
+    return false;
 }
 
 void video_system_t::save_screenshot() {

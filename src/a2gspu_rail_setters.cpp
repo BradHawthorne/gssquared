@@ -376,7 +376,7 @@ int set_tap(const char *v, char *m, size_t n) {
     if (!gtap_set_out(v)) { snprintf(m, n, "A2GSPU_TAP: cannot open '%s'", v); return SET_INVALID; }
     if (!v) { snprintf(m, n, "A2GSPU_TAP: closed"); return SET_OK; }
     static bool s_atexit = false;
-    if (!s_atexit) { s_atexit = true; atexit(generic_tap_close); }
+    if (!s_atexit) { s_atexit = true; atexit(generic_tap_exit_close); }
     snprintf(m, n, "A2GSPU_TAP: armed -> %s (%d watch PCs, %d ptr fields)%s", v, g_gtap.nwatch, g_gtap.nptr,
              g_gtap.nwatch ? "" : " -- WARNING no A2GSPU_TAP_PCS set: the tap will never fire");
     return SET_OK;
@@ -385,7 +385,7 @@ int set_tap_session(const char *v, char *m, size_t n) {
     if (!gtap_set_session(v)) { snprintf(m, n, "A2GSPU_TAP_SESSION: cannot write into '%s' (does the directory exist?)", v); return SET_INVALID; }
     if (!v) { snprintf(m, n, "A2GSPU_TAP_SESSION: closed"); return SET_OK; }
     static bool s_atexit = false;
-    if (!s_atexit) { s_atexit = true; atexit(generic_tap_close); }
+    if (!s_atexit) { s_atexit = true; atexit(generic_tap_exit_close); }
     snprintf(m, n, "A2GSPU_TAP_SESSION: armed -> %s (dump=%ds zp=%ds key_post=%df)", v, g_gtap.dump_every_s, g_gtap.zp_every_s, g_gtap.key_post_frames);
     return SET_OK;
 }

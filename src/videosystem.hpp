@@ -154,7 +154,7 @@ public:
     void set_display_engine(display_color_engine_t mode);
     void set_display_mono_color(display_mono_color_t mode);
     void copy_screen();
-    void save_screenshot(const char *path);
+    bool save_screenshot(const char *path);
     void save_screenshot();
     void flip_display_scale_mode();
     // True when the CRT post-process shader is available to be used.

@@ -109,6 +109,10 @@ Raw SPIKE, VRAM and tap captures now refuse failed payload or sidecar I/O;
 real empty streams remain valid. Require a successful run/command and the
 [checked artifact reader](Docs/INSTRUMENTATION_SHAPE.md#m6--artifact-discipline-and-a-shared-reader--p4--s)
 before using captures as evidence.
+Synchronous screenshot, text, snapshot and coverage exports also propagate
+output failures. Structured record writes and global/tap/subscription
+finalization are checked; [remaining sink lifecycles](Docs/reports/gssquared-sink-io-20261016/README.md)
+stay explicit. Output failure does not roll back guest execution.
 The [rail reference](Docs/A2GSPU_RAILS.md) gives detailed launch recipes,
 including windowed co-pilot. Keep each driven run's outputs in its own directory.
 

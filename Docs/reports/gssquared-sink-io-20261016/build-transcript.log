@@ -1,0 +1,1120 @@
+[0/2] Re-checking globbed directories...
+[1/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_exp.c.obj
+[2/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_atan2.c.obj
+[3/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_log.c.obj
+[4/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_fmod.c.obj
+[5/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/cmake_pch.h.gch
+[6/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_log10.c.obj
+[7/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_rem_pio2.c.obj
+[8/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_pow.c.obj
+[9/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/e_sqrt.c.obj
+[10/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/k_cos.c.obj
+[11/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/k_sin.c.obj
+[12/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/k_tan.c.obj
+[13/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_atan.c.obj
+[14/705] Building CXX object vendored/SDL/CMakeFiles/SDL3-shared.dir/cmake_pch.hxx.gch
+[15/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/k_rem_pio2.c.obj
+[16/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_copysign.c.obj
+[17/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_cos.c.obj
+[18/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_fabs.c.obj
+[19/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_floor.c.obj
+[20/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_isinf.c.obj
+[21/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_isinff.c.obj
+[22/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_isnan.c.obj
+[23/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_isnanf.c.obj
+[24/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_modf.c.obj
+[25/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_sin.c.obj
+[26/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_scalbn.c.obj
+[27/705] Building C object vendored/SDL/CMakeFiles/SDL_uclibc.dir/src/libm/s_tan.c.obj
+[28/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftbdf.c.obj
+[29/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftbbox.c.obj
+[30/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftcid.c.obj
+[31/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftfstype.c.obj
+[32/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftgasp.c.obj
+[33/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftgxval.c.obj
+[34/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftglyph.c.obj
+[35/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftinit.c.obj
+[36/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftbitmap.c.obj
+[37/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftpatent.c.obj
+[38/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftotval.c.obj
+[39/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftpfr.c.obj
+[40/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftmm.c.obj
+[41/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftsynth.c.obj
+[42/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/fttype1.c.obj
+[43/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftwinfnt.c.obj
+[44/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/bzip2/ftbzip2.c.obj
+[45/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftstroke.c.obj
+[46/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/cache/ftcache.c.obj
+[47/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/bdf/bdf.c.obj
+[48/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/cid/type1cid.c.obj
+[49/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/lzw/ftlzw.c.obj
+[50/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/autofit/autofit.c.obj
+[51/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/pcf/pcf.c.obj
+[52/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/cff/cff.c.obj
+[53/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftbase.c.obj
+[54/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/pfr/pfr.c.obj
+[55/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/gzip/ftgzip.c.obj
+[56/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/psnames/psnames.c.obj
+[57/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/raster/raster.c.obj
+[58/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/smooth/smooth.c.obj
+[59/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/pshinter/pshinter.c.obj
+[60/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/svg/svg.c.obj
+[61/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/sdf/sdf.c.obj
+[62/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/type42/type42.c.obj
+[63/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/winfonts/winfnt.c.obj
+[64/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/builds/windows/ftdebug.c.obj
+[65/705] Building RC object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/base/ftver.rc.obj
+[66/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/type1/type1.c.obj
+[67/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/builds/windows/ftsystem.c.obj
+[68/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL.c.obj
+[69/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_assert.c.obj
+[70/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_error.c.obj
+[71/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_guid.c.obj
+[72/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/psaux/psaux.c.obj
+[73/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_hints.c.obj
+[74/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_list.c.obj
+[75/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_hashtable.c.obj
+[76/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/atomic/SDL_atomic.c.obj
+[77/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_utils.c.obj
+[78/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_log.c.obj
+[79/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/sfnt/sfnt.c.obj
+[80/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/SDL_properties.c.obj
+[81/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/atomic/SDL_spinlock.c.obj
+[82/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_audiodev.c.obj
+[83/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_audioqueue.c.obj
+[84/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_audioresample.c.obj
+[85/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_mixer.c.obj
+[86/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_audiotypecvt.c.obj
+[87/705] Building C object vendored/SDL_ttf/external/freetype-build/CMakeFiles/freetype.dir/src/truetype/truetype.c.obj
+[88/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_audio.c.obj
+[89/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/SDL_core_unsupported.c.obj
+[90/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_categories.c.obj
+[91/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/cpuinfo/SDL_cpuinfo.c.obj
+[92/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_wave.c.obj
+[93/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/camera/SDL_camera.c.obj
+[94/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_clipboardevents.c.obj
+[95/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_displayevents.c.obj
+[96/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_dropevents.c.obj
+[97/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_eventwatch.c.obj
+[98/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/SDL_audiocvt.c.obj
+[99/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_keysym_to_keycode.c.obj
+[100/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_keysym_to_scancode.c.obj
+[101/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_keymap.c.obj
+[102/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_keyboard.c.obj
+[103/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_quit.c.obj
+[104/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_scancode_tables.c.obj
+[105/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_pen.c.obj
+[106/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_events.c.obj
+[107/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/imKStoUCS.c.obj
+[108/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_windowevents.c.obj
+[109/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_touch.c.obj
+[110/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/filesystem/SDL_filesystem.c.obj
+[111/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/events/SDL_mouse.c.obj
+[112/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/haptic/SDL_haptic.c.obj
+[113/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/io/SDL_asyncio.c.obj
+[114/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/io/generic/SDL_asyncio_generic.c.obj
+[115/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/io/SDL_iostream.c.obj
+[116/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/gpu/SDL_gpu.c.obj
+[117/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/controller_type.c.obj
+[118/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/hidapi/SDL_hidapi.c.obj
+[119/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/SDL_steam_virtual_gamepad.c.obj
+[120/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/locale/SDL_locale.c.obj
+[121/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/SDL_gamepad.c.obj
+[122/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/main/SDL_runapp.c.obj
+[123/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/main/SDL_main_callbacks.c.obj
+[124/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/misc/SDL_url.c.obj
+[125/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/power/SDL_power.c.obj
+[126/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/SDL_d3dmath.c.obj
+[127/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/SDL_render_unsupported.c.obj
+[128/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/SDL_yuv_sw.c.obj
+[129/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/direct3d/SDL_shaders_d3d.c.obj
+[130/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/SDL_joystick.c.obj
+[131/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/direct3d/SDL_render_d3d.c.obj
+[132/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/direct3d11/SDL_shaders_d3d11.c.obj
+[133/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/gpu/SDL_pipeline_gpu.c.obj
+[134/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/direct3d11/SDL_render_d3d11.c.obj
+[135/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/direct3d12/SDL_shaders_d3d12.c.obj
+[136/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/gpu/SDL_shaders_gpu.c.obj
+[137/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/gpu/SDL_render_gpu.c.obj
+[138/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/ngage/SDL_render_ngage.c.obj
+[139/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/direct3d12/SDL_render_d3d12.c.obj
+[140/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/opengles2/SDL_shaders_gles2.c.obj
+[141/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/SDL_render.c.obj
+[142/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/opengl/SDL_shaders_gl.c.obj
+[143/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/ps2/SDL_render_ps2.c.obj
+[144/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/psp/SDL_render_psp.c.obj
+[145/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/opengl/SDL_render_gl.c.obj
+[146/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/opengles2/SDL_render_gles2.c.obj
+[147/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_blendpoint.c.obj
+[148/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_drawline.c.obj
+[149/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_drawpoint.c.obj
+[150/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_rotate.c.obj
+[151/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_render_sw.c.obj
+[152/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/vitagxm/SDL_render_vita_gxm.c.obj
+[153/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/vitagxm/SDL_render_vita_gxm_memory.c.obj
+[154/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/vitagxm/SDL_render_vita_gxm_tools.c.obj
+[155/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/dynapi/SDL_dynapi.c.obj
+[156/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/vulkan/SDL_shaders_vulkan.c.obj
+[157/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_crc16.c.obj
+[158/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/sensor/SDL_sensor.c.obj
+[159/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_triangle.c.obj
+[160/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_crc32.c.obj
+[161/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_malloc.c.obj
+[162/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_iconv.c.obj
+[163/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_getenv.c.obj
+[164/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_memcpy.c.obj
+[165/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_memmove.c.obj
+[166/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_memset.c.obj
+[167/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_mslibc.c.obj
+[168/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_murmur3.c.obj
+[169/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_random.c.obj
+[170/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_blendfillrect.c.obj
+[171/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/vulkan/SDL_render_vulkan.c.obj
+[172/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_stdlib.c.obj
+[173/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_strtokr.c.obj
+[174/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/storage/SDL_storage.c.obj
+[175/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/time/SDL_time.c.obj
+[176/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_string.c.obj
+[177/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/stdlib/SDL_qsort.c.obj
+[178/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/SDL_thread.c.obj
+[179/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit.c.obj
+[180/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/render/software/SDL_blendline.c.obj
+[181/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/timer/SDL_timer.c.obj
+[182/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_0.c.obj
+[183/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_copy.c.obj
+[184/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_1.c.obj
+[185/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_RLEaccel.c.obj
+[186/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_clipboard.c.obj
+[187/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_bmp.c.obj
+[188/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_fillrect.c.obj
+[189/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_slow.c.obj
+[190/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_egl.c.obj
+[191/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_N.c.obj
+[192/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_rect.c.obj
+[193/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_pixels.c.obj
+[194/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_stretch.c.obj
+[195/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_video_unsupported.c.obj
+[196/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_A.c.obj
+[197/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_vulkan_utils.c.obj
+[198/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/yuv2rgb/yuv_rgb_lsx.c.obj
+[199/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_stb.c.obj
+[200/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_surface.c.obj
+[201/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/dummy/SDL_dummyaudio.c.obj
+[202/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/disk/SDL_diskaudio.c.obj
+[203/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/camera/dummy/SDL_camera_dummy.c.obj
+[204/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_video.c.obj
+[205/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/virtual/SDL_virtualjoystick.c.obj
+[206/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/yuv2rgb/yuv_rgb_sse.c.obj
+[207/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/dummy/SDL_nullevents.c.obj
+[208/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/dummy/SDL_nullframebuffer.c.obj
+[209/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/dummy/SDL_nullvideo.c.obj
+[210/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/yuv2rgb/yuv_rgb_std.c.obj
+[211/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/SDL_hid.c.obj
+[212/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/pch.c.obj
+[213/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/SDL_xinput.c.obj
+[214/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/SDL_immdevice.c.obj
+[215/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/SDL_windows.c.obj
+[216/705] Building CXX object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/SDL_gameinput.cpp.obj
+[217/705] Building CXX object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/pch_cpp.cpp.obj
+[218/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/io/windows/SDL_asyncio_windows_ioring.c.obj
+[219/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/main/windows/SDL_sysmain_runapp.c.obj
+[220/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/misc/windows/SDL_sysurl.c.obj
+[221/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_surface_utils.c.obj
+[222/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/directsound/SDL_directsound.c.obj
+[223/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/audio/wasapi/SDL_wasapi.c.obj
+[224/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsclipboard.c.obj
+[225/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_yuv.c.obj
+[226/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsframebuffer.c.obj
+[227/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsmessagebox.c.obj
+[228/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowskeyboard.c.obj
+[229/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsmodes.c.obj
+[230/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsevents.c.obj
+[231/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsmouse.c.obj
+[232/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsopengles.c.obj
+[233/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsrawinput.c.obj
+[234/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsopengl.c.obj
+[235/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsshape.c.obj
+[236/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsvideo.c.obj
+[237/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/generic/SDL_syscond.c.obj
+[238/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsvulkan.c.obj
+[239/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/generic/SDL_sysrwlock.c.obj
+[240/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/windows/SDL_syscond_cv.c.obj
+[241/705] Building CXX object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowsgameinput.cpp.obj
+[242/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/windows/SDL_sysmutex.c.obj
+[243/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/windows/SDL_sysrwlock_srw.c.obj
+[244/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/windows/SDL_syssem.c.obj
+[245/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/windows/SDL_windowswindow.c.obj
+[246/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/windows/SDL_systhread.c.obj
+[247/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/thread/windows/SDL_systls.c.obj
+[248/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/power/windows/SDL_syspower.c.obj
+[249/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/locale/windows/SDL_syslocale.c.obj
+[250/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/filesystem/windows/SDL_sysfsops.c.obj
+[251/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/sensor/windows/SDL_windowssensor.c.obj
+[252/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/storage/generic/SDL_genericstorage.c.obj
+[253/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/storage/steam/SDL_steamstorage.c.obj
+[254/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/filesystem/windows/SDL_sysfilesystem.c.obj
+[255/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/time/windows/SDL_systime.c.obj
+[256/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/timer/windows/SDL_systimer.c.obj
+[257/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/loadso/windows/SDL_sysloadso.c.obj
+[258/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_combined.c.obj
+[259/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_8bitdo.c.obj
+[260/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_flydigi.c.obj
+[261/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/tray/windows/SDL_tray.c.obj
+[262/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_gamecube.c.obj
+[263/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_luna.c.obj
+[264/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_lg4ff.c.obj
+[265/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_ps3.c.obj
+[266/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_ps4.c.obj
+[267/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_rumble.c.obj
+[268/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_gip.c.obj
+[269/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_shield.c.obj
+[270/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_ps5.c.obj
+[271/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_stadia.c.obj
+[272/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_steam_hori.c.obj
+[273/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_steamdeck.c.obj
+[274/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_steam.c.obj
+[275/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_xbox360.c.obj
+[276/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/SDL_blit_auto.c.obj
+[277/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_xbox360w.c.obj
+[278/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_wii.c.obj
+[279/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/haptic/hidapi/SDL_hidapihaptic.c.obj
+[280/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_xboxone.c.obj
+[281/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapi_switch.c.obj
+[282/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/haptic/hidapi/SDL_hidapihaptic_lg4ff.c.obj
+[283/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/windows/SDL_dinputjoystick.c.obj
+[284/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/hidapi/SDL_hidapijoystick.c.obj
+[285/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/windows/SDL_windowsjoystick.c.obj
+[286/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/windows/SDL_xinputjoystick.c.obj
+[287/705] Building RC object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/core/windows/version.rc.obj
+[288/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/haptic/windows/SDL_windowshaptic.c.obj
+[289/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/windows/SDL_windows_gaming_input.c.obj
+[290/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/joystick/windows/SDL_rawinputjoystick.c.obj
+[291/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/dialog/SDL_dialog.c.obj
+[292/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/haptic/windows/SDL_dinputhaptic.c.obj
+[293/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/dialog/SDL_dialog_utils.c.obj
+[294/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/process/SDL_process.c.obj
+[295/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenevents.c.obj
+[296/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenframebuffer.c.obj
+[297/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/camera/mediafoundation/SDL_camera_mediafoundation.c.obj
+[298/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/process/windows/SDL_windowsprocess.c.obj
+[299/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenopengles.c.obj
+[300/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenvideo.c.obj
+[301/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenvulkan.c.obj
+[302/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/video/offscreen/SDL_offscreenwindow.c.obj
+[303/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/tray/SDL_tray_utils.c.obj
+[304/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/dialog/windows/SDL_windowsdialog.c.obj
+[305/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/main/generic/SDL_sysmain_callbacks.c.obj
+[306/705] Linking C static library lib\libSDL_uclibc.a
+[307/705] Linking CXX static library lib\libfreetype.a
+[308/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-canvas.c.obj
+[309/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-matrix.c.obj
+[310/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-font.c.obj
+[311/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-blend.c.obj
+[312/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-paint.c.obj
+[313/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-rasterize.c.obj
+[314/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-ft-math.c.obj
+[315/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-ft-raster.c.obj
+[316/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-path.c.obj
+[317/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/gpu/d3d12/SDL_gpu_d3d12.c.obj
+[318/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-ft-stroker.c.obj
+[319/705] Building RC object vendored/SDL_net/CMakeFiles/SDL3_net-shared.dir/src/version.rc.obj
+[320/705] Building C object vendored/SDL/CMakeFiles/SDL3-shared.dir/src/gpu/vulkan/SDL_gpu_vulkan.c.obj
+[321/705] Building C object vendored/SDL_ttf/external/plutosvg-guild/CMakeFiles/plutosvg.dir/source/plutosvg.c.obj
+[322/705] Building C object vendored/SDL_net/CMakeFiles/SDL3_net-shared.dir/src/SDL_net.c.obj
+[323/705] Building CXX object CMakeFiles/gs2_trace.dir/src/debugger/trace_opcodes.cpp.obj
+[324/705] Building CXX object CMakeFiles/gs2_trace.dir/src/debugger/trace.cpp.obj
+[325/705] Building CXX object CMakeFiles/gs2_serial_devices.dir/src/serial_devices/SerialDevice.cpp.obj
+[326/705] Linking CXX shared library SDL3.dll
+[327/705] Building C object vendored/SDL_ttf/CMakeFiles/SDL3_ttf-shared.dir/src/SDL_hashtable_ttf.c.obj
+[328/705] Building C object vendored/SDL_ttf/CMakeFiles/SDL3_ttf-shared.dir/src/SDL_hashtable.c.obj
+[329/705] Building C object vendored/SDL_ttf/CMakeFiles/SDL3_ttf-shared.dir/src/SDL_surface_textengine.c.obj
+[330/705] Building C object vendored/SDL_ttf/CMakeFiles/SDL3_ttf-shared.dir/src/SDL_gpu_textengine.c.obj
+[331/705] Building C object vendored/SDL_ttf/CMakeFiles/SDL3_ttf-shared.dir/src/SDL_renderer_textengine.c.obj
+[332/705] Building RC object vendored/SDL_ttf/CMakeFiles/SDL3_ttf-shared.dir/src/version.rc.obj
+[333/705] Linking C shared library SDL3_net.dll
+[334/705] Linking CXX static library lib\libgs2_trace.a
+[335/705] Building CXX object CMakeFiles/gs2_cpu.dir/src/cpu.cpp.obj
+[336/705] Building CXX object CMakeFiles/gs2_serial_devices.dir/src/serial_devices/host/HostSerial_win32.cpp.obj
+[337/705] Building C object vendored/SDL_ttf/external/plutovg-build/CMakeFiles/plutovg.dir/source/plutovg-surface.c.obj
+[338/705] Linking CXX static library lib\libgs2_serial_devices.a
+[339/705] Linking C static library lib\libplutovg.a
+[340/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/media.cpp.obj
+[341/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/dialog.cpp.obj
+[342/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/apm.cpp.obj
+[343/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/ResourceFile.cpp.obj
+[344/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/EventQueue.cpp.obj
+[345/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/Event.cpp.obj
+[346/705] Building C object vendored/SDL_ttf/CMakeFiles/SDL3_ttf-shared.dir/src/SDL_ttf.c.obj
+[347/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/SoundEffect.cpp.obj
+[348/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/HexDecode.cpp.obj
+[349/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/mount.cpp.obj
+[350/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/TextRenderer.cpp.obj
+[351/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/DeviceFrameDispatcher.cpp.obj
+[352/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/Metrics.cpp.obj
+[353/705] Building CXX object CMakeFiles/gs2_ntsc.dir/src/display/Matrix3x3.cpp.obj
+[354/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/Connections.cpp.obj
+[355/705] Building CXX object CMakeFiles/gs2_ntsc.dir/src/display/OEVector.cpp.obj
+[356/705] Building CXX object CMakeFiles/gs2_ntsc.dir/src/display/filters.cpp.obj
+[357/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/EventTimer.cpp.obj
+[358/705] Building CXX object CMakeFiles/gs2_device_info.dir/src/device_info.cpp.obj
+[359/705] Building CXX object CMakeFiles/gs2_ntsc.dir/src/display/ntsc.cpp.obj
+[360/705] Building CXX object CMakeFiles/gs2_util.dir/src/util/MenuInterface.cpp.obj
+[361/705] Building CXX object CMakeFiles/gs2_ntsc.dir/src/display/shaders/GpuShaderLoader.cpp.obj
+[362/705] Building CXX object CMakeFiles/gs2_paths.dir/src/paths.cpp.obj
+[363/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/arp_table.c.obj
+[364/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/bootp.c.obj
+[365/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/cksum.c.obj
+[366/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/dhcpv6.c.obj
+[367/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/dnssearch.c.obj
+[368/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/if.c.obj
+[369/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ip6_icmp.c.obj
+[370/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ip6_input.c.obj
+[371/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ip6_output.c.obj
+[372/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ip_icmp.c.obj
+[373/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ip_input.c.obj
+[374/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ip_output.c.obj
+[375/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/mbuf.c.obj
+[376/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/misc.c.obj
+[377/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ncsi.c.obj
+[378/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/ndp_table.c.obj
+[379/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/sbuf.c.obj
+[380/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/slirp.c.obj
+[381/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/state.c.obj
+[382/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/socket.c.obj
+[383/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/stream.c.obj
+[384/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/tcp_input.c.obj
+[385/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/tcp_output.c.obj
+[386/705] Building CXX object CMakeFiles/gs2_toml.dir/src/util/toml_impl.cpp.obj
+D:/gsqs/sinkio-20261016/src/src/util/toml_impl.cpp:19:9: warning: 'TOML_IMPLEMENTATION' redefined
+   19 | #define TOML_IMPLEMENTATION
+      |         ^~~~~~~~~~~~~~~~~~~
+<command-line>: note: this is the location of the previous definition
+[387/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/tcp_timer.c.obj
+[388/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/tcp_subr.c.obj
+[389/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/udp.c.obj
+[390/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/tftp.c.obj
+[391/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/version.c.obj
+[392/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/udp6.c.obj
+[393/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/util.c.obj
+[394/705] Building CXX object CMakeFiles/gs2_mmu.dir/src/mmus/mmu.cpp.obj
+[395/705] Building CXX object CMakeFiles/gs2_libslirp.dir/src/devices/uthernet2/glib_compat/glib_compat.cpp.obj
+[396/705] Linking CXX static library lib\libgs2_cpu.a
+[397/705] Building CXX object CMakeFiles/gs2_mmu.dir/src/mmus/mmu_iie.cpp.obj
+[398/705] Building CXX object CMakeFiles/gs2_mmu.dir/src/mmus/mmu_ii.cpp.obj
+[399/705] Building C object CMakeFiles/gs2_libslirp.dir/vendored/libslirp/src/vmstate.c.obj
+[400/705] Building CXX object CMakeFiles/gs2_displaypp.dir/src/devices/displaypp/frame/frame_bit.cpp.obj
+[401/705] Building CXX object CMakeFiles/gs2_displaypp.dir/src/devices/displaypp/AppleIIgsColors.cpp.obj
+[402/705] Building CXX object CMakeFiles/gs2_displaypp.dir/src/devices/displaypp/frame/frame_byte.cpp.obj
+[403/705] Linking CXX static library lib\libgs2_ntsc.a
+[404/705] Building CXX object CMakeFiles/gs2_displaypp.dir/src/devices/displaypp/CharRom.cpp.obj
+[405/705] Building CXX object CMakeFiles/gs2_devices_floppy_woz.dir/src/util/woz_nibblizer.cpp.obj
+[406/705] Building CXX object CMakeFiles/gs2_displaypp.dir/src/devices/displaypp/generate/AppleII.cpp.obj
+[407/705] Building CXX object CMakeFiles/gs2_devices_floppy_woz.dir/src/util/woz_nibblizer_525.cpp.obj
+[408/705] Building CXX object CMakeFiles/gs2_devices_floppy_woz.dir/src/util/woz.cpp.obj
+[409/705] Building CXX object CMakeFiles/gs2_devices_floppy_woz.dir/src/util/woz_nibblizer_35.cpp.obj
+[410/705] Linking CXX static library lib\libgs2_paths.a
+[411/705] Building CXX object CMakeFiles/gs2_mmu.dir/src/mmus/mmu_iigs.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/mmus/mmu_iigs.cpp:3:
+D:/gsqs/sinkio-20261016/src/src/memvu_storevis.hpp:5:20: warning: inline function 'std::string iigs_tool_func_name(unsigned int, unsigned int)' used but never defined
+    5 | inline std::string iigs_tool_func_name(unsigned tool, unsigned fn);            // iigs_symbols.hpp: a call word's name (report path only)
+      |                    ^~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/memvu_storevis.hpp:6:13: warning: inline function 'void iigs_syms_flush_note()' used but never defined
+    6 | inline void iigs_syms_flush_note();                                             // iigs_symbols.hpp: a pending one-line note
+      |             ^~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/memvu_storevis.hpp:4:20: warning: inline function 'const char* a2gspu_name_pc(uint32_t, char*, size_t)' used but never defined
+    4 | inline const char *a2gspu_name_pc(uint32_t full_pc, char *buf, size_t n);     // iigs_symbols.hpp (names by default)
+      |                    ^~~~~~~~~~~~~~
+[412/705] Linking CXX static library lib\libgs2_device_info.a
+[413/705] Linking CXX static library lib\libgs2_toml.a
+[414/705] Building CXX object CMakeFiles/gs2_devices_floppy_woz.dir/src/devices/floppy/Floppy_woz.cpp.obj
+[415/705] Building CXX object CMakeFiles/gs2_devices_floppy_woz.dir/src/devices/floppy/Floppy525_woz.cpp.obj
+[416/705] Building CXX object CMakeFiles/gs2_devices_floppy_woz.dir/src/devices/floppy/Floppy35_woz.cpp.obj
+[417/705] Building CXX object CMakeFiles/gs2_systemconfig.dir/src/util/uuid.cpp.obj
+[418/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG.c.obj
+[419/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_WIC.c.obj
+[420/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_avif.c.obj
+[421/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_bmp.c.obj
+[422/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_gif.c.obj
+[423/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_jpg.c.obj
+[424/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_jxl.c.obj
+[425/705] Building CXX object CMakeFiles/gs2_systemconfig.dir/src/util/SystemSettings.cpp.obj
+[426/705] Building CXX object CMakeFiles/gs2_systemconfig.dir/src/util/ConfigDraft.cpp.obj
+[427/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_pcx.c.obj
+[428/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_lbm.c.obj
+[429/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_pnm.c.obj
+[430/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_qoi.c.obj
+[431/705] Building CXX object CMakeFiles/gs2_systemconfig.dir/src/util/SystemConfig.cpp.obj
+[432/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_png.c.obj
+[433/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_tga.c.obj
+[434/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_tif.c.obj
+[435/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_webp.c.obj
+[436/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_xpm.c.obj
+[437/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_xcf.c.obj
+[438/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_xv.c.obj
+[439/705] Building RC object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/version.rc.obj
+[440/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_svg.c.obj
+[441/705] Building CXX object CMakeFiles/gs2_systemconfig.dir/src/util/SettingsConfig.cpp.obj
+[442/705] Building CXX object CMakeFiles/gs2_devices_game.dir/src/devices/game/mousewheel.cpp.obj
+[443/705] Building C object vendored/SDL_image/CMakeFiles/SDL3_image-shared.dir/src/IMG_stb.c.obj
+[444/705] Building CXX object CMakeFiles/gs2_devices_game.dir/src/devices/game/gamecontroller.cpp.obj
+[445/705] Building CXX object CMakeFiles/gs2_devices_pdblock2.dir/src/devices/pdblock2/pdblock2.cpp.obj
+[446/705] Building CXX object CMakeFiles/gs2_devices_prodos_clock.dir/src/devices/prodos_clock/prodos_clock.cpp.obj
+[447/705] Building CXX object CMakeFiles/gs2_devices_languagecard.dir/src/devices/languagecard/languagecard.cpp.obj
+[448/705] Building CXX object CMakeFiles/gs2_devices_tcp.dir/src/devices/thunderclock_plus/thunderclockplus.cpp.obj
+[449/705] Building CXX object CMakeFiles/gs2_devices_keyboard.dir/src/devices/keyboard/keyboard.cpp.obj
+[450/705] Building CXX object CMakeFiles/gs2_devices_pdblock3.dir/src/devices/pdblock3/pdblock3.cpp.obj
+D:/gsqs/sinkio-20261016/src/src/devices/pdblock3/pdblock3.cpp: In constructor 'PDBlock3::PDBlock3(uint8_t, MMU*)':
+D:/gsqs/sinkio-20261016/src/src/devices/pdblock3/pdblock3.cpp:60:13: warning: 'PDBlock3::_slot' will be initialized after [-Wreorder]
+   60 |     uint8_t _slot;
+      |             ^~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/pdblock3/pdblock3.cpp:56:10: warning:   'MMU* PDBlock3::mmu' [-Wreorder]
+   56 |     MMU *mmu;
+      |          ^~~
+D:/gsqs/sinkio-20261016/src/src/devices/pdblock3/pdblock3.cpp:105:5: warning:   when initialized here [-Wreorder]
+  105 |     PDBlock3(uint8_t slot, MMU *mmu) : _slot(slot), mmu(mmu) {
+      |     ^~~~~~~~
+[451/705] Building CXX object CMakeFiles/gs2_devices_speaker.dir/src/devices/speaker/speaker.cpp.obj
+[452/705] Building CXX object CMakeFiles/gs2_devices_memexp.dir/src/devices/memoryexpansion/memexp.cpp.obj
+[453/705] Building CXX object CMakeFiles/gs2_devices_parallel.dir/src/devices/parallel/parallel.cpp.obj
+[454/705] Building CXX object CMakeFiles/gs2_devices_mouse.dir/src/devices/applemouseiii/MouseController.cpp.obj
+[455/705] Building CXX object CMakeFiles/gs2_devices_videx.dir/src/devices/videx/videx.cpp.obj
+[456/705] Building CXX object CMakeFiles/gs2_devices_mouse.dir/src/devices/applemouseiii/PIA6520.cpp.obj
+[457/705] Building CXX object CMakeFiles/gs2_devices_videx.dir/src/devices/videx/videx_80x24.cpp.obj
+[458/705] Building CXX object CMakeFiles/gs2_devices_mouse.dir/src/devices/applemouseiii/applemouseiii.cpp.obj
+[459/705] Building CXX object CMakeFiles/gs2_devices_ensoniq.dir/src/devices/es5503/ensoniq.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/es5503/ensoniq.cpp:1:
+D:/gsqs/sinkio-20261016/src/src/devices/es5503/ensoniq.hpp: In constructor 'ES5503::ES5503()':
+D:/gsqs/sinkio-20261016/src/src/devices/es5503/ensoniq.hpp:88:17: warning: 'ES5503::<unnamed union>::m_rege0' will be initialized after [-Wreorder]
+   88 |         uint8_t m_rege0;                // Contents of register 0xe0
+      |                 ^~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/es5503/ensoniq.hpp:76:13: warning:   'uint8_t ES5503::m_channel_strobe' [-Wreorder]
+   76 |     uint8_t m_channel_strobe;   // Current channel strobe
+      |             ^~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/es5503/ensoniq.cpp:21:1: warning:   when initialized here [-Wreorder]
+   21 | ES5503::ES5503()
+      | ^~~~~~
+[460/705] Building CXX object CMakeFiles/gs2_devices_mockingboard.dir/src/devices/mockingboard/mb2.cpp.obj
+[461/705] Building CXX object CMakeFiles/gs2_devices_iiememory.dir/src/devices/iiememory/iiememory.cpp.obj
+[462/705] Building CXX object CMakeFiles/gs2_devices_ensoniq.dir/src/devices/es5503/soundglu.cpp.obj
+[463/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/ss_host_text.cpp.obj
+[464/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/ss_a2_text_sync.cpp.obj
+[465/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/ss_gpu_text.cpp.obj
+[466/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/ppu_render.cpp.obj
+[467/705] Building CXX object CMakeFiles/gs2_devices_ssc.dir/src/devices/ssc/ssc.cpp.obj
+[468/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/ss_gpu.cpp.obj
+[469/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/secondsight.cpp.obj
+[470/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/vga_render_8.cpp.obj
+[471/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/vga_render_text_9x16.cpp.obj
+[472/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/vga_render_16.cpp.obj
+[473/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/vga_render_text_8x8.cpp.obj
+[474/705] Building CXX object CMakeFiles/gs2_devices_scc8530.dir/src/devices/scc8530/scc8530.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/scc8530/scc8530.hpp:4,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/scc8530/scc8530.cpp:1:
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp: In constructor 'Z85C30::Z85C30(InterruptController*, EventTimer*, NClockII*, uint64_t)':
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:859:19: warning: 'void* memset(void*, int, size_t)' clearing an object of non-trivial type 'struct Z85C30::scc_channel_state_t'; use assignment or value-initialization instead [-Wclass-memaccess]
+  859 |             memset(registers, 0, sizeof(registers));
+      |             ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:94:12: note: 'struct Z85C30::scc_channel_state_t' declared here
+   94 |     struct scc_channel_state_t {
+      |            ^~~~~~~~~~~~~~~~~~~
+[475/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/vga_render_24.cpp.obj
+[476/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/vga_render_text_9x16_present.cpp.obj
+[477/705] Building CXX object CMakeFiles/gs2_devices_secondsight.dir/src/devices/secondsight/vga_render_text_8x8_present.cpp.obj
+[478/705] Building CXX object CMakeFiles/gs2_devices_cassette.dir/src/devices/cassette/cassette.cpp.obj
+[479/705] Building CXX object CMakeFiles/gs2_devices_voc.dir/src/devices/voc/voc.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/Frames.hpp:3,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/VideoScannerII.hpp:5,
+                 from D:/gsqs/sinkio-20261016/src/src/NClock.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/platforms.hpp:25,
+                 from D:/gsqs/sinkio-20261016/src/src/computer.hpp:15,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/voc/voc.hpp:20,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/voc/voc.cpp:18:
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp: In instantiation of 'Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t, uint32_t, SDL_Renderer*, SDL_PixelFormat) [with bs_t = RGBA_t; unsigned int HEIGHT = 400; unsigned int WIDTH = 640; StoragePolicy = SDLTextureStorage; uint32_t = unsigned int; SDL_Renderer = SDL_Renderer; SDL_PixelFormat = SDL_PixelFormat]':
+C:/msys64/ucrt64/include/c++/16.1.0/bits/unique_ptr.h:1086:30:   required from 'std::__detail::__unique_ptr_t<_Tp> std::make_unique(_Args&& ...) [with _Tp = Frame<RGBA_t, 400, 640, SDLTextureStorage>; _Args = {int, int, SDL_Renderer*&, SDL_PixelFormat}; __detail::__unique_ptr_t<_Tp> = __detail::__unique_ptr_t<Frame<RGBA_t, 400, 640, SDLTextureStorage> >]'
+ 1086 |     { return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...)); }
+      |                              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/voc/voc.cpp:185:46:   required from here
+  185 |     d->frame = std::make_unique<Frame640x400>(640, 400, vs->renderer, PIXEL_FORMAT);
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:78:14: warning: 'Frame<RGBA_t, 400, 640, SDLTextureStorage>::f_height' will be initialized after [-Wreorder]
+   78 |     uint32_t f_height;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning:   'uint32_t Frame<RGBA_t, 400, 640, SDLTextureStorage>::scanline' [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning: 'Frame<RGBA_t, 400, 640, SDLTextureStorage>::scanline' will be initialized after [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:75:14: warning:   'uint32_t Frame<RGBA_t, 400, 640, SDLTextureStorage>::hloc' [-Wreorder]
+   75 |     uint32_t hloc;
+      |              ^~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[480/705] Building CXX object CMakeFiles/gs2_devices_vidhd.dir/src/devices/vidhd/vidhd.cpp.obj
+[481/705] Building C object CMakeFiles/gs2_devices_a2gspu.dir/src/devices/a2gspu/vt100.c.obj
+[482/705] Building C object CMakeFiles/gs2_devices_a2gspu.dir/src/devices/a2gspu/utf8_decode.c.obj
+[483/705] Building CXX object CMakeFiles/gs2_devices_iwm.dir/src/devices/iwm/iwm_device.cpp.obj
+[484/705] Building CXX object CMakeFiles/gs2_devices_a2gspu.dir/src/devices/a2gspu/a2gspu_emu.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.cpp:21:
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp: In constructor 'a2gspu_emu_state::a2gspu_emu_state()':
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:102:13: warning: 'a2gspu_emu_state::mode_flags' will be initialized after [-Wreorder]
+  102 |     uint8_t mode_flags;      // display mode flags (80col, text, hires, etc.)
+      |             ^~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:93:18: warning:   'SDL_Texture* a2gspu_emu_state::texture' [-Wreorder]
+   93 |     SDL_Texture *texture;
+      |                  ^~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:303:5: warning:   when initialized here [-Wreorder]
+  303 |     a2gspu_emu_state() :
+      |     ^~~~~~~~~~~~~~~~
+[485/705] Building CXX object CMakeFiles/gs2_devices_a2gspu.dir/src/devices/a2gspu/a2gspu_proto.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_proto.cpp:12:
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp: In constructor 'a2gspu_emu_state::a2gspu_emu_state()':
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:102:13: warning: 'a2gspu_emu_state::mode_flags' will be initialized after [-Wreorder]
+  102 |     uint8_t mode_flags;      // display mode flags (80col, text, hires, etc.)
+      |             ^~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:93:18: warning:   'SDL_Texture* a2gspu_emu_state::texture' [-Wreorder]
+   93 |     SDL_Texture *texture;
+      |                  ^~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:303:5: warning:   when initialized here [-Wreorder]
+  303 |     a2gspu_emu_state() :
+      |     ^~~~~~~~~~~~~~~~
+[486/705] Building C object CMakeFiles/gs2_devices_hostfst.dir/src/devices/hostfst/host_common.c.obj
+[487/705] Building CXX object CMakeFiles/gs2_devices_hostfst.dir/src/devices/hostfst/hostfst.cpp.obj
+[488/705] Building CXX object CMakeFiles/gs2_devices_hostfst.dir/src/devices/hostfst/hostfst_engine.cpp.obj
+[489/705] Linking CXX static library lib\libgs2_libslirp.a
+[490/705] Building CXX object CMakeFiles/gs2_devices_a2gspu.dir/src/devices/a2gspu/a2gspu.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu.cpp:16:
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp: In constructor 'a2gspu_emu_state::a2gspu_emu_state()':
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:102:13: warning: 'a2gspu_emu_state::mode_flags' will be initialized after [-Wreorder]
+  102 |     uint8_t mode_flags;      // display mode flags (80col, text, hires, etc.)
+      |             ^~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:93:18: warning:   'SDL_Texture* a2gspu_emu_state::texture' [-Wreorder]
+   93 |     SDL_Texture *texture;
+      |                  ^~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:303:5: warning:   when initialized here [-Wreorder]
+  303 |     a2gspu_emu_state() :
+      |     ^~~~~~~~~~~~~~~~
+[491/705] Building CXX object CMakeFiles/gs2_devices_adb.dir/src/devices/adb/keygloo.cpp.obj
+[492/705] Building C object CMakeFiles/gs2_devices_hostfst.dir/src/devices/hostfst/win32_host_fst.c.obj
+[493/705] Building C object CMakeFiles/gs2_devices_hostfst.dir/src/devices/hostfst/win32_host_common.c.obj
+[494/705] Building CXX object CMakeFiles/gs2_devices_uthernet2.dir/src/devices/uthernet2/slirp_backend.cpp.obj
+D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp: In member function 'bool u2::SlirpBackend::init(const u2::SlirpNetConfig&)':
+D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp:147:10: warning: 'SlirpCb::register_poll_fd' is deprecated [-Wdeprecated-declarations]
+  147 |     cbs_.register_poll_fd = register_poll_fd_cb;
+      |          ^~~~~~~~~~~~~~~~
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.hpp:6,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp:5:
+D:/gsqs/sinkio-20261016/src/vendored/libslirp/src/libslirp.h:134:12: note: declared here
+  134 |     void (*register_poll_fd)(int fd, void *opaque) SLIRP_DEPRECATED;
+      |            ^~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp:147:10: warning: 'SlirpCb::register_poll_fd' is deprecated [-Wdeprecated-declarations]
+  147 |     cbs_.register_poll_fd = register_poll_fd_cb;
+      |          ^~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/vendored/libslirp/src/libslirp.h:134:12: note: declared here
+  134 |     void (*register_poll_fd)(int fd, void *opaque) SLIRP_DEPRECATED;
+      |            ^~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp:147:10: warning: 'SlirpCb::register_poll_fd' is deprecated [-Wdeprecated-declarations]
+  147 |     cbs_.register_poll_fd = register_poll_fd_cb;
+      |          ^~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/vendored/libslirp/src/libslirp.h:134:12: note: declared here
+  134 |     void (*register_poll_fd)(int fd, void *opaque) SLIRP_DEPRECATED;
+      |            ^~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp:148:10: warning: 'SlirpCb::unregister_poll_fd' is deprecated [-Wdeprecated-declarations]
+  148 |     cbs_.unregister_poll_fd = unregister_poll_fd_cb;
+      |          ^~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/vendored/libslirp/src/libslirp.h:136:12: note: declared here
+  136 |     void (*unregister_poll_fd)(int fd, void *opaque) SLIRP_DEPRECATED;
+      |            ^~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp:148:10: warning: 'SlirpCb::unregister_poll_fd' is deprecated [-Wdeprecated-declarations]
+  148 |     cbs_.unregister_poll_fd = unregister_poll_fd_cb;
+      |          ^~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/vendored/libslirp/src/libslirp.h:136:12: note: declared here
+  136 |     void (*unregister_poll_fd)(int fd, void *opaque) SLIRP_DEPRECATED;
+      |            ^~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/uthernet2/slirp_backend.cpp:148:10: warning: 'SlirpCb::unregister_poll_fd' is deprecated [-Wdeprecated-declarations]
+  148 |     cbs_.unregister_poll_fd = unregister_poll_fd_cb;
+      |          ^~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/vendored/libslirp/src/libslirp.h:136:12: note: declared here
+  136 |     void (*unregister_poll_fd)(int fd, void *opaque) SLIRP_DEPRECATED;
+      |            ^~~~~~~~~~~~~~~~~~
+[495/705] Linking CXX static library lib\libgs2_mmu.a
+[496/705] Building CXX object CMakeFiles/gs2_devices_uthernet2.dir/src/devices/uthernet2/net_worker.cpp.obj
+[497/705] Building CXX object CMakeFiles/gs2_devices_uthernet2.dir/src/devices/uthernet2/slirp_netpick.cpp.obj
+[498/705] Linking CXX static library lib\libgs2_displaypp.a
+[499/705] Linking CXX static library lib\libgs2_systemconfig.a
+[500/705] Building CXX object CMakeFiles/gs2_devices_uthernet2.dir/src/devices/uthernet2/uthernet2.cpp.obj
+[501/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/ScanBuffer.cpp.obj
+[502/705] Building CXX object CMakeFiles/gs2_devices_uthernet2.dir/src/devices/uthernet2/w5100_chip.cpp.obj
+[503/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/VideoScannerIIe.cpp.obj
+[504/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/VideoScannerII.cpp.obj
+[505/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/VideoScannerIIePAL.cpp.obj
+[506/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/VideoScannerIIgs.cpp.obj
+[507/705] Building CXX object CMakeFiles/gs2_devices_diskii_woz.dir/src/devices/diskii/ndiskii_woz.cpp.obj
+[508/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/VideoScanGenerator_Comp.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/Frames.hpp:3,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/VideoScanGenerator_Comp.cpp:6:
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp: In instantiation of 'Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t, uint32_t, SDL_Renderer*, SDL_PixelFormat) [with bs_t = unsigned char; unsigned int HEIGHT = 192; unsigned int WIDTH = 560; StoragePolicy = MemoryStorage<unsigned char>; uint32_t = unsigned int; SDL_Renderer = SDL_Renderer; SDL_PixelFormat = SDL_PixelFormat]':
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/VideoScanGenerator_Comp.cpp:44:39:   required from here
+   44 |     frame_byte = new Frame560(560, 263);
+      |                                       ^
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:78:14: warning: 'Frame<unsigned char, 192, 560>::f_height' will be initialized after [-Wreorder]
+   78 |     uint32_t f_height;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning:   'uint32_t Frame<unsigned char, 192, 560>::scanline' [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning: 'Frame<unsigned char, 192, 560>::scanline' will be initialized after [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:75:14: warning:   'uint32_t Frame<unsigned char, 192, 560>::hloc' [-Wreorder]
+   75 |     uint32_t hloc;
+      |              ^~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[509/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/VideoScanGenerator.cpp.obj
+[510/705] Linking CXX static library lib\libgs2_devices_game.a
+[511/705] Linking C shared library SDL3_image.dll
+[512/705] Building CXX object CMakeFiles/gs2_util_audio.dir/src/devices/speaker/LowPass.cpp.obj
+[513/705] Building CXX object CMakeFiles/gs2_computer.dir/src/computer.cpp.obj
+[514/705] Building CXX object CMakeFiles/gs2_video_scanner.dir/src/devices/displaypp/VideoScanGenerator_RGB.cpp.obj
+[515/705] Linking CXX static library lib\libgs2_devices_pdblock2.a
+[516/705] Linking CXX static library lib\libgs2_devices_pdblock3.a
+[517/705] Linking CXX static library lib\libgs2_devices_prodos_clock.a
+[518/705] Building CXX object CMakeFiles/gs2_util_audio.dir/src/devices/speaker/SpeakerX.cpp.obj
+[519/705] Linking CXX static library lib\libgs2_devices_tcp.a
+[520/705] Linking CXX static library lib\libgs2_devices_languagecard.a
+[521/705] Linking CXX static library lib\libgs2_devices_keyboard.a
+[522/705] Linking CXX static library lib\libgs2_devices_speaker.a
+[523/705] Linking CXX static library lib\libgs2_devices_memexp.a
+[524/705] Linking CXX static library lib\libgs2_devices_parallel.a
+[525/705] Linking CXX static library lib\libgs2_devices_videx.a
+[526/705] Linking CXX static library lib\libgs2_devices_mockingboard.a
+[527/705] Linking CXX static library lib\libgs2_devices_mouse.a
+[528/705] Linking CXX static library lib\libgs2_devices_iiememory.a
+[529/705] Linking CXX static library lib\libgs2_devices_ensoniq.a
+[530/705] Linking CXX static library lib\libgs2_devices_scc8530.a
+[531/705] Linking CXX static library lib\libgs2_devices_ssc.a
+[532/705] Linking CXX static library lib\libgs2_devices_voc.a
+[533/705] Linking CXX static library lib\libgs2_devices_secondsight.a
+[534/705] Linking CXX static library lib\libgs2_devices_cassette.a
+[535/705] Linking CXX static library lib\libgs2_devices_vidhd.a
+[536/705] Linking CXX static library lib\libgs2_devices_a2gspu.a
+[537/705] Linking CXX static library lib\libgs2_devices_hostfst.a
+[538/705] Linking CXX static library lib\libgs2_devices_uthernet2.a
+[539/705] Building CXX object CMakeFiles/gs2_debugger.dir/src/debugger/MemoryWatch.cpp.obj
+[540/705] Building CXX object CMakeFiles/gs2_devices_rtc_pram.dir/src/devices/rtc/rtc_pram.cpp.obj
+[541/705] Building CXX object CMakeFiles/gs2_debugger.dir/src/debugger/disasm.cpp.obj
+[542/705] Building CXX object CMakeFiles/gs2_debugger.dir/src/debugger/BreakpointTable.cpp.obj
+[543/705] Building CXX object CMakeFiles/gs2_debugger.dir/src/debugger/DebugVideoView.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/Frames.hpp:3,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/generate/AppleII.hpp:7,
+                 from D:/gsqs/sinkio-20261016/src/src/debugger/DebugVideoView.hpp:10,
+                 from D:/gsqs/sinkio-20261016/src/src/debugger/DebugVideoView.cpp:1:
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp: In instantiation of 'Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t, uint32_t, SDL_Renderer*, SDL_PixelFormat) [with bs_t = RGBA_t; unsigned int HEIGHT = 192; unsigned int WIDTH = 567; StoragePolicy = SDLTextureStorage; uint32_t = unsigned int; SDL_Renderer = SDL_Renderer; SDL_PixelFormat = SDL_PixelFormat]':
+D:/gsqs/sinkio-20261016/src/src/debugger/DebugVideoView.cpp:206:81:   required from here
+  206 |         new (std::align_val_t(64)) Frame560RGBA(567, 192, renderer, PIXEL_FORMAT));
+      |                                                                                 ^
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:78:14: warning: 'Frame<RGBA_t, 192, 567, SDLTextureStorage>::f_height' will be initialized after [-Wreorder]
+   78 |     uint32_t f_height;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning:   'uint32_t Frame<RGBA_t, 192, 567, SDLTextureStorage>::scanline' [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning: 'Frame<RGBA_t, 192, 567, SDLTextureStorage>::scanline' will be initialized after [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:75:14: warning:   'uint32_t Frame<RGBA_t, 192, 567, SDLTextureStorage>::hloc' [-Wreorder]
+   75 |     uint32_t hloc;
+      |              ^~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp: In instantiation of 'Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t, uint32_t, SDL_Renderer*, SDL_PixelFormat) [with bs_t = RGBA_t; unsigned int HEIGHT = 200; unsigned int WIDTH = 640; StoragePolicy = SDLTextureStorage; uint32_t = unsigned int; SDL_Renderer = SDL_Renderer; SDL_PixelFormat = SDL_PixelFormat]':
+D:/gsqs/sinkio-20261016/src/src/debugger/DebugVideoView.cpp:208:77:   required from here
+  208 |         new (std::align_val_t(64)) Frame640(640, 200, renderer, PIXEL_FORMAT));
+      |                                                                             ^
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:78:14: warning: 'Frame<RGBA_t, 200, 640, SDLTextureStorage>::f_height' will be initialized after [-Wreorder]
+   78 |     uint32_t f_height;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning:   'uint32_t Frame<RGBA_t, 200, 640, SDLTextureStorage>::scanline' [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning: 'Frame<RGBA_t, 200, 640, SDLTextureStorage>::scanline' will be initialized after [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:75:14: warning:   'uint32_t Frame<RGBA_t, 200, 640, SDLTextureStorage>::hloc' [-Wreorder]
+   75 |     uint32_t hloc;
+      |              ^~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[544/705] Building CXX object CMakeFiles/gs2_cpu_new.dir/src/cpus/cpu_implementations.cpp.obj
+[545/705] Building CXX object CMakeFiles/gs2_debugger.dir/src/debugger/debugwindow.cpp.obj
+[546/705] Building CXX object CMakeFiles/gs2_debugger.dir/src/debugger/Monitor.cpp.obj
+[547/705] Building CXX object vendored/SDL_ttf/external/harfbuzz-build/CMakeFiles/harfbuzz.dir/src/harfbuzz.cc.obj
+In file included from D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/harfbuzz.cc:5:
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-buffer-verify.cc: In function 'void buffer_verify_error(hb_buffer_t*, hb_font_t*, const char*, ...)':
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-buffer-verify.cc:56:14: warning: function 'void buffer_verify_error(hb_buffer_t*, hb_font_t*, const char*, ...)' might be a candidate for 'gnu_printf' format attribute [-Wsuggest-attribute=format]
+   56 |     vfprintf (stderr, fmt, ap);
+      |     ~~~~~~~~~^~~~~~~~~~~~~~~~~
+In file included from D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/harfbuzz.cc:6:
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-buffer.cc: In member function 'bool hb_buffer_t::message_impl(hb_font_t*, const char*, va_list)':
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-buffer.cc:2259:13: warning: function 'bool hb_buffer_t::message_impl(hb_font_t*, const char*, va_list)' might be a candidate for 'gnu_printf' format attribute [-Wsuggest-attribute=format]
+ 2259 |   vsnprintf (buf, sizeof (buf), fmt, ap);
+      |   ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/harfbuzz.cc:60:
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-uniscribe.cc: In function 'hb_bool_t _hb_uniscribe_shape(hb_shape_plan_t*, hb_font_t*, hb_buffer_t*, const hb_feature_t*, unsigned int)':
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-uniscribe.cc:584:1: warning: offset '4' outside bounds of constant string [-Warray-bounds=]
+  584 | _hb_uniscribe_shape (hb_shape_plan_t    *shape_plan,
+      | ^~~~~~~~~~~~~~~~~~~
+In file included from D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/harfbuzz.cc:56:
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-static.cc:46:16: note: '_hb_NullPool' declared here
+   46 | uint64_t const _hb_NullPool[(HB_NULL_POOL_SIZE + sizeof (uint64_t) - 1) / sizeof (uint64_t)] = {};
+      |                ^~~~~~~~~~~~
+In file included from D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb.hh:548,
+                 from D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-aat-layout.cc:28,
+                 from D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/harfbuzz.cc:1:
+In function 'int hb_memcmp(const void*, const void*, unsigned int)',
+    inlined from 'int hb_array_t< <template-parameter-1-1> >::cmp(const hb_array_t< <template-parameter-1-1> >&) const [with Type = const char]' at D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-array.hh:169:22,
+    inlined from 'static int OT::post::accelerator_t::cmp_key(const void*, const void*, void*)' at D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-ot-post-table.hh:251:44,
+    inlined from 'bool hb_bsearch_impl(unsigned int*, const K&, V*, size_t, size_t, int (*)(const void*, const void*, Ts ...), Ts ...) [with V = short unsigned int; K = hb_array_t<const char>; Ts = {void*}]' at D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-algs.hh:1090:20,
+    inlined from 'V* hb_bsearch(const K&, V*, size_t, size_t, int (*)(const void*, const void*, Ts ...), Ts ...) [with V = short unsigned int; K = hb_array_t<const char>; Ts = {void*}]' at D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-algs.hh:1128:26,
+    inlined from 'bool OT::post::accelerator_t::get_glyph_from_name(const char*, int, hb_codepoint_t*) const' at D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-ot-post-table.hh:207:30,
+    inlined from 'hb_bool_t hb_ot_get_glyph_from_name(hb_font_t*, void*, const char*, int, hb_codepoint_t*, void*)' at D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-ot-font.cc:473:42:
+D:/gsqs/sinkio-20261016/src/vendored/SDL_ttf/external/harfbuzz/src/hb-algs.hh:988:17: warning: 'int memcmp(const void*, const void*, size_t)' specified bound [2147483648, 4294967295] exceeds source size 1850 [-Wstringop-overread]
+  988 |   return memcmp (a, b, len);
+      |          ~~~~~~~^~~~~~~~~~~
+[548/705] Linking C static library lib\libharfbuzz.a
+[549/705] Linking CXX static library lib\libplutosvg.a
+[550/705] Building CXX object CMakeFiles/gs2_event_dispatcher.dir/src/util/EventDispatcher.cpp.obj
+[551/705] Linking CXX shared library SDL3_ttf.dll
+[552/705] Linking CXX static library lib\libgs2_util.a
+[553/705] Linking CXX static library lib\libgs2_devices_floppy_woz.a
+[554/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/AssetAtlas.cpp.obj
+[555/705] Linking CXX static library lib\libgs2_devices_iwm.a
+[556/705] Linking CXX static library lib\libgs2_devices_adb.a
+[557/705] Linking CXX static library lib\libgs2_computer.a
+[558/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/Container.cpp.obj
+[559/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/DiskII_Button.cpp.obj
+[560/705] Building CXX object CMakeFiles/gs2_debugger.dir/src/debugger/DebugProtocolServer.cpp.obj
+[561/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/AppleDisk_525_Button.cpp.obj
+[562/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/AppleDisk_35_Button.cpp.obj
+[563/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/Unidisk_Button.cpp.obj
+[564/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/MousePositionTile.cpp.obj
+[565/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/Tile.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/ui/Tile.cpp:18:
+D:/gsqs/sinkio-20261016/src/src/ui/Tile.hpp: In constructor 'Tile_t::Tile_t(UIContext*, const Style_t&, int64_t)':
+D:/gsqs/sinkio-20261016/src/src/ui/Tile.hpp:177:16: warning: 'Tile_t::ctx' will be initialized after [-Wreorder]
+  177 |     UIContext *ctx = nullptr;
+      |                ^~~
+D:/gsqs/sinkio-20261016/src/src/ui/Tile.hpp:160:14: warning:   'Style_t Tile_t::style' [-Wreorder]
+  160 |      Style_t style;
+      |              ^~~~~
+D:/gsqs/sinkio-20261016/src/src/ui/Tile.cpp:20:1: warning:   when initialized here [-Wreorder]
+   20 | Tile_t::Tile_t(UIContext *ctx, const Style_t& initial_style, int64_t initial_value) : ctx(ctx), style(initial_style), _value(initial_value) {
+      | ^~~~~~
+[566/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/MainAtlas.cpp.obj
+[567/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/Button.cpp.obj
+[568/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/FadeButton.cpp.obj
+[569/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/ModalContainer.cpp.obj
+[570/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/ScreenshotWriter.cpp.obj
+[571/705] Building CXX object CMakeFiles/gs2_cpu_new.dir/src/cpus/cpu_6502.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/iigs_toolbox.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/cpus/base_6502.cpp:23,
+                 from D:/gsqs/sinkio-20261016/src/src/cpus/cpu_6502.cpp:19:
+D:/gsqs/sinkio-20261016/src/src/iigs_symbols.hpp:31:13: warning: inline function 'void a2gspu_warn(const char*, const char*)' used but never defined
+   31 | inline void a2gspu_warn(const char *rail, const char *what);
+      |             ^~~~~~~~~~~
+[572/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/Clipboard.cpp.obj
+[573/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/TextInput.cpp.obj
+[574/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/OSD.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/ui/OSD.cpp:32:
+D:/gsqs/sinkio-20261016/src/src/ui/OSD.hpp: In constructor 'OSD::OSD(computer_t*, SDL_Renderer*, SDL_Window*, SlotManager_t*, int, int, AssetAtlas_t*)':
+D:/gsqs/sinkio-20261016/src/src/ui/OSD.hpp:126:9: warning: 'OSD::window_h' will be initialized after [-Wreorder]
+  126 |     int window_h = 0;
+      |         ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/ui/OSD.hpp:64:17: warning:   'computer_t* OSD::computer' [-Wreorder]
+   64 |     computer_t *computer = nullptr;
+      |                 ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/ui/OSD.cpp:257:1: warning:   when initialized here [-Wreorder]
+  257 | OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, SlotManager_t *slot_manager, int window_width, int window_height, AssetAtlas_t *aa)
+      | ^~~
+D:/gsqs/sinkio-20261016/src/src/ui/OSD.hpp:121:19: warning: 'OSD::aa' will be initialized after [-Wreorder]
+  121 |     AssetAtlas_t *aa = nullptr;
+      |                   ^~
+D:/gsqs/sinkio-20261016/src/src/ui/OSD.hpp:101:13: warning:   'NClock* OSD::clock' [-Wreorder]
+  101 |     NClock *clock = nullptr;
+      |             ^~~~~
+D:/gsqs/sinkio-20261016/src/src/ui/OSD.cpp:257:1: warning:   when initialized here [-Wreorder]
+  257 | OSD::OSD(computer_t *computer, SDL_Renderer *rendererp, SDL_Window *windowp, SlotManager_t *slot_manager, int window_width, int window_height, AssetAtlas_t *aa)
+      | ^~~
+[575/705] Building CXX object CMakeFiles/gs2_cpu_new.dir/src/cpus/cpu_65c02.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/iigs_toolbox.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/cpus/base_6502.cpp:23,
+                 from D:/gsqs/sinkio-20261016/src/src/cpus/cpu_65c02.cpp:19:
+D:/gsqs/sinkio-20261016/src/src/iigs_symbols.hpp:31:13: warning: inline function 'void a2gspu_warn(const char*, const char*)' used but never defined
+   31 | inline void a2gspu_warn(const char *rail, const char *what);
+      |             ^~~~~~~~~~~
+[576/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/LabeledButton.cpp.obj
+[577/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SystemButton.cpp.obj
+[578/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/FadeContainer.cpp.obj
+[579/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SlotButton.cpp.obj
+[580/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/StatusMessage.cpp.obj
+[581/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SelectSystem.cpp.obj
+[582/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/DrivesHUD.cpp.obj
+[583/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/DisplaySelect.cpp.obj
+[584/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SpeedSelect.cpp.obj
+[585/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/HoverControls.cpp.obj
+[586/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/DrivesOSD.cpp.obj
+[587/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/HD20SC_Button.cpp.obj
+[588/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/DirtyDiskSave.cpp.obj
+[589/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/ScrollBar.cpp.obj
+[590/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/WrapContainer.cpp.obj
+[591/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/QuitModal.cpp.obj
+[592/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SlotsPanel.cpp.obj
+[593/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SystemBadge.cpp.obj
+[594/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/StorageButtonFactory.cpp.obj
+[595/705] Linking CXX static library lib\libgs2_devices_diskii_woz.a
+[596/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/ConfigSelectors.cpp.obj
+[597/705] Building CXX object CMakeFiles/gs2_message_bus.dir/src/mbus/MessageBus.cpp.obj
+[598/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SerialPortButton.cpp.obj
+[599/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/SerialPortsOSD.cpp.obj
+[600/705] Linking CXX static library lib\libgs2_video_scanner.a
+[601/705] Linking CXX static library lib\libgs2_devices_rtc_pram.a
+[602/705] Building CXX object CMakeFiles/gs2_ui.dir/src/ui/EditSystem.cpp.obj
+[603/705] Linking CXX static library lib\libgs2_util_audio.a
+[604/705] Linking CXX static library lib\libgs2_debugger.a
+[605/705] Assembling resources into build/resources/
+[606/705] Linking CXX static library lib\libgs2_event_dispatcher.a
+[607/705] Linking CXX static library lib\libgs2_message_bus.a
+[608/705] Building CXX object CMakeFiles/platform_specific.dir/src/platform-specific/windows/menu.cpp.obj
+[609/705] Linking CXX static library lib\libgs2_ui.a
+[610/705] Building CXX object CMakeFiles/gs2_device_registry.dir/src/devices.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/scc8530/scc8530.hpp:4,
+                 from D:/gsqs/sinkio-20261016/src/src/devices.cpp:44:
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp: In constructor 'Z85C30::Z85C30(InterruptController*, EventTimer*, NClockII*, uint64_t)':
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:859:19: warning: 'void* memset(void*, int, size_t)' clearing an object of non-trivial type 'struct Z85C30::scc_channel_state_t'; use assignment or value-initialization instead [-Wclass-memaccess]
+  859 |             memset(registers, 0, sizeof(registers));
+      |             ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:94:12: note: 'struct Z85C30::scc_channel_state_t' declared here
+   94 |     struct scc_channel_state_t {
+      |            ^~~~~~~~~~~~~~~~~~~
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/devices.cpp:46:
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp: In constructor 'a2gspu_emu_state::a2gspu_emu_state()':
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:102:13: warning: 'a2gspu_emu_state::mode_flags' will be initialized after [-Wreorder]
+  102 |     uint8_t mode_flags;      // display mode flags (80col, text, hires, etc.)
+      |             ^~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:93:18: warning:   'SDL_Texture* a2gspu_emu_state::texture' [-Wreorder]
+   93 |     SDL_Texture *texture;
+      |                  ^~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:303:5: warning:   when initialized here [-Wreorder]
+  303 |     a2gspu_emu_state() :
+      |     ^~~~~~~~~~~~~~~~
+[611/705] Building CXX object CMakeFiles/GSSquared.dir/src/opcodes.cpp.obj
+[612/705] Building CXX object CMakeFiles/gs2_device_registry.dir/src/display/display.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/Frames.hpp:3,
+                 from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/VideoScannerII.hpp:5,
+                 from D:/gsqs/sinkio-20261016/src/src/NClock.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/cpus/cpu_traits.hpp:3,
+                 from D:/gsqs/sinkio-20261016/src/src/cpu.hpp:28,
+                 from D:/gsqs/sinkio-20261016/src/src/display/display.cpp:22:
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp: In instantiation of 'Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t, uint32_t, SDL_Renderer*, SDL_PixelFormat) [with bs_t = RGBA_t; unsigned int HEIGHT = 263; unsigned int WIDTH = 910; StoragePolicy = SDLTextureStorage; uint32_t = unsigned int; SDL_Renderer = SDL_Renderer; SDL_PixelFormat = SDL_PixelFormat]':
+D:/gsqs/sinkio-20261016/src/src/display/display.cpp:915:92:   required from here
+  915 |     ds->frame_vsg = new(std::align_val_t(64)) FrameVSG(910, 263, vs->renderer, PIXEL_FORMAT);
+      |                                                                                            ^
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:78:14: warning: 'Frame<RGBA_t, 263, 910, SDLTextureStorage>::f_height' will be initialized after [-Wreorder]
+   78 |     uint32_t f_height;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning:   'uint32_t Frame<RGBA_t, 263, 910, SDLTextureStorage>::scanline' [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning: 'Frame<RGBA_t, 263, 910, SDLTextureStorage>::scanline' will be initialized after [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:75:14: warning:   'uint32_t Frame<RGBA_t, 263, 910, SDLTextureStorage>::hloc' [-Wreorder]
+   75 |     uint32_t hloc;
+      |              ^~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[613/705] Building CXX object CMakeFiles/GSSquared.dir/src/debug.cpp.obj
+[614/705] Linking CXX static library lib\libgs2_device_registry.a
+[615/705] Building CXX object CMakeFiles/gs2_cpu_new.dir/src/cpus/cpu_65816.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/iigs_toolbox.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/cpus/base_6502.cpp:23,
+                 from D:/gsqs/sinkio-20261016/src/src/cpus/cpu_65816.cpp:19:
+D:/gsqs/sinkio-20261016/src/src/iigs_symbols.hpp:31:13: warning: inline function 'void a2gspu_warn(const char*, const char*)' used but never defined
+   31 | inline void a2gspu_warn(const char *rail, const char *what);
+      |             ^~~~~~~~~~~
+[616/705] Linking CXX static library lib\libgs2_cpu_new.a
+[617/705] Building CXX object CMakeFiles/GSSquared.dir/src/a2gspu_selftests.cpp.obj
+[618/705] Building CXX object CMakeFiles/GSSquared.dir/src/a2gspu_snapshot.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/scc8530/scc8530.hpp:4,
+                 from D:/gsqs/sinkio-20261016/src/src/a2gspu_snapshot.cpp:21:
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp: In constructor 'Z85C30::Z85C30(InterruptController*, EventTimer*, NClockII*, uint64_t)':
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:859:19: warning: 'void* memset(void*, int, size_t)' clearing an object of non-trivial type 'struct Z85C30::scc_channel_state_t'; use assignment or value-initialization instead [-Wclass-memaccess]
+  859 |             memset(registers, 0, sizeof(registers));
+      |             ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:94:12: note: 'struct Z85C30::scc_channel_state_t' declared here
+   94 |     struct scc_channel_state_t {
+      |            ^~~~~~~~~~~~~~~~~~~
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu.hpp:22,
+                 from D:/gsqs/sinkio-20261016/src/src/a2gspu_snapshot.cpp:24:
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp: In constructor 'a2gspu_emu_state::a2gspu_emu_state()':
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:102:13: warning: 'a2gspu_emu_state::mode_flags' will be initialized after [-Wreorder]
+  102 |     uint8_t mode_flags;      // display mode flags (80col, text, hires, etc.)
+      |             ^~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:93:18: warning:   'SDL_Texture* a2gspu_emu_state::texture' [-Wreorder]
+   93 |     SDL_Texture *texture;
+      |                  ^~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/a2gspu/a2gspu_emu.hpp:303:5: warning:   when initialized here [-Wreorder]
+  303 |     a2gspu_emu_state() :
+      |     ^~~~~~~~~~~~~~~~
+[619/705] Building CXX object CMakeFiles/GSSquared.dir/src/platforms.cpp.obj
+[620/705] Building CXX object CMakeFiles/GSSquared.dir/src/slots.cpp.obj
+[621/705] Building CXX object CMakeFiles/GSSquared.dir/src/systemconfig.cpp.obj
+[622/705] Building CXX object CMakeFiles/GSSquared.dir/src/a2gspu_ctrl.cpp.obj
+[623/705] Building CXX object CMakeFiles/GSSquared.dir/src/util/AudioSystem.cpp.obj
+[624/705] Linking CXX static library lib\libplatform_specific.a
+[625/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_assert.c.obj
+[626/705] Building CXX object CMakeFiles/GSSquared.dir/src/a2gspu_rail_setters.cpp.obj
+[627/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_compare.c.obj
+[628/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_common.c.obj
+[629/705] Building CXX object CMakeFiles/GSSquared.dir/src/videosystem.cpp.obj
+[630/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_crc32.c.obj
+[631/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_font.c.obj
+[632/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_fuzzer.c.obj
+[633/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_log.c.obj
+[634/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_harness.c.obj
+[635/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_md5.c.obj
+[636/705] Building CXX object apps/vgatext/CMakeFiles/vgatext.dir/main.cpp.obj
+[637/705] Building CXX object CMakeFiles/GSSquared.dir/src/a2gspu_spike.cpp.obj
+[638/705] Building CXX object apps/vgatext/CMakeFiles/vgatext2.dir/main2.cpp.obj
+[639/705] Building CXX object apps/vgatext/CMakeFiles/vgatext2.dir/__/__/src/devices/secondsight/vga_render_text_9x16.cpp.obj
+[640/705] Building C object vendored/SDL/CMakeFiles/SDL3_test.dir/src/test/SDL_test_memory.c.obj
+[641/705] Building CXX object apps/vgatext/CMakeFiles/vgatext3.dir/main3.cpp.obj
+[642/705] Building CXX object apps/vgatext/CMakeFiles/vgatext4.dir/main4.cpp.obj
+[643/705] Building CXX object apps/ssppu/CMakeFiles/ssppu.dir/__/__/src/devices/secondsight/ppu_render.cpp.obj
+[644/705] Building CXX object apps/ssppu/CMakeFiles/ssppu.dir/main.cpp.obj
+[645/705] Building CXX object apps/mbtest/CMakeFiles/w6522.dir/w6522.cpp.obj
+[646/705] Building CXX object apps/ssppu/CMakeFiles/chr2tiles.dir/chr2tiles.cpp.obj
+[647/705] Building CXX object CMakeFiles/GSSquared.dir/src/gs2.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/scc8530/scc8530.hpp:4,
+                 from D:/gsqs/sinkio-20261016/src/src/gs2.cpp:25:
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp: In constructor 'Z85C30::Z85C30(InterruptController*, EventTimer*, NClockII*, uint64_t)':
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:859:19: warning: 'void* memset(void*, int, size_t)' clearing an object of non-trivial type 'struct Z85C30::scc_channel_state_t'; use assignment or value-initialization instead [-Wclass-memaccess]
+  859 |             memset(registers, 0, sizeof(registers));
+      |             ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:94:12: note: 'struct Z85C30::scc_channel_state_t' declared here
+   94 |     struct scc_channel_state_t {
+      |            ^~~~~~~~~~~~~~~~~~~
+[648/705] Building CXX object apps/gstrace/CMakeFiles/gstrace.dir/main.cpp.obj
+[649/705] Building CXX object apps/wozutil/CMakeFiles/wozutil.dir/main.cpp.obj
+[650/705] Building CXX object apps/mmutest/CMakeFiles/mmutest.dir/main.cpp.obj
+[651/705] Building CXX object apps/diskid/CMakeFiles/diskid.dir/main.cpp.obj
+[652/705] Building CXX object apps/montest/CMakeFiles/montest.dir/main.cpp.obj
+[653/705] Building CXX object apps/cputest/CMakeFiles/cputest.dir/main.cpp.obj
+[654/705] Building CXX object apps/cycletest/CMakeFiles/cycletest.dir/main.cpp.obj
+[655/705] Building CXX object apps/cycletest/CMakeFiles/cycletest816.dir/main816.cpp.obj
+[656/705] Building CXX object apps/iieromcsum/CMakeFiles/iieromcsum.dir/main.cpp.obj
+[657/705] Building C object apps/binprint/CMakeFiles/binprint.dir/binprint.c.obj
+[658/705] Building CXX object apps/vpp/CMakeFiles/vpp2.dir/main2.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/Frames.hpp:3,
+                 from D:/gsqs/sinkio-20261016/src/apps/vpp/main2.cpp:14:
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp: In instantiation of 'Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t, uint32_t, SDL_Renderer*, SDL_PixelFormat) [with bs_t = RGBA_t; unsigned int HEIGHT = 263; unsigned int WIDTH = 910; StoragePolicy = SDLTextureStorage; uint32_t = unsigned int; SDL_Renderer = SDL_Renderer; SDL_PixelFormat = SDL_PixelFormat]':
+D:/gsqs/sinkio-20261016/src/apps/vpp/main2.cpp:383:91:   required from here
+  383 |     FrameVSG *fr_vsg = new(std::align_val_t(64)) FrameVSG(910, 263, renderer, PIXEL_FORMAT);
+      |                                                                                           ^
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:78:14: warning: 'Frame<RGBA_t, 263, 910, SDLTextureStorage>::f_height' will be initialized after [-Wreorder]
+   78 |     uint32_t f_height;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning:   'uint32_t Frame<RGBA_t, 263, 910, SDLTextureStorage>::scanline' [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:76:14: warning: 'Frame<RGBA_t, 263, 910, SDLTextureStorage>::scanline' will be initialized after [-Wreorder]
+   76 |     uint32_t scanline;
+      |              ^~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:75:14: warning:   'uint32_t Frame<RGBA_t, 263, 910, SDLTextureStorage>::hloc' [-Wreorder]
+   75 |     uint32_t hloc;
+      |              ^~~~
+D:/gsqs/sinkio-20261016/src/src/devices/displaypp/frame/frame.hpp:208:1: warning:   when initialized here [-Wreorder]
+  208 | Frame<bs_t, HEIGHT, WIDTH, StoragePolicy>::Frame(uint32_t width, uint32_t height, SDL_Renderer* renderer, SDL_PixelFormat format)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[659/705] Building CXX object apps/conformtest/CMakeFiles/conformtest.dir/main.cpp.obj
+[660/705] Building CXX object apps/ui/CMakeFiles/ui.dir/main.cpp.obj
+[661/705] Building CXX object apps/cpu816test/CMakeFiles/cpu816test.dir/main.cpp.obj
+[662/705] Building CXX object CMakeFiles/GSSquared.dir/src/a2gspu_ctrl_cmds.cpp.obj
+In file included from D:/gsqs/sinkio-20261016/src/src/devices/scc8530/scc8530.hpp:4,
+                 from D:/gsqs/sinkio-20261016/src/src/a2gspu_ctrl_cmds.cpp:25:
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp: In constructor 'Z85C30::Z85C30(InterruptController*, EventTimer*, NClockII*, uint64_t)':
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:859:19: warning: 'void* memset(void*, int, size_t)' clearing an object of non-trivial type 'struct Z85C30::scc_channel_state_t'; use assignment or value-initialization instead [-Wclass-memaccess]
+  859 |             memset(registers, 0, sizeof(registers));
+      |             ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:/gsqs/sinkio-20261016/src/src/devices/scc8530/Z85C30.hpp:94:12: note: 'struct Z85C30::scc_channel_state_t' declared here
+   94 |     struct scc_channel_state_t {
+      |            ^~~~~~~~~~~~~~~~~~~
+[663/705] Building CXX object apps/rtctest/CMakeFiles/rtctest.dir/main.cpp.obj
+[664/705] Building CXX object apps/mousebugtest/CMakeFiles/mousebugtest.dir/main.cpp.obj
+[665/705] Building CXX object apps/coveragetest/CMakeFiles/coveragetest.dir/main.cpp.obj
+[666/705] Building CXX object apps/doc/CMakeFiles/doc.dir/main.cpp.obj
+[667/705] Building CXX object apps/ssgputexttest/CMakeFiles/ssgputexttest.dir/main.cpp.obj
+[668/705] Building CXX object apps/ssgputexttest/CMakeFiles/ssgputexttest.dir/__/__/src/devices/secondsight/ss_gpu_text.cpp.obj
+[669/705] Linking C static library lib\libSDL3_test.a
+[670/705] Linking CXX executable GSSquared.exe
+[671/705] Linking CXX executable w6522.exe
+[672/705] Linking CXX executable vgatext.exe
+[673/705] Linking CXX executable vgatext2.exe
+[674/705] Linking CXX executable vgatext3.exe
+[675/705] Linking CXX executable vgatext4.exe
+[676/705] Linking CXX executable ssppu.exe
+[677/705] Linking CXX executable chr2tiles.exe
+[678/705] Linking CXX executable diskid.exe
+[679/705] Linking CXX executable wozutil.exe
+[680/705] Linking CXX executable gstrace.exe
+[681/705] Building CXX object apps/iigsmmutest/CMakeFiles/iigsmmutest.dir/main.cpp.obj
+[682/705] Linking CXX executable mmutest.exe
+[683/705] Linking CXX executable cputest.exe
+[684/705] Linking CXX executable iigsmmutest.exe
+[685/705] Linking CXX executable montest.exe
+[686/705] Linking CXX executable cycletest.exe
+[687/705] Linking CXX executable cycletest816.exe
+[688/705] Linking CXX executable conformtest.exe
+[689/705] Linking CXX executable coveragetest.exe
+[690/705] Linking CXX executable vpp2.exe
+[691/705] Linking CXX executable iieromcsum.exe
+[692/705] Linking C executable binprint.exe
+[693/705] Linking CXX executable ui.exe
+[694/705] Linking CXX executable cpu816test.exe
+[695/705] Building CXX object apps/systemconfigtest/CMakeFiles/systemconfigtest.dir/main.cpp.obj
+[696/705] Linking CXX executable rtctest.exe
+[697/705] Linking CXX executable doc.exe
+[698/705] Linking CXX executable mousebugtest.exe
+[699/705] Linking CXX executable ssgputexttest.exe
+[700/705] Linking CXX executable systemconfigtest.exe
+[701/705] Building CXX object apps/snapdifftest/CMakeFiles/snapdiff.dir/main.cpp.obj
+[702/705] Building CXX object apps/interfacecontracttest/CMakeFiles/interfacecontracttest.dir/main.cpp.obj
+[703/705] Linking CXX executable snapdiff.exe
+[704/705] Linking CXX executable interfacecontracttest.exe

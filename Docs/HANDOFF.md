@@ -22,6 +22,16 @@ build is preserved at `D:\gsqs\consumer-20261016\build-rollback`.
 Exact hashes, tested descriptor and scratch-space maintenance:
 `Docs/reports/gssquared-consumer-refresh-20261016/README.md`.
 
+**Output sink continuation, 2026-10-16:** central record errors propagate;
+global/tap/subscription finalization and screenshot/text/coverage/PNG/snapshot
+save outputs are checked. Fresh exported Release passes 14/14 gates, 14/14
+native CTests, 26 Python tests, 25 output cases, 43 I/O contract checks (24 new),
+42 unchanged boots and two MCP launches. Real-stdio fixtures retain two old
+false-success cases and their refusals. Consumer unchanged; tested candidate:
+`D:\gsqs\sinkio-20261016\build\GSSquared.exe`. The audit explicitly leaves
+per-rail closers, miscellaneous exports and ACK publication for the next slice.
+Evidence: `reports/gssquared-sink-io-20261016/README.md`.
+
 **Raw artifact I/O continuation, 2026-10-16:** SPIKE, CTRL VRAM and generic
 tap raw writers now refuse payload/sidecar I/O failures while retaining valid
 empty streams. Fresh exported Release: 14/14 gates, 14/14 native CTests,

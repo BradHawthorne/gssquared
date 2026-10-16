@@ -1,0 +1,114 @@
+{
+  "base_commit": "89019ae54948ccc0b0bff9c94565836b24b1071e",
+  "overlay": [
+    {
+      "path": "apps/interfacecontracttest/main.cpp",
+      "sha256": "4e61bd37436c3a0ef3aef0da9918b28574891264a57bd6308dff9cecc35e2013"
+    },
+    {
+      "path": "apps/interfacecontracttest/sink_io_checks.hpp",
+      "sha256": "a4eb94811da6e08c9c41db5850a17c68b85462c5cc756a14eb15812e5779b331"
+    },
+    {
+      "path": "src/a2gspu_artifact_io.hpp",
+      "sha256": "ba65ab960c9ce1f3676f6b5e907621f3037ea94d71ab82dd7d14d8c693adbe42"
+    },
+    {
+      "path": "src/a2gspu_coverage.hpp",
+      "sha256": "955534668f0e1c196dd5ed8bcfac28ea357a9053bd76c093999077697e12d343"
+    },
+    {
+      "path": "src/a2gspu_ctrl.cpp",
+      "sha256": "ddd871ea29240f1dba31afd066b5cc5f31df93bbacaac098c663c70f189c5700"
+    },
+    {
+      "path": "src/a2gspu_events.hpp",
+      "sha256": "6f69df00ea946a242e50ea317025311f2157aaf26b94efdd571a88b8adb129ee"
+    },
+    {
+      "path": "src/a2gspu_png.hpp",
+      "sha256": "aee76d0dceaccfdc46f34532f776246762afd69d0720c9d567be5cbf2cef6ec6"
+    },
+    {
+      "path": "src/a2gspu_rail_setters.cpp",
+      "sha256": "d032649054c725ffadf955293eb7e74ae2c77adf4907d2995d0bb8df9b47aef4"
+    },
+    {
+      "path": "src/a2gspu_snapshot.cpp",
+      "sha256": "3846721704d783bafbdc6e018ae8525214fe33516a48b53a767b6393cd7b78e8"
+    },
+    {
+      "path": "src/a2gspu_spike.cpp",
+      "sha256": "4c1f3360ce7e34e11e8e67073fe9117b0bd798d6c9c2c6ae461186135171a36a"
+    },
+    {
+      "path": "src/a2record.hpp",
+      "sha256": "5f43e82591b03654f262c2d7febaf2d250ae7f90b6a35be8cf63cb2b9e129e4d"
+    },
+    {
+      "path": "src/generic_tap.hpp",
+      "sha256": "895740681aaa2eb63fedf64d7b0398409bb0bcd0bf53d2ca649cb7dd7eaf9798"
+    },
+    {
+      "path": "src/gs2.cpp",
+      "sha256": "213d022d28da70cf5e227b2cb3953e757e45713a88896e9dfd37b8145e040e31"
+    },
+    {
+      "path": "src/videosystem.cpp",
+      "sha256": "04a89d84c91c7cf0a3fe8789a0d08933fec977b3d3ec5b1a42b65e009c3123b7"
+    },
+    {
+      "path": "src/videosystem.hpp",
+      "sha256": "55a1f2ddc9265af13401840ad13a80ae9b4533a29fae1c5af3f83c1dc157c16e"
+    },
+    {
+      "path": "tools/a2rail/p0check.py",
+      "sha256": "a372f9eb4f3e9fb31adea4416d57c542ff6fb4b1bb3c29c9e1105dbf3d67fafe"
+    },
+    {
+      "path": "tools/a2rail/sinkiocheck.py",
+      "sha256": "11f9d63adb2da628aa2c8c7063c2cf4918fec6601f644a46bcc91411ab1645b1"
+    }
+  ],
+  "source_model": "exported commit plus digest-bound reviewed overlays; compiled revision names base",
+  "vendored_snapshot": {
+    "sha256": "f270afdb4c093769509a3dc278cfe7b7df5fad3e9372ac689488e3cd1a47d647",
+    "files": 7459
+  },
+  "dependency_origin": "unchanged verified publication export",
+  "local_inputs": {
+    "assets/roms/apple2gs3/main.rom": {
+      "sha256": "4e606469961649381216b2a61334ccb29af4da90c630df19214b08ff7fdb9bc5",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs3/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "assets/roms/apple2gs4/main.rom": {
+      "sha256": "565d8ca073e5c46367ca56d4b12827020e76e6a0bf6c2300da0989161aa34ad9",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs4/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "corpus/DOS3.3_MASTER.dsk": {
+      "sha256": "eac550ddb65ef9b8ae34f6fe3523ec6572a5672e7ae07becc950acfdd185dbb1",
+      "bytes": 143360
+    },
+    "corpus/gsos601.po": {
+      "sha256": "ae7ca90bab81f379c9ff5770d50565e0cbec4f9b633872c2119282e4a0e2778e",
+      "bytes": 33554432
+    },
+    "corpus/_finder.po": {
+      "sha256": "4f440bacbdbe8a0180479c7ebac853d41f2777042cb46343f2f14322c31b024e",
+      "bytes": 33553920
+    },
+    "corpus/mb-audit-v1.61.po": {
+      "sha256": "d1d94dd3d1254dc46c5aa3c943c9d67cd3cc77a199df5c6738ee3c78a7a38f8a",
+      "bytes": 143360
+    }
+  },
+  "protected_consumer_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e"
+}

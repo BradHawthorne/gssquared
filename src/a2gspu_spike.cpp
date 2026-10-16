@@ -653,17 +653,16 @@ static void run_headless_spike_impl(GS2AppState *state) {
     // SNAP_SAVE: after BOTH boot paths, post run_one_frame mutation, pre trace-disarm.
     // The assert/golden gate further below still runs, so a SNAP_SAVE run can be golden-blessed.
     if (snap_save) {
-        FILE *sf = fopen(snap_save, "wb");
-        if (!sf) { printf("A2GSPU SNAP: could not open '%s' for save\n", snap_save); }
-        else if (!state->mmu_iigs) { printf("A2GSPU SNAP: no IIgs MMU (use -p 5)\n"); fclose(sf); }
-        else {
+        if (!state->mmu_iigs)throw a2artifact::Error("snapshot-no-IIgs-MMU",snap_save,0);
+        {
+            a2artifact::Output output(snap_save);FILE *sf=output.get();
             a2gspu_cpu_save(sf, computer->cpu);
             state->mmu_iigs->A2GSPU_snapshot(sf);
             const std::string devs = a2gspu_snap_write_devices(sf, computer);
             a2gspu_snap_write_sentinel(sf);   // trailing magic -> truncation is detectable on load
             const std::string manifest = a2gspu_snap_manifest_text(spike_i, devs);
             a2gspu_snap_write_manifest(sf, manifest);
-            fclose(sf);
+            output.finish();
             printf("A2GSPU SNAP: saved machine state to '%s'\n", snap_save);
             a2gspu_snap_print_manifest(manifest);
         }
@@ -776,7 +775,8 @@ static void run_headless_spike_impl(GS2AppState *state) {
     video_system_t *vs = computer->video_system;
     vs->update_display(true);
     SDL_ClearError();
-    vs->save_screenshot(a2gspu_out_path("spike_frame.bmp", a2gspu_outbuf, sizeof a2gspu_outbuf));
+    if(!vs->save_screenshot(a2gspu_out_path("spike_frame.bmp", a2gspu_outbuf, sizeof a2gspu_outbuf)))
+        throw a2artifact::Error("screenshot",a2gspu_outbuf,0);
     const char *err = SDL_GetError();
     printf("SPIKE FRAMEBUF: save_screenshot('spike_frame.bmp') SDL_GetError='%s'\n",
            (err && *err) ? err : "(none)");
@@ -837,7 +837,10 @@ static void run_headless_spike_impl(GS2AppState *state) {
 
     // A2GSPU_COVERAGE: flush the execution bitmap BEFORE the gate block below,
     // which exit()s on any gate and would otherwise discard the run's coverage.
-    if (const char *co = SDL_getenv("A2GSPU_COVERAGE_OUT")) a2gspu_cov_write(co);
+    if (const char *co = SDL_getenv("A2GSPU_COVERAGE_OUT"))
+        if(!a2gspu_cov_write(co))throw a2artifact::Error("coverage",co,0);
+    generic_tap_close();
+    a2record::flush();
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
     {

@@ -391,9 +391,12 @@ publication of a payload/sidecar pair. A failed attempt may leave a partial
 payload; use fresh run directories and require both a successful command/run
 and the checked reader. Existing files can survive a refusal before opening
 them. Record observer notifications can precede a later close failure, so they
-are not final publication receipts. General NDJSON sink lifecycle, screenshots,
-coverage and snapshot writer hardening are separate paths and are not covered
-by this raw-writer guarantee.
+are not final publication receipts. The subsequent
+[output-sink continuation](reports/gssquared-sink-io-20261016/README.md) checks
+central records, global/tap/subscription finalization, synchronous screenshots,
+coverage/profile/PNG and snapshot save paths. Per-rail shutdown, miscellaneous
+exports and ACK publication retain separate audit work; this is not a universal
+output-durability guarantee.
 
 ### M7 — Symbols by default  (P10) — M
 

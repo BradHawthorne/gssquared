@@ -30,6 +30,7 @@
 
 #pragma once
 #include "house_fnv.hpp"   // the artifact hash uses the house basis, like every golden
+#include "a2gspu_artifact_io.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -132,7 +133,7 @@ static inline bool a2gspu_cov_mapped_byte(uint32_t pc, uint8_t value) {
         m.bits[off/8]|=(uint8_t)(1u<<(off%8));
         return true;
 }
-static inline bool a2gspu_cov_map_write(const char *path);
+static inline bool a2gspu_cov_map_write(const char *path,a2artifact::WriteOps ops={});
 
 static inline void a2gspu_cov_mark(uint32_t a) {
     if (a < g_cov_lo || a > g_cov_hi) return;
@@ -231,15 +232,15 @@ inline void a2gspu_cov_off() {
 }
 
 // Separate JSON artifact: existing A2COV1/A2COV2 bytes stay compatible.
-static inline bool a2gspu_cov_counts_write(const char *path) {
+static inline bool a2gspu_cov_counts_write(const char *path,a2artifact::WriteOps ops={}) {
     if (!g_cov_on || !g_cov_counts_on || g_cov_map_error[0] || !path || !*path) return false;
     uint64_t total_instructions=0,total_cycles=0;
     for (const auto &item : g_cov_counts) {
         if (UINT64_MAX-total_instructions < item.second.instructions || UINT64_MAX-total_cycles < item.second.cycles) return false;
         total_instructions+=item.second.instructions; total_cycles+=item.second.cycles;
     }
-    FILE *f = fopen(path, "wb");
-    if (!f) return false;
+    try {
+    a2artifact::Output output(path,ops);FILE *f=output.get();
     uint64_t map_hash = g_cov_plan.empty() ? 0 : HOUSE_FNV_BASIS;
     for (uint8_t b : g_cov_plan) { map_hash ^= b; map_hash *= HOUSE_FNV_PRIME; }
     bool ok = fprintf(f,"{\"schema\":\"a2profile-v1\",\"model\":\"instruction-cycles\",\"lo\":%u,\"hi\":%u,\"generation\":%llu,\"map_hash\":\"%016llX\",\"total_instructions\":%llu,\"total_cycles\":%llu,\"pcs\":[",
@@ -252,7 +253,9 @@ static inline bool a2gspu_cov_counts_write(const char *path) {
         first = false;
     }
     ok = (fprintf(f,"]}\n") >= 0) && ok;
-    return fclose(f) == 0 && ok;
+    if(!ok)throw a2artifact::Error("profile-write",path);
+    output.finish();return true;
+    } catch(const a2artifact::Error &error){fprintf(stderr,"A2GSPU COVERAGE: FAIL %s\n",error.what());return false;}
 }
 
 // On-disk format (little-endian), deliberately trivial so any consumer can read it:
@@ -263,16 +266,16 @@ static inline bool a2gspu_cov_counts_write(const char *path) {
 // Returns true only if a file actually landed on disk.  Callers MUST propagate
 // this: a caller that answers "wrote" unconditionally turns a silent no-op into
 // a reported success, which is the worst failure mode instrumentation has.
-static inline bool a2gspu_cov_write(const char *path) {
+static inline bool a2gspu_cov_write(const char *path,a2artifact::WriteOps ops={}) {
     if (!g_cov_on || !g_cov_bits || !path || !path[0]) return false;
-    if(!g_cov_maps.empty()) return a2gspu_cov_map_write(path);
-    FILE *f = fopen(path, "wb");
-    if (!f) { fprintf(stderr, "A2GSPU COVERAGE: cannot write '%s'\n", path); return false; }
-    fwrite("A2COV1\0", 1, 8, f);
+    if(!g_cov_maps.empty()) return a2gspu_cov_map_write(path,ops);
+    try {
+    a2artifact::Output output(path,ops);
+    output.write("A2COV1\0",8);
     uint32_t lo = g_cov_lo, hi = g_cov_hi;
-    fwrite(&lo, 4, 1, f); fwrite(&hi, 4, 1, f);
-    fwrite(g_cov_bits, 1, g_cov_nbytes, f);
-    fclose(f);
+    output.write(&lo,4);output.write(&hi,4);
+    output.write(g_cov_bits,g_cov_nbytes);
+    output.finish();
     uint32_t span = g_cov_hi - g_cov_lo + 1;
     // The body's house-FNV hash goes on the line, so a reader can prove it read
     // what was written (tools/a2rail/artifacts.py recomputes it). A reader once
@@ -285,6 +288,7 @@ static inline bool a2gspu_cov_write(const char *path) {
             span ? (100.0 * (double)g_cov_marked / (double)span) : 0.0,
             g_cov_lo, g_cov_hi, (unsigned long long)h);
     return true;
+    } catch(const a2artifact::Error &error){fprintf(stderr,"A2GSPU COVERAGE: FAIL %s\n",error.what());return false;}
 }
 
 static inline uint32_t a2cov_u32(const uint8_t *p) {
@@ -344,23 +348,24 @@ static inline bool a2gspu_cov_map_load(const char *path) {
     return true;
 }
 
-static inline bool a2gspu_cov_map_write(const char *path) {
+static inline bool a2gspu_cov_map_write(const char *path,a2artifact::WriteOps ops) {
     if(g_cov_map_error[0]) {fprintf(stderr,"A2GSPU COVERAGE: refusing stale/ambiguous evidence: %s\n",g_cov_map_error);return false;}
-    FILE *f=fopen(path,"wb");if(!f)return false;
+    try {
+    a2artifact::Output output(path,ops);
     uint8_t header[32]={0};memcpy(header,"A2COV2\0",8);
     a2cov_put32(header+8,(uint32_t)g_cov_plan.size());
     a2cov_put64(header+16,g_cov_run_id);a2cov_put64(header+24,g_cov_generation);
     uint64_t hash=HOUSE_FNV_BASIS;
     auto write=[&](const uint8_t *bytes,size_t size) {
         for(size_t i=0;i<size;i++){hash^=bytes[i];hash*=HOUSE_FNV_PRIME;}
-        return fwrite(bytes,1,size,f)==size;
+        output.write(bytes,size);return true;
     };
     bool ok=write(header,sizeof(header)) && write(g_cov_plan.data(),g_cov_plan.size());
     for(const auto &m:g_cov_maps) if(ok) ok=
         write(m.bits.data(),m.bits.size()) && write(m.starts.data(),m.starts.size());
     uint8_t sum[8];a2cov_put64(sum,hash);
-    if(ok)ok=fwrite(sum,1,8,f)==8;
-    if(fclose(f))ok=false;
+    if(ok)output.write(sum,8);
+    output.finish();
     // hash= APPENDED, at the end of the line. The A2COV1 line has carried the
     // body's house-FNV since the week a reader counted the header as coverage;
     // this line computed the same hash two statements above, wrote it into the
@@ -376,4 +381,5 @@ static inline bool a2gspu_cov_map_write(const char *path) {
             (unsigned long long)g_cov_marked,(unsigned long long)hash);
     }
     return ok;
+    } catch(const a2artifact::Error &error){fprintf(stderr,"A2GSPU COVERAGE: FAIL %s\n",error.what());return false;}
 }

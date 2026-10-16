@@ -310,7 +310,8 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
         char tag[32]; snprintf(tag, sizeof(tag), "periodic_t%03d", sec);
         gtap_write_full_ram(cpu, tag);
         snprintf(p, sizeof(p), "%s/hgr_dump_periodic_t%03d.bin.meta", g_gtap.dir.c_str(), sec);
-        if (FILE *f = fopen(p, "wb")) {
+        {
+            a2artifact::Output output(p);FILE *f=output.get();
             a2record::Record("tap", "dumpmeta", a2record::frame_now(), (unsigned long long)cycles)
                 .i("emu_t", sec)
                 // Display switches from the video scanner (what `vid` reads), not by
@@ -322,7 +323,7 @@ inline void generic_tap_session_frame(cpu_state *cpu, uint64_t cycles) {
                 .u("mixed_on",     (g_a2obs_video_flags && g_a2obs_video_flags() >= 0) ? ((g_a2obs_video_flags() & 2) ? 1 : 0) : 0)
                 .str("video_src",  (g_a2obs_video_flags && g_a2obs_video_flags() >= 0) ? "scanner" : "unavailable")
                 .write(f, false);
-            fclose(f);
+            output.finish();
         }
         if (g_gtap.pages_f) {
             std::string page; gtap_page_json(cpu, page);
@@ -378,13 +379,20 @@ inline void generic_tap_disk_write(int qtrack, int drive) {
 }
 
 // ---- env parsing / arm / close ----------------------------------------------
-inline void generic_tap_close() {
-    if (g_gtap.out)     { printf("A2GSPU_TAP: %llu events captured\n", (unsigned long long)g_gtap.count); fclose(g_gtap.out);   g_gtap.out = nullptr; }
+inline void gtap_close_files(bool include_out) {
+    std::string failure;
     g_tap_key_event = nullptr; g_tap_disk_write_event = nullptr;   // before the files they write close
-    for (FILE **f : { &g_gtap.zp_f, &g_gtap.pages_f, &g_gtap.keys_f, &g_gtap.disk_f })
-        if (*f) { fclose(*f); *f = nullptr; }
-    g_gtap.on = false; g_gtap.sess_on = false;
+    g_gtap.sess_on=false;g_gtap.npost=0;
+    auto close=[&](FILE *&file,const std::string &path){try {a2artifact::finish(file,path.c_str());}catch(const a2artifact::Error &error){if(failure.empty())failure=error.what();}};
+    close(g_gtap.zp_f,g_gtap.dir+"/zp_stream.ndjson");
+    close(g_gtap.pages_f,g_gtap.dir+"/text_pages.ndjson");
+    close(g_gtap.keys_f,g_gtap.dir+"/keypress_events.ndjson");
+    close(g_gtap.disk_f,g_gtap.dir+"/disk_writes.ndjson");
+    if(include_out){g_gtap.on=false;const bool had_out=g_gtap.out!=nullptr;close(g_gtap.out,"A2GSPU_TAP");if(had_out && failure.empty())printf("A2GSPU_TAP: %llu events captured\n",(unsigned long long)g_gtap.count);}
+    if(!failure.empty())throw a2artifact::Error("tap-close",failure.c_str(),0);
 }
+inline void generic_tap_close() {gtap_close_files(true);}
+inline void generic_tap_exit_close() {try {generic_tap_close();}catch(const a2artifact::Error &error){a2artifact::fatal_on_exit(error);}}
 
 // Parse "HEXPC[:LABEL][/N@HEXZP]" tokens into the watch table.
 inline void gtap_parse_pcs(const char *spec) {
@@ -438,8 +446,8 @@ inline void gtap_set_ptrs(const char *spec) {
 // The call tap's record file. Closing it leaves the gate on for a title config's
 // extension hook (wiz5_config.hpp), which rides the same per-instruction visit.
 inline bool gtap_set_out(const char *path) {
-    if (g_gtap.out) { printf("A2GSPU_TAP: %llu events captured\n", (unsigned long long)g_gtap.count); fclose(g_gtap.out); g_gtap.out = nullptr; }
     g_gtap.on = (g_gtap_ext != nullptr);
+    if(g_gtap.out){a2artifact::finish(g_gtap.out,"A2GSPU_TAP");printf("A2GSPU_TAP: %llu events captured\n",(unsigned long long)g_gtap.count);}
     if (!path) return true;
     g_gtap.out = fopen(path, "w");
     if (!g_gtap.out) return false;
@@ -447,25 +455,23 @@ inline bool gtap_set_out(const char *path) {
     return true;
 }
 inline void gtap_close_session() {
-    g_tap_key_event = nullptr; g_tap_disk_write_event = nullptr;   // before the files they write close
-    for (FILE **f : { &g_gtap.zp_f, &g_gtap.pages_f, &g_gtap.keys_f, &g_gtap.disk_f })
-        if (*f) { fclose(*f); *f = nullptr; }
-    g_gtap.sess_on = false;
-    g_gtap.npost = 0;
+    gtap_close_files(false);
 }
 inline bool gtap_set_session(const char *dir) {
     gtap_close_session();
     if (!dir) return true;
-    char p[600];
-    snprintf(p, sizeof(p), "%s/zp_stream.ndjson", dir);
-    g_gtap.zp_f = fopen(p, "w");
-    if (!g_gtap.zp_f) return false;                    // no such directory, or not writable
+    FILE *files[4]={};const char *names[]={"zp_stream.ndjson","text_pages.ndjson","keypress_events.ndjson","disk_writes.ndjson"};
+    for(int i=0;i<4;++i) {
+        const std::string path=std::string(dir)+"/"+names[i];files[i]=fopen(path.c_str(),"w");
+        if(!files[i]) {
+            for(auto &file:files)try {a2artifact::finish(file,dir);}catch(const a2artifact::Error &error){fprintf(stderr,"A2GSPU_TAP: FAIL rollback %s\n",error.what());}
+            return false;
+        }
+    }
+    g_gtap.zp_f=files[0];g_gtap.pages_f=files[1];g_gtap.keys_f=files[2];g_gtap.disk_f=files[3];
     g_gtap.dir = dir; g_gtap.sess_on = true;
     g_gtap.frame = 0;
     g_gtap.next_dump_s = g_gtap.dump_every_s; g_gtap.next_zp_s = g_gtap.zp_every_s;
-    snprintf(p, sizeof(p), "%s/text_pages.ndjson", dir);      g_gtap.pages_f = fopen(p, "w");
-    snprintf(p, sizeof(p), "%s/keypress_events.ndjson", dir); g_gtap.keys_f  = fopen(p, "w");
-    snprintf(p, sizeof(p), "%s/disk_writes.ndjson", dir);     g_gtap.disk_f  = fopen(p, "w");
     if (g_gtap.keys_f) g_tap_key_event = generic_tap_keypress;
     if (g_gtap.disk_f) g_tap_disk_write_event = generic_tap_disk_write;
     return true;
@@ -506,5 +512,5 @@ inline void generic_tap_arm() {
         if (getenv("A2GSPU_TAP_SESSION")) a2gspu_rail_arm_env("A2GSPU_TAP_SESSION");
         else a2gspu_rail_arm_value("A2GSPU_TAP_SESSION", getenv("WIZ5_SESSION"), "WIZ5_SESSION");
     }
-    atexit(generic_tap_close);
+    atexit(generic_tap_exit_close);
 }

@@ -21,6 +21,17 @@ struct WriteOps {
     int (*close)(FILE*)=std::fclose;
 };
 
+// Consume an existing owned stream even when flushing or closing fails.
+inline void finish(FILE *&file,const char *path,WriteOps ops={}) {
+    if(!file)return;
+    FILE *owned=file;file=nullptr;
+    errno=0;const bool flush_failed=ops.flush(owned)!=0 || std::ferror(owned)!=0;
+    const int flush_error=errno;
+    errno=0;const bool close_failed=ops.close(owned)!=0;
+    const int close_error=errno;
+    if(flush_failed || close_failed)throw Error(flush_failed?"flush":"close",path,flush_failed?flush_error:close_error);
+}
+
 class Output {
     std::string path_;
     WriteOps ops_;
@@ -40,13 +51,7 @@ public:
         if(bytes && ops_.write(data,1,bytes,file_)!=bytes)throw Error("write",path_.c_str());
     }
     void finish() {
-        if(!file_)return;
-        FILE *file=file_;file_=nullptr;
-        errno=0;const bool flush_failed=ops_.flush(file)!=0 || std::ferror(file)!=0;
-        const int flush_error=errno;
-        errno=0;const bool close_failed=ops_.close(file)!=0;
-        const int close_error=errno;
-        if(flush_failed || close_failed)throw Error(flush_failed?"flush":"close",path_.c_str(),flush_failed?flush_error:close_error);
+        a2artifact::finish(file_,path_.c_str(),ops_);
     }
 };
 
@@ -57,5 +62,13 @@ inline void write_file(const char *path,const void *data,size_t bytes) {
 [[noreturn]] inline void fatal(const Error &error) {
     std::fprintf(stderr,"A2GSPU ARTIFACT: status=FAIL artifact-io %s\n",error.what());
     std::exit(2);
+}
+
+// atexit cannot throw or recursively call exit. Normal drivers close explicitly;
+// this fallback still refuses a zero process exit if late finalization fails.
+[[noreturn]] inline void fatal_on_exit(const Error &error) {
+    std::fprintf(stderr,"A2GSPU ARTIFACT: status=FAIL late-output-io %s\n",error.what());
+    std::fflush(nullptr);
+    std::_Exit(2);
 }
 }

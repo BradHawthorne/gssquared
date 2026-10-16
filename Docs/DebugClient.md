@@ -191,6 +191,19 @@ transaction, automatic reconnect, cancellation, or mutation-retry facility.
 The file client likewise rejects control characters before publication and
 keeps its existing pending-sequence recovery through `wait()`.
 
+## Output failures
+
+Native `status=FAIL output-io` can follow guest execution or a partial host-file
+write. It does not roll back a command; inspect state and retained evidence
+before deciding whether to retry. A failed global record sink can keep commands
+failing and requires a fresh session; native QUIT still permits owned shutdown.
+Global/tap late-finalization failure exits 2. A successful QUIT acknowledgement
+alone does not establish complete output: check the process exit and explicit
+stream close/status. Buffered record counts and observer notifications can
+precede a later close failure. See the
+[output-sink audit](reports/gssquared-sink-io-20261016/README.md) for covered
+writers, remaining per-rail lifecycle work and the emergency exit limitation.
+
 ## Managed close-out
 
 `Client.quit(timeout=seconds)` optionally bounds the QUIT reply wait; omitting

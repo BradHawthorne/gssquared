@@ -47,11 +47,10 @@
 // filesystem; A2GSPU_CTRL_TIMEOUT seconds (default 300) of wall-clock silence
 // auto-quits an orphaned session.
 static void a2gspu_ctrl_dump_text(computer_t *computer, const char *path) {
-    FILE *tfp = fopen(path, "wb");
-    if (!tfp) { printf("A2GSPU CTRL: text open fail '%s'\n", path); return; }
+    a2artifact::Output output(path);
     for (uint32_t a = 0x0400; a < 0x0800; a++) {
         uint8_t b = rail_mmu(computer)->probe_peek(a);
-        fwrite(&b, 1, 1, tfp);
+        output.write(&b,1);
     }
     // The 80-column aux half. The old fallback read FPI bank $01, which on a
     // IIgs is not the memory the display is generated from -- that is Mega II
@@ -59,9 +58,9 @@ static void a2gspu_ctrl_dump_text(computer_t *computer, const char *path) {
     const uint8_t *mem = rail_video_base(computer);
     for (uint32_t a = 0x0400; a < 0x0800; a++) {
         uint8_t b = mem ? mem[0x10000 + a] : rail_mmu(computer)->probe_peek(0x010000u | a);
-        fwrite(&b, 1, 1, tfp);
+        output.write(&b,1);
     }
-    fclose(tfp);
+    output.finish();
 }
 
 // Atomic ack: write ack.N.tmp then rename, so a polling reader never sees a
@@ -90,7 +89,7 @@ static inline int a2gspu_sw(MMU_II *m, uint16_t a) {
 
 // One machine-thread dispatcher for the file rail and socket agent tools.
 // Transport framing and ownership policy stay with their respective callers.
-static bool a2gspu_dispatch(GS2AppState *state, const char *line,
+static bool a2gspu_dispatch_impl(GS2AppState *state, const char *line,
                            char *result, size_t rsz, int &ctrl_frame) {
     computer_t *computer=state->computer;
     // A2CTRL-DISPATCH-BEGIN -- shared registry parity covers this implementation.
@@ -288,8 +287,8 @@ static bool a2gspu_dispatch(GS2AppState *state, const char *line,
     } else if (!strncmp(line, "shot ", 5)) {
         video_system_t *vs = computer->video_system;
         vs->update_display(true);
-        vs->save_screenshot(line + 5);
-        snprintf(result, rsz, "status=OK shot profile=sdl-human %s", line + 5);
+        if(vs->save_screenshot(line + 5))snprintf(result, rsz, "status=OK shot profile=sdl-human %s", line + 5);
+        else snprintf(result,rsz,"status=FAIL shot-write-fail %s",line+5);
     } else if (!strncmp(line, "mount ", 6)) {
         // mount sXdY <path> — swap media at runtime (the 1981 flippy dance,
         // agent edition: multi-disk originals prompt for disk swaps mid-run).
@@ -836,6 +835,16 @@ static bool a2gspu_dispatch(GS2AppState *state, const char *line,
     return false;
 }
 
+static bool a2gspu_dispatch(GS2AppState *state,const char *line,char *result,size_t rsz,int &frame) {
+    bool quit=false;
+    try {quit=a2gspu_dispatch_impl(state,line,result,rsz,frame);a2record::flush();}
+    catch(const a2artifact::Error &error) {
+        a2ctrljson::native_payload.clear();a2ctrljson::native_status.clear();
+        snprintf(result,rsz,"status=FAIL output-io %s",error.what());
+    }
+    return quit;
+}
+
 std::string a2gspu_agent_request(GS2AppState *state,bool discovery,const std::string &command,int &frame) {
     a2ctrljson::native_payload.clear();a2ctrljson::native_status.clear();a2ctrljson::surface="socket";
     char result[8192]={},json[16384]={};
@@ -1018,6 +1027,7 @@ void a2gspu_copilot_poll(computer_t *computer) {
 
     // --- observe / discover ---
     a2events::begin_command(line);
+    try {
     if (!strcmp(line,"protocol") || !strcmp(line,"systems") || !strncmp(line,"systems ",8) ||
         !strncmp(line,"manifest ",9) || !strcmp(line,"limitations") || !strncmp(line,"limitations ",12) ||
         !strcmp(line,"help") || !strncmp(line,"help ",5) ||
@@ -1116,6 +1126,11 @@ void a2gspu_copilot_poll(computer_t *computer) {
         handled=true;
     }
 
+    a2record::flush();
+    } catch(const a2artifact::Error &error) {
+        handled=true;a2ctrljson::native_payload.clear();a2ctrljson::native_status.clear();
+        snprintf(result,sizeof result,"status=FAIL output-io %s",error.what());
+    }
     if(!handled) snprintf(result,sizeof result,
         "status=FAIL copilot-command-not-allowed use='copilot' "
         "(observe, windowed control, rail and trap only; no poke/load/setreg splices)");

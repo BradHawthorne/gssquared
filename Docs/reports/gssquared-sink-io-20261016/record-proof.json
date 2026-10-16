@@ -1,0 +1,32 @@
+{
+  "cases": [
+    {
+      "version": "before",
+      "case": "write",
+      "exit_code": 1,
+      "expected": 0,
+      "ok": false
+    },
+    {
+      "version": "before",
+      "case": "late-close",
+      "exit_code": 0,
+      "expected": 2,
+      "ok": false
+    },
+    {
+      "version": "after",
+      "case": "write",
+      "exit_code": 0,
+      "expected": 0,
+      "ok": true
+    },
+    {
+      "version": "after",
+      "case": "late-close",
+      "exit_code": 2,
+      "expected": 2,
+      "ok": true
+    }
+  ]
+}

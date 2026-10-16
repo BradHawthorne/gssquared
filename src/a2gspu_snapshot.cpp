@@ -151,22 +151,27 @@ std::string a2gspu_snap_manifest_text(int frame, const std::string &devices) {
 // Each block is 'GSDV', an 8-byte NUL-padded name, a version, a payload length,
 // and the payload, so a reader that does not know a block can step over it and
 // say so, and a snapshot from before device blocks reads exactly as it did.
+static long a2gspu_snap_position(FILE *f) {
+    long at=ftell(f);if(at<0)throw a2artifact::Error("snapshot-position","snapshot");return at;
+}
+static void a2gspu_snap_seek(FILE *f,long at) {
+    if(fseek(f,at,SEEK_SET)!=0)throw a2artifact::Error("snapshot-seek","snapshot");
+}
 static long a2gspu_snap_dev_begin(FILE *f, const char *name, uint32_t version) {
     uint32_t magic = A2GSPU_SNAP_DEV, len = 0; char nm[8] = {0};
     strncpy(nm, name, 7);
     fwrite(&magic, 4, 1, f); fwrite(nm, 1, 8, f); fwrite(&version, 4, 1, f);
-    long at = ftell(f); fwrite(&len, 4, 1, f);
+    long at = a2gspu_snap_position(f); fwrite(&len, 4, 1, f);
     return at;
 }
 // A u32 length in front of a sub-record, so a reader can step over one it cannot apply.
-static long a2gspu_snap_len_begin(FILE *f) { uint32_t len = 0; long at = ftell(f); fwrite(&len, 4, 1, f); return at; }
+static long a2gspu_snap_len_begin(FILE *f) { uint32_t len = 0; long at = a2gspu_snap_position(f); fwrite(&len, 4, 1, f); return at; }
 static void a2gspu_snap_len_end(FILE *f, long at) {
-    long end = ftell(f); uint32_t len = (uint32_t)(end - at - 4);
-    fseek(f, at, SEEK_SET); fwrite(&len, 4, 1, f); fseek(f, end, SEEK_SET);
+    long end = a2gspu_snap_position(f); uint32_t len = (uint32_t)(end - at - 4);
+    a2gspu_snap_seek(f,at); fwrite(&len, 4, 1, f); a2gspu_snap_seek(f,end);
 }
 static void a2gspu_snap_dev_end(FILE *f, long at) {
-    long end = ftell(f); uint32_t len = (uint32_t)(end - at - 4);
-    fseek(f, at, SEEK_SET); fwrite(&len, 4, 1, f); fseek(f, end, SEEK_SET);
+    a2gspu_snap_len_end(f,at);
 }
 // Every device this machine has and this binary can save. Returns their names.
 std::string a2gspu_snap_write_devices(FILE *f, computer_t *computer) {
@@ -550,15 +555,14 @@ MMU_IIgs *g_saveat_mmu = nullptr;
 computer_t *g_saveat_computer = nullptr;
 char      g_saveat_path[512] = "snap_at.bin";
 void a2gspu_save_at_cb(cpu_state *cpu) {
-    FILE *sf = fopen(g_saveat_path, "wb");
-    if (!sf) { printf("A2GSPU SAVE_AT: could not open '%s' for save\n", g_saveat_path); return; }
-    if (!g_saveat_mmu) { a2gspu_warn("A2GSPU SAVE_AT", "no IIgs MMU (use -p 5) -- skipped"); fclose(sf); return; }
+    if (!g_saveat_mmu)throw a2artifact::Error("save-at-no-IIgs-MMU",g_saveat_path,0);
+    a2artifact::Output output(g_saveat_path);FILE *sf=output.get();
     a2gspu_cpu_save(sf, cpu);
     g_saveat_mmu->A2GSPU_snapshot(sf);
     const std::string devs = g_saveat_computer ? a2gspu_snap_write_devices(sf, g_saveat_computer) : std::string();
     a2gspu_snap_write_sentinel(sf);
     a2gspu_snap_write_manifest(sf, a2gspu_snap_manifest_text(g_iigs_cur_frame, devs));
-    fclose(sf);
+    output.finish();
     printf("A2GSPU SAVE_AT: snapshot at %02X/%04X -> '%s'\n", cpu->pb, cpu->pc, g_saveat_path);
 }
 
@@ -567,8 +571,8 @@ void a2gspu_save_at_cb(cpu_state *cpu) {
 // (a2gspu_ctrl_cmds.hpp). run/step/run-until/keys/press/key: try_exec / try_input.
 
 bool a2gspu_ctrl_snap_save(const char *path, computer_t *computer, GS2AppState *state) {
-    FILE *sf = fopen(path, "wb");
-    if (!sf) return false;
+    try {
+    a2artifact::Output output(path);FILE *sf=output.get();
     bool ok = false;
     a2gspu_cpu_save(sf, computer->cpu);
     if (state->mmu_iigs) { state->mmu_iigs->A2GSPU_snapshot(sf); ok = true; }
@@ -578,9 +582,10 @@ bool a2gspu_ctrl_snap_save(const char *path, computer_t *computer, GS2AppState *
         a2gspu_snap_write_sentinel(sf);
         a2gspu_snap_write_manifest(sf, a2gspu_snap_manifest_text(g_iigs_cur_frame, devs));
     }
-    fclose(sf);
+    output.finish();
     if (!ok) remove(path);
     return ok;
+    } catch(const a2artifact::Error &error){fprintf(stderr,"A2GSPU SNAP: FAIL %s\n",error.what());return false;}
 }
 
 // Restores into the live machine, in order, and reports the first step that

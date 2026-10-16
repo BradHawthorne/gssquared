@@ -1,0 +1,1 @@
+PASS before: silent write and successful late-close exit; after: write refusal and late-close exit 2

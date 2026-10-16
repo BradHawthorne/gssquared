@@ -71,13 +71,15 @@ inline void begin_command(const char *command) {
     cause_id=0;
     if(context_listener && !context_command(command))cause_id=context_listener("command.begin","{\"command\":"+a2ctrljson::quote(command)+"}");
 }
-inline void close() {
+inline void close_with_ops(a2artifact::WriteOps ops={}) {
     if(sink) {
         control("stopped","{\"retained\":"+std::to_string(retained)+",\"dropped\":"+std::to_string(dropped)+"}");
-        std::fclose(sink);sink=nullptr;
+        try {a2artifact::finish(sink,path.c_str(),ops);}
+        catch(const a2artifact::Error &failure){error=std::string("subscription-finalization-failed: ")+failure.what();std::fprintf(stderr,"A2GSPU SUBSCRIPTION: FAIL %s\n",error.c_str());}
     }
     active=false;a2record::g_observer=enabled()?observe:nullptr;
 }
+inline void close(){close_with_ops();}
 inline bool open(const std::vector<std::string> &filters,const std::string &file,uint64_t cap,std::string &why) {
     if(active){why="subscription-already-active; turn it off first";return false;}
     if(file.rfind("\\\\.\\",0)==0 || file.rfind("\\\\?\\",0)==0){why="subscription requires an ordinary file";return false;}
@@ -87,6 +89,7 @@ inline bool open(const std::vector<std::string> &filters,const std::string &file
     sink=f;path=file;kinds=filters;limit=cap;retained=dropped=sequence=0;error.clear();active=true;
     a2record::g_observer=observe;
     control("started","{\"limit\":"+std::to_string(limit)+",\"coverage\":\"a2record rails, commands/stops, IRQ edges, audio captures, SCC/WDM console and command/frame-sampled device fields; transient device changes may be missed\"}");
+    if(!error.empty()){why=error;close();return false;}
     static bool registered=false;if(!registered){std::atexit(close);registered=true;}
     return true;
 }
