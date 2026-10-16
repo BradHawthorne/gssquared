@@ -87,9 +87,10 @@ output directory. `--seed` and repeatable `--rail NAME=value` customize startup;
 rail names are checked against live discovery before serving tools. Transport,
 background-window and output-root rails are reserved by the managed lifecycle.
 
-`tools/list` generates 73 `gs2_<verb>` tools from the live catalog plus
-`gs2_agent_tools`, `gs2_batch` and four structured debugger observations
-(82 total, including three artifact adapters). Hyphens become underscores; each native tool accepts an optional
+As of 2026-10-16, `tools/list` generates 74 `gs2_<verb>` tools from the live
+catalog plus `gs2_agent_tools`, `gs2_batch`, four structured debugger observations,
+three artifact adapters and two context adapters (85 total). The running catalog
+is authoritative. Hyphens become underscores; each native tool accepts an optional
 `arguments` string containing only the verb's arguments. `gs2_pause` explicitly
 pauses; ordinary tools never pause implicitly. Unknown methods/tools and
 malformed requests are protocol errors, while execution refusals retain native

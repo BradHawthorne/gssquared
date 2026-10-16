@@ -1,121 +1,153 @@
 # gssquared — `a2gspu` development fork
 
-A fork of **[gssquared](https://github.com/jawaidbazyar2/gssquared)** (Jawaid Bazyar's Apple II / IIgs
-emulator) carrying one thing upstream doesn't: a **headless, machine-drivable development + test layer**
-for building and validating Apple IIgs / GS/OS software with an external cross-toolchain. Everything
-lives on one branch, **`a2gspu`** (the default).
+An instrumented Apple II / IIgs emulator for **agentic closed-loop software development**,
+built on **[gssquared](https://github.com/jawaidbazyar2/gssquared)** by Jawaid Bazyar.
+This fork pairs with the Rosetta v3 toolchain: build software, execute it, inspect the
+emulated architecture, challenge the result and use the evidence to improve the next build.
+The published development branch is **`a2gspu`** (the default).
 
-> **This fork is one-way.** We pull upstream *in*, never push *out* — no PRs, no path to pollute
-> upstream `main`. It's just a public branch; upstream is welcome to cherry-pick anything useful on
-> their own terms. For the canonical emulator, use
+Ordinary windowed emulation remains the default; instrumentation is opt-in. This branch
+also carries fidelity fixes and selected upstream ports, so its default behavior is
+not a claim of identity with every upstream revision. Upstream already provides a
+debugger protocol; the fork extends it with shared agent tools, evidence and validation.
+
+> Upstream integration is one-way: selected changes come into this fork by hand.
+> We publish to the owner's fork, never push changes or open PRs upstream.
+> For the canonical emulator and its releases, visit
 > **[upstream](https://github.com/jawaidbazyar2/gssquared)**.
 
-Everything below is **what this fork adds.** It is all additive and env-gated — with the features off,
-the emulator is stock.
+## What an agent can do
 
----
+| Capability | Available interfaces and evidence |
+| --- | --- |
+| Discover the machine | Live tool/rail manifests, compiled and installed device topology, absent models and explicit availability limits |
+| Observe and explain | CPU/memory/device state, address routing, IRQs, stops, scheduler queues, source references, bounded event history, marks and typed deltas; context reads can sample a running machine |
+| Drive execution | Load bytes, set registers, step/run to declared goals, inject input, mount media, use boundary fault injection and inspect completion reasons |
+| Capture and assert | Toolbox/GS/OS traces, SCC A/B TX and WDM consoles, memory/video/audio artifacts, coverage/counts/profiles, assertions and golden comparisons |
+| Compare experiments | Snapshot-file and semantic checkpoint diffs, context-bound cycle/instruction/code-size comparisons and local revision witness search |
+| Exchange evidence | Scoped SHA256-checked MCP input uploads and artifact reads, including native PNGs as MCP image results |
 
-## The development layer — what makes this fork different
+The file CTRL rail and debug socket share native handlers. Python clients and a
+stdlib MCP adapter expose those handlers with discovery and native verdicts.
+**As of 2026-10-16:** 74 native verbs, 85 MCP tools, 161 rails and 32 socket
+wire types. Discover the running executable rather than assuming these counts.
+See [Machine context](Docs/MACHINE_CONTEXT.md), the
+[rail/command reference](Docs/A2GSPU_RAILS.md) and the
+[Python/MCP contract](Docs/DebugClient.md).
 
-**Exposed machine context.** Discover installed and absent models, inspect live
-state while execution continues, explain mappings/IRQs/stops/reference pixels,
-and follow retained command, timer and interrupt evidence into implementation
-sources. Synchronized snapshots and typed changes connect those observations
-to Rosetta experiment results and cycle/instruction/code-size comparisons.
-See [Machine context](Docs/MACHINE_CONTEXT.md) for the interfaces and explicit
-coverage limits.
+Snapshots declare their captured blocks and compatibility checks; they can shorten
+edit/run loops for supported configurations. They are not a complete deterministic
+replay capsule. Reference pixels explain supported HGR/SHR source models, not GPU/CRT
+readback. Sampled changes can miss transients, and retained parent links are not
+universal data-flow or last-writer tracking. Full replay, complete device semantics,
+DWARF variables/unwind and physical-IIgs validation remain work in progress.
+The [roadmap](Docs/AGENTIC_ROADMAP.md) records completed subsets and remaining gaps.
 
-**Headless GS/OS bring-up diagnostics.** An env-gated, stdout-only suite (`A2GSPU_*`): toolbox +
-GS/OS-dispatch + error-code traces, a per-scanline SCB video-mode / palette / pixel-index summary and
-an ASCII screen map, memory-range hexdump, BRK CPU-state dump, headless breakpoints, and symbol
-resolution. Debug a GS/OS app with no window open.
+## Rosetta and the development loop
 
-**A closed-loop assertion gate.** `A2GSPU_ASSERT="scb_mode==320;qd_carry==0;idx6==28800"` is evaluated
-against the final machine + video state at the end of a headless run and sets the process **exit code
-(0 / 1)**. With `A2GSPU_SEED` (pinned determinism) and `A2GSPU_GOLDEN` (SHR-render compare), the
-emulator becomes a deterministic pass/fail oracle a build system drives unattended.
-
-**Deterministic golden + behavioral-differential testing.** SHR-render goldens that catch any
-boot/render drift, plus a differential model that validates toolchain-produced binaries against real
-GS/OS behavior on the actual ROM.
-
-**Snapshots.** Save/restore the machine — CPU, MMU, RAM and the device blocks it has (on a IIgs the
-ADB micro, the Ensoniq, the interrupt registers, the disk controller and the block device) — for a
-fast edit→run loop that skips the cold boot. Every file carries a manifest of what it holds; a restore
-that does not fit is rolled back, never half-applied.
-
-**Native agent tools.** CTRL and the debug socket share the same instrument
-handlers, with typed JSON state/results and live capability discovery.
-`AGENT_TOOLS`/`AGENT_COMMAND` expose the tool catalog and deliberate calls;
-`ui` gives native presentation/clock settings with availability and readback.
-The stdlib MCP adapter (`tools/a2rail/mcpserver.py`, or installed `gs2-mcp`)
-generates its tools from the running emulator and can launch or attach to a
-session. Its 85 tools include live machine context, scoped, digest-checked input uploads and evidence
-reads, with native PNGs delivered as MCP images. Socket timeouts can recover
-the original reply without resending a mutation. See [`Docs/DebugClient.md`](Docs/DebugClient.md) for the pause,
-ownership, startup-rail and MCP configuration contracts.
-
-**Expanded ROM personalities.** Size-agnostic Apple IIgs ROM 01 / 03 / 04.
-
-**The `a2gspu` device.** An experimental coprocessor/peripheral device model — the fork's namesake —
-used for instrumentation and protocol experiments.
-
----
-
-## Toolchain integration
-
-This fork is the **emulator half of a closed loop** with an external Apple IIgs cross-toolchain
-(assembler, linker, C compiler, resource compiler, disk-image tools):
-
-```
-edit .s/.c → assemble + link → mint a bootable disk → boot headless (-n) → A2GSPU_ASSERT → exit 0/1
+```text
+source/specification → Rosetta build → raw image or bootable disk
+        ↑                                     ↓
+refine candidate ← compare retained evidence ← run / observe / assert
 ```
 
-The toolchain emits IIgs binaries; this fork **runs and verifies** them against real GS/OS and reports
-precise diagnostics (toolbox returns, render state, error codes) back to the build system — so a
-toolchain bug shows up immediately as a failed assertion instead of a silent wrong-pixel or a corrupt
-object file. The emulator is the toolchain's regression oracle.
+Both direct raw-image execution and GS/OS disk-boot tests are supported workflows.
+The additive [`experiment.py`](tools/a2rail/experiment.py) companion covers declared
+raw fixtures: explicit build tools, source/image identities, independent result checks,
+negative controls, native context and compatible cycle/instruction/byte comparisons.
+It is not an OMF loader or a full GS/OS build/boot harness. Existing Rosetta
+differential and disk-boot tests are separate lanes; see
+[Closed-loop integration](Docs/CLOSED_LOOP_INTEGRATION.md).
 
-**Shared foundation.** This is not a single-product harness. a2engine, a2tile, a2os, a2gpu/a2vga,
-Rosetta closed-loop work, and interactive use all share the same rail and device contracts. Product
-sessions often drive fixes here; behaviour must stay general. See
-[`Docs/SHARED_FOUNDATION.md`](Docs/SHARED_FOUNDATION.md) (and [`AGENTS.md`](AGENTS.md) for agents).
+An oracle is only as useful as its checks. `GSDIAG: status=OK` says the emulator
+detected no run fault; it does not prove the guest program succeeded. Pin the inputs,
+seed, time and BRAM, assert the behavior the program must produce, and prove the
+check fails on a known-bad case. Golden images cover their declared render model;
+emulated ROM execution is not a measurement on physical hardware.
 
-> Automation never opens a window that can take focus or a modal dialog. The emulator runs headless
-> (`-n`), or with `A2GSPU_BACKGROUND_WINDOW` for the one gate that needs a window. Of the `apps/`
-> programs, the ctest set (`conformtest`, `coveragetest`, `cycletest`, `cycletest816`, `w6522`) is
-> headless; `cputest` and `cpu816test` exit 77 with instructions when their third-party fixture is
-> absent instead of raising a dialog.
+The long-term CIDAR direction is to recover contracts and lineage from historical
+software, then refine, fuse and specialize primitive libraries through adversarial
+experiments. Repeated archive boilerplate does not establish optimality. Archive-wide
+ingestion and automatic library promotion are future goals; current evidence supports
+measured results for declared workloads. See the
+[architectural-refinement contract](Docs/AGENTIC_ORACLE.md#10-design-review-for-architectural-understanding).
 
----
+This is a shared foundation for Rosetta, a2engine, a2tile, a2os, a2gpu/a2vga and
+interactive use. Contracts remain general across consumers and across IIe/IIgs.
+See [Shared foundation](Docs/SHARED_FOUNDATION.md).
 
-## Developed with Claude Code
+## Start an agent session
 
-The loop is built to be driven by an agent — **[Claude Code](https://claude.com/claude-code)**
-(Anthropic's agentic CLI) in practice, though the contract is vendor-neutral files, text and exit
-codes. A change runs edit → build → headless boot → read the `A2GSPU_ASSERT` / golden verdict,
-unattended, which is why diagnostics are machine-readable lines and validation collapses to an exit
-code.
+After building the emulator, run this from the checkout with Python available.
+Replace both placeholders with absolute paths; on Windows the executable is
+`GSSquared.exe` and its MSYS2 UCRT64 runtime directory must be on `PATH`.
 
-What keeps it honest is the gate set, not the agent: `tools/a2rail/gates.ps1` runs every fork-local
-gate — the registry/catalogue/dispatcher parity check, the dual-platform CTRL suites, every built-in
-machine configuration, the assert-surface parity check, and `unarmedhash.ps1`, which pins stock IIe
-and IIgs boots against a recorded baseline and proves that armed observation rails change neither.
-Nothing enforces running it automatically; the windowed, no-instrumentation check is still done by
-hand.
+```bash
+python -I tools/a2rail/mcpserver.py --exe <tested-executable> --platform 5 --out-root <runs-directory>
+```
 
----
+Configure that command as a stdio MCP server in your agent client. It creates a fresh
+session directory, pins startup inputs, verifies the native bootstrap and starts the
+machine paused. Use discovery, explicitly pause before ordinary tools, load inputs,
+run and inspect the result. Context read queries also work while running. Installed
+`gs2-mcp` provides the same entry point; attach with `--socket <endpoint>`.
+Transport timeouts do not cancel execution: recover the pending reply instead of
+resending a mutation. See the [client setup and ownership contract](Docs/DebugClient.md)
+and [Python package](clients/python/README.md).
 
-## Build & credits
+For file-based sessions, use [`session.ps1`](tools/a2rail/session.ps1) and
+[`ctl.ps1`](tools/a2rail/ctl.ps1), one command and acknowledgement at a time.
+One-shot headless runs use `A2GSPU_SPIKE_FRAMES`, `A2GSPU_ASSERT` and optional goldens.
+The [rail reference](Docs/A2GSPU_RAILS.md) gives detailed launch recipes,
+including windowed co-pilot. Keep each driven run's outputs in its own directory.
 
-Base build, prerequisites, and packaged binaries: see
-**[upstream's README](https://github.com/jawaidbazyar2/gssquared)** and the
-[User Documentation](Docs/index.md). The fork's additions are env-gated and live mostly in their own
-files (`src/a2gspu_*`, `src/iigs_*`, `src/memvu_*`) — `cmake --build build` produces the emulator,
-unchanged for ordinary interactive use. On Windows the MSYS2 UCRT64 toolchain's `bin` directory must be
-on `PATH` to run the emulator (ctest carries it itself). Test inputs — disk images and snapshots, which
-are not redistributed — go in `corpus/`; see `corpus/README.md`. What has been ported from upstream, and
-what is owed, is `Docs/UPSTREAM_SYNC.md`.
+## Build and validate
+
+Use Git, CMake, Ninja and the platform's compiler/development prerequisites.
+Initialize the vendored SDL dependencies before configuring:
+
+```bash
+git submodule update --init vendored/SDL vendored/SDL_image vendored/SDL_net
+git submodule update --init --recursive vendored/SDL_ttf
+cmake -S . -B build-local -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-local --parallel
+ctest --test-dir build-local --output-on-failure
+```
+
+On Windows, use **MSYS2 UCRT64** GCC/CMake/Ninja, with `/ucrt64/bin` first on
+`PATH`; keep that directory on `PATH` when launching the executable too. A short
+checkout path avoids SDL_ttf's nested dependencies exceeding Windows path limits;
+enable Git `core.longpaths` if needed. Base platform prerequisites and UI instructions
+are in [upstream's README](https://github.com/jawaidbazyar2/gssquared) and the
+[User Documentation](Docs/index.md). Contributors should first read
+[AGENTS.md](AGENTS.md) and the [current handoff](Docs/HANDOFF.md), including the
+protected consumer-build rule for the owner's existing checkout.
+
+The fork gate stack is `tools/a2rail/gates.ps1` (PowerShell 7). For the build above,
+set `A2_GSSQUARED` to the absolute `build-local/GSSquared.exe` path on Windows
+and `GSSQUARED_ROOT` to this checkout before invoking it. `-Offline` runs five
+offline suites; the full stack runs 14 suites, including native CTests, both
+platforms, discovery parity, agent interfaces and pinned unarmed/armed boot witnesses.
+Missing corpus inputs fail the relevant gates. Some ROM personalities also require
+local ignored ROM files; a fresh clone alone cannot reproduce every check. Supply
+the inputs described in [corpus/README.md](corpus/README.md) and the
+[handoff](Docs/HANDOFF.md#3-how-to-build-and-verify). A manual ordinary-windowed
+check remains separate from automated gates.
+
+The [2026-10-16 publication checkpoint](Docs/reports/gssquared-publication-20261016/README.md)
+records a fresh exported-source Release build: **14/14 gates, 14/14 native CTests,
+21/21 Python tests and 3/3 affected Rosetta checks**. Its 103-vector CPU differential
+classified 100 identical results and three known COP/BRK stop-policy differences.
+These results describe the recorded inputs and executable, not every possible guest.
+
+Completed phases are reviewed, validated, committed and fast-forward synced to the
+owner's `a2gspu` branch. README freshness is part of that closeout; the
+[handoff](Docs/HANDOFF.md#7-phase-completion-commits-and-github-sync) owns the policy.
+The [upstream ledger](Docs/UPSTREAM_SYNC.md) records selected ports and deferred work.
+The separate slot-engine model remains unmerged; drift B–E and consumer executable
+replacement remain separate owner decisions.
+
+## Credits
 
 Code merged from upstream carries its own attributions, repeated here because this README replaces
 upstream's: the Host FST is Kelvin Sherlock's GSPlus code (GPL 2.0); the Apple Mouse II Interface

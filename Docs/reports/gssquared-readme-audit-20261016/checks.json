@@ -1,0 +1,29 @@
+{
+  "scope": "Documentation-only assessment; no runtime suites rerun",
+  "starting_commit": "1df5dbd09cf23887aac6362c82d64ae7fa157634",
+  "documents": [
+    "README.md",
+    "Docs/DebugClient.md",
+    "Docs/HANDOFF.md",
+    "Docs/AGENTIC_ROADMAP.md",
+    "Docs\\reports\\gssquared-readme-audit-20261016\\README.md"
+  ],
+  "local_link_destinations_checked": 30,
+  "anchors_checked": 3,
+  "source_native_verbs": 74,
+  "source_generated_mcp_tools": 85,
+  "cli_help": {
+    "tools/a2rail/mcpserver.py": {
+      "exit_code": 0,
+      "stdout": "usage: mcpserver.py [-h] (--socket SOCKET | --exe EXE) [--out-dir OUT_DIR |\n                    --out-root OUT_ROOT] [--artifact-root ARTIFACT_ROOT]\n                    [--platform PLATFORM | --config CONFIG] [--seed SEED]\n                    [--rail NAME=VALUE]\n\nSmall stdio MCP tool server backed by the emulator's native tool registry. No\nshell, expression evaluation, implicit pause, mutation retry or HTTP server.\nAn attached session remains alive on EOF; a launched session is owned and\nclosed.\n\noptions:\n  -h, --help            show this help message and exit\n  --socket SOCKET\n  --exe EXE\n  --out-dir OUT_DIR\n  --out-root OUT_ROOT\n  --artifact-root ARTIFACT_ROOT\n                        explicit existing root for artifact access; managed\n                        launch defaults to its fresh output directory\n  --platform PLATFORM\n  --config CONFIG\n  --seed SEED\n  --rail NAME=VALUE\n"
+    },
+    "tools/a2rail/experiment.py": {
+      "exit_code": 0,
+      "stdout": "usage: experiment.py [-h] {run,compare} ...\n\nBuild/run a declared raw CPU fixture and retain context-bound efficiency\nevidence. An additive Rosetta companion, not a new Rosetta v3 CLI feature.\nBuild tools are explicit executable/argv lists; no shell. Each invocation owns\na fresh directory and a fresh machine. A raw load is never a GS/OS boot claim.\n\npositional arguments:\n  {run,compare}\n\noptions:\n  -h, --help     show this help message and exit\n"
+    }
+  },
+  "runtime_evidence_candidate": "bd276467a2cd1f989dae9bc3c062441af9fad172",
+  "runtime_evidence_counts_verified": true,
+  "protected_consumer_sha256_unchanged": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "git_diff_check_exit_code": 0
+}

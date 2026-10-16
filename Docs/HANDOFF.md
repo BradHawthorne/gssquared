@@ -157,6 +157,9 @@ publication evidence.
    known limits and remaining tasks. A phase can finish with later roadmap
    items open. Before ending a session at such a boundary, include commit/sync
    in closeout instead of silently accumulating local-only completed work.
+   Assess `README.md` against the completed feature set, launch/build recipes,
+   evidence and remaining limits. Update stale claims and linked entry points
+   before publication; record that review with the phase evidence.
 2. **Review the complete publication scope.** Fetch `origin`; compare its
    `a2gspu` tip with local history, inventory tracked and untracked changes and
    review both outgoing commits and newly selected files. Include required

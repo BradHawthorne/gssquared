@@ -42,6 +42,7 @@ The execution record is `reports/gssquared-publication-20261016/README.md`.
 | Verify selected tracked candidate and record validation | Complete: fresh exported committed inputs, pristine pinned dependency objects, 14/14 native CTests, 21/21 Python tests, all 14 gates and 3/3 affected Rosetta checks; pinned boot witnesses unchanged |
 | Fast-forward sync and verify `origin/a2gspu` | Complete: `ed2c00fc` -> `bd276467`, explicit ordinary push and independent matching remote SHA; documentation receipt follows the same cadence |
 | Repeat commit/sync at subsequent coherent phase boundaries | Standing owner-authorized practice; report unsynced completed work or concrete blockers at handoff |
+| Assess README freshness after the catch-up and at future phase closeouts | Complete 2026-10-16: current interfaces, Rosetta/CIDAR scope, setup, evidence and limits replace stale claims; adjacent MCP inventory corrected. Documentation-only checks and audit: `reports/gssquared-readme-audit-20261016/README.md`. README assessment is now required by handoff section 7 |
 
 Publication closes this completed phase; it does not require finishing all
 future roadmap items. Next integration work remains in the CIDAR queue below;
