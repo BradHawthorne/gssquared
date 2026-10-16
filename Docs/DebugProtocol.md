@@ -1,6 +1,11 @@
 # External Debug Protocol (Framing v1)
 
-Wire protocol for host-driven debugging of GSSquared. External tools (CLI, Python, LLM agents) speak this framing over a local byte stream; the emulator does not embed a scripting language or parse JSON.
+Wire protocol for host-driven debugging of GSSquared. External tools (CLI, Python,
+LLM agents) speak binary framing over a local byte stream. The emulator does not
+embed a scripting language. Original debugger payloads are binary records;
+additive MANIFEST, AGENT_TOOLS, AGENT_COMMAND replies and subscription events
+can carry native JSON, as specified in their sections below. MCP JSON-RPC remains
+in the host-side adapter.
 
 This document is the source of truth for the wire format. Exploratory notes in `ExternalDebugInterface.md` are historical and not normative. Host-side library: [DebugClient.md](DebugClient.md). **Agent cookbook:** [gs2debug.md](gs2debug.md).
 
@@ -14,7 +19,8 @@ closed-producer length/content witnesses. `SUBSCRIBE` also accepts `context`,
 `scheduler` and `interrupt`. See [MACHINE_CONTEXT.md](MACHINE_CONTEXT.md).
 
 - Host-driven, imperative commands only — no DSL, Lua, or expression language inside GS2.
-- Opaque binary payloads — no JSON encode/decode in the emulator.
+- Per-type payloads: original packed binary records plus explicit native JSON
+  discovery/tool/event envelopes in the fork extensions.
 - Transport-agnostic framing that works on Unix domain sockets first, TCP later.
 - Dedicated protocol-driver thread so the main emulation loop never blocks on socket I/O.
 - Extensible type namespace and sequence IDs for later pipelining, streaming, and client-side routing.
@@ -23,7 +29,8 @@ closed-producer length/content witnesses. `SUBSCRIBE` also accepts `context`,
 
 - TCP listen/connect (frame is ready; transport comes later).
 - Required request pipelining (header supports it; implementation may allow only one outstanding request).
-- MCP, GDB RSP, or an embedded script runtime.
+- In-process MCP, GDB RSP, or an embedded script runtime. The host-side MCP
+  adapter is documented in [DebugClient.md](DebugClient.md).
 - Full debug command set — session meta plus GET_STATUS / RESET / PAUSE / CONTINUE / STEP_INTO / GET_TRACE / GET_REGS / SET_REGS / READMEM / WRITEMEM / FINDMEM / BP_* / KEYEVENT / PASTE_TEXT / STATE_GET / STATE_SET / VIDEO_TEXT / MOUNT / UNMOUNT / QUIT below.
 
 ---
@@ -123,7 +130,8 @@ TYPE_MASK  = 0x00FFFFFF   /* main + sub; flags cleared */
 ## Payload rules
 
 - Opaque binary; layout is **per `type`**, documented with each command.
-- No JSON in GS2.
+- JSON is used only by the documented native discovery/tool/event extensions;
+  it does not change the binary frame header or existing packed field layouts.
 - Fields use explicit widths (`uint8` / `uint16` / `uint32` / `uint64`), little-endian, packed sequentially. Do not rely on compiler struct padding across the wire — document field order and sizes.
 - Strings (rare): either length-prefixed inside the payload, or “remainder of payload is UTF-8” when there is a single trailing string (no NUL required).
 

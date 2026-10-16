@@ -36,7 +36,12 @@ The physical REPT key is not modeled. Host keyboards already supply autorepeat; 
 
 ## DMABank
 
-The IIgs DMABank register is currently unimplemented.
+**Implemented register; older entry superseded.** `$C037` read/write handlers
+are installed in `src/mmus/mmu_iigs.cpp` (`c037_read` / `c037_write`), following
+the fidelity study and port correction recorded in
+[fidelity/README.md](fidelity/README.md). Register storage/readback is not a
+claim that every possible external DMA device is modeled. This is no longer
+an intentionally unimplemented register.
 
 ---
 

@@ -1,5 +1,15 @@
 # scout — the golden-splice-scout (gdiff G4)
 
+**Scope:** this is the retained owned-GS/OS campaign helper, not a generic
+primitive experiment runner. It requires an explicit image and kernel symbol/
+milestone inputs (`-Img` / `GDIFF_IMG`, `-Kernel` / `GDIFF_KERNEL`); the old
+`owned_boot.po` default described below is historical, not a current supplied
+input. An external oracle-env script is optional, so do not infer the complete
+G5 pin contract unless that script was explicitly supplied and its pins verified.
+It also uses a shared temporary `scout` directory; parallel-safe isolated-run
+generalization is still pending. For current general experiments, see
+[Machine context](../../Docs/MACHINE_CONTEXT.md) and `tools/a2rail/experiment.py`.
+
 The predictive control-forward superpower, **packaged**. Given a wall (a BRK/stall PC)
 and a DELIBERATE splice, `scout.ps1` boots the emulator **forward, bounded**, and reports
 **how far** it got and the **next wall** (PC + a class hint) — then optionally **repeats**,

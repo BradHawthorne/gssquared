@@ -43,6 +43,7 @@ machine-readable event for every command, acknowledgement, refusal and stall.
 | `sockettoolscheck.py`, `uicheck.py`, `mcpcheck.py` | gates (`agentic`, through p0check) | 3 and 5; long bridge wait on 3 | shared socket tool catalog/invocation, native presentation/clock settings on file/socket/co-pilot, MCP framing/lifecycle/native execution/startup configuration, and preservation of completed long-command replies |
 | `observabilitycheck.py` | gates (`agentic`, through mcpcheck) | 3 and 5 | structured upstream trace/memory/search/text adapters, unreadable-I/O exclusions, bounded/truncated results, platform refusals, stable repeated extended trace formatting |
 | `autonomycheck.py`, `executionshapecheck.py` | gates (`agentic`, through mcpcheck) | 3 and 5 | MCP-only upload/load/run/assert/PNG/evidence loop; cold-batch evidence, digest/scope/overwrite failures, evidence after quit, exact binary identity, real timeout recovery without resending, strict execution validation and already-satisfied PC goals |
+| `contextcheck.py`, `experimentcheck.py` | gates (`agentic`, through p0check) | 3 and 5 | native topology/state/address/IRQ/scheduler/reference-pixel explanations, running context reads, bounded history/marks, snapshot witnesses, typed MCP adapters and correctness-bound experiment comparisons |
 | ctest | dualsmoke | host | CPU conformance/coverage/cycles, 6522 VIA, checked snapshot comparison fixtures |
 | `railcheck.ps1` | dualsmoke | 3 and 5 | CTRL verb honesty |
 | `gs816/execcheck.ps1` | dualsmoke | 3 and 5 | run / step / bp / banked PCs |
@@ -64,7 +65,7 @@ P0 usage and formats are in `Docs/A2GSPU_RAILS.md`. `profile.py` consumes
 `python -I tools/a2rail/profile.py counts.json --symbols functions.json`.
 For an out-of-tree build, set `A2_GSSQUARED` to its executable and
 `GSSQUARED_ROOT` to the source checkout; dualsmoke selects ctest beside that
-executable. The full umbrella now contains 13 gates; ctest/rail/exec/ALTZP
+executable. The full umbrella contains 14 gates; ctest/rail/exec/ALTZP
 rows above are sub-suites of dualsmoke.
 
 ## Data tools

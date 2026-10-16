@@ -1,5 +1,12 @@
 
-# Current Release: 0.7.1
+# Upstream release roadmap — historical
+
+This inherited checklist begins at upstream release 0.7.1; it is not this
+fork's release/version status or task queue. The current build derives its
+version from `CMakeLists.txt` and Git. Use [AGENTIC_ROADMAP.md](AGENTIC_ROADMAP.md)
+and [HANDOFF.md](HANDOFF.md) for fork priorities and completed work; use
+[UPSTREAM_SYNC.md](UPSTREAM_SYNC.md) for integration decisions. The release
+checklists below are retained as historical context.
 
 ## Release 0.3
 

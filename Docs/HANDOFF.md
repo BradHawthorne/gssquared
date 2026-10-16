@@ -31,6 +31,13 @@ The earlier preserved `GSSquared-awareness.exe` and tested `mcp-launch.json`
 remain documented in the machine-context report.
 The original Claude-to-Codex handoff and the assessment reports are historical evidence; current status is below.
 
+The whole-fork stale-information audit is recorded in
+`Docs/reports/gssquared-stale-audit-20261016/README.md`. Historical proposals and
+studies now point to implemented interfaces, and `Docs/DEVELOPMENT_SETUP.md`
+describes maintained editor configuration, enforced fork-only release targets
+and remaining host-package/harness work. The state table's older feature rows retain their checkpoint
+counts; the machine-context row and publication report give the current inventory.
+
 ## 1. What this repo is
 
 The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIgs emulator.

@@ -12,8 +12,9 @@ completion points. Normal phase-completion commits and fast-forward pushes to th
 existing `origin/a2gspu` are authorized; use `Docs/HANDOFF.md` section 7 for the
 closeout procedure. This supersedes the earlier blanket no-push instruction for
 that scope. Never push upstream, change remotes or rewrite published history
-under this standing authorization. Catch up the reviewed local backlog before
-starting another major feature phase; do not publish an unreviewed dirty tree.
+under this standing authorization. If completed work has accumulated locally,
+close out that reviewed backlog before another major feature phase; do not
+publish an unreviewed dirty tree. The initial catch-up completed on 2026-10-16.
 
 ## What this repo is
 
@@ -60,7 +61,8 @@ quietly unenforced has no reason to believe the next.
 | 9 | A driven session writes only where it was told: run from a scratch directory or set `A2GSPU_OUT_DIR`, and pin `A2GSPU_BRAM` when a number must reproduce. Test inputs live in `corpus/`. | review |
 
 **Before calling shared work done**, run `.\tools\a2rail\gates.ps1` (about
-seven minutes; `-Offline` for the seconds-long subset). It runs every gate above
+seven minutes; `-Offline` for the subset without emulator runs, including tiny
+revision fixture builds). It runs every gate above
 and prints one matrix.
 
 **Rule 4 in full.** Shared rail/MMU/device changes need evidence on **both**
@@ -95,7 +97,11 @@ generalised into.
 Windows: MSYS2 UCRT64 GCC with Ninja. `C:\msys64\ucrt64\bin` must be on `PATH`
 to build and to run `build\GSSquared.exe` (without it the process exits
 `0xC0000135`); the gate scripts find it themselves (`runtime.ps1`), and ctest
-carries it per test. `cmake --build build`, then `.\tools\a2rail\gates.ps1`.
+carries it per test. Use a separate build directory in the owner's checkout;
+`build\GSSquared.exe` is a protected consumer and must not be replaced without
+the owner's approval. Set `A2_GSSQUARED` to the tested executable and
+`GSSQUARED_ROOT` to this source tree before running the fork gates. See
+`README.md` for the `build-local` recipe and `Docs/HANDOFF.md` for current evidence.
 
 A fresh clone needs the vendored SDL submodules:
 `git submodule update --init vendored/SDL vendored/SDL_image vendored/SDL_net` and
@@ -103,11 +109,18 @@ A fresh clone needs the vendored SDL submodules:
 `git config --global core.longpaths true` first (or clone to a short path): SDL_ttf's
 nested harfbuzz and plutosvg checkouts exceed MAX_PATH from a deep directory and fail
 with "Filename too long". Verified 2026-09-16: a clean clone configures, builds every
-target and passes ctest 8/8.
+target and passed the then-current ctest 8/8. The later 2026-10-16 exported-source
+checkpoint passed 14/14 native CTests and all 14 gates; see the publication report.
 
 Drive the emulator headless with env rails, or with the CTRL rail through
 `tools/a2rail/session.ps1` + `ctl.ps1`, one command at a time. `session.ps1 -Config N` picks a
 built-in machine; `-ConfigFile <file.gs2>` starts any card set the built-ins lack.
+
+**Package publication override:** the maintained release helper and local release
+skill target only `BradHawthorne/gssquared`, defaulting to `origin/a2gspu` and
+refusing other origins/upload destinations. The inherited `origin/main` recipe
+below is not the fork's workflow. Package builds/uploads still require a package
+release request; ordinary phase sync follows `Docs/HANDOFF.md` section 7.
 
 ---
 

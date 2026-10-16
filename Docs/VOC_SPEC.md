@@ -4,8 +4,12 @@ This document describes the Apple IIgs Video Overlay Card (VOC) as inferred from
 the KEGS emulator implementation and related public material. It is intended as
 a cleanroom hardware specification for implementers.
 
-**Sources:** [`src/voc.c`](../src/voc.c), [`src/moremem.c`](../src/moremem.c),
-[`src/video.c`](../src/video.c), [`doc/README.kegs.txt`](README.kegs.txt).
+**Sources (external KEGS paths):** `src/voc.c`, `src/moremem.c`,
+`src/video.c`, `doc/README.kegs.txt`. These paths belong to the reference
+checkout, not this repository; the original note does not pin its KEGS revision.
+This is reference analysis, not a current fork capability inventory. The fork's
+VOC model is under `src/devices/voc/`; discover its installed state and declared
+coverage through [machine context](MACHINE_CONTEXT.md).
 Register bit names and overlay/genlock semantics come from inline comments in
 `voc.c` (attributed in KEGS to VOC development headers and public material).
 

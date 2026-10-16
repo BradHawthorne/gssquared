@@ -9,6 +9,15 @@ description: >-
 
 # GSSquared release packages
 
+> **Fork policy (2026-10-16):** this workflow targets only
+> `BradHawthorne/gssquared`, using `origin/a2gspu` by default. Host commands
+> refuse a non-fork origin; upload refuses any other CLI/environment destination.
+> Never target upstream. Package upload still requires the owner's explicit
+> release request. Ordinary phase sync follows `Docs/HANDOFF.md` section 7 and
+> does not run this package workflow. Policy fixtures are
+> `python -I scripts/release/test_fork_policy.py`; actual host package builds
+> require configured hosts and separate platform evidence.
+
 Orchestrator: `scripts/release/gs2-release` (Python 3.9+, stdlib only). Native builds only — do not cross-compile.
 
 ```bash
@@ -28,7 +37,7 @@ Release packages:
 - [ ] hosts.toml present
 - [ ] ping
 - [ ] unpushed
-- [ ] sync (origin/main)
+- [ ] sync (origin/a2gspu)
 - [ ] build all (background; poll status)
 - [ ] collect
 - [ ] wait for explicit upload
@@ -38,16 +47,16 @@ Release packages:
    Fix SSH/toolchain/repo issues before continuing. `--platform macos|windows|linux` to test one host.
 
 2. **Unpushed.** `scripts/release/gs2-release unpushed`  
-   On each host's everyday clone, **no fetch**: fail if `HEAD` is ahead of the existing `origin/main` ref (`git rev-list --count origin/main..HEAD`). Dirty files are ignored. **Stop and tell the user to push** if this fails; do not sync.
+   On each host's everyday clone, **no fetch**: fail if `HEAD` is ahead of the existing `origin/a2gspu` ref (`git rev-list --count origin/a2gspu..HEAD`). Dirty files are ignored. Close the coherent phase and sync it under handoff section 7 before package sync; do not discard local commits.
 
-3. **Sync.** Detached worktree beside the clone (`<repo>-release`, e.g. `~/src/gssquared-release`). Default ref is **`origin/main`** after fetch. The everyday clone is not checked out and may stay dirty.  
+3. **Sync.** Detached worktree beside the clone (`<repo>-release`, e.g. `~/src/gssquared-fork-release`). Default ref is **`origin/a2gspu`** after fetch. The everyday clone is not checked out and may stay dirty.
    `scripts/release/gs2-release sync`  
-   `scripts/release/gs2-release sync --ref v0.10.0`  
+   `scripts/release/gs2-release sync --ref <published-fork-tag>`
    `--force-clean` only affects the release worktree (`git clean -fdx`, wipes ignored `build/`).
 
 4. **Build.** Package recipes match README (not the `GS2_PROGRAM_FILES=ON` dev build):
    - macOS: app bundle + CPack `.dmg`
-   - Windows: CPack `win64` zip (SSH is already MSYS2 bash at `/c/Users/...`; `source ~/.profile`)
+   - Windows: CPack `win64` zip (MSYS2 UCRT64 GCC/CMake/Ninja; runtime on PATH)
    - Linux: `appimage` target
 
    Builds take a long time (vendored SDL). Start in the background (`block_until_ms` 0). Poll; do not kill with SIGTERM to “check”.

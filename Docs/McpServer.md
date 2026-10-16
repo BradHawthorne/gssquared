@@ -1,4 +1,13 @@
-# GS2 Debug Protocol — MCP server (decision)
+# GS2 Debug Protocol — historical upstream MCP decision
+
+**Fork status, 2026-10-16:** the decision below describes the upstream Go
+distribution proposal, not this fork's implemented MCP server. This fork ships
+a stdlib Python stdio adapter in `tools/a2rail/mcpserver.py`, also installed as
+`gs2-mcp` from `clients/python`. It uses shared native agent tools and adds
+context, isolated batch and artifact adapters. Start with
+[DebugClient.md](DebugClient.md#mcp-entry-point) and
+[MACHINE_CONTEXT.md](MACHINE_CONTEXT.md). The historical choices and estimates
+below are preserved as a decision record; they are not fork runtime guarantees.
 
 Decision record from 2026-08-20. Not an implementation spec.
 

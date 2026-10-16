@@ -29,8 +29,21 @@ except ImportError:  # Python < 3.11
 
 PLATFORMS = ("macos", "windows", "linux")
 MIN_ARTIFACT_BYTES = 4_000_000
-DEFAULT_GH_REPO = "jawaidbazyar2/gssquared"
+DEFAULT_GH_REPO = "BradHawthorne/gssquared"
+DEFAULT_REF = "origin/a2gspu"
 PLACEHOLDER_RE = re.compile(r"YOUR[-_]")
+
+# All release commands operate on the owner's fork. Refuse a different origin
+# before running host scripts; uploads also validate their explicit/env target.
+ORIGIN_GUARD = r'''
+origin_url=$(git remote get-url origin | tr -d '\r')
+origin_url=$(printf '%s' "$origin_url" | tr '[:upper:]' '[:lower:]')
+origin_url=${origin_url%.git}
+case "$origin_url" in
+  https://github.com/bradhawthorne/gssquared|git@github.com:bradhawthorne/gssquared|ssh://git@github.com/bradhawthorne/gssquared) ;;
+  *) echo "gs2-release: refusing non-fork origin; expected BradHawthorne/gssquared" >&2; exit 2 ;;
+esac
+'''
 
 ARTIFACT_PATTERNS: dict[str, tuple[str, ...]] = {
     "macos": (
@@ -63,8 +76,9 @@ cmake --build build --target package
 """,
     "windows": """
 set -euo pipefail
-cmake -G "MinGW Makefiles" -DGS2_PROGRAM_FILES=OFF -DCMAKE_BUILD_TYPE=Release \\
-    -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -B build -S .
+export PATH=/ucrt64/bin:$PATH
+cmake -G Ninja -DGS2_PROGRAM_FILES=OFF -DCMAKE_BUILD_TYPE=Release \\
+    -DCMAKE_C_COMPILER=/ucrt64/bin/gcc -DCMAKE_CXX_COMPILER=/ucrt64/bin/g++ -B build -S .
 cmake --build build --parallel --target package
 """,
     "linux": """
@@ -93,12 +107,12 @@ UNPUSHED_SCRIPT = r"""
 set -euo pipefail
 echo "branch=$(git rev-parse --abbrev-ref HEAD)"
 echo "head=$(git rev-parse --short HEAD)"
-git rev-parse --verify origin/main >/dev/null
-ahead=$(git rev-list --count origin/main..HEAD)
-echo "ahead_of_origin_main=$ahead"
+git rev-parse --verify origin/a2gspu >/dev/null
+ahead=$(git rev-list --count origin/a2gspu..HEAD)
+echo "ahead_of_origin_a2gspu=$ahead"
 if [ "$ahead" -gt 0 ]; then
   echo "UNPUSHED_COMMITS:"
-  git log --oneline origin/main..HEAD
+  git log --oneline origin/a2gspu..HEAD
   echo UNPUSHED_FAIL
   exit 1
 fi
@@ -309,13 +323,15 @@ def wrap_remote_script(host: Host, bash_command: str, tree: str = "source") -> s
     """Script fed to `bash -s` on the remote. MSYS2 SSH is already bash."""
     lines: list[str] = ["set -e"]
     if host.remote_shell == "msys2":
-        # Login `bash -l` already ran /etc/profile (MinGW PATH). ~/.profile is
+        # Login `bash -l` already ran /etc/profile. ~/.profile is
         # optional on these boxes; source it only when present (and before -u).
         lines.append('if [ -f "$HOME/.profile" ]; then source "$HOME/.profile"; fi')
+        lines.append('export PATH=/ucrt64/bin:$PATH')
         lines.append("set -uo pipefail")
     else:
         lines.append("set -uo pipefail")
     lines.append(f"cd {shlex.quote(host.tree_path(tree))}")
+    lines.append(ORIGIN_GUARD)
     lines.append(bash_command.rstrip() + "\n")
     return "\n".join(lines)
 
@@ -400,7 +416,10 @@ def run_on_host(
 ) -> int:
     prefix = prefix or host.name
     if host.kind == "local":
-        argv = ["bash", "-c", bash_command]
+        # A bare bash on Windows can launch the WSL system executable before
+        # PATH, even when shutil.which finds MSYS2. Use the configured MSYS2 path.
+        shell = host.msys_bash if os.name == "nt" else "bash"
+        argv = [shell, "-c", "set -euo pipefail\n" + ORIGIN_GUARD + bash_command]
         cwd = Path(host.tree_path(tree))
         if log is None:
             return subprocess.run(argv, cwd=cwd).returncode
@@ -416,8 +435,9 @@ def capture_on_host(
     host: Host, bash_command: str, tree: str = "source"
 ) -> subprocess.CompletedProcess[str]:
     if host.kind == "local":
+        shell = host.msys_bash if os.name == "nt" else "bash"
         return subprocess.run(
-            ["bash", "-c", bash_command],
+            [shell, "-c", "set -euo pipefail\n" + ORIGIN_GUARD + bash_command],
             cwd=host.tree_path(tree),
             text=True,
             capture_output=True,
@@ -443,7 +463,7 @@ def ensure_on_origin(repo: Path, sha: str) -> None:
     """Fail unless origin can supply this commit (branch tip, ancestor, or tag)."""
     subprocess.run(["git", "fetch", "origin", "--tags"], cwd=repo, check=True)
     contains = subprocess.run(
-        ["git", "branch", "-r", "--contains", sha],
+        ["git", "branch", "-r", "--contains", sha, "--list", "origin/*"],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -472,20 +492,33 @@ def ensure_on_origin(repo: Path, sha: str) -> None:
     sys.exit(1)
 
 
+def require_fork_repo(value: str) -> str:
+    """Normalize supported GitHub identity spellings; never redirect an upload."""
+    for prefix in ("https://github.com/", "ssh://git@github.com/", "git@github.com:"):
+        if value.lower().startswith(prefix):
+            value = value[len(prefix):]
+            break
+    if value.endswith(".git"):
+        value = value[:-4]
+    if value.casefold() != DEFAULT_GH_REPO.casefold():
+        raise ValueError("release destination must be " + DEFAULT_GH_REPO)
+    return DEFAULT_GH_REPO
+
+
+def fork_origin(local_repo: Path) -> str:
+    url = subprocess.check_output(
+        ["git", "remote", "get-url", "origin"], cwd=local_repo, text=True,
+    ).strip()
+    if not url.lower().startswith(("https://github.com/", "ssh://git@github.com/", "git@github.com:")):
+        raise ValueError("origin must be the GitHub fork " + DEFAULT_GH_REPO)
+    return require_fork_repo(url)
+
+
 def detect_gh_repo(local_repo: Path) -> str:
     env = os.environ.get("GS2_GH_REPO")
     if env:
-        return env
-    try:
-        url = subprocess.check_output(
-            ["git", "remote", "get-url", "origin"],
-            cwd=local_repo,
-            text=True,
-        ).strip()
-    except subprocess.CalledProcessError:
-        return DEFAULT_GH_REPO
-    m = re.search(r"github\.com[:/](.+?)(?:\.git)?$", url)
-    return m.group(1) if m else DEFAULT_GH_REPO
+        return require_fork_repo(env)
+    return fork_origin(local_repo)
 
 
 def find_artifact_local(repo: Path, platform: str) -> Path | None:
@@ -569,7 +602,7 @@ def cmd_ping(hosts: dict[str, Host], platforms: tuple[str, ...]) -> int:
 
 
 def cmd_unpushed(hosts: dict[str, Host], platforms: tuple[str, ...]) -> int:
-    """Fail if source clone HEAD is ahead of the existing origin/main ref (no fetch)."""
+    """Fail if source clone HEAD is ahead of origin/a2gspu (no fetch)."""
     rc = 0
     for name in platforms:
         host = hosts[name]
@@ -632,7 +665,8 @@ def cmd_sync(
     local_repo = Path(hosts["macos"].repo)
     if not local_repo.is_dir():
         local_repo = repo_root()
-    ref_arg = ref or "origin/main"
+    fork_origin(local_repo)
+    ref_arg = ref or DEFAULT_REF
     emit("sync", f"fetching origin in {local_repo}")
     subprocess.run(["git", "fetch", "origin", "--tags"], cwd=local_repo, check=True)
     sha = git_sha(local_repo, ref_arg)
@@ -875,6 +909,12 @@ def cmd_collect(hosts: dict[str, Host], platforms: tuple[str, ...]) -> int:
 
 
 def cmd_upload(tag: str, create: bool, gh_repo: str | None) -> int:
+    # Refuse wrong CLI/env/origin targets before inspecting artifacts or invoking gh.
+    try:
+        repo = require_fork_repo(gh_repo) if gh_repo else detect_gh_repo(repo_root())
+    except (ValueError, subprocess.CalledProcessError) as exc:
+        sys.stderr.write(f"refusing release upload: {exc}\n")
+        return 2
     dest_root = dist_dir()
     if not dest_root.is_dir():
         sys.stderr.write("nothing in .release/dist/; run collect first\n")
@@ -883,8 +923,6 @@ def cmd_upload(tag: str, create: bool, gh_repo: str | None) -> int:
     if not files:
         sys.stderr.write("nothing in .release/dist/; run collect first\n")
         return 1
-    local_repo = repo_root()
-    repo = gh_repo or detect_gh_repo(local_repo)
     for f in files:
         ok, detail = True, ""
         name = f.name.lower()
@@ -943,12 +981,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     unpushed = sub.add_parser(
         "unpushed",
-        help="fail if HEAD is ahead of origin/main (no fetch; run before sync)",
+        help="fail if HEAD is ahead of origin/a2gspu (no fetch; run before sync)",
     )
     unpushed.add_argument("--platform", default="all")
 
-    sync = sub.add_parser("sync", help="detached worktree at <repo>-release from origin/main")
-    sync.add_argument("--ref", default=None, help="SHA, tag, or branch (default: origin/main)")
+    sync = sub.add_parser("sync", help="detached fork worktree from origin/a2gspu")
+    sync.add_argument("--ref", default=None, help="SHA, tag, or branch (default: origin/a2gspu)")
     sync.add_argument(
         "--force-clean",
         action="store_true",
@@ -971,7 +1009,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="create the GitHub release if it does not exist",
     )
-    upload.add_argument("--repo", default=None, help="owner/name (default: origin)")
+    upload.add_argument("--repo", default=None, help="must be BradHawthorne/gssquared (default: fork origin)")
     return p
 
 

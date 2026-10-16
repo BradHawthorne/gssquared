@@ -1,6 +1,8 @@
 Thanks for contributing — we love pull requests.
 
-If this change alters current emulator behavior, please test it against real hardware first (or cite a test that has already been run on real hardware). See [CONTRIBUTING.md](CONTRIBUTING.md).
+If this change alters current emulator behavior, state the hardware or emulator
+evidence and its limits. See [CONTRIBUTING.md](../CONTRIBUTING.md) for this fork's
+dual-platform gates, public contracts and upstream policy.
 
 ## What
 

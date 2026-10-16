@@ -1,142 +1,149 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
         {
             "name": "Debug gs2",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/GSSquared",
-            // "args": /* [], */
-            //"args": ["-ds7d1=/Users/bazyar/src/IIgsDisks/HD1B.PO","-ds7d2=/Users/bazyar/src/IIgsDisks/Communications.2mg"], 
-            "args": ["-p","5","-ds7d1=/Users/bazyar/src/gssquared/testdev/selftests/test6/test.po"], 
-            //"args": ["-p","3","-ds7d1=/Users/bazyar/src/gssquared/testdev/selftests/iwm/iwmtest.po"], 
+            "program": "${workspaceFolder}/build-local/GSSquared",
+            "args": [
+                "-p",
+                "5"
+            ],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-gs2-debug"
+            "preLaunchTask": "build-gs2-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/GSSquared.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Debug gs2 (windows)",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/GSSquared.exe",
+            "program": "${workspaceFolder}/build-local/GSSquared.exe",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "env": { "PATH": "C:/msys64/mingw64/bin;${env:PATH}" },
+            "env": {
+                "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+            },
             "preLaunchTask": "build-gs2-debug-win"
         },
         {
             "name": "Debug mmutest",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/mmutest",
+            "program": "${workspaceFolder}/build-local/mmutest",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-debug"
+            "preLaunchTask": "build-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/mmutest.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Debug cycletest",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/cycletest",
+            "program": "${workspaceFolder}/build-local/cycletest",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-cycletest-debug"
+            "preLaunchTask": "build-cycletest-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/cycletest.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Debug cpu816test",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/cpu816test",
+            "program": "${workspaceFolder}/build-local/cpu816test",
             "args": [],
-            "cwd": "/Users/bazyar/src/snes-tests",
-            "preLaunchTask": "build-debug"
+            "cwd": "${input:cpuFixtureDirectory}",
+            "preLaunchTask": "build-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/cpu816test.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Debug cputest",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/cputest",
+            "program": "${workspaceFolder}/build-local/cputest",
             "args": [],
-            "cwd": "/Users/bazyar/src/6502_65C02_functional_tests/bin_2025",
-            "preLaunchTask": "build-debug"
+            "cwd": "${input:cpuFixtureDirectory}",
+            "preLaunchTask": "build-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/cputest.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Debug cputest 65C02",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/cputest",
-            "args": ["65c02", "test65c02"],
-            "cwd": "/Users/bazyar/src/6502_65C02_functional_tests/bin_2025",
-            "preLaunchTask": "build-debug"
-        },
-        {
-            "name": "Debug dpp",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/dpp",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-debug"
-        },
-        {
-            "name": "Debug vpp",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/vpp",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-debug"
+            "program": "${workspaceFolder}/build-local/cputest",
+            "args": [
+                "65c02",
+                "test65c02"
+            ],
+            "cwd": "${input:cpuFixtureDirectory}",
+            "preLaunchTask": "build-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/cputest.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Debug vpp2",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/vpp2",
+            "program": "${workspaceFolder}/build-local/vpp2",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-debug"
-        },
-        {
-            "name": "Debug speaker",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/speaker",
-            "args": ["/Users/bazyar/src/gssquared/testdev/speaker/speaker_event_log.txt"],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-debug"
-        },
-        {
-            "name": "Debug newspeakfx",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/newspeakfx",
-            "args": ["/Users/bazyar/src/gssquared/testdev/speaker/speaker_event_log.txt"],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-debug"
-        },
-        {
-            "name": "Debug newspeakfp",
-            "type": "lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/newspeakfp",
-            "args": ["/Users/bazyar/src/gssquared/testdev/speaker/speaker_event_log.txt"],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build-debug"
+            "preLaunchTask": "build-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/vpp2.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Debug iigsmmutest",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/iigsmmutest",
-            "args": ["-l","26"],
-            "cwd": "${workspaceFolder}/testdev/gsmmu/",
-            "preLaunchTask": "build-debug"
+            "program": "${workspaceFolder}/build-local/iigsmmutest",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build-debug",
+            "windows": {
+                "program": "${workspaceFolder}/build-local/iigsmmutest.exe",
+                "env": {
+                    "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+                }
+            }
         },
         {
             "name": "Profile mmutest (Instruments)",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/mmutest",
+            "program": "${workspaceFolder}/build-local/mmutest",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build-release-with-debug",
@@ -146,11 +153,21 @@
             "name": "Profile GSSquared (Instruments)",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/GSSquared",
-            "args": ["-ds5d1=/Users/bazyar/src/gssquared/disk_images/AppleIISystem800k.hdv"],
+            "program": "${workspaceFolder}/build-local/GSSquared",
+            "args": [
+                "-p",
+                "5"
+            ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build-release-with-debug",
             "postDebugTask": "profile-gssquared-with-instruments"
         }
+    ],
+    "inputs": [
+        {
+            "id": "cpuFixtureDirectory",
+            "type": "promptString",
+            "description": "Absolute fixture working directory; see Docs/DEVELOPMENT_SETUP.md"
+        }
     ]
-} 
+}

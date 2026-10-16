@@ -1,0 +1,18 @@
+test_environment_cannot_redirect_upload (__main__.ForkPolicyTests.test_environment_cannot_redirect_upload) ... ok
+test_host_guards_refuse_wrong_or_missing_origin_before_effects (__main__.ForkPolicyTests.test_host_guards_refuse_wrong_or_missing_origin_before_effects) ... gs2-release: refusing non-fork origin; expected BradHawthorne/gssquared
+gs2-release: refusing non-fork origin; expected BradHawthorne/gssquared
+ok
+test_missing_origin_has_no_fallback (__main__.ForkPolicyTests.test_missing_origin_has_no_fallback) ... ok
+test_origin_must_be_github_fork_not_owner_shaped_local_path (__main__.ForkPolicyTests.test_origin_must_be_github_fork_not_owner_shaped_local_path) ... ok
+test_remote_wrapper_uses_same_guard_and_ucrt (__main__.ForkPolicyTests.test_remote_wrapper_uses_same_guard_and_ucrt) ... ok
+test_repo_identity_and_wrong_destinations (__main__.ForkPolicyTests.test_repo_identity_and_wrong_destinations) ... ok
+test_sync_defaults_to_fork_ref_without_network (__main__.ForkPolicyTests.test_sync_defaults_to_fork_ref_without_network) ... ok
+test_upload_and_create_commands_bind_fork (__main__.ForkPolicyTests.test_upload_and_create_commands_bind_fork) ... ok
+test_wrong_environment_refuses_before_artifacts_or_gh (__main__.ForkPolicyTests.test_wrong_environment_refuses_before_artifacts_or_gh) ... ok
+test_wrong_sync_origin_refuses_before_fetch (__main__.ForkPolicyTests.test_wrong_sync_origin_refuses_before_fetch) ... ok
+test_wrong_upload_refuses_before_artifacts_or_gh (__main__.ForkPolicyTests.test_wrong_upload_refuses_before_artifacts_or_gh) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 1.118s
+
+OK

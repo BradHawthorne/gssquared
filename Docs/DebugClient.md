@@ -450,7 +450,9 @@ class Client:
         Also invoked for EVENTs interleaved while a request awaits its reply."""
 ```
 
-Generic `request` keeps payloads as `bytes`. Thin helpers pack/unpack documented fields with `struct` — no JSON.
+Generic `request` keeps payloads as `bytes`. Original debugger helpers pack/unpack
+documented fields with `struct`; manifest/shared-agent helpers decode their
+explicit native JSON payloads. MCP JSON-RPC is a separate host-side layer.
 
 Constants (`BP_KIND_*`, `BP_ACCESS_*`, `BP_FLAG_*`, `EVT_*`, `STOP_*`, `EXEC_*`, `MEM_*`, `PLATFORM_*`) are re-exported from `gs2debug` / `gs2debug.types`. Breakpoint semantics: [DebugProtocol.md](DebugProtocol.md) (EXEC / DATA / IO, masks, ignore_count, STOP reasons).
 
@@ -490,13 +492,12 @@ Implementers and agents must handle these; do not reinvent per script:
 | Connection model | One client connection; reconnect = new `Client` |
 | Socket path | AF_UNIX path for now (e.g. `/tmp/gs2.sock`). Windows named pipes / TCP later |
 | Unknown events | Ignore unknown `event_id` values (handler may no-op); `wait_stopped` skips non-`EVT_STOPPED` |
-| Encoding | No JSON. Payloads are `bytes`; helpers use `struct` for fixed fields |
+| Encoding | Payloads are `bytes`; helpers use `struct` for packed fields and JSON for documented manifest/agent extensions |
 
 ## Smoke-test story
 
-**Until the emulator socket exists:** unit-test `frame.py` encode/decode only.
-
-**Once the debug socket exists:**
+The socket and client are implemented. Unit framing tests supplement the native
+integration checks; they do not stand in for an emulator round trip:
 
 1. Start GSSquared with `--debug PATH` (or `-D PATH`), e.g. `-p 3` for IIe Enhanced / `-p 5` for IIgs.
 2. `Client().connect(path)` → `hello()` → `get_status()` (check `platform_id`) → `reset()` / `read_mem` / `paste_text` / `type_text` / `bp_*` / `wait_stopped` → `quit()`.

@@ -1,5 +1,12 @@
 # GSSquared - Ultimate Apple II Series Emulator
 
+**Fork entry point (2026-10-16):** the platform/status tables below are a dated
+upstream overview, not the current fork capability inventory. Use the
+[agentic roadmap](AGENTIC_ROADMAP.md), [machine context](MACHINE_CONTEXT.md),
+[client/MCP setup](DebugClient.md) and [upstream integration ledger](UPSTREAM_SYNC.md)
+for current implementation, validation and remaining work. Device presence and
+coverage are discoverable from the running executable.
+
 The ambition for this project is large - and it will take a while to get it done. So at any given point in time, consider it a work-in-progress complete with bugs, missing features, and experiments. Of course there will be plenty that "just works".
 
 Looking for how to use GSSquared?

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-16 — fork checkpoint
+
+The `a2gspu` fork published its integrated agent-interface and machine-context
+checkpoint, followed by the stale-information/tooling audit. Shared CTRL/socket
+tools, Python/MCP context and artifact interfaces, and the Rosetta experiment
+companion are documented in the [fork roadmap](Docs/AGENTIC_ROADMAP.md).
+Validation identities and scoped results are retained in
+[the publication report](Docs/reports/gssquared-publication-20261016/README.md)
+and [the stale audit](Docs/reports/gssquared-stale-audit-20261016/README.md).
+
+The audit corrects current setup/contracts and makes package tooling explicitly
+fork-only. Historical upstream entries below are preserved; they are not a
+complete list of this fork's later instrumentation changes.
+
 ## 2026-09-17
 
 ### Features

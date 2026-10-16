@@ -2,7 +2,14 @@
 
 Proposed on-disk format for user-created system configurations. Maps to `SystemConfig_t` in `src/systemconfig.hpp`, slot device IDs in `src/Device_ID.hpp` / `src/devices.cpp`, and initial disk mounts handled by `Mounts::mount_media()` in `src/util/mount.cpp`.
 
-This is a **design proposal** — not yet implemented.
+**Implementation status, 2026-10-16:** `.gs2` version-1 loading and writing are
+implemented in `src/util/SystemConfig.cpp` / `SystemConfig.hpp`; loading validates
+the version and constructs the machine configuration. This document began as a
+design proposal and retains design notes that are not all implemented. For the
+supported user workflow, start with [ConfigFiles.md](ConfigFiles.md); verify a
+particular field against the loader before treating proposal wording as a
+runtime guarantee. UI save availability and upstream-only changes can differ
+from this fork; see [UPSTREAM_SYNC.md](UPSTREAM_SYNC.md).
 
 ## File identity
 
@@ -10,7 +17,7 @@ This is a **design proposal** — not yet implemented.
 |------|-------|
 | Extension | `.gs2` |
 | Format | TOML 1.0 |
-| Default location | User config directory (e.g. `~/Library/Application Support/GSSquared/systems/` on macOS) |
+| Default examples | `PrefPath/SystemConfigs` on ordinary interactive startup; user-created files may live elsewhere |
 | Related formats | Project X files (arqyv-generated) are a separate, forward-compatible format |
 
 Every file MUST begin with a format version so future loaders can migrate or reject old files:
@@ -21,7 +28,10 @@ gs2_version = 1
 
 Unknown `gs2_version` values are a hard error. Loaders MAY accept a range of versions if they implement migration.
 
-TODO: on the first invocation of GS2 copy some default extra configs into the local user systems folder.
+Default-example seeding is implemented by
+`SystemConfig::ensure_default_system_configs`; headless/rail runs skip that host
+preference operation. The original proposal notes below must be read with that
+implemented behavior in mind.
 
 ---
 

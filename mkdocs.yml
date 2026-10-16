@@ -7,7 +7,10 @@ site_dir: site
 
 nav:
   - Overview: Documentation.md
-  - Roadmap: Roadmap.md
+  - Fork Roadmap: AGENTIC_ROADMAP.md
+  - Current Handoff: HANDOFF.md
+  - Developer Setup: DEVELOPMENT_SETUP.md
+  - Upstream Release History: Roadmap.md
 
   # The instrumentation set. This section exists because it was once absent:
   # every document AGENTS.md names as "read first for behavioural changes" and
@@ -20,6 +23,10 @@ nav:
   # Docs/ -- a page that is not in nav is a page a reader cannot reach.
   - Instrumentation & Agentic Oracle:
     - Agentic Oracle Contract: AGENTIC_ORACLE.md
+    - Machine Context: MACHINE_CONTEXT.md
+    - Python and MCP Setup: DebugClient.md
+    - Python Agent Cookbook: gs2debug.md
+    - Debug Wire Protocol: DebugProtocol.md
     - Rails (env contract): A2GSPU_RAILS.md
     - PC Traps: A2GSPU_TRAP.md
     - Closed-Loop Integration: CLOSED_LOOP_INTEGRATION.md
@@ -33,6 +40,8 @@ nav:
     - Getting Started: index.md
     - Menus: Menus.md
     - Selecting a System: Select.md
+    - Saved Config Files: ConfigFiles.md
+    - Config Editor: ConfigEditor.md
     - On Screen Display (OSD): OSD.md
     - Using a Keyboard: KeyboardShortcuts.md
     - Using a Mouse: Mouse.md
@@ -110,15 +119,16 @@ nav:
 # on every build, so the next doc that lands in Docs/ without a nav entry is
 # noisy rather than silently unpublished.
 #
-# This warns today, on purpose, and the list is short and known:
+# This warns today, on purpose. Unlisted pages include historical proposals,
+# design scratch and retained reports; the examples below are not an exhaustive
+# inventory. Current agent entry points are explicitly included in nav above.
 #   SecondSight.md    -- its own first line says to leave it out for now
 #   Woz.md            -- design scratch, not a finished page
 #   NeilA235Floppy.md -- third-party reference text kept verbatim
 #   IIgs_SHR_SCB.md   -- oracle note, wants a home under Internals
 #   Serial_Modem.md   -- linked from Docs/index.md but never navigable
-# Deliberately NOT paired with `strict: true`: that would turn those five into
-# a hard build failure and the fix for them is an editorial decision, not this
-# change's to make.
+# Deliberately NOT paired with `strict: true`: dated reports and reference notes
+# require editorial classification rather than silently becoming active guidance.
 validation:
   nav:
     omitted_files: warn

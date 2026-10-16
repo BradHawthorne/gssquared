@@ -6,7 +6,7 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/vendored/SDL/include",
-                "/usr/local/include",               
+                "/usr/local/include",
                 "/Library/Developer/CommandLineTools/usr/include",
                 "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include"
             ],
@@ -21,25 +21,22 @@
             "configurationProvider": "ms-vscode.cmake-tools"
         },
         {
-            "name": "Win32",
+            "name": "Windows UCRT64",
             "includePath": [
-                "${workspaceFolder}/**",
                 "${workspaceFolder}/src",
+                "${workspaceFolder}/build-local/generated",
                 "${workspaceFolder}/vendored/SDL/include",
-                "${workspaceFolder}/build/generated",
-                "C:/msys64/mingw64/include",
-                "C:/msys64/mingw64/x86_64-w64-mingw32/include"
+                "C:/msys64/ucrt64/include"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE"
             ],
-            "windowsSdkVersion": "10.0.19041.0",
-            "compilerPath": "C:/msys64/mingw64/bin/clang++.exe",
+            "compilerPath": "C:/msys64/ucrt64/bin/g++.exe",
             "cStandard": "c17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "windows-clang-x64",
+            "intelliSenseMode": "windows-gcc-x64",
             "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],

@@ -37,8 +37,10 @@ candidate; repeated historical implementations are not an optimization oracle.
 2. **Upstream sync is manual integration.** The fork pulls upstream in, never pushes out. Every
    ported upstream feature is brought under the instrumentation. The record of what was ported,
    skipped and deferred is [`UPSTREAM_SYNC.md`](UPSTREAM_SYNC.md).
-3. **Dual-mode is a hard invariant.** With no `A2GSPU_*`/`MEMVU_*` environment the emulator is
-   the stock windowed emulator, and instrumentation never taxes that use.
+3. **Dual-mode is a hard invariant.** With no instrumentation environment the
+   emulator retains ordinary windowed use and extra collection is off by default.
+   Pinned unarmed/armed boot gates check guest hashes and cycles; they do not
+   establish zero host-time overhead or identity with every upstream revision.
 4. **Co-pilot.** Telemetry is orthogonal to windowed-vs-headless and human-vs-agent input: an
    agent can read state (`A2GSPU_COPILOT`) while a human drives the window.
 5. **Parallel-safe.** Many agents drive one install. Every run writes into its own directory
@@ -106,9 +108,13 @@ set A2GSPU_BRAM=default
 <checkout>\build\GSSquared.exe -p 5 -d s7d1=<image>.po -n
 ```
 
-The binary is `build/GSSquared.exe` (target `GSSquared`). The first output line is
-`A2GSPU PINS:` — the run's identity; the last is `GSDIAG:`. Two runs with equal PINS lines must
-agree on `GSDIAG`'s `hash=` and `cycles=`; `A2GSPU_EXPECT_HASH` makes that a gate.
+The usual binary is `build/GSSquared.exe` (target `GSSquared`); select the tested
+executable explicitly when using another build. `A2GSPU PINS:` records declared
+run pins and `GSDIAG:` gives the final diagnostic. For matching executable,
+configuration, media/input bytes and pins, compare `hash=` and `cycles=`;
+`A2GSPU_EXPECT_HASH` makes the expected hash a gate. Equal PINS lines alone are
+not a complete replay identity. In the owner's checkout, the in-tree binary is
+protected and stale: follow [HANDOFF.md](HANDOFF.md) for the current tested build.
 
 ## Upstream-sync discipline
 

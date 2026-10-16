@@ -7,6 +7,8 @@ build-web/*
 .cache/*
 build/
 build/*
+# Separate developer build used by README/editor tasks; never the protected consumer.
+/build-local/
 gs2.dSYM/
 hw.dSYM/
 testdev/*

@@ -32,7 +32,10 @@ There is also **`Profiles.txt`**, which is a **catalog** listing available profi
 
 When you launch with a config file path, GSSquared skips the System Select screen and boots straight into that configuration.
 
-**Save System** (writing your current session back to disk) is planned but not fully wired up yet. For now, create configs by editing a `.gs2` file in a text editor.
+The System Select **+** / **Edit…** config editor can create and save `.gs2`
+files; see [ConfigEditor.md](ConfigEditor.md). That implemented editor workflow
+is separate from the proposed **Save System** action for serializing an already
+running session. Hand-editing a `.gs2` remains supported.
 
 ---
 
@@ -100,6 +103,11 @@ These go at the start of the file (before any `[[cards]]` blocks).
 `id` is a UUID that identifies the *machine*, not the filename. On IIgs platforms, battery RAM (Control Panel / NVRAM) is stored as:
 
 `PrefPath/bram/<id>.bin`
+
+That is the ordinary interactive path. This fork's automated runs use their
+working-directory BRAM contract instead; `A2GSPU_BRAM` explicitly pins the initial
+bytes. See [A2GSPU_RAILS.md](A2GSPU_RAILS.md) before assuming a headless run uses
+the interactive machine's persisted Control Panel state.
 
 (for example under `~/Library/Application Support/jawaidbazyar2/GSSquared/bram/` on macOS).
 
@@ -476,7 +484,11 @@ MyConfigs/
     ProDOS_32MB.po
 ```
 
-On macOS, user configs will eventually live under Application Support (for example `~/Library/Application Support/GSSquared/systems/`). Until Save System is implemented, you can keep files anywhere and open them with the folder icon or `-c`.
+Ordinary interactive startup seeds shipped examples into `PrefPath/SystemConfigs`
+(`SystemConfig::ensure_default_system_configs`). You can also keep files elsewhere
+and open them with Launch Config or as a positional CLI argument. `-c N` selects
+a built-in configuration index; it does not take a config filename. Headless/rail
+runs suppress host-preference loading and first-run example seeding.
 
 ---
 

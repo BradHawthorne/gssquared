@@ -60,3 +60,7 @@ After saving, use **Launch Config…**, double-click the `.gs2`, or Open With to
 ## Machine identity (BRAM)
 
 Each `.gs2` file gets a stable **`id`** (UUID). On Apple IIgs configs, battery RAM / Control Panel NVRAM is stored per `id` under your prefs `bram/` folder — so two different configs do not overwrite each other’s BRAM. You normally do not need to edit `id` by hand; GSSquared assigns one when missing. See [Writing Config Files Manually](ConfigFiles.md#machine-identity-id).
+
+This describes ordinary interactive use. Automated fork runs use their own
+working-directory BRAM and explicit `A2GSPU_BRAM` pin; see the
+[rail contract](A2GSPU_RAILS.md). They do not inherit interactive preferences.

@@ -122,6 +122,9 @@ are in [upstream's README](https://github.com/jawaidbazyar2/gssquared) and the
 [User Documentation](Docs/index.md). Contributors should first read
 [AGENTS.md](AGENTS.md) and the [current handoff](Docs/HANDOFF.md), including the
 protected consumer-build rule for the owner's existing checkout.
+Maintained editor tasks and package-tool policy are described in
+[Developer setup](Docs/DEVELOPMENT_SETUP.md); package destinations are restricted
+to this fork.
 
 The fork gate stack is `tools/a2rail/gates.ps1` (PowerShell 7). For the build above,
 set `A2_GSSQUARED` to the absolute `build-local/GSSquared.exe` path on Windows

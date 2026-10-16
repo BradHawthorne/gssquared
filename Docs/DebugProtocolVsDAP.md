@@ -1,5 +1,12 @@
 # GS2 Debug Protocol vs DAP
 
+**Historical comparison of the original debugger surface.** Counts, symbol
+support and JSON restrictions below predate this fork's native agent bridge,
+source/layout companions and machine context. They are not current capability
+claims. Use [DebugProtocol.md](DebugProtocol.md), [DebugClient.md](DebugClient.md)
+and [MACHINE_CONTEXT.md](MACHINE_CONTEXT.md) for implemented contracts; source
+variables/unwind and a DAP/GDB adapter remain separate roadmap work.
+
 Coverage comparison for source- and assembly-level debugging: GSSquared’s binary host protocol ([DebugProtocol.md](DebugProtocol.md), v1) against Microsoft’s [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/specification.html) used by VS Code and similar IDEs.
 
 ## Bottom line

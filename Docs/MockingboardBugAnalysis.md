@@ -1,5 +1,13 @@
 # Mockingboard AY-8910 Emulation: Bug Analysis
 
+**Historical diagnosis of an earlier implementation.** The line references
+and suggested fixes below do not establish current defects or current hardware
+verification. The active audio implementation is under
+`src/devices/mockingboard/`; use the dated
+[sound/time study and its status](fidelity/README.md), current source, and
+`tools/a2rail/mbaudit.ps1` evidence to assess present behavior. MB-Audit covers
+its card tests; a pass does not settle every AY synthesis claim in this report.
+
 ## Reported Symptom
 
 When programs rapidly change each channel's volume register manually (not using

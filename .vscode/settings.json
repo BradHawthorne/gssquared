@@ -74,5 +74,7 @@
     },
     "makefile.configureOnOpen": false,
     "todo-tree.tree.scanMode": "workspace",
-    "todo-tree.tree.showBadges": true
+    "todo-tree.tree.showBadges": true,
+    "cmake.buildDirectory": "${workspaceFolder}/build-local",
+    "cmake.configureOnOpen": false
 }

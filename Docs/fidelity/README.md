@@ -10,6 +10,14 @@ evidence) or recollection (unverified).
 refer to the fork at `ed2c00fc` (before the port) and upstream at `d380e055`. The status column
 below records what has been done since.
 
+**2026-10-16 follow-up:** the study bodies keep their original revision-relative
+claims. Since then the fork added boundary NMI/ABORT/IRQ injection (not mid-bus
+ABORT rollback), SCC/WDM capture, counting profiles, a shared CTRL/socket tool
+dispatcher, MCP and machine context. Read [AGENTIC_ROADMAP.md](../AGENTIC_ROADMAP.md)
+and [MACHINE_CONTEXT.md](../MACHINE_CONTEXT.md) before treating an old absence
+or inventory below as a current implementation task. Unverified hardware
+questions remain unverified; later emulator gates do not become hardware runs.
+
 | Report | Subject |
 |---|---|
 | [memory_video.md](memory_video.md) | FPI decode, shadowing, Mega II `$E0`/`$E1`, soft switches, VGC interrupts and counters, the video scanner |

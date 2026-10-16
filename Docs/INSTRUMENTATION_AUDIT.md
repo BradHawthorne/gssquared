@@ -18,7 +18,8 @@ is a snapshot and its value is that it is one; do not rewrite its findings. But
 both present it without saying what has since closed, and most of §5's programme
 has. An agent taking §5 as a work list sets out to build things that exist; an
 agent reading §2's scorecard concludes the interactive surface is skeletal when
-it is 65 CTRL verbs with a checked reachability table. The cost is wasted work
+it already had 65 CTRL verbs at that closure (74 as of 2026-10-16, with live
+discovery authoritative). The cost is wasted work
 and mis-set expectations, which is why this section is here and the body is not
 touched.
 
@@ -33,10 +34,10 @@ touched.
 | P1.7 DHGR golden rail | **done** | `dhgr-golden` verb + `A2GSPU_DHGR_GOLDEN` SPIKE gate with a named profile |
 | P2.8 split the CTRL dispatcher out of `gs2.cpp` | **done** | the CTRL loop and co-pilot rail are `src/a2gspu_ctrl.cpp`, the verb families `src/a2gspu_ctrl_cmds.cpp`, the spike `src/a2gspu_spike.cpp`, snapshots `src/a2gspu_snapshot.cpp`, micro-tests `src/a2gspu_selftests.cpp`; `gs2.cpp` is the application again. `railparity.ps1` finds verbs by `A2CTRL-DISPATCH` markers, not by file name |
 | P2.9 verb registry auto-listed by `help` | **done** | `verbs[]` in `a2gspu_manifest.hpp` drives `help`, `help <file>` and `manifest <file>` identically, and `railparity.ps1` now fails a verb the dispatcher answers but the table omits |
-| P2.10 platform-matrix ctest | **partial** | `dualsmoke.ps1` runs railcheck + exec + ALTZP on IIe **and** IIgs, and `unarmedhash.ps1` pins a IIe and two IIgs boots; ctest itself is CPU/VIA-level. `tools/a2rail/gates.ps1` runs all of them |
+| P2.10 platform-matrix ctest | **partial** | `dualsmoke.ps1` runs railcheck + exec + ALTZP on IIe **and** IIgs, and `unarmedhash.ps1` pins a IIe and three IIgs boots; native CTests also include snapshot and interface contracts. `tools/a2rail/gates.ps1` runs the fork suites |
 | P3.11 `A2GSPU_PROFILE` preset bundles | **open** | no such rail |
 | P3.12 batch `script` verb | **open** (and arguably a non-goal — `session.ps1`'s header argues against batching the rail) | |
-| P3.13 snapshot classes documented and expanded | **partial** | every snapshot carries a manifest and the class letter is derived from the blocks written; `adb`, `ensoniq`, `vgcint`, `iwm` and `pdblock` are saved. Scanner state is still out — see `INSTRUMENTATION_SHAPE.md` M5 |
+| P3.13 snapshot classes documented and expanded | **partial** | supported blocks now include scanner, storage/media, RTC/ThunderClock, serial/network and several cards. Session clocks, host connections and some synthesis state remain excluded; the file manifest is authoritative — see `INSTRUMENTATION_SHAPE.md` M5 |
 
 §2's scorecard is likewise 2026-07-31. Two of its stated reasons have since
 gone: "root `A2GSPU_INSTRUMENTATION.md` stale" (P0.3) and the D for CTRL↔env parity.

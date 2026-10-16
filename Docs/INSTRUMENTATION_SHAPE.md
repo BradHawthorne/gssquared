@@ -16,8 +16,9 @@ The Rosetta experiment companion binds correctness and native execution to
 measured efficiency. Complete device data flow, presentation and replay remain
 open rather than implied by this interface.
 
-The Status paragraph under each mechanism is the detail; this table is the summary, and it
-is kept to what the code does now. Items listed as open are real work, not wording.
+This table summarizes current status. The mechanism sections retain the historical
+implementation progression; later entries and the table supersede earlier
+intermediate states. Items listed as open are real work, not wording.
 
 | Mechanism | State | Still open |
 |-----------|-------|------------|
@@ -323,7 +324,8 @@ another name warns and the fresh listing has no `T`. The host file is never
 written from a snapshot, as with `pdblock`.
 The scan position is saved but not applied: it belongs to the clock, which is not
 in the snapshot, and restoring it against another clock's frame boundaries drew
-the picture shifted. Still out: floppy media and the clock. The test the roadmap
+the picture shifted. Still out: the session clock; floppy media support is
+described above and has its own compatibility limits. The test the roadmap
 named passes: the Dealer Demo, saved at frame 1200 and restored for 1200
 frames with STOREVIS armed, reports 3,517,548 stores, 851,529 visible,
 469,605 device, 46,494 slow-side, 335,430 shadowed; the cold-run difference

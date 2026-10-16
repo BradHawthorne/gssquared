@@ -1,5 +1,13 @@
 # GSSquared Todo List
 
+**Historical upstream inventory.** Issue states and feature checkboxes below
+are dated observations, not a live GitHub issue mirror or this fork's task
+queue. In particular, this fork has ROM personalities and snapshot facilities
+that several old unchecked items predate. Current fork work and outstanding
+limits live in [AGENTIC_ROADMAP.md](AGENTIC_ROADMAP.md), with integration
+dispositions in [UPSTREAM_SYNC.md](UPSTREAM_SYNC.md). Preserve the historical
+states below rather than treating them as fresh implementation requests.
+
 Curated from open items, unchecked boxes, status tables, and known issues across `Docs/*.md`, plus open GitHub issues.
 
 Many older checkboxes in `DevelopLog.md` are historical; this list prefers items that still appear open in feature docs, compatibility notes, or the roadmap. When a doc is clearly stale relative to `Roadmap.md`, the roadmap wins and the stale item is omitted or called out.

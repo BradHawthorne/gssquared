@@ -1,5 +1,9 @@
 # Using GSSquared - User Documentation
 
+For this fork's agent interfaces, start with [Machine context](MACHINE_CONTEXT.md),
+[Python/MCP setup](DebugClient.md), [the rail reference](A2GSPU_RAILS.md) and
+[the current roadmap](AGENTIC_ROADMAP.md). The user guide below covers interactive use.
+
 * [Menus](Menus.md)
 
 * [Selecting a system](Select.md)

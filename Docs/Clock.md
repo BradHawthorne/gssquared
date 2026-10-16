@@ -1,5 +1,11 @@
 # Clock abstraction
 
+**Historical implementation notes.** The questions and future-tense steps below
+are the original design journal. Current clocks are implemented in `src/NClock.hpp`;
+[MACHINE_CONTEXT.md](MACHINE_CONTEXT.md) describes exposed clock domains and
+scheduler observations. The deferred upstream clock refactor is drift D in
+[AGENTIC_ROADMAP.md](AGENTIC_ROADMAP.md), not an implicit instruction to apply it.
+
 Probably the next thing I should do is figure out and implement the Apple IIgs RAM/ROM/MegaII cycle timing.
 
 Rather than putting in increasingly more complex logic into incr_cycle, I should probably do this:

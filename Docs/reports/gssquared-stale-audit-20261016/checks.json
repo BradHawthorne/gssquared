@@ -1,0 +1,43 @@
+{
+  "starting_commit": "21b88bb1facb400a9d365580788bfbc9c6d66866",
+  "local_markdown_links_checked": 418,
+  "missing_local_destinations": [],
+  "changed_document_anchors_checked": 17,
+  "invalid_changed_document_anchors": [],
+  "nav_destinations_checked": 83,
+  "editor_tasks": 13,
+  "editor_launch_targets": 11,
+  "editor_task_graph_acyclic": true,
+  "python_sources_parsed": 92,
+  "powershell_sources_parsed": 21,
+  "release_policy_tests": {
+    "passed": 11,
+    "failed": 0
+  },
+  "python_client_tests": {
+    "passed": 21,
+    "failed": 0
+  },
+  "fork_gates": {
+    "passed": 14,
+    "failed": 0
+  },
+  "native_ctest": {
+    "passed": 14,
+    "failed": 0
+  },
+  "executable": "D:\\gsqs\\pub-20261016\\build\\GSSquared.exe",
+  "executable_sha256": "9b6a866d851855d4f6fa49d47468a13ca295058ad218c47841c6fccefbfd7342",
+  "executable_source_checkpoint": "bd276467a2cd1f989dae9bc3c062441af9fad172",
+  "native_sources_unchanged": true,
+  "protected_consumer_sha256_unchanged": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "git_diff_check_exit_code": 0,
+  "publication_scan": "No high-confidence private-key/GitHub-token patterns in selected changes; heuristic, not exhaustive",
+  "limits": [
+    "No rendered MkDocs site (module unavailable)",
+    "No interactive IDE/Instruments test",
+    "No new native build (emulator code unchanged)",
+    "No multi-host package build/upload",
+    "No physical-hardware measurement or full replay claim"
+  ]
+}
