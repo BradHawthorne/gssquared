@@ -8,10 +8,11 @@ Read this first, then `Docs/AGENTIC_ROADMAP.md` (the task list) and `Docs/report
 completion points. Completed, reviewed and validated work may be committed and
 fast-forward pushed to the existing `origin/a2gspu` without asking again at each
 ordinary closeout. This supersedes the old blanket no-push rule for that scope.
-The first catch-up publication is in progress; see section 7 and the roadmap.
-The 2026-10-16 integrated agent-interface/context/design checkpoint is undergoing
-validation from an exported committed tree before the authorized fork sync.
-Evidence is in `Docs/reports/gssquared-publication-20261016/README.md`.
+The first catch-up publication is complete: the integrated agent-interface/context/
+design checkpoint `bd276467` passed fresh exported-tree validation, was pushed,
+and its remote SHA was independently confirmed. This closeout receipt follows
+the same commit/sync cadence. Evidence is in
+`Docs/reports/gssquared-publication-20261016/README.md`.
 
 **Design direction, 2026-10-16:** instrumentation must support CIDAR-driven
 architectural understanding and measured primitive refinement across Rosetta
@@ -23,9 +24,11 @@ The design-only checkpoint and pending integration slices are recorded in
 Updated by the coherency audit, the owner's explicit P0.1-P0.4 approval, and the
 subsequent task-queue iterations implementing P2.1 and P2.4 on 2026-10-15.
 The 2026-10-16 continuation adds exposed machine context and context-bound
-Rosetta efficiency experiments; the latest validated executable is
-`D:\gsqs\coherency-20261015\build\GSSquared-awareness.exe` (see the report's
-`validation.json` and tested `mcp-launch.json`).
+Rosetta efficiency experiments. The latest fresh publication build is
+`D:\gsqs\pub-20261016\build\GSSquared.exe`, compiled from `bd276467`;
+its identity and results are in the publication report's `validation.json`.
+The earlier preserved `GSSquared-awareness.exe` and tested `mcp-launch.json`
+remain documented in the machine-context report.
 The original Claude-to-Codex handoff and the assessment reports are historical evidence; current status is below.
 
 ## 1. What this repo is
@@ -46,7 +49,7 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 
 | Item | State |
 | --- | --- |
-| Branch `a2gspu` | Catch-up publication in progress from audited base `834028cd` (68 commits ahead of `origin/a2gspu` at `ed2c00fc`). The completed agent-interface/context/design work is selected as one integrated checkpoint; fresh exported-tree validation and sync evidence are retained in `gssquared-publication-20261016/` |
+| Branch `a2gspu` | Integrated checkpoint `bd276467` published and independently verified on GitHub, including the previous 68 local commits. Fresh exported-tree Release: 14/14 gates, 14/14 native CTests, 21/21 Python tests, 3/3 affected Rosetta tests. Documentation receipts follow the same phase-end sync; see `gssquared-publication-20261016/` |
 | Upstream main | Network refreshed 2026-10-15: `643e6c21`; separate `1.1/ntscshader` development branch at `0aed0214` assessed in the upstream observation report |
 | Drift stage A | **Done:** nine upstream commits cherry-picked with `-x` (`7481a130`..`053a4e14`) |
 | Drift stages B-E | **Awaiting the owner's approval** (`Docs/AGENTIC_ROADMAP.md` §1) |
@@ -80,8 +83,8 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
   `GSSQUARED_ROOT` to this source checkout. `dualsmoke` now runs ctest beside the
   selected executable, avoiding accidental validation of the stale in-tree build.
 - **File-harness filename constraint:** use
-  `D:\gsqs\coherency-20261015\build\GSSquared.exe` for the PowerShell gate stack.
-  Its bytes match `GSSquared-awareness.exe`, but existing file-harness liveness
+  `D:\gsqs\pub-20261016\build\GSSquared.exe` for the latest PowerShell gate stack.
+  Existing file-harness liveness
   checks reject a renamed process. The CIDAR design report retains that failure
   and the roadmap tracks the identity/diagnostic fix. The Python/MCP launch
   descriptor's preserved alias is a separate supported path.
@@ -108,11 +111,10 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 
 ## 5. Completed continuation and next decisions
 
-- **Current closeout: bring GitHub current.** Publication review selects the
-  interdependent agent interfaces, clients, tests and context/design documentation
-  as one integrated checkpoint. Validate its committed inputs in scratch, then
-  fast-forward push and verify the remote SHA. Unfinished CIDAR, replay, drift
-  and model work remain named open tasks rather than blocking finished work.
+- **GitHub catch-up complete.** The interdependent agent interfaces, clients,
+  tests and context/design documentation are published as `bd276467` after
+  fresh committed-input validation and remote verification. Continue phase-end
+  sync; unfinished CIDAR, replay, drift and model work remain named open tasks.
 
 - **P0.1-P0.4 were approved separately from drift and the engine merge:**
   - SCC A/B completed-TX capture to explicit files or existing pipes;
@@ -182,6 +184,10 @@ publication evidence.
    changed candidate. Authentication or publication-review failures are real
    blockers to report, not successful syncs. A required history rewrite remains
    a separate owner decision.
+   On this host, MSYS2 Git has no usable push credential, while the installed
+   Windows Git uses its existing `manager` credential helper. Invoke
+   `C:/Program Files/Git/cmd/git.exe` from MSYS2 bash for the push if needed;
+   do not copy credentials or change remotes. That path completed this catch-up.
 6. **Verify and report.** Query `origin` after the push and confirm its branch
    SHA equals the published local commit. Report the checkpoint, validation,
    remote link and any work intentionally left local. Update the roadmap and

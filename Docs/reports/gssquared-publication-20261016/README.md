@@ -52,12 +52,50 @@ repository and are not staged or pushed here.
 
 ## Validation and publication
 
-Pending: commit the selected checkpoint, export its tracked source with detached
-scratch Git identity, copy pinned dependencies and explicit local test inputs,
-then configure/build and run native/Python/full fork gates plus affected Rosetta
-checks. The export must not borrow untracked implementation files from this
-working checkout. Retain candidate/tree/tool/input identities and results.
+**Published source checkpoint:** `bd276467a2cd1f989dae9bc3c062441af9fad172`,
+tree `a8106f71cbd32d72146801f18393f09a76e502fe`. The explicit selection committed
+287 source/client/test/document/evidence files. A stale zero-byte index lock
+from the preceding day was removed only after confirming no Git writer was
+active. The original working tree was clean after the commit.
 
-Only after those checks pass: recheck origin, fast-forward push the explicit
-branch, and independently verify its SHA. Publication and verification results
-will be added here before closeout.
+Fresh validation used `D:/gsqs/pub-20261016/src` exported from that commit and
+`D:/gsqs/pub-20261016/build`, configured for Release/UCRT64 GCC/Ninja. No untracked
+implementation files were borrowed. Root dependency source came from the exact
+gitlink objects; SDL_ttf's four nested revisions were fetched from their declared
+public URLs into scratch because local nested metadata was unavailable. Original
+vendored source/configuration remained untouched. Dependency tracked content
+was checked after validation, with Windows file modes ignored and the recorded
+macOS-framework symlinks omitted. This is Windows validation, not a macOS build.
+Eight ignored local ROM/corpus inputs were explicitly copied and digest-checked.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Fresh configure and build | PASS; 88 warning lines retained | `configure.log`, `build.log` |
+| Native CTest | 14/14 PASS | `gates.log`, dualsmoke |
+| Exported Python package | 21/21 PASS | `python-tests.log` |
+| Full fork gates | 14/14 PASS, no skips | `gates.log`, `gates.ndjson` |
+| Pinned stock/armed boots | 42 checks over four boots PASS; baseline hashes/cycles unchanged | `gates.log`, unarmedhash |
+| Affected Rosetta integration | CTRL session, external CPU differential and coverage mapping: 3/3 PASS | `rosetta-integration.log`, `rosetta-coverage.log` |
+| CPU classification | 103 vectors: 100 identical; three known COP/BRK stop-policy differences; zero cycle-only differences | `rosetta-compare.txt` |
+| Candidate, dependencies, local pins and protected consumer identity | PASS | `validation.json`, `final-identity-check.log` |
+
+Executable SHA256:
+`9b6a866d851855d4f6fa49d47468a13ca295058ad218c47841c6fccefbfd7342`.
+Protected consumer SHA256 remains
+`af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c`.
+No new full Rosetta run, manual stock-windowed check, physical-IIgs measurement
+or replay completeness claim is made. Rosetta's pre-existing local modifications
+remain in that repository.
+
+The final outgoing scan covered 1,242 blobs / 27,405,363 bytes through the
+candidate, with no high-confidence credential-pattern matches. The MSYS2 Git
+push failed noninteractively for missing credentials (`push-candidate.log`).
+The installed Windows Git's existing `manager` helper then completed the normal
+fast-forward `ed2c00fc..bd276467` (`push-candidate-windows.log`). No credentials
+or remote configuration were changed. An independent `git ls-remote` confirmed
+the exact candidate SHA on `refs/heads/a2gspu` (`remote-candidate.log`).
+
+This documentation-only closeout receipt follows the same ordinary commit/push
+cadence. It retains the published candidate's runtime evidence; implementation
+files remain unchanged from that validated commit. The final branch SHA is
+verified again after syncing this receipt and reported at task closeout.

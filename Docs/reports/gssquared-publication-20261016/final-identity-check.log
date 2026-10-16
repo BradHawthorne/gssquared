@@ -1,0 +1,5 @@
+PASS exact committed candidate and unchanged exported tracked content
+PASS 14/14 fork gates; 14/14 native CTests; 21/21 Python tests
+PASS 3/3 affected Rosetta tests, 103-vector known classification preserved
+PASS eight local pin hashes and protected consumer identity unchanged
+Executable SHA256: 9b6a866d851855d4f6fa49d47468a13ca295058ad218c47841c6fccefbfd7342

@@ -1,0 +1,4 @@
+vectors=103 identical=100 state-diff=3 cycle-only-diff=0
+STATE COP 12 native            S,PC,P MEM CYC ros=7 gsq=8
+STATE BRK native               S,PC,P MEM CYC ros=7 gsq=8
+STATE BRK emulation            S,PC,P MEM

@@ -1,0 +1,13 @@
+Test project D:/gsqs/interface-completeness-20261015/rosetta-build
+    Start 26: gssquared_coverage_mapping
+1/1 Test #26: gssquared_coverage_mapping .......   Passed    2.65 sec
+
+100% tests passed out of 1
+
+Label Time Summary:
+behavioral      =   2.65 sec*proc (1 test)
+coverage        =   2.65 sec*proc (1 test)
+differential    =   2.65 sec*proc (1 test)
+gssquared       =   2.65 sec*proc (1 test)
+
+Total Test time (real) =   2.67 sec

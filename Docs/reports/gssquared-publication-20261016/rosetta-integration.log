@@ -1,0 +1,17 @@
+Test project D:/gsqs/interface-completeness-20261015/rosetta-build
+    Start 149: ctrl_session
+1/2 Test #149: ctrl_session .....................   Passed    3.39 sec
+    Start 208: lib65816_cpu_differential
+2/2 Test #208: lib65816_cpu_differential ........   Passed    4.94 sec
+
+100% tests passed out of 2
+
+Label Time Summary:
+behavioral      =   8.33 sec*proc (2 tests)
+ctrl            =   3.39 sec*proc (1 test)
+differential    =   8.33 sec*proc (2 tests)
+gssquared       =   8.33 sec*proc (2 tests)
+lib65816        =   4.94 sec*proc (1 test)
+loop04          =   4.94 sec*proc (1 test)
+
+Total Test time (real) =   8.34 sec

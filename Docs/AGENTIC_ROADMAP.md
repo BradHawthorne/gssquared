@@ -27,24 +27,25 @@ real-hardware witnesses and the existing replay/drift prerequisites.
 file is the tracked summary. The owner's 2026-10-16 direction makes normal
 commit/sync part of validated phase closeout; the policy is `HANDOFF.md` section 7.
 
-**Current closeout — catch up GitHub (in progress, not yet published).** Origin was
-fetched on 2026-10-16: GitHub's default/working branch is `a2gspu`, at
-`ed2c00fc` (2026-09-16); local `834028cd` is 68 commits ahead and 0 behind.
-At planning time there are 90 modified tracked files and 189 untracked files,
-including the prior continuations' source, clients, tests and report evidence.
+**GitHub catch-up complete (2026-10-16).** The integrated checkpoint
+`bd276467` is published on `origin/a2gspu`, independently verified by a live
+remote query. It includes the previous 68 local commits plus the completed
+agent-interface/context/design work. The starting point was GitHub
+`ed2c00fc` (2026-09-16), local `834028cd`, and the accumulated dirty tree.
 Detailed evidence: `reports/gssquared-github-cadence-20261016/README.md`.
 The execution record is `reports/gssquared-publication-20261016/README.md`.
 
 | Closeout task, before another major feature phase | State / completion evidence |
 | --- | --- |
 | Review outgoing history and complete file inventory for publication | Reviewed: 68 outgoing commits, 960 outgoing blobs and 284 selected changed/new files at the initial inventory; high-confidence credential scan finds no matches; no newly selected binary artifacts |
-| Commit the completed agent-interface/context/design checkpoint | In progress; one integrated checkpoint preserves the native/client/test/discovery dependencies |
-| Verify selected tracked candidate and record validation | In progress; fresh selected-input build, native/client checks and all fork gates, with unchanged pinned witnesses and relevant consumer checks |
-| Fast-forward sync and verify `origin/a2gspu` | Pending; explicit ordinary push, independently confirmed matching remote SHA and a checkpoint summary |
+| Commit the completed agent-interface/context/design checkpoint | Complete: `bd276467`, one integrated 287-file checkpoint preserving native/client/test/discovery dependencies |
+| Verify selected tracked candidate and record validation | Complete: fresh exported committed inputs, pristine pinned dependency objects, 14/14 native CTests, 21/21 Python tests, all 14 gates and 3/3 affected Rosetta checks; pinned boot witnesses unchanged |
+| Fast-forward sync and verify `origin/a2gspu` | Complete: `ed2c00fc` -> `bd276467`, explicit ordinary push and independent matching remote SHA; documentation receipt follows the same cadence |
 | Repeat commit/sync at subsequent coherent phase boundaries | Standing owner-authorized practice; report unsynced completed work or concrete blockers at handoff |
 
-Publication closes a completed phase; it does not require finishing all future
-roadmap items. The owner has now directed execution of this closeout.
+Publication closes this completed phase; it does not require finishing all
+future roadmap items. Next integration work remains in the CIDAR queue below;
+the renamed-process harness issue is also still open.
 
 **CIDAR design direction, 2026-10-16 — recorded, integration pending.** The
 paired shared-foundation contracts now require architectural understanding,

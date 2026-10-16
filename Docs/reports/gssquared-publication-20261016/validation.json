@@ -1,0 +1,439 @@
+{
+  "candidate": "bd276467a2cd1f989dae9bc3c062441af9fad172",
+  "tree": "a8106f71cbd32d72146801f18393f09a76e502fe",
+  "exported_source": "D:\\gsqs\\pub-20261016\\src",
+  "build": "D:\\gsqs\\pub-20261016\\build",
+  "executable_sha256": "9b6a866d851855d4f6fa49d47468a13ca295058ad218c47841c6fccefbfd7342",
+  "protected_consumer_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "native_ctest": {
+    "passed": 14,
+    "failed": 0
+  },
+  "python_tests": {
+    "passed": 21,
+    "failed": 0
+  },
+  "gates": [
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 1.7,
+      "suite": "railparity",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:41:44.7234112Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 0.1,
+      "suite": "artifacts",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:41:44.8865640Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 0.1,
+      "suite": "gdiff",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:41:45.0085517Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 0.6,
+      "suite": "buscompare",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:41:45.6334342Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 58.3,
+      "suite": "bisect",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:42:43.9336493Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 109.9,
+      "suite": "agentic",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:44:33.8319462Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 20.8,
+      "suite": "dualsmoke",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:44:54.6310662Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 25.7,
+      "suite": "personality",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:45:20.2990171Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 2.3,
+      "suite": "protocol",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:45:22.6194831Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 3.8,
+      "suite": "copilot",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:45:26.4582518Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 12.8,
+      "suite": "assertparity",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:45:39.3089497Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 74.8,
+      "suite": "unarmedhash",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:46:54.0925479Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 5.8,
+      "suite": "hwtruth",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:46:59.8819375Z",
+      "note": ""
+    },
+    {
+      "schema": "a2gates-event-v1",
+      "seconds": 8.0,
+      "suite": "mbaudit",
+      "outcome": "PASS",
+      "rc": 0,
+      "ts": "2026-10-16T09:47:07.9016378Z",
+      "note": ""
+    }
+  ],
+  "rosetta_tests": [
+    "ctrl_session",
+    "lib65816_cpu_differential",
+    "gssquared_coverage_mapping"
+  ],
+  "cpu_differential": "vectors=103 identical=100 state-diff=3 cycle-only-diff=0\nSTATE COP 12 native            S,PC,P MEM CYC ros=7 gsq=8\nSTATE BRK native               S,PC,P MEM CYC ros=7 gsq=8\nSTATE BRK emulation            S,PC,P MEM\n",
+  "dependencies_and_local_pins": {
+    "candidate": "bd276467a2cd1f989dae9bc3c062441af9fad172",
+    "tree": "a8106f71cbd32d72146801f18393f09a76e502fe",
+    "source": "D:\\gsqs\\pub-20261016\\src",
+    "dependencies": {
+      "vendored/SDL": {
+        "commit": "536126fdcf6b507074f9a9240c0630e748658e1f",
+        "input_model": "exported pinned Git objects",
+        "sha256": "d5b52761d16ae4989a21a1842085f4811cb5ce5d94dd67d00d0ee18fecafef72",
+        "files": 2126
+      },
+      "vendored/SDL_image": {
+        "commit": "0891a7f1d4f8ee5c7336a102713a2ceee03db357",
+        "input_model": "exported pinned Git objects",
+        "sha256": "028a4dfd76df699a3359336f2e367194538f4254072904e6ced2439cf79c5b8b",
+        "files": 354
+      },
+      "vendored/SDL_net": {
+        "commit": "92022dc5f604b435e346cf6d56cd80cf05271815",
+        "input_model": "exported pinned Git objects",
+        "sha256": "658256dbba4872043dd15e91dafda97f80face600ed13e9d31095d11d962e138",
+        "files": 226
+      },
+      "vendored/SDL_ttf": {
+        "commit": "b9e7e9381bc8a3e816de8a2b2b76b0749238e69a",
+        "input_model": "exported pinned Git objects",
+        "sha256": "06d7a4ca1ef3392f49987fb5ae1ddc32067db1ad8f7922c86be01bf4f24a688e",
+        "files": 4632
+      },
+      "vendored/libslirp": {
+        "commit": "dd76415fce457e319d665eb8210d05c5731360ba",
+        "input_model": "exported pinned Git objects",
+        "sha256": "8ff42ddf3b3490aea12fffb586979652f74ae58847795812926d9f58c1550c46",
+        "files": 120
+      },
+      "vendored/SDL_ttf/external/freetype": {
+        "commit": "9973564cfa63763a3e4ac67c09147899539b1e07",
+        "url": "https://github.com/libsdl-org/freetype.git",
+        "input_model": "exported exact parent gitlink revision",
+        "sha256": "7733b7925067456be9d0eeb477c9ee267cc691564e9d6148cab9dc922a2b522a",
+        "files": 732
+      },
+      "vendored/SDL_ttf/external/harfbuzz": {
+        "commit": "fbb8d128270da81725538a6cc5427e1a155a6580",
+        "url": "https://github.com/libsdl-org/harfbuzz.git",
+        "input_model": "exported exact parent gitlink revision",
+        "sha256": "46c1379b153b96dd05b5878bbbdf0cfbf60af41291c2220892def6c9b5bbc706",
+        "files": 3564
+      },
+      "vendored/SDL_ttf/external/plutosvg": {
+        "commit": "dc5ea47b2519205a2924bbf9e505c1aac6573109",
+        "url": "https://github.com/libsdl-org/plutosvg.git",
+        "input_model": "exported exact parent gitlink revision",
+        "sha256": "b1d0b11b9ee700a0edc3164046f2010f42c9960f44bf96b35cfa96447a7938cb",
+        "files": 21
+      },
+      "vendored/SDL_ttf/external/plutovg": {
+        "commit": "c42264b70c4fbb22d33217580fd9b077c7b3a62c",
+        "url": "https://github.com/libsdl-org/plutovg.git",
+        "input_model": "exported exact parent gitlink revision",
+        "sha256": "dc405568fdae28bb5957ea7fbbe495e05073e05dd105dd2147270093281a5a6d",
+        "files": 35
+      }
+    },
+    "local_inputs": {
+      "assets/roms/apple2gs3/main.rom": {
+        "sha256": "4e606469961649381216b2a61334ccb29af4da90c630df19214b08ff7fdb9bc5",
+        "bytes": 262144
+      },
+      "assets/roms/apple2gs3/char.rom": {
+        "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+        "bytes": 16384
+      },
+      "assets/roms/apple2gs4/main.rom": {
+        "sha256": "565d8ca073e5c46367ca56d4b12827020e76e6a0bf6c2300da0989161aa34ad9",
+        "bytes": 262144
+      },
+      "assets/roms/apple2gs4/char.rom": {
+        "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+        "bytes": 16384
+      },
+      "corpus/DOS3.3_MASTER.dsk": {
+        "sha256": "eac550ddb65ef9b8ae34f6fe3523ec6572a5672e7ae07becc950acfdd185dbb1",
+        "bytes": 143360
+      },
+      "corpus/gsos601.po": {
+        "sha256": "ae7ca90bab81f379c9ff5770d50565e0cbec4f9b633872c2119282e4a0e2778e",
+        "bytes": 33554432
+      },
+      "corpus/_finder.po": {
+        "sha256": "4f440bacbdbe8a0180479c7ebac853d41f2777042cb46343f2f14322c31b024e",
+        "bytes": 33553920
+      },
+      "corpus/mb-audit-v1.61.po": {
+        "sha256": "d1d94dd3d1254dc46c5aa3c943c9d67cd3cc77a199df5c6738ee3c78a7a38f8a",
+        "bytes": 143360
+      }
+    },
+    "dependency_symlink_model": "Git symlinks recorded but not materialized for Windows build; platform framework links are outside this validation.",
+    "omitted_dependency_symlinks": [
+      {
+        "path": "vendored/SDL_image/Xcode/macOS/SDL3.framework/Headers",
+        "target": "Versions/Current/Headers"
+      },
+      {
+        "path": "vendored/SDL_image/Xcode/macOS/SDL3.framework/Resources",
+        "target": "Versions/Current/Resources"
+      },
+      {
+        "path": "vendored/SDL_image/Xcode/macOS/SDL3.framework/SDL3.tbd",
+        "target": "Versions/Current/SDL3.tbd"
+      },
+      {
+        "path": "vendored/SDL_image/Xcode/macOS/SDL3.framework/Versions/Current",
+        "target": "A"
+      },
+      {
+        "path": "vendored/SDL_net/Xcode/macOS/SDL3.framework/Headers",
+        "target": "Versions/Current/Headers"
+      },
+      {
+        "path": "vendored/SDL_net/Xcode/macOS/SDL3.framework/Resources",
+        "target": "Versions/Current/Resources"
+      },
+      {
+        "path": "vendored/SDL_net/Xcode/macOS/SDL3.framework/SDL3.tbd",
+        "target": "Versions/Current/SDL3.tbd"
+      },
+      {
+        "path": "vendored/SDL_net/Xcode/macOS/SDL3.framework/Versions/Current",
+        "target": "A"
+      },
+      {
+        "path": "vendored/SDL_ttf/Xcode/macOS/SDL3.framework/Headers",
+        "target": "Versions/Current/Headers"
+      },
+      {
+        "path": "vendored/SDL_ttf/Xcode/macOS/SDL3.framework/Resources",
+        "target": "Versions/Current/Resources"
+      },
+      {
+        "path": "vendored/SDL_ttf/Xcode/macOS/SDL3.framework/SDL3.tbd",
+        "target": "Versions/Current/SDL3.tbd"
+      },
+      {
+        "path": "vendored/SDL_ttf/Xcode/macOS/SDL3.framework/Versions/Current",
+        "target": "A"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_icmp6/ndp.pcap",
+        "target": "../IN_ndp/ndp.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/DNS_freedesktop_1-1-1-1.pcap",
+        "target": "../IN_udp/DNS_freedesktop_1-1-1-1.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/dhcp.pkt",
+        "target": "../IN_dhcp/dhcp.pkt"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/dhcp_capture.pcap",
+        "target": "../IN_dhcp/dhcp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/icmp_capture.pcap",
+        "target": "../IN_icmp/icmp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/nc-10.0.2.2-8080.pcap",
+        "target": "../IN_tcp/nc-10.0.2.2-8080.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/nc-ident.pcap",
+        "target": "../IN_tcp/nc-ident.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/ping_10-0-2-2.pcap",
+        "target": "../IN_icmp/ping_10-0-2-2.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/tcp_qemucapt.pcap",
+        "target": "../IN_tcp/tcp_qemucapt.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/tftp-get-blah.pkt",
+        "target": "../IN_tftp/tftp-get-blah.pkt"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/tftp_capture.pcap",
+        "target": "../IN_tftp/tftp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip-header/tftp_get_libslirp-txt.pcap",
+        "target": "../IN_tftp/tftp_get_libslirp-txt.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip6-header/DNS_freedesktop_1-1-1-1.pcap",
+        "target": "../IN_udp6/DNS_freedesktop_1-1-1-1.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip6-header/icmp_capture.pcap",
+        "target": "../IN_icmp6/icmp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip6-header/ping_10-0-2-2.pcap",
+        "target": "../IN_icmp6/ping_10-0-2-2.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip6-header/tcp_qemucapt.pcap",
+        "target": "../IN_tcp6/tcp_qemucapt.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip6-header/tftp_capture.pcap",
+        "target": "../IN_udp6/tftp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_ip6-header/tftp_get_libslirp-txt.pcap",
+        "target": "../IN_udp6/tftp_get_libslirp-txt.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_tcp-d",
+        "target": "IN_tcp"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_tcp-h",
+        "target": "IN_tcp"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_tcp6-d",
+        "target": "IN_tcp6"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_tcp6-h",
+        "target": "IN_tcp6"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp-h",
+        "target": "IN_udp"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp/dhcp.pkt",
+        "target": "../IN_dhcp/dhcp.pkt"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp/dhcp_capture.pcap",
+        "target": "../IN_dhcp/dhcp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp/tftp-get-blah.pkt",
+        "target": "../IN_tftp/tftp-get-blah.pkt"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp/tftp_capture.pcap",
+        "target": "../IN_tftp/tftp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp/tftp_get_libslirp-txt.pcap",
+        "target": "../IN_tftp/tftp_get_libslirp-txt.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp6-h",
+        "target": "IN_udp6"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp6/tftp_capture.pcap",
+        "target": "../IN_tftp6/tftp_capture.pcap"
+      },
+      {
+        "path": "vendored/libslirp/fuzzing/IN_udp6/tftp_get_libslirp-txt.pcap",
+        "target": "../IN_tftp6/tftp_get_libslirp-txt.pcap"
+      },
+      {
+        "path": "vendored/SDL_ttf/external/harfbuzz/README",
+        "target": "README.md"
+      }
+    ]
+  },
+  "source_content_unchanged_during_validation": true,
+  "dependency_tracked_content_unchanged_except_declared_symlink_omissions": true,
+  "source_model": "Committed root tree; dependency Git objects and eight explicit ignored local inputs; Windows filemode ignored and dependency symlinks excluded as recorded.",
+  "build_warning_lines": 88,
+  "limits": [
+    "No new full Rosetta rerun",
+    "No manual stock windowed validation",
+    "No physical IIgs measurement",
+    "No full replay claim",
+    "No consumer binary replacement or engine/drift merge"
+  ]
+}

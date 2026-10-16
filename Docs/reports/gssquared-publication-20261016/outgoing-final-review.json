@@ -1,0 +1,10 @@
+{
+  "base": "ed2c00fca3f951788d6ed6cc2a81595247f0ed88",
+  "head": "bd276467a2cd1f989dae9bc3c062441af9fad172",
+  "outgoing_commits": 69,
+  "outgoing_blobs_scanned": 1242,
+  "outgoing_blob_bytes": 27405363,
+  "selected_files": [],
+  "findings": [],
+  "scanner_scope": "High-confidence credential patterns in every outgoing blob and selected file; heuristic review aid, not a complete secret/content audit."
+}
