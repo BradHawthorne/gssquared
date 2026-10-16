@@ -1,0 +1,28 @@
+{
+  "schema": "gssquared-consumer-refresh-v1",
+  "source_commit": "813914febce9d99f9d2300eb423990bb578a0e0b",
+  "executable": "D:\\projects\\gssquared-fork\\build\\GSSquared.exe",
+  "sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+  "rollback": "D:\\gsqs\\consumer-20261016\\build-rollback",
+  "rollback_executable_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "gates": 14,
+  "native_ctests": 14,
+  "python_client_tests": 21,
+  "mcp_descriptor_launches": 2,
+  "mcp_tools": 85,
+  "native_verbs": 74,
+  "rails": 161,
+  "wire_types": 32,
+  "unchanged_boot_checks": 42,
+  "candidate_name_during_gates": "D:\\projects\\gssquared-fork\\build\\GSSquared.candidate.exe",
+  "promoted_same_bytes": true,
+  "scratch": "D:\\gsqs\\tmp",
+  "manual_stock_windowed_ux": "not exercised",
+  "dependencies": "Existing vendored worktree retained. Top-level pins match gitlinks; pre-existing macOS framework-link differences and unavailable nested Git metadata remain. No vendored edits or repairs performed.",
+  "temp_cleanup": {
+    "archived_source_bytes": 21071283894,
+    "directories": 31,
+    "archive_root": "E:\\agent-temp-archive",
+    "private_receipt": "D:/gsqs/cspace-summary-20261016.json"
+  }
+}

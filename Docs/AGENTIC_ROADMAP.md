@@ -2,6 +2,13 @@
 
 > **North star (owner, 2026-10-15):** "my goal is always for our gssquared-fork to be the definitive partner tool for full agentic ai closed loop development along side Rosetta." Every task here is judged by how much it advances that: an agent can build with Rosetta, run and observe in this emulator, and verify, closed-loop and deterministically, without a human in the loop.
 
+**Consumer refresh, 2026-10-16:** separately approved and complete. The in-tree
+consumer now builds published `813914fe`: 14/14 gates, 14/14 native tests,
+21 client tests, two final-path MCP launches and 42 unchanged boot checks.
+The whole September 17 build is preserved for rollback. Source/binary identity,
+tested descriptor and scoped C: scratch cleanup:
+`reports/gssquared-consumer-refresh-20261016/README.md`.
+
 **Machine-context iteration, 2026-10-16:** the owner's exposed-architecture
 direction now has a native `context` interface: synchronized observations,
 compiled/installed/absent topology, device/mapping/IRQ/stop/reference-pixel
@@ -17,7 +24,7 @@ See `MACHINE_CONTEXT.md` and
 Final Release: ctest 14/14, gates 14/14 and Python 21/21. Eight real Rosetta
 efficiency pairs, actual wrong-result controls, C statement/value proof on
 65816 IIe/IIgs, and the 103-vector CPU classification pass their contracts.
-Pinned baselines and protected consumer binary are unchanged. The preserved
+At that checkpoint, pinned baselines and the protected consumer were unchanged. The preserved
 `GSSquared-awareness.exe` and tested MCP descriptor are named in that report.
 Remaining work is explicit: all device-local fields/timers, universal causal
 data flow/last writers, full presentation models, source variables/unwind,
@@ -166,7 +173,8 @@ Upstream main was still at 643e6c21 on 2026-10-15.
 after `834028cd`; see `Docs/reports/gssquared-coherency-p0-20261015/README.md`
 for validation: Release build, ctest 12/12, all 13 gates green, baselines unchanged.
 This approval excludes drift B-E, the engine merge,
-and rebuilding the consumer-facing in-tree binary.
+and rebuilding the consumer-facing in-tree binary. The latter was separately
+approved and completed on 2026-10-16; see the refresh report above.
 
 | Task | Why | Size | Gate |
 | --- | --- | --- | --- |
@@ -187,7 +195,7 @@ all suggestions from the live black-box audit. The acceptance queue and evidence
 are in `Docs/reports/gssquared-interface-completeness-20261015/README.md`.
 Work starts with accurate discovery, native typed observations and a per-device
 capability matrix, then control, semantic diffs, events, guest meaning, output
-assertions and replay. Existing drift/merge/re-bless/consumer-build decisions
+assertions and replay. Existing drift/merge/re-bless decisions
 remain individually gated; pending work is not represented as complete.
 
 Checkpoint 2 passed ctest 14/14 and gates 14/14 with native memory, the public
@@ -240,7 +248,8 @@ the new offline `bisect` gate builds tiny fixtures and needs a compiler/Ninja.
 | P4.2 independent fleets | Implemented explicit platform/seed/config/image command matrices, isolated owned sessions and staged inputs, assertions, bounded event closeout and per-cell/aggregate verdicts. Current phase validation/evidence: `reports/gssquared-fleets-20261016/README.md`. These are independent starts, not checkpoint branches |
 | P6 output/input tools | Configured SHR glyphs, tolerant PNG comparisons, generated DOC/SFX samples and cycle/frame agent-input macros implemented and gated; physical host mix/input and full-machine replay are outside these models |
 | P2.4 bisect | Complete: scratch-only revision builds, strict repeated witnesses, verified earlier prefix, inconclusive failures. Nine fixture tests, real-history no-change case, current ctest 13/13 and gates 14/14; see `gssquared-queue-p24-20261015/` |
-| Drift B-E / engine merge / consumer build | Still separate owner decisions; no baseline re-bless, merge or consumer binary replacement in this iteration |
+| Protected consumer build | Separately approved and refreshed on 2026-10-16; full validation and whole-build rollback in `reports/gssquared-consumer-refresh-20261016/README.md` |
+| Drift B-E / engine merge | Still separate owner decisions; no baseline re-bless or model merge |
 
 The full text is in `Docs/reports/gssquared-agentic-proposal-20261015/README.md`: per-task files, sizes, dependencies,
 known-pass and known-fail gates, and the home (fork, Rosetta or GSnux).

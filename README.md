@@ -126,7 +126,10 @@ enable Git `core.longpaths` if needed. Base platform prerequisites and UI instru
 are in [upstream's README](https://github.com/jawaidbazyar2/gssquared) and the
 [User Documentation](Docs/index.md). Contributors should first read
 [AGENTS.md](AGENTS.md) and the [current handoff](Docs/HANDOFF.md), including the
-protected consumer-build rule for the owner's existing checkout.
+protected consumer-build rule for the owner's existing checkout. Its separately
+approved 2026-10-16 refresh passed all 14 gates and 14 native tests; the
+[consumer refresh report](Docs/reports/gssquared-consumer-refresh-20261016/README.md)
+retains its exact binary identity, tested MCP configuration and whole-build rollback.
 Maintained editor tasks and package-tool policy are described in
 [Developer setup](Docs/DEVELOPMENT_SETUP.md); package destinations are restricted
 to this fork.

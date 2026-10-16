@@ -14,6 +14,14 @@ and its remote SHA was independently confirmed. This closeout receipt follows
 the same commit/sync cadence. Evidence is in
 `Docs/reports/gssquared-publication-20261016/README.md`.
 
+**Consumer refresh, 2026-10-16:** separately approved and complete. The current
+consumer is `D:\projects\gssquared-fork\build\GSSquared.exe`, a fresh Release
+build of `813914fe`. It passed all 14 gates, 14 native tests, 21 Python tests and
+two MCP launches; 42 pinned boot checks remain unchanged. The original whole
+build is preserved at `D:\gsqs\consumer-20261016\build-rollback`.
+Exact hashes, tested descriptor and scratch-space maintenance:
+`Docs/reports/gssquared-consumer-refresh-20261016/README.md`.
+
 **Design direction, 2026-10-16:** instrumentation must support CIDAR-driven
 architectural understanding and measured primitive refinement across Rosetta
 and this fork. Archive prevalence is not evidence of optimality. Apply
@@ -24,10 +32,10 @@ The design-only checkpoint and pending integration slices are recorded in
 Updated by the coherency audit, the owner's explicit P0.1-P0.4 approval, and the
 subsequent task-queue iterations implementing P2.1 and P2.4 on 2026-10-15.
 The 2026-10-16 continuation adds exposed machine context and context-bound
-Rosetta efficiency experiments. The latest fresh publication build is
+Rosetta efficiency experiments. The preserved initial publication build is
 `D:\gsqs\pub-20261016\build\GSSquared.exe`, compiled from `bd276467`;
 its identity and results are in the publication report's `validation.json`.
-The fleet continuation's current build is
+The preserved fleet-validation build is
 `D:\gsqs\fleet-20261016\build\GSSquared.exe`, built from an exported
 `1878ecc9` base plus reviewed, digest-bound source overlays. Its exact identity,
 validation and new repeatable read-only-media MCP launch descriptor are in
@@ -77,7 +85,7 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 | Drift stage A | **Done:** nine upstream commits cherry-picked with `-x` (`7481a130`..`053a4e14`) |
 | Drift stages B-E | **Awaiting the owner's approval** (`Docs/AGENTIC_ROADMAP.md` §1) |
 | Branch `local/slot-engine-model` | Head `0dd0216d`: the `pico2lite_engine` slot-card model (v1: registers, IRQ tick, TRNG, a bootable ProDOS block device). 92 unit checks. **Not merged into `a2gspu`; merging is the owner's choice** |
-| In-tree `build\` | **Stale** (2026-09-17). Rosetta and other consumers of that binary don't see stage A or the model until someone runs `cmake --build build`, which needs the owner's nod |
+| In-tree `build\` | **Refreshed with separate owner approval, 2026-10-16:** fresh Release of `813914fe`, 14/14 gates, 14/14 native tests, 21 Python tests, two final-path MCP launches and 42 unchanged boot checks. Whole old build preserved for rollback. See `gssquared-consumer-refresh-20261016/README.md`. The engine model remains unmerged |
 | P0.1-P0.4 | Owner approved; included in the integrated publication checkpoint. Original Release evidence: ctest 12/12, 13/13 gates, pinned baselines unchanged. See the continuation and publication reports for evidence and usage |
 | P2.1 | Complete: CTRL/co-pilot `diff` and standalone `snapdiff`; ctest 13/13, gates 13/13, baselines unchanged. See `gssquared-queue-p21-20261015/` for current evidence |
 | P2.4 | Complete: local revision witness search, nine fixture tests, real archived revision builds with ctest 12/12 each and matching repeated IIgs witnesses. Current ctest 13/13 and gates 14/14, baselines unchanged; see `gssquared-queue-p24-20261015/` |
@@ -105,14 +113,15 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
   That fixture exists on `local/slot-engine-model`, not on `a2gspu`.
 - **Out-of-tree gate selection:** set `A2_GSSQUARED` to the tested executable and
   `GSSQUARED_ROOT` to this source checkout. `dualsmoke` now runs ctest beside the
-  selected executable, avoiding accidental validation of the stale in-tree build.
+  selected executable, avoiding accidental validation of another build.
 - **File-harness process identity:** receipts now bind the executable path and
   exact native UTC start ticks in `runtime.ps1`. Owned renamed executables are
   supported; wrong/missing identities refuse before command publication. Old
   receipts without the new identity fields require a fresh session. The original
   failure and current known-pass/negative evidence are retained in the harness
-  queue report. Use `D:\gsqs\fleet-20261016\build\GSSquared.exe` for the current
-  native implementation. The identity/scout queue changes are in the host harness;
+  queue report. Use `D:\projects\gssquared-fork\build\GSSquared.exe` for the current
+  consumer; its refresh report retains the validation and rollback identity.
+  The identity/scout queue changes are in the host harness;
   the later fleet checkpoint also adds native discovery/writeback-policy readback.
 - **Windows shell:** invoke MSYS2 bash for commands, with UCRT64 tools on PATH for
   this fork's CMake build. Invoke `pwsh -File` from bash for the fork-mandated
@@ -134,6 +143,8 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 4. **Test-first:** a known-pass and a known-fail case for every new feature or gate (the owner's evidence method).
 5. **Python:** use `python -I` with script files, never `python -` (stdin). With WSL, use `MSYS_NO_PATHCONV=1`.
 6. **Never open `E:\20251221_archive`**; it holds credential exports. `E:\` in general is a read-only archive.
+   The owner-authorized 2026-10-16 temporary-file retention uses the separate
+   `E:\agent-temp-archive` folder; existing archives remain read-only.
 
 ## 5. Completed continuation and next decisions
 
@@ -166,7 +177,6 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 ## 6. Open questions for the owner
 
 - Merge `local/slot-engine-model` into `a2gspu`?
-- Rebuild the in-tree `build\`?
 - Approve drift stages B-E?
 - Select the P1 kernel/client/debug-info fixtures for the next integration work.
   P0's approval was limited; subsequent queue requests separately implemented P2.1/P2.4.
@@ -228,4 +238,5 @@ publication evidence.
 The initial catch-up is planned in
 `Docs/reports/gssquared-github-cadence-20261016/README.md`. Existing separate
 approvals for drift B-E, engine merge, baseline re-blessing and consumer binary
-replacement remain unchanged by this publication policy.
+replacement remain unchanged by this publication policy. The consumer refresh
+was subsequently approved separately and completed as recorded above.

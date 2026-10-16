@@ -1,0 +1,3 @@
+PASS tested descriptor launch 1 85 tools, typed media policy, fleet schema and native QUIT
+PASS tested descriptor launch 2 85 tools, typed media policy, fleet schema and native QUIT
+PASS repeated launch configuration retains two independently closed receipts

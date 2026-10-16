@@ -1,0 +1,15 @@
+{
+  "authorized": "Owner explicitly approved protected rebuild on 2026-10-16",
+  "checkpoint": "813914febce9d99f9d2300eb423990bb578a0e0b",
+  "workspace": "D:\\projects\\gssquared-fork",
+  "build": "D:\\projects\\gssquared-fork\\build",
+  "rollback": "D:\\gsqs\\consumer-20261016\\build-rollback",
+  "original_sha256": "af7e0bbd72bee417ffddb5e86a00597df280fba904e8b2ed1ff9ad0738e2956c",
+  "original_binary_write_utc": "2026-09-17T09:43:33.7072305Z",
+  "state": "validated-and-promoted",
+  "scratch": "D:\\gsqs\\tmp",
+  "candidate_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+  "candidate": "D:\\projects\\gssquared-fork\\build\\GSSquared.candidate.exe",
+  "promoted_utc": "2026-10-16T13:31:22.5366181Z",
+  "current_executable": "D:\\projects\\gssquared-fork\\build\\GSSquared.exe"
+}

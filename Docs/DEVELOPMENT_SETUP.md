@@ -3,7 +3,15 @@
 Read [HANDOFF.md](HANDOFF.md) and [AGENTS.md](../AGENTS.md) before changing
 shared behavior. The repository README gives the base build prerequisites;
 the default editor tasks use a separate `build-local` directory and never
-replace the owner's protected `build/GSSquared.exe`.
+replace the owner's protected `build/GSSquared.exe`. The owner separately
+approved its 2026-10-16 refresh; the current binary, complete validation and
+whole-build rollback are recorded in
+[the consumer refresh report](reports/gssquared-consumer-refresh-20261016/README.md).
+
+On this host, direct task-local build/test scratch to `D:/gsqs/tmp` with `TEMP`,
+`TMP` and `TMPDIR` in the launched process environment. The low-space cleanup
+preserved inactive C: tests under `E:\agent-temp-archive`, with hash manifests
+and forwarding notes. Application-wide environment settings remain unchanged.
 
 ## Editor configuration
 
