@@ -7,6 +7,9 @@
 #include <filesystem>
 #include <set>
 #include <stdexcept>
+#include <algorithm>
+#include <vector>
+#include "a2gspu_outputs.hpp"
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -23,8 +26,26 @@
 #endif
 
 inline std::set<std::string> a2_sink_paths;
+struct A2ByteSink;
+inline std::vector<A2ByteSink *> a2_byte_sinks;
+inline void a2_close_byte_sinks();
+#ifdef _WIN32
+using A2PipeHandle=HANDLE;
+inline bool a2_close_pipe(A2PipeHandle pipe){return CloseHandle(pipe)!=0;}
+#else
+using A2PipeHandle=int;
+inline bool a2_close_pipe(A2PipeHandle pipe){return ::close(pipe)==0;}
+#endif
+// Native contract-test injection only; production uses these defaults.
+struct A2ByteCloseOps {
+    a2artifact::WriteOps stdio{};
+    bool (*pipe_close)(A2PipeHandle)=a2_close_pipe;
+};
 
 struct A2ByteSink {
+    A2ByteSink()=default;
+    A2ByteSink(const A2ByteSink&)=delete;
+    A2ByteSink& operator=(const A2ByteSink&)=delete;
     FILE *file = nullptr;
 #ifdef _WIN32
     HANDLE pipe = INVALID_HANDLE_VALUE;
@@ -87,10 +108,14 @@ struct A2ByteSink {
 #endif
         }
         a2_sink_paths.insert(resolved);reserved=true;enabled = true;
+        a2_byte_sinks.push_back(this);
+        a2outputs::add("byte-captures",a2_close_byte_sinks);
         std::fprintf(stderr, "A2GSPU %s: armed binding=%s resolved=%s\n", name, spec, path.c_str());
     }
     void open(const char *name,const char *spec) {
-        close();try {open_checked(name,spec);}catch(const std::exception &e){fail(e.what());}
+        try {close();open_checked(name,spec);}
+        catch(const a2artifact::Error &error){a2artifact::fatal(error);}
+        catch(const std::exception &error){fail(error.what());}
     }
     void write(const unsigned char *data, size_t n) {
         if (!enabled) return;
@@ -122,22 +147,52 @@ struct A2ByteSink {
         bytes += n;
     }
     void byte(unsigned char b) { write(&b, 1); }
-    void close() {
-        if (file) std::fclose(file);
-#ifdef _WIN32
-        if (pipe != INVALID_HANDLE_VALUE) CloseHandle(pipe);
-#else
-        if (pipe >= 0) ::close(pipe);
-#endif
-        if (enabled) std::fprintf(stderr, "A2GSPU %s: closed bytes=%llu binding=%s\n", label.c_str(), bytes, binding.c_str());
-        if (reserved) a2_sink_paths.erase(resolved);
-        reserved=false;
-        resolved.clear(); binding.clear(); file=nullptr; enabled=false; bytes=0;
+    void close(A2ByteCloseOps ops={}) {
+        // Consume ownership and reservations before any operation can fail.
+        // A failed close is not retryable against an already consumed handle.
+        FILE *owned_file=file;file=nullptr;
+        const auto owned_pipe=pipe;
+        const bool was_enabled=enabled;
+        const auto closed_bytes=bytes;
+        const std::string closed_binding=binding;
+        const std::string closed_label=label;
 #ifdef _WIN32
         pipe=INVALID_HANDLE_VALUE;
 #else
         pipe=-1;
 #endif
+        if (reserved) a2_sink_paths.erase(resolved);
+        a2_byte_sinks.erase(std::remove(a2_byte_sinks.begin(),a2_byte_sinks.end(),this),a2_byte_sinks.end());
+        reserved=false;
+        resolved.clear(); binding.clear(); file=nullptr; enabled=false; bytes=0;
+        std::string failures;
+        try {a2artifact::finish(owned_file,closed_binding.c_str(),ops.stdio);}
+        catch(const a2artifact::Error &error){failures=error.what();}
+#ifdef _WIN32
+        if(owned_pipe!=INVALID_HANDLE_VALUE && !ops.pipe_close(owned_pipe)) {
+            if(!failures.empty())failures+="; ";
+            failures+="pipe-close win32-error="+std::to_string(GetLastError());
+        }
+#else
+        if(owned_pipe>=0 && !ops.pipe_close(owned_pipe)) {
+            if(!failures.empty())failures+="; ";
+            failures+=a2artifact::Error("pipe-close",closed_binding.c_str()).what();
+        }
+#endif
+        if(!failures.empty()) {
+            std::fprintf(stderr,"A2GSPU %s: FAIL capture-finalization bytes=%llu binding=%s %s\n",closed_label.c_str(),closed_bytes,closed_binding.c_str(),failures.c_str());
+            throw a2artifact::Error("capture-finalization",(closed_label+" "+closed_binding+" "+failures).c_str(),0);
+        }
+        if(was_enabled)std::fprintf(stderr,"A2GSPU %s: closed bytes=%llu binding=%s\n",closed_label.c_str(),closed_bytes,closed_binding.c_str());
     }
-    ~A2ByteSink() { close(); }
+    ~A2ByteSink() {try {close();}catch(const a2artifact::Error &error){a2artifact::fatal_on_exit(error);}}
 };
+
+inline void a2_close_byte_sinks() {
+    std::string failures;
+    while(!a2_byte_sinks.empty()) {
+        try {a2_byte_sinks.back()->close();}
+        catch(const a2artifact::Error &error){if(!failures.empty())failures+="; ";failures+=error.what();}
+    }
+    if(!failures.empty())throw a2artifact::Error("byte-capture-finalization",failures.c_str(),0);
+}

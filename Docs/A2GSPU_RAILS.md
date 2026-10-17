@@ -66,6 +66,16 @@ rebinding; the off path releases only its owned operands. A failed arm leaves
 other active captures intact. Native status is `a2capture-v1`. `file:` requires
 an ordinary file. Byte/write failures retain the original fail-loud contract.
 
+SCC/WDM file and pipe bindings participate in checked shutdown while the
+machine is still alive. Closing checks latched file errors, flush, fclose and
+pipe-handle closure. Live `off` returns FAIL on a close error; it has consumed
+the binding and released its endpoint reservation (and owned WDM handlers),
+so failure does not mean rollback or permit retrying the old handle. Query
+status before rearming. Shutdown attempts all byte captures and other owned
+outputs before reporting failure; late finalization errors refuse exit 0.
+An empty capture is valid. A successful close does not promise fsync, power-loss
+durability or acknowledgement from a pipe reader.
+
 `inspect devices` separately lists every powered-on model (device ID and slot)
 and every debug handler. Each model declares observer names, control surfaces,
 candidate snapshot blocks and incomplete semantic coverage. A candidate block
