@@ -1,0 +1,41 @@
+{
+  "schema": "gssquared-byte-close-validation-v1",
+  "source_commit": "9393f114b442c5e793f4430e038ac0efc30fe861",
+  "source_model": "exact committed Git export; no working-tree overlays",
+  "implementation_matches_frozen_export": true,
+  "implementation_sha256": {
+    "src/a2gspu_output.hpp": "885ceb278ea3f9c79c7dc296561bc11058145477fe0e46e2ed78aa71d878583e",
+    "apps/interfacecontracttest/main.cpp": "2d20edd9d6996f12ccfd7ea9811d6718e1ffebe7fbe428778915dcba1d0ce601",
+    "apps/interfacecontracttest/byte_close_checks.hpp": "8104dfbfbaabf0e2e56ea795a37365e31e2dc04e721df37e7eee2fc8e7111fc8"
+  },
+  "native_executable": "D:\\gsqs\\byteclose-20261016\\build\\GSSquared.exe",
+  "native_sha256": "fb720528ffea0e2cf88bb1a74ff72822011d2e32ddaa11ca0b322aaaf2fba852",
+  "protected_consumer_replaced": false,
+  "protected_consumer_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+  "gates": 14,
+  "native_ctests": 14,
+  "unchanged_pinned_boot_checks": 42,
+  "python_tests": 26,
+  "new_byte_close_checks": 25,
+  "total_io_contract_checks": 92,
+  "stdio_baseline_candidate_checks": 8,
+  "mcp_launches": 2,
+  "native_verbs": 74,
+  "mcp_tools": 85,
+  "rails": 161,
+  "wire_types": 32,
+  "stock_windowed_manual_test": "not exercised",
+  "hardware_validation": "not performed",
+  "remaining_output_audit": [
+    "legacy debugger traces",
+    "device-private serializers",
+    "asynchronous UI/media flows"
+  ],
+  "close_contract": [
+    "consume binding/handle on failure",
+    "attempt all managed captures before reporting errors",
+    "late errors refuse exit 0",
+    "no rollback, fsync or pipe-reader acknowledgement guarantee"
+  ],
+  "fixture_runner_correction": "Initial baseline assertion expected a close log after std::exit; local C++ destructors are bypassed there. Assertion corrected to check the erroneous zero exit without requiring a destructor message; implementation unchanged."
+}

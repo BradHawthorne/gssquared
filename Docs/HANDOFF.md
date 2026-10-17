@@ -26,7 +26,10 @@ Exact hashes, tested descriptor and scratch-space maintenance:
 closure and join managed shutdown, with consumed ownership, released bindings
 and aggregated failures. Twenty-five focused native cases pass; a real-stdio
 fixture reproduces the old direct/shutdown false success and late exit 0.
-Full candidate validation and publication are pending for this local checkpoint.
+Fresh Release: 14/14 gates, 14/14 native CTests, 26 Python tests,
+92 I/O contract checks (25 new), 42 unchanged boots and two MCP launches.
+Protected consumer unchanged; tested candidate:
+`D:\gsqs\byteclose-20261016\build\GSSquared.exe`.
 Evidence: `reports/gssquared-byte-close-20261016/README.md`.
 
 **Per-rail/ACK continuation, 2026-10-16:** registered owned outputs now close

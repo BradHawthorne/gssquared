@@ -1,0 +1,4 @@
+A2GSPU fixture: armed binding=file:D:\gsqs\byteclose-20261016\committed-shutdown.bin resolved=D:\gsqs\byteclose-20261016\committed-shutdown.bin
+A2GSPU fixture: FAIL capture-finalization bytes=0 binding=file:D:\gsqs\byteclose-20261016\committed-shutdown.bin flush 'file:D:\gsqs\byteclose-20261016\committed-shutdown.bin'
+A2GSPU OUTPUT: FAIL byte-capture-finalization 'capture-finalization 'fixture file:D:\gsqs\byteclose-20261016\committed-shutdown.bin flush 'file:D:\gsqs\byteclose-20261016\committed-shutdown.bin'''
+PASS: capture finalization refused latched I/O error

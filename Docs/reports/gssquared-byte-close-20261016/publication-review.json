@@ -1,0 +1,137 @@
+{
+  "schema": "gssquared-byte-close-publication-review-v1",
+  "status": "PASS",
+  "code_commit": "9393f114b442c5e793f4430e038ac0efc30fe861",
+  "selected_files": {
+    "Docs/A2GSPU_RAILS.md": "f58cb207d0474b8d311c2ae43217e94280aa7aa41bd90366cbe0f0ffb9f8f85b",
+    "Docs/AGENTIC_ROADMAP.md": "cd62f6a3a556679b47829a99700fe694abb05d71eeca11b2d7a0c6681f10f774",
+    "Docs/HANDOFF.md": "e6387fcedcb14609297fc747c30786aa50bb5d856bf42f870679b0e02b0e63d5",
+    "Docs/reports/gssquared-byte-close-20261016/README.md": "6426892117329bc58ce2ab888ca92acc489281b511b210a7e70ae6f816e9667d",
+    "Docs/reports/gssquared-byte-close-20261016/baseline-destructor.log": "9edf66068faf5a19055c5dae19d21328ef7898150d44cb25b6c86dfb60f95903",
+    "Docs/reports/gssquared-byte-close-20261016/baseline-direct.log": "2707228d9ea418cd2799ff5baee1446b02b95cc476f62909d8420a8d6bf64736",
+    "Docs/reports/gssquared-byte-close-20261016/baseline-late.log": "cbc3065a7528228fa2baeaa591e70471a51ac0958d8bfd9b794829cb4a599aaf",
+    "Docs/reports/gssquared-byte-close-20261016/baseline-shutdown.log": "9caf0a3987ff3f7e6e5ccdef3bd2090c618c897d0a3e00cb92f67c82931d10ac",
+    "Docs/reports/gssquared-byte-close-20261016/build-inputs.json": "12ba849325e30760267586c783b3fe21f08f71e52425d8fdfc1ac83f8582577d",
+    "Docs/reports/gssquared-byte-close-20261016/build-transcript.log": "9652c07c97ccaed48309df6e316ec45f9aca2498a350d04230606c91b99d5e8a",
+    "Docs/reports/gssquared-byte-close-20261016/candidate-destructor.log": "3677085371e1305ae40d9f7954fa7304c97f3173107d0009e66d485cf5205d23",
+    "Docs/reports/gssquared-byte-close-20261016/candidate-direct.log": "3931060e95a592ef1c8233258502bac3a6fb13e7ff6fc494b5bcede8dc728f06",
+    "Docs/reports/gssquared-byte-close-20261016/candidate-late.log": "b5c0a366c17e2e0c42506c8316f5fc32f5bb8c4711ea944b8549de93c8250254",
+    "Docs/reports/gssquared-byte-close-20261016/candidate-shutdown.log": "d17148d151cb802d6d533ff6a8b2c1bcf8ff60e6374fd5b18d5516886f780476",
+    "Docs/reports/gssquared-byte-close-20261016/close_fixture.cpp": "f1ddf0fc15dc814976b0361412e06f0391726902010faffdf7df80b4db508d7e",
+    "Docs/reports/gssquared-byte-close-20261016/configure.log": "35d88ba1e436b38a83d2010c416d041aad63c5e73c01d74832bd365c65dc31e5",
+    "Docs/reports/gssquared-byte-close-20261016/fixture-check-initial.log": "416d8cd38bb56e3f12265641f17cfdc453ae21833fc8257f41158fcfe99298e4",
+    "Docs/reports/gssquared-byte-close-20261016/fixture-check.log": "bd6f03b9e7c79c19d8f3ad3da4fa404de673bf6ebb944125571e746437b949aa",
+    "Docs/reports/gssquared-byte-close-20261016/fixture-check.py": "12a45dc19778acd38eba1c438df5ab84282aa6a3ef79dbeaecd998bc021ca847",
+    "Docs/reports/gssquared-byte-close-20261016/fixture-checks.json": "a5ebb7e543843fb2ef840e01168a1897669aebd272790a1be680590b78f4c6ff",
+    "Docs/reports/gssquared-byte-close-20261016/focused-contract.log": "07496e633155ed24f987eb9c7dac793529182d211862b67cbd2b84b60a86dbd7",
+    "Docs/reports/gssquared-byte-close-20261016/gates.log": "616528e27ba9786fa58e80d575b3b4d2703256f3cf65d2408bfaf7ae67a1dc13",
+    "Docs/reports/gssquared-byte-close-20261016/gates.ndjson": "ac72558b9b542a527210e267c814db5c8ffeec1619f52b8e4f34bc75d59969e6",
+    "Docs/reports/gssquared-byte-close-20261016/launch-proof.json": "5debcda24d5615539cf77fb3e33dd70ffec1aa277b92eabd2aa8fbf9ef8aacd6",
+    "Docs/reports/gssquared-byte-close-20261016/launch-proof.log": "8afcc6b3d9a3c06c5fcc5963e3fa9a8176fc3bc30552af77a43da3d4a782f012",
+    "Docs/reports/gssquared-byte-close-20261016/mcp-launch.json": "8bb7c67373ddb512130fa7eaf356e53173b6ea0073b18975598e4b5a3c607ea0",
+    "Docs/reports/gssquared-byte-close-20261016/native-tests.log": "09483a257f6b6939f2b0202853db2cb57d51dda64d08fbfb21f60f826ae0e27a",
+    "Docs/reports/gssquared-byte-close-20261016/prepare.log": "ded2c137997eaec852d0a99ed44fe23920ddc4f7a06e697243dd58399b1270da",
+    "Docs/reports/gssquared-byte-close-20261016/python-tests.log": "c7f536dbc84bef4729c657aed116abf2e2f1486602f7ab406c1b8b2f732fe293",
+    "Docs/reports/gssquared-byte-close-20261016/validation.json": "a051a27105521ee7d75d67855375285c766f4d21949a717d8b3f4f2bb47397ec",
+    "apps/interfacecontracttest/byte_close_checks.hpp": "8104dfbfbaabf0e2e56ea795a37365e31e2dc04e721df37e7eee2fc8e7111fc8",
+    "apps/interfacecontracttest/main.cpp": "2d20edd9d6996f12ccfd7ea9811d6718e1ffebe7fbe428778915dcba1d0ce601",
+    "src/a2gspu_output.hpp": "885ceb278ea3f9c79c7dc296561bc11058145477fe0e46e2ed78aa71d878583e"
+  },
+  "selected_file_count": 33,
+  "local_links": [
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "CLOSED_LOOP_INTEGRATION.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "A2GSPU_TRAP.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "reports/gssquared-rail-close-20261016/README.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "A2GSPU_TRAP.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "CLOSED_LOOP_INTEGRATION.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "CLOSED_LOOP_INTEGRATION.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "A2GSPU_TRAP.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "INSTRUMENTATION_SHAPE.md"
+    },
+    {
+      "source": "Docs/A2GSPU_RAILS.md",
+      "target": "UPSTREAM_SYNC.md"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "validation.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "build-inputs.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "build-transcript.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "gates.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "gates.ndjson"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "native-tests.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "focused-contract.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "python-tests.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "fixture-checks.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "fixture-check.py"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "mcp-launch.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "launch-proof.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-byte-close-20261016/README.md",
+      "target": "fixture-check-initial.log"
+    }
+  ],
+  "credential_matches": 0,
+  "new_binary_artifacts": 0,
+  "identity_exclusion": "publication-review.json itself; avoid a circular digest",
+  "transcript_policy": "Generated logs/JSON are retained byte-for-byte including native CRLF. Whitespace checks apply to authored code and Markdown; JSON/NDJSON parse separately.",
+  "readme_assessment": "Existing capabilities, counts, build and launch recipes remain current. Detailed capture close/failure semantics updated in A2GSPU_RAILS.md; no new surface or default behavior claim.",
+  "scope": "current phase only; no upstream remote, drift stage, model merge or protected consumer replacement"
+}

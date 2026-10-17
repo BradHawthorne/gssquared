@@ -1,0 +1,54 @@
+A2GSPU SCC_A: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\SCC_A resolved=D:\gsqs\tmp\a2byteclose-416952276955900\SCC_A
+A2GSPU SCC_B: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\SCC_B resolved=D:\gsqs\tmp\a2byteclose-416952276955900\SCC_B
+A2GSPU WDM: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\WDM resolved=D:\gsqs\tmp\a2byteclose-416952276955900\WDM
+A2GSPU WDM: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\WDM
+A2GSPU SCC_B: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\SCC_B
+A2GSPU SCC_A: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\SCC_A
+A2GSPU empty: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\empty resolved=D:\gsqs\tmp\a2byteclose-416952276955900\empty
+A2GSPU empty: closed bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\empty
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected resolved=D:\gsqs\tmp\a2byteclose-416952276955900\injected
+A2GSPU injected: FAIL capture-finalization bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected flush 'file:D:\gsqs\tmp\a2byteclose-416952276955900\injected': No space left on device
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected resolved=D:\gsqs\tmp\a2byteclose-416952276955900\injected
+A2GSPU injected: closed bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected resolved=D:\gsqs\tmp\a2byteclose-416952276955900\injected
+A2GSPU injected: FAIL capture-finalization bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected close 'file:D:\gsqs\tmp\a2byteclose-416952276955900\injected': Input/output error
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected resolved=D:\gsqs\tmp\a2byteclose-416952276955900\injected
+A2GSPU injected: closed bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\injected
+A2GSPU latched: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\latched resolved=D:\gsqs\tmp\a2byteclose-416952276955900\latched
+A2GSPU latched: FAIL capture-finalization bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\latched flush 'file:D:\gsqs\tmp\a2byteclose-416952276955900\latched'
+A2GSPU bad-first: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-first resolved=D:\gsqs\tmp\a2byteclose-416952276955900\bad-first
+A2GSPU bad-second: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-second resolved=D:\gsqs\tmp\a2byteclose-416952276955900\bad-second
+A2GSPU healthy: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\healthy resolved=D:\gsqs\tmp\a2byteclose-416952276955900\healthy
+A2GSPU healthy: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\healthy
+A2GSPU bad-second: FAIL capture-finalization bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-second flush 'file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-second'
+A2GSPU bad-first: FAIL capture-finalization bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-first flush 'file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-first'
+A2GSPU OUTPUT: FAIL byte-capture-finalization 'capture-finalization 'bad-second file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-second flush 'file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-second''; capture-finalization 'bad-first file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-first flush 'file:D:\gsqs\tmp\a2byteclose-416952276955900\bad-first'''
+A2GSPU preserved: armed binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\preserved resolved=D:\gsqs\tmp\a2byteclose-416952276955900\preserved
+A2GSPU preserved: closed bytes=2 binding=file:D:\gsqs\tmp\a2byteclose-416952276955900\preserved
+A2GSPU pipe-fixture: closed bytes=0 binding=pipe:fixture
+A2GSPU pipe-fixture: FAIL capture-finalization bytes=0 binding=pipe:fixture pipe-close win32-error=29
+PASS unarmed byte capture owns no output
+PASS all byte captures register with managed shutdown
+PASS managed close consumes all byte captures
+PASS managed close preserves independent exact capture bytes
+PASS zero-byte capture closes successfully
+PASS byte capture refuses injected flush failure
+PASS failed byte close releases state and endpoint reservation
+PASS failed byte close is consumed exactly once
+PASS failed binding can be armed again with a fresh counter
+PASS byte capture refuses injected fclose failure
+PASS failed byte close releases state and endpoint reservation
+PASS failed byte close is consumed exactly once
+PASS failed binding can be armed again with a fresh counter
+PASS byte close refuses a real latched stdio error
+PASS latched-error close leaves capture disabled
+PASS managed close reports aggregate byte-capture failures
+PASS failed captures do not skip other captures during shutdown
+PASS healthy capture completes beside failed captures
+PASS repeated managed cleanup does not retry consumed failures
+PASS rebind refusal preserves the already armed capture
+PASS rebind refusal preserves bytes and creates no replacement
+PASS valid pipe handle closes successfully
+PASS pipe close consumes handle even when finalization fails
+PASS pipe close failure refuses
+PASS pipe close consumes handle even when finalization fails

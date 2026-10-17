@@ -1,0 +1,79 @@
+{
+  "baseline_commit": "3cec97671f81897b4253b6fc4188cb3a4ccd1f13",
+  "baseline_header_sha256": {
+    "a2gspu_output.hpp": "c5f78baab498e44be25419d74fdb02d81d467f505a051c93e12673e8c384d7bd",
+    "a2gspu_outputs.hpp": "0ac8644f27307a899f8f09a0bf6595d2c4b717e7e05f1119f6f47f92a9d88aef",
+    "a2gspu_artifact_io.hpp": "47f57d395818245e8af824a009b4da9fbb2c0c9faca437579e14534b85ee4cab"
+  },
+  "baseline_compile_argv": [
+    "g++",
+    "-std=c++17",
+    "-I",
+    "D:\\gsqs\\byteclose-20261016\\baseline-includes",
+    "D:\\gsqs\\byteclose-20261016\\src\\Docs\\reports\\gssquared-byte-close-20261016\\close_fixture.cpp",
+    "-o",
+    "D:\\gsqs\\byteclose-20261016\\baseline-fixture.exe"
+  ],
+  "checks": [
+    {
+      "variant": "baseline",
+      "mode": "direct",
+      "expected_exit": 1,
+      "exit_code": 1,
+      "old_false_success_reproduced": true
+    },
+    {
+      "variant": "baseline",
+      "mode": "shutdown",
+      "expected_exit": 1,
+      "exit_code": 1,
+      "old_false_success_reproduced": true
+    },
+    {
+      "variant": "baseline",
+      "mode": "late",
+      "expected_exit": 0,
+      "exit_code": 0,
+      "old_false_success_reproduced": true
+    },
+    {
+      "variant": "baseline",
+      "mode": "destructor",
+      "expected_exit": 0,
+      "exit_code": 0,
+      "old_false_success_reproduced": true
+    },
+    {
+      "variant": "candidate",
+      "mode": "direct",
+      "expected_exit": 0,
+      "exit_code": 0,
+      "refusal_visible": true,
+      "false_closed_receipt": false
+    },
+    {
+      "variant": "candidate",
+      "mode": "shutdown",
+      "expected_exit": 0,
+      "exit_code": 0,
+      "refusal_visible": true,
+      "false_closed_receipt": false
+    },
+    {
+      "variant": "candidate",
+      "mode": "late",
+      "expected_exit": 2,
+      "exit_code": 2,
+      "refusal_visible": true,
+      "false_closed_receipt": false
+    },
+    {
+      "variant": "candidate",
+      "mode": "destructor",
+      "expected_exit": 2,
+      "exit_code": 2,
+      "refusal_visible": true,
+      "false_closed_receipt": false
+    }
+  ]
+}
