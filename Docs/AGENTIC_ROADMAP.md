@@ -217,13 +217,20 @@ Protected consumer unchanged; tested candidate:
 `D:\gsqs\traceio-20261017\build\GSSquared.exe`.
 Evidence: `reports/gssquared-trace-io-20261017/README.md`.
 
-**Next independent output audit:** legacy trace reading/`gstrace` and monitor
-save/load, then device-private serializers and asynchronous UI/media paths.
-The trace reader currently opens raw records in text mode without checking the
-read, and `gstrace` prints capacity rather than the loaded count. Monitor save
-ignores write/close errors; load's EOF loop can write an extra byte. These are
-identified, unmodified follow-ups. SCC/WDM closure is complete in the preceding
-phase. Keep owned file/pipe lifetime and borrowed streams explicit; use
+**Legacy trace-input continuation, 2026-10-17:** binary loads validate record
+alignment, usable capacity, read and close before publishing entries/count/head/
+tail. `gstrace` decodes only loaded entries and checks syntax, missing labels
+and stdout errors. Twenty-nine native checks and 21 CLI checks pass locally;
+the latter join the agentic gate. Seven baseline CLI defects and corrupted
+binary input are reproduced without retaining uninitialized decoded memory.
+Full trace-input candidate validation and publication are pending for this local checkpoint.
+Evidence: `reports/gssquared-trace-input-20261017/README.md`.
+
+**Next independent I/O audit:** monitor save/load, then device-private
+serializers and asynchronous UI/media paths. Monitor save ignores write/close
+errors; load's EOF loop can write an extra byte. These remain unmodified.
+SCC/WDM closure and legacy trace export/input are complete in their named
+phases. Keep owned file/pipe lifetime and borrowed streams explicit; use
 known-pass and known-fail fixtures before claiming complete captures.
 
 The earlier audit checkpoint was `643e6c21` (2026-10-15). A read-only refresh

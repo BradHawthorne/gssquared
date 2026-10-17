@@ -22,6 +22,16 @@ build is preserved at `D:\gsqs\consumer-20261016\build-rollback`.
 Exact hashes, tested descriptor and scratch-space maintenance:
 `Docs/reports/gssquared-consumer-refresh-20261016/README.md`.
 
+**Legacy trace-input continuation, 2026-10-17:** trace loads now check binary
+input, bounds, record alignment and close before replacing ring state. `gstrace`
+prints the loaded count and refuses bad inputs/options and failed stdout.
+Twenty-nine native input checks and 21 CLI checks pass locally; CLI checks join
+the regular agentic gate. The baseline reproduced reader corruption and seven
+false-success/extra-row cases without retaining decoded uninitialized memory.
+Full trace-input candidate validation and publication are pending for this local checkpoint.
+Evidence: `reports/gssquared-trace-input-20261017/README.md`.
+Next: monitor save/load, then device-private serializers and asynchronous UI/media.
+
 **Legacy trace-export continuation, 2026-10-17:** automatic debugger exports
 now preserve binary bytes on Windows and check open/write/flush/close. Twenty
 focused native cases pass; the same real-stdio fixture reproduces the old
@@ -31,8 +41,7 @@ Fresh exported Release: 14/14 gates, 14/14 native CTests, 26 Python tests,
 Protected consumer unchanged; tested candidate:
 `D:\gsqs\traceio-20261017\build\GSSquared.exe`.
 Evidence: `reports/gssquared-trace-io-20261017/README.md`.
-The next audit is legacy trace reading/`gstrace` and monitor save/load, then
-device-private serializers and asynchronous UI/media output.
+The subsequent input/decoder phase above completes the trace reading follow-up.
 
 **SCC/WDM close continuation, 2026-10-16:** byte captures now check file/pipe
 closure and join managed shutdown, with consumed ownership, released bindings

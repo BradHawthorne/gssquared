@@ -290,6 +290,16 @@ shutdown. An empty ring is a valid empty file. Records retain the host's struct
 layout; this is not a portable interchange format. Failure can leave a partial
 file, and successful close does not guarantee power-loss durability.
 
+For offline decoding, run `gstrace [-l labels.lbl] 6502|65c02|65816 trace.bin`.
+It reads raw binary records and prints only the loaded entries, in file order.
+An empty file prints no trace rows. Requested label files retain the existing
+label-count summary. Missing files, partial records, read/close errors and
+inputs above 99,999 records refuse with exit 2; invalid command syntax exits 1.
+The 100,000-slot ring reserves one slot. A failed load preserves the previous
+trace in memory, and successful loading supports subsequent append/export.
+The CLI also checks stdout write/finalization errors. Headerless raw records
+cannot identify a wrong host layout or missing whole records.
+
 There is not yet a built-in menu command to save or reload a trace mid-session; use the automatic save on exit, or the external debug protocol for scripted capture.
 
 ---

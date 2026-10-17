@@ -1,61 +1,49 @@
-
 #include "debugger/trace.hpp"
+#include <exception>
+
+namespace {
+int usage() {
+    std::fprintf(stderr,"usage: gstrace [-l labelfile] 6502|65c02|65816 tracefilename.bin\n");
+    return 1;
+}
+}
 
 int main(int argc, char **argv) {
-    char *tmsg;
-
+    if (argc < 3) return usage();
     processor_type cputype = PROCESSOR_6502;
-    const char *trace_filename = nullptr;
+    bool have_cpu = false;
     const char *label_filename = nullptr;
-    
-    if (argc < 3) {
-        printf("usage: gstrace [options] 6502|65c02|65816 tracefilename.bin\n");
-        printf("options:\n");
-        printf("  -l labelfile    VICE label file\n");
-        return 1;
-    }
-    
-    // Parse arguments
-    int i = 1;
-    while (i < argc - 1) {
-        if (strcmp(argv[i], "-l") == 0) {
-            if (i + 1 >= argc - 1) {
-                printf("Error: -l requires a filename\n");
-                return 1;
-            }
-            label_filename = argv[i + 1];
-            i += 2;
-        } else if (strcmp(argv[i], "6502") == 0) {
-            cputype = PROCESSOR_6502;
-            i++;
-        } else if (strcmp(argv[i], "65c02") == 0) {
-            cputype = PROCESSOR_65C02;
-            i++;
-        } else if (strcmp(argv[i], "65816") == 0) {
-            cputype = PROCESSOR_65816;
-            i++;
+    for (int i = 1; i < argc - 1; ++i) {
+        if (std::strcmp(argv[i], "-l") == 0) {
+            if (label_filename || i + 1 >= argc - 1) return usage();
+            label_filename = argv[++i];
         } else {
-            printf("usage: gstrace [options] 6502|65c02|65816 tracefilename.bin\n");
-            printf("options:\n");
-            printf("  -l labelfile    VICE label file\n");
-            return 1;
+            if (have_cpu) return usage();
+            if (std::strcmp(argv[i], "6502") == 0) cputype = PROCESSOR_6502;
+            else if (std::strcmp(argv[i], "65c02") == 0) cputype = PROCESSOR_65C02;
+            else if (std::strcmp(argv[i], "65816") == 0) cputype = PROCESSOR_65816;
+            else return usage();
+            have_cpu = true;
         }
     }
-    
-    trace_filename = argv[argc - 1];
-
-    system_trace_buffer trace_buffer(100000, cputype);
-    
-    // Load labels if specified
-    if (label_filename != nullptr) {
-        trace_buffer.load_labels_from_file(label_filename);
-    }
-    
-    trace_buffer.read_from_file(trace_filename);
-    
-    for (size_t i = 0; i < trace_buffer.size; i++) {
-        system_trace_entry_t *entry = trace_buffer.get_entry(i);
-        tmsg = trace_buffer.decode_trace_entry(entry);
-        printf("%s\n", tmsg);
+    if (!have_cpu) return usage();
+    try {
+        system_trace_buffer trace_buffer(100000, cputype);
+        if (label_filename && !trace_buffer.load_labels_from_file(label_filename))
+            throw a2artifact::Error("labels", label_filename, 0);
+        trace_buffer.read_from_file(argv[argc - 1]);
+        for (size_t i = 0; i < trace_buffer.count; ++i) {
+            const char *line = trace_buffer.decode_trace_entry(trace_buffer.get_entry(i));
+            if (std::fputs(line, stdout) == EOF || std::fputc('\n', stdout) == EOF)
+                throw a2artifact::Error("write", "stdout");
+        }
+        // This standalone process owns finalizing stdout, including an empty
+        // decode. Refuse failed redirected/pipe output instead of a zero exit.
+        FILE *output = stdout;
+        a2artifact::finish(output, "stdout");
+        return 0;
+    } catch (const std::exception &error) {
+        std::fprintf(stderr,"gstrace: status=FAIL %s\n",error.what());
+        return 2;
     }
 }

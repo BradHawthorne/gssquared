@@ -55,6 +55,12 @@ struct trace_decode_options {
     bool show_opbytes = false;
 };
 
+// Native-test injection only; production always reads and closes through stdio.
+struct trace_read_ops {
+    size_t (*read)(void*,size_t,size_t,FILE*) = std::fread;
+    int (*close)(FILE*) = std::fclose;
+};
+
 /** Fixed column origins for a decoded trace line (absolute positions in line_buffer). */
 struct trace_column_layout {
     int cycle_w;
@@ -90,7 +96,9 @@ struct system_trace_buffer {
     // open/write/finalization failure; ops is native-test injection only.
     void save_to_file(const std::string &filename, a2artifact::WriteOps ops = {});
 
-    void read_from_file(const std::string &filename);
+    // Binary host-layout records, limited to size-1 (the ring reserves a slot).
+    // Publish entries/count/head/tail only after complete input and checked close.
+    void read_from_file(const std::string &filename, trace_read_ops ops = {});
 
     system_trace_entry_t *get_entry(size_t index);
 

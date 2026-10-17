@@ -72,6 +72,8 @@ $suites = [ordered]@{
         if ($LASTEXITCODE -ne 0) { throw 'Session identity fixture failed' }
         & (Join-Path $root 'tools/scout/scoutcheck.ps1') -Exe (Get-GSSquaredExe)
         if ($LASTEXITCODE -ne 0) { throw 'Scout isolation fixture failed' }
+        python -I (Join-Path $here 'traceinputcheck.py') --emulator (Get-GSSquaredExe)
+        if ($LASTEXITCODE -ne 0) { throw 'Legacy trace input fixture failed' }
         python -I (Join-Path $here 'p0check.py') --exe (Get-GSSquaredExe)
     } }
     'dualsmoke'    = @{ offline = $false; run = { & (Join-Path $here 'dualsmoke.ps1') } }

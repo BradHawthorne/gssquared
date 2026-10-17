@@ -2,6 +2,8 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <memory>
+#include <vector>
 
 #include "util/HexDecode.hpp"
 #include "debugger/trace.hpp"
@@ -234,10 +236,37 @@ void system_trace_buffer::save_to_file(const std::string &filename, a2artifact::
     file.finish();
 }
 
-void system_trace_buffer::read_from_file(const std::string &filename) {
-    std::ifstream file(filename);
-    file.read(reinterpret_cast<char *>(entries), sizeof(system_trace_entry_t) * size);
-    file.close();
+void system_trace_buffer::read_from_file(const std::string &filename, trace_read_ops ops) {
+    errno = 0;
+    std::unique_ptr<FILE, int(*)(FILE*)> file(std::fopen(filename.c_str(), "rb"), ops.close);
+    if (!file) throw a2artifact::Error("open", filename.c_str());
+
+    // Match the live ring's reserved slot; never silently truncate a larger file.
+    // Temporary storage keeps a failed load from replacing a usable old trace.
+    std::vector<system_trace_entry_t> loaded(size ? size - 1 : 0);
+    const size_t limit = loaded.size() * sizeof(system_trace_entry_t);
+    errno = 0;
+    const size_t bytes = limit ? ops.read(loaded.data(), 1, limit, file.get()) : 0;
+    if (std::ferror(file.get()) || bytes > limit || (bytes < limit && !std::feof(file.get())))
+        throw a2artifact::Error("read", filename.c_str());
+    if (bytes % sizeof(system_trace_entry_t))
+        throw a2artifact::Error("partial-record", filename.c_str(), 0);
+    if (bytes == limit) {
+        unsigned char extra;
+        errno = 0;
+        const size_t more = ops.read(&extra, 1, 1, file.get());
+        if (std::ferror(file.get()) || (!more && !std::feof(file.get())))
+            throw a2artifact::Error("read", filename.c_str());
+        if (more) throw a2artifact::Error("capacity-exceeded", filename.c_str(), 0);
+    }
+    FILE *owned = file.release();
+    errno = 0;
+    if (ops.close(owned) != 0) throw a2artifact::Error("close", filename.c_str());
+
+    if (bytes) std::memcpy(entries, loaded.data(), bytes);
+    count = bytes / sizeof(system_trace_entry_t);
+    tail = 0;
+    head = count;
 }
 
 system_trace_entry_t *system_trace_buffer::get_entry(size_t index) {

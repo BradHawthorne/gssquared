@@ -12,12 +12,19 @@
 #include "railclose_checks.hpp"
 #include "byte_close_checks.hpp"
 #include "trace_io_checks.hpp"
+#include "trace_input_checks.hpp"
 #include <chrono>
 #include <string>
 #include <iostream>
 #include <stdexcept>
 uint64_t debug_level=0;
-int main() {
+int main(int argc,char **argv) {
+    if(argc!=1) {
+        if(argc==3 && std::strcmp(argv[1],"--trace-input-fixtures")==0) {
+            trace_input_checks::make_fixtures(argv[2]);return 0;
+        }
+        std::cerr<<"usage: interfacecontracttest [--trace-input-fixtures new-directory]\n";return 2;
+    }
     int checks=0;
     auto check=[&](bool pass){if(!pass)throw std::runtime_error("interface contract check "+std::to_string(checks));++checks;};
     check(artifact_io_checks::run()==0);
@@ -25,6 +32,7 @@ int main() {
     check(railclose_checks::run()==0);
     check(byte_close_checks::run()==0);
     check(trace_io_checks::run()==0);
+    check(trace_input_checks::run()==0);
     // Independent truth table: only request-with-no-guard combinations flush.
     const bool flush_expected[16]={false,true,true,true,false,false,false,false,false,false,false,false,false,false,false,false};
     for(unsigned bits=0;bits<16;++bits) {
