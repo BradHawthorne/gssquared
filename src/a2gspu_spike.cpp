@@ -219,6 +219,7 @@ static void run_headless_spike_impl(GS2AppState *state) {
     // sequence for the ours-vs-pristine first-divergence differ (tools/gdiff/calldiff.py).
     if (const char *cs = SDL_getenv("A2GSPU_CALLSTREAM")) {
         g_callstream_out = fopen(cs, "wb");
+        a2outputs::track(g_callstream_out,cs);
         g_callstream_on  = (g_callstream_out != nullptr);
         printf("A2GSPU_CALLSTREAM: %s -> '%s'\n", g_callstream_on ? "NDJSON" : "OPEN-FAILED", cs);
         if (!g_callstream_on) { fprintf(stderr, "A2GSPU_CALLSTREAM: FAIL cannot open '%s' -- aborting (exit 2)\n", cs); exit(2); }
@@ -790,6 +791,7 @@ static void run_headless_spike_impl(GS2AppState *state) {
     if (const char *tf = SDL_getenv("A2GSPU_TEXTDUMP")) {
         tf = a2gspu_out_path(tf, a2gspu_outbuf, sizeof a2gspu_outbuf);   // A2GSPU_OUT_DIR (relative names only)
         FILE *tfp = fopen(tf, "wb");
+        a2artifact::ExistingOutput text_output(tfp,tf);
         if (tfp) {
             for (uint32_t a = 0x0400; a < 0x0800; a++) {
                 uint8_t b = rail_mmu(computer)->probe_peek(a);
@@ -801,10 +803,10 @@ static void run_headless_spike_impl(GS2AppState *state) {
                 uint8_t b = mem ? mem[0x10000 + a] : rail_mmu(computer)->probe_peek(0x010000u | a);
                 fwrite(&b, 1, 1, tfp);
             }
-            fclose(tfp);
+            text_output.finish();
             printf("A2GSPU TEXTDUMP: wrote '%s' (text page 1 main+aux, 2KB)\n", tf);
         } else {
-            printf("A2GSPU TEXTDUMP: could not open '%s'\n", tf);
+            throw a2artifact::Error("textdump-open",tf);
         }
     }
 
@@ -841,6 +843,7 @@ static void run_headless_spike_impl(GS2AppState *state) {
         if(!a2gspu_cov_write(co))throw a2artifact::Error("coverage",co,0);
     generic_tap_close();
     a2record::flush();
+    a2outputs::finish_all();
 
     // ---- (4) golden-diff (#9) + assertion gate (#2) -> exit code (CI loop) ----
     {

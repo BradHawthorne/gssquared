@@ -1,0 +1,176 @@
+{
+  "checks": [
+    {
+      "ok": true,
+      "label": "p3 help publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 help refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 manifest publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 manifest refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 systems publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 systems refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 limitations publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 limitations refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 rail env-only publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 rail env-only refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 devstate all publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 devstate all refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 read 000800 16 publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 read 000800 16 refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 dis 000800 1 publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 dis 000800 1 refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p3 iolog dump publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p3 iolog dump refuses blocked output"
+    },
+    {
+      "ok": false,
+      "label": "p3 screen refuses blocked sidecar",
+      "reply": "status=OK screen mode=TEXT page=1 hgr1_lit=26880 hgr2_lit=26880 text_rows=0 nonblank_rows=0 png=D:\\gsqs\\railclose-20261016\\export-before\\screen-p3.png\n"
+    },
+    {
+      "ok": true,
+      "label": "p3 remains usable after export refusal"
+    },
+    {
+      "ok": false,
+      "label": "p3 textdump failure exits 2",
+      "exit_code": 0
+    },
+    {
+      "ok": true,
+      "label": "p5 help publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 help refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 manifest publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 manifest refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 systems publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 systems refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 limitations publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 limitations refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 rail env-only publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 rail env-only refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 devstate all publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 devstate all refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 read 000800 16 publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 read 000800 16 refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 dis 000800 1 publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 dis 000800 1 refuses blocked output"
+    },
+    {
+      "ok": true,
+      "label": "p5 iolog dump publishes output"
+    },
+    {
+      "ok": true,
+      "label": "p5 iolog dump refuses blocked output"
+    },
+    {
+      "ok": false,
+      "label": "p5 screen refuses blocked sidecar",
+      "reply": "status=OK screen mode=TEXT page=1 hgr1_lit=0 hgr2_lit=0 text_rows=0 nonblank_rows=0 png=D:\\gsqs\\railclose-20261016\\export-before\\screen-p5.png\n"
+    },
+    {
+      "ok": true,
+      "label": "p5 remains usable after export refusal"
+    },
+    {
+      "ok": false,
+      "label": "p5 textdump failure exits 2",
+      "exit_code": 0
+    }
+  ]
+}

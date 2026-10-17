@@ -27,6 +27,7 @@
 // matching bus_trace.hpp. Disabled by default: the hot-path cost is one
 // predictable branch on a bool.
 // ============================================================================
+#include "a2gspu_artifact_io.hpp"
 #include <vector>
 #include <cstdint>
 #include <cstdio>
@@ -64,6 +65,7 @@ inline void io_trace_note(uint32_t address, uint8_t data, uint8_t rw) {
 // Text dump, newest-last: "seq rw addr data".
 inline bool io_trace_dump(const char *path) {
     FILE *f = fopen(path, "wb");
+    a2artifact::ExistingOutput a2output_f_0(f,path);
     if (!f) return false;
     fprintf(f, "# io_trace: %u total touches, %zu retained, %u dropped\n",
             g_io_trace_seq, g_io_trace.size(), g_io_trace_dropped);
@@ -71,6 +73,6 @@ inline bool io_trace_dump(const char *path) {
     for (const auto &r : g_io_trace)
         fprintf(f, "%u %c %04X %02X\n", r.seq, r.rw ? 'W' : 'R',
                 (unsigned)r.addr, (unsigned)r.data);
-    fclose(f);
+    a2output_f_0.finish();
     return true;
 }

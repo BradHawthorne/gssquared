@@ -1,0 +1,18 @@
+PASS p3 tmp-directory: command effects precede failed ACK
+PASS p3 tmp-directory: publication failure exits 2
+PASS p3 no partial ACK is published
+PASS p3 ack-directory: command effects precede failed ACK
+PASS p3 ack-directory: publication failure exits 2
+PASS p3 blocked destination is preserved
+PASS p3 old-receipt: command effects precede failed ACK
+PASS p3 old-receipt: publication failure exits 2
+PASS p3 old receipt is preserved
+PASS p5 tmp-directory: command effects precede failed ACK
+PASS p5 tmp-directory: publication failure exits 2
+PASS p5 no partial ACK is published
+PASS p5 ack-directory: command effects precede failed ACK
+PASS p5 ack-directory: publication failure exits 2
+PASS p5 blocked destination is preserved
+PASS p5 old-receipt: command effects precede failed ACK
+PASS p5 old-receipt: publication failure exits 2
+PASS p5 old receipt is preserved

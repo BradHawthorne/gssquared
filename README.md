@@ -13,6 +13,9 @@ debugger protocol; the fork extends it with shared agent tools, evidence and val
 
 > Upstream integration is one-way: selected changes come into this fork by hand.
 > We publish to the owner's fork, never push changes or open PRs upstream.
+> GitHub ahead/behind counts describe ancestry; manually ported changes remain
+> behind in that count. The [integration ledger](Docs/UPSTREAM_SYNC.md) records
+> reviewed, ported, skipped and pending changes.
 > For the canonical emulator and its releases, visit
 > **[upstream](https://github.com/jawaidbazyar2/gssquared)**.
 
@@ -111,8 +114,11 @@ real empty streams remain valid. Require a successful run/command and the
 before using captures as evidence.
 Synchronous screenshot, text, snapshot and coverage exports also propagate
 output failures. Structured record writes and global/tap/subscription
-finalization are checked; [remaining sink lifecycles](Docs/reports/gssquared-sink-io-20261016/README.md)
-stay explicit. Output failure does not roll back guest execution.
+finalization are checked. [Per-rail shutdown and ACK publication](Docs/reports/gssquared-rail-close-20261016/README.md)
+now check completion too; failed ACK publication preserves prior receipts and
+exits 2 with effects explicitly uncertain. Use fresh session directories.
+Output failure does not roll back guest execution; legacy/private output
+paths retain explicit audit work.
 The [rail reference](Docs/A2GSPU_RAILS.md) gives detailed launch recipes,
 including windowed co-pilot. Keep each driven run's outputs in its own directory.
 

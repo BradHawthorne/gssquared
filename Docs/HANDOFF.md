@@ -22,6 +22,17 @@ build is preserved at `D:\gsqs\consumer-20261016\build-rollback`.
 Exact hashes, tested descriptor and scratch-space maintenance:
 `Docs/reports/gssquared-consumer-refresh-20261016/README.md`.
 
+**Per-rail/ACK continuation, 2026-10-16:** registered owned outputs now close
+while the clock is valid, aggregate failures and refuse silent shutdown success.
+Discovery/memory/device/trace/golden exports check finalization; screen sidecar
+and SPIKE text-dump failures refuse. File ACK publication checks write through
+rename, preserves existing receipts and exits 2 with unknown-effects metadata
+on failure. Fresh Release: 14/14 gates, 14/14 native CTests, 26 Python
+tests, 18 ACK checks, 42 export checks, 67 I/O contract checks (24 new),
+42 unchanged boots and two MCP launches. Protected consumer unchanged.
+Tested candidate: `D:\gsqs\railclose-20261016\build\GSSquared.exe`.
+Evidence: `reports/gssquared-rail-close-20261016/README.md`.
+
 **Output sink continuation, 2026-10-16:** central record errors propagate;
 global/tap/subscription finalization and screenshot/text/coverage/PNG/snapshot
 save outputs are checked. Fresh exported Release passes 14/14 gates, 14/14
@@ -93,6 +104,12 @@ counts; the machine-context row and publication report give the current inventor
 
 ## 1. What this repo is
 
+The owner's 2026-10-16 long-horizon direction includes a possible parallel
+IIgs+ clone mainboard once this foundation is production quality. Instrument
+pressure points and compare explicit hypothetical models against preserved
+stock profiles; retain compatibility and model-quality evidence. This is a
+future design target, not current board work. See `AGENTIC_ORACLE.md` section 11.
+
 The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIgs emulator.
 - **Upstream stays vanilla by choice:** never upstream anything, never open PRs.
 - **"Drift"** means individually assessing upstream changes for integration on our terms (`Docs/UPSTREAM_SYNC.md` is
@@ -110,7 +127,7 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 | Item | State |
 | --- | --- |
 | Branch `a2gspu` | Integrated checkpoint `bd276467` published and independently verified on GitHub, including the previous 68 local commits. Fresh exported-tree Release: 14/14 gates, 14/14 native CTests, 21/21 Python tests, 3/3 affected Rosetta tests. Documentation receipts follow the same phase-end sync; see `gssquared-publication-20261016/` |
-| Upstream main | Network refreshed 2026-10-15: `643e6c21`; separate `1.1/ntscshader` development branch at `0aed0214` assessed in the upstream observation report |
+| Upstream main | Read-only refresh 2026-10-16: `b2b7b6db`; three new commits inspected but not ported (UPSTREAM_SYNC section 25). Earlier main audit checkpoint `643e6c21`; separate `1.1/ntscshader @0aed0214` assessment remains historical |
 | Drift stage A | **Done:** nine upstream commits cherry-picked with `-x` (`7481a130`..`053a4e14`) |
 | Drift stages B-E | **Awaiting the owner's approval** (`Docs/AGENTIC_ROADMAP.md` §1) |
 | Branch `local/slot-engine-model` | Head `0dd0216d`: the `pico2lite_engine` slot-card model (v1: registers, IRQ tick, TRNG, a bootable ProDOS block device). 92 unit checks. **Not merged into `a2gspu`; merging is the owner's choice** |

@@ -451,6 +451,7 @@ inline bool gtap_set_out(const char *path) {
     if (!path) return true;
     g_gtap.out = fopen(path, "w");
     if (!g_gtap.out) return false;
+    a2outputs::add("tap",generic_tap_close);
     g_gtap.on = true; g_gtap.count = 0;
     return true;
 }
@@ -469,6 +470,7 @@ inline bool gtap_set_session(const char *dir) {
         }
     }
     g_gtap.zp_f=files[0];g_gtap.pages_f=files[1];g_gtap.keys_f=files[2];g_gtap.disk_f=files[3];
+    a2outputs::add("tap",generic_tap_close);
     g_gtap.dir = dir; g_gtap.sess_on = true;
     g_gtap.frame = 0;
     g_gtap.next_dump_s = g_gtap.dump_every_s; g_gtap.next_zp_s = g_gtap.zp_every_s;

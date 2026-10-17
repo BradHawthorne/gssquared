@@ -394,9 +394,13 @@ them. Record observer notifications can precede a later close failure, so they
 are not final publication receipts. The subsequent
 [output-sink continuation](reports/gssquared-sink-io-20261016/README.md) checks
 central records, global/tap/subscription finalization, synchronous screenshots,
-coverage/profile/PNG and snapshot save paths. Per-rail shutdown, miscellaneous
-exports and ACK publication retain separate audit work; this is not a universal
-output-durability guarantee.
+coverage/profile/PNG and snapshot save paths. The
+[per-rail/ACK continuation](reports/gssquared-rail-close-20261016/README.md)
+checks registered per-rail shutdown, named synchronous exports and ACK
+publication. Registered shutdown attempts every closer before destroying the
+clock; any failure refuses exit success. Legacy debug traces, device-private
+serializers and asynchronous UI/media flows remain to audit. This is not a
+universal output-durability guarantee.
 
 ### M7 — Symbols by default  (P10) — M
 

@@ -1,0 +1,159 @@
+{
+  "implementation_files": [
+    {
+      "path": "apps/interfacecontracttest/main.cpp",
+      "frozen_sha256": "8a76aaf3c4dcaa7b4542fe31512870d33f63f88fc0e68d341fe535414ca85b0e",
+      "git_blob_sha256": "8a76aaf3c4dcaa7b4542fe31512870d33f63f88fc0e68d341fe535414ca85b0e",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "apps/interfacecontracttest/railclose_checks.hpp",
+      "frozen_sha256": "6bfaa7feca73360f196c65ff1535487ff635a13c962b4db928585d95fcae20a2",
+      "git_blob_sha256": "6bfaa7feca73360f196c65ff1535487ff635a13c962b4db928585d95fcae20a2",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_ack.hpp",
+      "frozen_sha256": "fa509e84bfd7ab8840a2e51984048a51f13a2cb9a62c784558b88e16626a7e11",
+      "git_blob_sha256": "fa509e84bfd7ab8840a2e51984048a51f13a2cb9a62c784558b88e16626a7e11",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_artifact_io.hpp",
+      "frozen_sha256": "47f57d395818245e8af824a009b4da9fbb2c0c9faca437579e14534b85ee4cab",
+      "git_blob_sha256": "47f57d395818245e8af824a009b4da9fbb2c0c9faca437579e14534b85ee4cab",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_ctrl.cpp",
+      "frozen_sha256": "247be9542fbcfaecbc3f8f6a55c39d27ba5f9b4d7e8c4274e481801b4b1aabc0",
+      "git_blob_sha256": "247be9542fbcfaecbc3f8f6a55c39d27ba5f9b4d7e8c4274e481801b4b1aabc0",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_ctrl_cmds.cpp",
+      "frozen_sha256": "6ba85684acfa3236429591700ad00ae61766fd086522a3ab84317b08eca42422",
+      "git_blob_sha256": "6ba85684acfa3236429591700ad00ae61766fd086522a3ab84317b08eca42422",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_dhgr.hpp",
+      "frozen_sha256": "11fab5ef15b5808253bb7d1a0c5940f4c9c1f4886be2becb2408ddfc9dac7705",
+      "git_blob_sha256": "11fab5ef15b5808253bb7d1a0c5940f4c9c1f4886be2becb2408ddfc9dac7705",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_events.hpp",
+      "frozen_sha256": "1a58557006b500822abcd0646de3e853b04f5f197cfa2426e4e737fe3228e754",
+      "git_blob_sha256": "1a58557006b500822abcd0646de3e853b04f5f197cfa2426e4e737fe3228e754",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_liveness.hpp",
+      "frozen_sha256": "1a422c9d6e6b97c762ba914e95bdeaef2f545f4e62e1b3556f542a37404a8db6",
+      "git_blob_sha256": "1a422c9d6e6b97c762ba914e95bdeaef2f545f4e62e1b3556f542a37404a8db6",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_outputs.hpp",
+      "frozen_sha256": "0ac8644f27307a899f8f09a0bf6595d2c4b717e7e05f1119f6f47f92a9d88aef",
+      "git_blob_sha256": "0ac8644f27307a899f8f09a0bf6595d2c4b717e7e05f1119f6f47f92a9d88aef",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_rail_setters.cpp",
+      "frozen_sha256": "fc2c0c04e94b10825a44fb29af4bb26e2bc6d2363c9481e541deccbc0d23c60d",
+      "git_blob_sha256": "fc2c0c04e94b10825a44fb29af4bb26e2bc6d2363c9481e541deccbc0d23c60d",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_spike.cpp",
+      "frozen_sha256": "d3bef64b2f94e57302a180fa1a3a1a9ec749fb3aa6cd6798e0bb2d2b350a8624",
+      "git_blob_sha256": "d3bef64b2f94e57302a180fa1a3a1a9ec749fb3aa6cd6798e0bb2d2b350a8624",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2gspu_trap.hpp",
+      "frozen_sha256": "382ff96671e4c24ec07fd09513c1e4ad991593c7978d44f533421a58e40bfbdf",
+      "git_blob_sha256": "382ff96671e4c24ec07fd09513c1e4ad991593c7978d44f533421a58e40bfbdf",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/a2record.hpp",
+      "frozen_sha256": "9149ae5b3b037de82cef7d9fecf561d5c5c0c198b1faeecfbc7cf2c2704b2084",
+      "git_blob_sha256": "9149ae5b3b037de82cef7d9fecf561d5c5c0c198b1faeecfbc7cf2c2704b2084",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/generic_tap.hpp",
+      "frozen_sha256": "1c432af427ffb1f9c9d830b288c710c6c8335983a156b74cd9ade3d76cdbf4d4",
+      "git_blob_sha256": "1c432af427ffb1f9c9d830b288c710c6c8335983a156b74cd9ade3d76cdbf4d4",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/gs2.cpp",
+      "frozen_sha256": "5a60d3581d9b7703fe0d24b7cf7c645c80792aa5bb232269de924929de232c14",
+      "git_blob_sha256": "5a60d3581d9b7703fe0d24b7cf7c645c80792aa5bb232269de924929de232c14",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/io_trace.hpp",
+      "frozen_sha256": "7dc6186f3e2795958a1313e10de881010fd04bf3aa689fe2ccf2974bb23d6219",
+      "git_blob_sha256": "7dc6186f3e2795958a1313e10de881010fd04bf3aa689fe2ccf2974bb23d6219",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/systemconfig.cpp",
+      "frozen_sha256": "e22b5653828358f990348312693d4bb1fe33e7a05c5a21bde113e36f4a38ab46",
+      "git_blob_sha256": "e22b5653828358f990348312693d4bb1fe33e7a05c5a21bde113e36f4a38ab46",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "src/wiz5_config.hpp",
+      "frozen_sha256": "68c5799321f07a61e876f5b5660b56c3ce821ff3439f8255f4b7dd966472ba34",
+      "git_blob_sha256": "68c5799321f07a61e876f5b5660b56c3ce821ff3439f8255f4b7dd966472ba34",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "tools/a2rail/ackcheck.py",
+      "frozen_sha256": "ac2cb3ba195cd9cededf86346cc5686041585e75e055a4eba56f63dcb4ab7bfc",
+      "git_blob_sha256": "ac2cb3ba195cd9cededf86346cc5686041585e75e055a4eba56f63dcb4ab7bfc",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "tools/a2rail/exportiocheck.py",
+      "frozen_sha256": "806e15c1570485345badb0bfdb4c6e2915a74cde3b8c5baeef5b907256c76c99",
+      "git_blob_sha256": "806e15c1570485345badb0bfdb4c6e2915a74cde3b8c5baeef5b907256c76c99",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    },
+    {
+      "path": "tools/a2rail/p0check.py",
+      "frozen_sha256": "a785a6a2ed22ae491b9f94da8dbe554df09476abec93874022da34a929bbd1c3",
+      "git_blob_sha256": "a785a6a2ed22ae491b9f94da8dbe554df09476abec93874022da34a929bbd1c3",
+      "byte_identical": true,
+      "crlf_to_lf_only": false
+    }
+  ],
+  "git_eol_policy": "core.autocrlf=input; only CRLF-to-LF normalization accepted"
+}

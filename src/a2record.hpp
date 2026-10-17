@@ -26,6 +26,7 @@
 #pragma once
 #include "a2gspu_rails_registry.hpp"   // a2rails::Registrar: this rail registers its own reader (M8)
 #include "a2gspu_artifact_io.hpp"
+#include "a2gspu_outputs.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -93,6 +94,7 @@ inline void arm() {
     g_global = fopen(p, "wb");
     if (!g_global) { fprintf(stderr, "A2GSPU_RECORDS: FAIL cannot open '%s' -- aborting (exit 2)\n", p); exit(2); }
     g_global_path = p;
+    a2outputs::add("records",close);
     atexit([] {try {close();} catch(const a2artifact::Error &error){a2artifact::fatal_on_exit(error);} });
 }
 

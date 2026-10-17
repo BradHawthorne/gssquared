@@ -153,6 +153,7 @@
 #include "generic_tap.hpp"     // gtap_page_json (the 40-col text page as JSON)
 
 namespace a2trap {
+inline void finish_outputs();
 
 // ---------------------------------------------------------------- helpers ---
 // A malformed spec throws. At launch arm() turns that into the fatal exit it always
@@ -557,6 +558,7 @@ inline void parse_spec(const std::string &raw, int index) {
     if (!t.out_path.empty()) {
         t.out = fopen(t.out_path.c_str(), "wb");
         if (!t.out) fail(raw, "cannot open out file '" + t.out_path + "'");
+        a2outputs::add("trap",finish_outputs);
         t.own_out = true;
     }
     if (t.kind == Trap::STORE) g_store_on = true;
@@ -807,16 +809,23 @@ inline void describe(const Trap &t) {
     printf("A2GSPU_TRAP: armed %s\n", describe_str(t).c_str());
 }
 
+inline void finish_outputs() {
+    std::string failures;
+    auto close=[&](FILE *&file,const char *path){try {a2artifact::finish(file,path);}catch(const a2artifact::Error &error){if(!failures.empty())failures+="; ";failures+=error.what();}};
+    for(Trap &t:g_traps)if(t.own_out)close(t.out,t.out_path.c_str());else t.out=nullptr;
+    close(g_default_out,"A2GSPU_TRAP_OUT");
+    if(!failures.empty())throw a2artifact::Error("trap-close",failures.c_str(),0);
+}
 inline void close_all() {
     for (Trap &t : g_traps) {
         printf("A2GSPU_TRAP: %s hits=%u records=%u entries=%u exits=%u%s%s\n", t.name.c_str(),
                (unsigned)t.hits, (unsigned)t.n, (unsigned)t.entries, (unsigned)t.exits,
                t.capped ? " CAPPED" : "", t.hits == 0 ? " (never reached)" : "");
-        if (t.own_out && t.out) { fclose(t.out); t.out = nullptr; }
     }
-    if (g_default_out) { fclose(g_default_out); g_default_out = nullptr; }
+    finish_outputs();
     fflush(stdout);
 }
+inline void exit_close(){try {close_all();}catch(const a2artifact::Error &error){a2artifact::fatal_on_exit(error);}}
 
 inline void arm() {
     if (g_armed) return;
@@ -827,6 +836,7 @@ inline void arm() {
     if (!env && !file) return;                       // stock: nothing armed, nothing printed
     if (outp) {
         g_default_out = fopen(outp, "wb");
+        a2outputs::add("trap",finish_outputs);
         if (!g_default_out) fail(outp, "cannot open A2GSPU_TRAP_OUT");
     }
     try {
@@ -853,7 +863,7 @@ inline void arm() {
     g_on = true;
     iigs_callctx_arm();   // records carry the toolbox call in progress (incall)
     static bool s_atexit = false;
-    if (!s_atexit) { s_atexit = true; atexit(close_all); }
+    if (!s_atexit) { s_atexit = true; atexit(exit_close); }
 }
 
 // ---- live (CTRL) arming --------------------------------------------------------------
@@ -883,25 +893,27 @@ inline std::string live_add(const std::string &spec, std::string *name) {
     g_on = true;
     iigs_callctx_arm();
     static bool s_atexit = false;
-    if (!s_atexit) { s_atexit = true; atexit(close_all); }
+    if (!s_atexit) { s_atexit = true; atexit(exit_close); }
     return "";
 }
 
 // `trap clear [name]`: disarms (printing each close-out) and returns how many went.
 inline int live_clear(const std::string &name) {
     int removed = 0;
+    std::string failures;
     for (size_t i = 0; i < g_traps.size();) {
         Trap &t = g_traps[i];
         if (!name.empty() && t.name != name) { i++; continue; }
         printf("A2GSPU_TRAP: %s hits=%u records=%u entries=%u exits=%u%s%s (cleared)\n", t.name.c_str(),
                (unsigned)t.hits, (unsigned)t.n, (unsigned)t.entries, (unsigned)t.exits,
                t.capped ? " CAPPED" : "", t.hits == 0 ? " (never reached)" : "");
-        if (t.own_out && t.out) { fclose(t.out); t.out = nullptr; }
+        if(t.own_out)try {a2artifact::finish(t.out,t.out_path.c_str());}catch(const a2artifact::Error &error){if(!failures.empty())failures+="; ";failures+=error.what();}
         g_traps.erase(g_traps.begin() + (long)i);
         removed++;
     }
     recompute_flags();
     fflush(stdout);
+    if(!failures.empty())throw a2artifact::Error("trap-clear",failures.c_str(),0);
     return removed;
 }
 

@@ -1,0 +1,116 @@
+UpdateCTestConfiguration  from :D:/gsqs/railclose-20261016/build/DartConfiguration.tcl
+Test project D:/gsqs/railclose-20261016/build
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 14
+    Start 14: interface_contract
+
+14: Test command: D:\gsqs\railclose-20261016\build\interfacecontracttest.exe
+14: Working Directory: D:/gsqs/railclose-20261016/build/apps/interfacecontracttest
+14: Test timeout computed to be: 10000000
+14: A2GSPU COVERAGE: enabled $000000-$0000FF (32 bytes of bitmap)
+14: A2GSPU COVERAGE: FAIL write 'D:\gsqs\tmp\a2sink-403266974980800\cov': No space left on device
+14: A2GSPU PNG: FAIL write 'D:\gsqs\tmp\a2sink-403266974980800\gray': No space left on device
+14: A2GSPU PNG: FAIL write 'D:\gsqs\tmp\a2sink-403266974980800\rgb': No space left on device
+14: A2GSPU COVERAGE: FAIL flush 'D:\gsqs\tmp\a2sink-403266974980800\cov': No space left on device
+14: A2GSPU COVERAGE: FAIL flush 'D:\gsqs\tmp\a2sink-403266974980800\profile': No space left on device
+14: A2GSPU PNG: FAIL flush 'D:\gsqs\tmp\a2sink-403266974980800\gray': No space left on device
+14: A2GSPU PNG: FAIL flush 'D:\gsqs\tmp\a2sink-403266974980800\rgb': No space left on device
+14: A2GSPU COVERAGE: FAIL close 'D:\gsqs\tmp\a2sink-403266974980800\cov': Input/output error
+14: A2GSPU COVERAGE: FAIL close 'D:\gsqs\tmp\a2sink-403266974980800\profile': Input/output error
+14: A2GSPU PNG: FAIL close 'D:\gsqs\tmp\a2sink-403266974980800\gray': Input/output error
+14: A2GSPU PNG: FAIL close 'D:\gsqs\tmp\a2sink-403266974980800\rgb': Input/output error
+14: A2GSPU COVERAGE: wrote D:\gsqs\tmp\a2sink-403266974980800\valid-cov -- 0/256 bytes executed (0.0%) range=$000000-$0000FF hash=171BB79DC8E18503
+14: A2GSPU SUBSCRIPTION: FAIL subscription-finalization-failed: flush 'D:\gsqs\tmp\a2sink-403266974980800\events': No space left on device
+14: A2GSPU SUBSCRIPTION: FAIL subscription-finalization-failed: close 'D:\gsqs\tmp\a2sink-403266974980800\events': Input/output error
+14: A2GSPU OUTPUT: FAIL fixture-callback 'failure'
+14: A2GSPU OUTPUT: FAIL flush 'failed fixture'
+14: PASS real zero-record trace is valid
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-403266967610300\empty.bin format=bus-trace-v1 count=0 bytes=0 content-hash=14650FB0739D0383 file-hash=14650FB0739D0383 meta=D:\gsqs\tmp\a2artifact-403266967610300\empty.bin.meta.json
+14: PASS empty payload can receive a sidecar
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-403266967610300\missing.bin NO-DESCRIPTION -- read-open 'D:\gsqs\tmp\a2artifact-403266967610300\missing.bin': No such file or directory
+14: PASS missing payload is not a zero-record capture
+14: PASS missing payload does not publish metadata
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-403266967610300\mismatch.bin NO-DESCRIPTION -- length-not-count-times-record-size 'D:\gsqs\tmp\a2artifact-403266967610300\mismatch.bin'
+14: PASS wrong payload length refuses before sidecar publication
+14: PASS invalid payload does not truncate an existing sidecar
+14: PASS SHR dump refuses failed open without a valid count
+14: PASS slot dump refuses failed open without a valid count
+14: PASS MMU dump refuses failed open without a valid count
+14: PASS short write refuses and closes
+14: PASS flush failure refuses and closes
+14: PASS close failure refuses without a double close
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-403266967610300\empty.bin NO-DESCRIPTION -- flush 'D:\gsqs\tmp\a2artifact-403266967610300\empty.bin.meta.json': No space left on device
+14: PASS failed sidecar finalization refuses
+14: PASS failed sidecar is removed
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-403266967610300\empty.bin NO-DESCRIPTION -- close 'D:\gsqs\tmp\a2artifact-403266967610300\empty.bin.meta.json': Input/output error
+14: PASS failed sidecar finalization refuses
+14: PASS failed sidecar is removed
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-403266967610300\empty.bin NO-DESCRIPTION -- invalid-record-size-or-count 'D:\gsqs\tmp\a2artifact-403266967610300\empty.bin'
+14: PASS zero record size refuses
+14: SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-403266967610300\empty.bin NO-DESCRIPTION -- invalid-record-size-or-count 'D:\gsqs\tmp\a2artifact-403266967610300\empty.bin'
+14: PASS record length overflow refuses
+14: PASS failed record write does not publish a successful observer event
+14: PASS void record writer refuses failed write
+14: PASS global readback refuses a latched stream error
+14: PASS global close refuses a latched error and clears ownership
+14: PASS owned FILE close consumes pointer on finalization failure
+14: PASS owned FILE close consumes pointer on finalization failure
+14: PASS coverage fixture arms
+14: PASS coverage refuses injected write/flush/close failure
+14: PASS gray PNG refuses injected write/flush/close failure
+14: PASS RGB PNG refuses injected write/flush/close failure
+14: PASS coverage refuses injected write/flush/close failure
+14: PASS profile refuses finalization failure
+14: PASS gray PNG refuses injected write/flush/close failure
+14: PASS RGB PNG refuses injected write/flush/close failure
+14: PASS coverage refuses injected write/flush/close failure
+14: PASS profile refuses finalization failure
+14: PASS gray PNG refuses injected write/flush/close failure
+14: PASS RGB PNG refuses injected write/flush/close failure
+14: PASS coverage succeeds after refused output
+14: PASS profile succeeds after refused output
+14: PASS PNG writers succeed after refused output
+14: PASS subscription opens before injected close fault
+14: PASS subscription refuses complete close receipt after finalization fault
+14: PASS subscription opens before injected close fault
+14: PASS subscription refuses complete close receipt after finalization fault
+14: A2GSPU LIVENESS: samples=0 frames=0 screen_last_changed=0 screen_unchanged_since=none text_last_changed=0 text_unchanged_since=none insns=0 cpu_stopped_since=none screen_store=none text_store=none kbd_poll=none
+14: PASS liveness close refuses latched I/O error
+14: A2GSPU_TRAP: fixture hits=0 records=0 entries=0 exits=0 (never reached)
+14: PASS trap close refuses latched I/O error
+14: PASS legacy title close refuses latched I/O error
+14: PASS managed shutdown reports failures after attempting all outputs
+14: PASS failed finalizer does not skip other callbacks or owned streams
+14: PASS tracking replacement updates one owner entry
+14: PASS live sink close propagates error
+14: PASS failed live close clears registry and pointer
+14: PASS scoped export refuses existing stream error
+14: PASS scoped export does not double close after refusal
+14: PASS early return ownership clears scoped FILE view
+14: PASS ACK publishes one complete newline-terminated receipt
+14: PASS ACK collision refuses
+14: PASS ACK collision preserves prior receipt
+14: PASS ACK blocked temporary output refuses
+14: PASS ACK failed write never publishes final file
+14: PASS ACK short-write/flush/close fault refuses
+14: PASS ACK finalization fault leaves no final receipt
+14: PASS ACK short-write/flush/close fault refuses
+14: PASS ACK finalization fault leaves no final receipt
+14: PASS ACK short-write/flush/close fault refuses
+14: PASS ACK finalization fault leaves no final receipt
+14: PASS ACK rename failure refuses
+14: PASS ACK rename failure retains complete temporary evidence
+14: interface contract: 62 checks passed
+1/1 Test #14: interface_contract ...............   Passed    0.08 sec
+
+The following tests passed:
+	interface_contract
+
+100% tests passed out of 1
+
+Total Test time (real) =   0.20 sec

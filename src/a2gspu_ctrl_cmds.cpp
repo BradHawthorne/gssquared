@@ -15,6 +15,7 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 // The CTRL verb families. Declarations: a2gspu_ctrl_cmds.hpp.
+#include "a2gspu_artifact_io.hpp"
 #include "gs2_app.hpp"
 #include "a2gspu_artifact_meta.hpp"   // M6: vram dumps describe themselves
 #include "a2gspu_inspect.hpp"
@@ -1013,8 +1014,9 @@ bool try_meta(const char *line, char *result, size_t rsz) {
         const char *path=line[11]?line+12:nullptr; while(path&&*path==' ')path++;
         if(!path||!*path) snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 known=%d capabilities=%d use='limitations <file>'",
             a2manifest::limitation_count("limitation"),a2manifest::limitation_count("capability"));
-        else { FILE *lf=fopen(path,"wb"); if(!lf)snprintf(result,rsz,"status=FAIL limitations-open-fail %s",path);
-            else {a2manifest::write_limitations(lf);fclose(lf);snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 wrote %s",path);} }
+        else { FILE *lf=fopen(path,"wb");
+            a2artifact::ExistingOutput a2output_lf_0(lf,path); if(!lf)snprintf(result,rsz,"status=FAIL limitations-open-fail %s",path);
+            else {a2manifest::write_limitations(lf);a2output_lf_0.finish();snprintf(result,rsz,"status=OK limitations schema=a2limitations-v1 wrote %s",path);} }
         return true;
     }
     if (!strcmp(line, "oracle") || !strncmp(line, "oracle ", 7)) {
@@ -1027,11 +1029,12 @@ bool try_meta(const char *line, char *result, size_t rsz) {
         if (!strncmp(line, "help ", 5) && line[5]) path = line + 5;
         if (path && path[0]) {
             FILE *hf = fopen(path, "wb");
+            a2artifact::ExistingOutput a2output_hf_1(hf,path);
             if (!hf) {
                 snprintf(result, rsz, "status=FAIL help-open-fail %s", path);
             } else {
                 a2manifest::write_help_short(hf);
-                fclose(hf);
+                a2output_hf_1.finish();
                 snprintf(result, rsz, "status=OK help wrote %s", path);
             }
         } else {
@@ -1046,11 +1049,12 @@ bool try_meta(const char *line, char *result, size_t rsz) {
             snprintf(result, rsz, "status=FAIL manifest-need-file");
         } else {
             FILE *mf = fopen(path, "wb");
+            a2artifact::ExistingOutput a2output_mf_2(mf,path);
             if (!mf) {
                 snprintf(result, rsz, "status=FAIL manifest-open-fail %s", path);
             } else {
                 a2manifest::write_manifest(mf);
-                fclose(mf);
+                a2output_mf_2.finish();
                 snprintf(result, rsz, "status=OK manifest wrote %s", path);
             }
         }
@@ -1096,8 +1100,9 @@ bool try_meta(const char *line, char *result, size_t rsz) {
             } else if (!memvu_sv_on && !memvu_lv_on && !memvu_op_on && !memvu_ir_on && !memvu_ws_on && !memvu_seam_on && g_memvu_blame_topn <= 0) {
                 snprintf(result, rsz, "status=FAIL memvu-not-armed -- no MEMVU rail is armed; `rail set MEMVU_STOREVIS 1` (or BLAME, OPMIX, SEAM...) first");
             } else if (FILE *rf = fopen(path, "wb")) {
+                a2artifact::ExistingOutput a2output_rf_3(rf,path);
                 const std::string sections = memvu_report_all(rf);
-                fclose(rf);
+                a2output_rf_3.finish();
                 snprintf(result, rsz, "status=OK memvu report sections=%s wrote %s", sections.empty() ? "-" : sections.c_str(), path);
             } else {
                 snprintf(result, rsz, "status=FAIL memvu-report-open-fail %s", path);
@@ -1171,11 +1176,12 @@ bool try_meta(const char *line, char *result, size_t rsz) {
                 a2manifest::format_rail_ack(result, rsz);
             } else {
                 FILE *rf = fopen(path, "wb");
+                a2artifact::ExistingOutput a2output_rf_4(rf,path);
                 if (!rf) {
                     snprintf(result, rsz, "status=FAIL rail-open-fail %s", path);
                 } else {
                     a2manifest::write_env_only_rails(rf);
-                    fclose(rf);
+                    a2output_rf_4.finish();
                     snprintf(result, rsz, "status=OK rail env-only wrote %s", path);
                 }
             }
@@ -1389,8 +1395,8 @@ bool try_trace_break(const char *line, char *result, size_t rsz) {
                      g_callstream_on ? 1 : 0, g_callstream_seq);
         } else if (!strncmp(rest, "off", 3) || !strncmp(rest, "clear", 5)) {
             if (g_callstream_out) {
-                fclose(g_callstream_out);
-                g_callstream_out = nullptr;
+                g_callstream_on=false;
+                a2outputs::finish(g_callstream_out,"A2GSPU_CALLSTREAM");
             }
             g_callstream_on = false;
             snprintf(result, rsz, "status=OK callstream off");
@@ -1401,10 +1407,11 @@ bool try_trace_break(const char *line, char *result, size_t rsz) {
                 snprintf(result, rsz, "status=FAIL callstream-need-file");
             } else {
                 if (g_callstream_out) {
-                    fclose(g_callstream_out);
-                    g_callstream_out = nullptr;
+                    g_callstream_on=false;
+                    a2outputs::finish(g_callstream_out,"A2GSPU_CALLSTREAM");
                 }
                 g_callstream_out = fopen(path, "wb");
+                a2outputs::track(g_callstream_out,path);
                 g_callstream_on = (g_callstream_out != nullptr);
                 g_callstream_seq = 0;
                 snprintf(result, rsz,
@@ -1530,11 +1537,12 @@ bool try_assert_dhgr(const char *line, char *result, size_t rsz,
         }
         if (bless || missing) {
             FILE *wf = fopen(fbuf, "wb");
+            a2artifact::ExistingOutput a2output_wf_5(wf,fbuf);
             if (!wf) {
                 snprintf(result, rsz, "status=FAIL dhgr-golden-write-fail %s", fbuf);
             } else {
                 fprintf(wf, "%016llX\n", (unsigned long long)h);
-                fclose(wf);
+                a2output_wf_5.finish();
                 snprintf(result, rsz,
                          "status=PASS dhgr-golden BLESSED profile=%s page=%d "
                          "hash=%016llX file=%s",
@@ -1570,8 +1578,9 @@ bool try_assert_dhgr(const char *line, char *result, size_t rsz,
         bool bless = narg > 1 && !strcmp(mode, "bless");
         if (bless || missing) {
             FILE *wf=fopen(fbuf,"wb");
+            a2artifact::ExistingOutput a2output_wf_6(wf,fbuf);
             if (!wf) snprintf(result,rsz,"status=FAIL shr-golden-write-fail %s",fbuf);
-            else { fprintf(wf,"%016llX\n",(unsigned long long)h); fclose(wf);
+            else { fprintf(wf,"%016llX\n",(unsigned long long)h); a2output_wf_6.finish();
                 snprintf(result,rsz,"status=PASS shr-golden BLESSED profile=shr-window hash=%016llX file=%s",(unsigned long long)h,fbuf); }
         } else if ((uint64_t)old == h) snprintf(result,rsz,"status=PASS shr-golden MATCH profile=shr-window hash=%016llX",(unsigned long long)h);
         else snprintf(result,rsz,"status=FAIL shr-golden DIFF profile=shr-window got=%016llX want=%016llX",(unsigned long long)h,old);
@@ -2012,6 +2021,7 @@ bool try_input(const char *line, char *result, size_t rsz,
                 return true;
             }
             FILE *f = fopen(path, "w");
+            a2artifact::ExistingOutput a2output_f_7(f,path);
             if (!f) {
                 snprintf(result, rsz, "status=FAIL devstate-open-fail %s", path);
                 return true;
@@ -2026,7 +2036,7 @@ bool try_input(const char *line, char *result, size_t rsz,
                 delete df;
                 nh++;
             }
-            fclose(f);
+            a2output_f_7.finish();
             snprintf(result, rsz, "status=OK devstate all handlers=%d lines=%d -> %s",
                      nh, nl, path);
             return true;
@@ -2581,6 +2591,7 @@ bool try_regs(const char *line, char *result, size_t rsz,
         if (sscanf(line + 5, "%63s %d %n", abuf, &len, &off) >= 2 && len > 0 &&
             parse_addr(abuf, &addr)) {
             FILE *rf = fopen(line + 5 + off, "wb");
+            a2artifact::ExistingOutput a2output_rf_8(rf,line + 5 + off);
             if (rf) {
                 int unreadable = 0;
                 // Bank 1 is the aux 64K, read the same way `load` writes it and
@@ -2593,7 +2604,7 @@ bool try_regs(const char *line, char *result, size_t rsz,
                 // about the wrong bank for a request that explicitly named 01.
                 const uint8_t *flat = rail_cpu_ram_base(computer);
                 if (((addr >> 16) & 0xFF) == 1 && !flat) {
-                    fclose(rf);
+                    a2output_rf_8.finish();
                     snprintf(result, rsz,
                              "status=FAIL read-no-aux-image -- bank 01 requested but this "
                              "machine exposes no flat CPU RAM image");
@@ -2604,7 +2615,7 @@ bool try_regs(const char *line, char *result, size_t rsz,
                         uint8_t b = flat[0x10000 + (((addr & 0xFFFF) + i) & 0xFFFF)];
                         fwrite(&b, 1, 1, rf);
                     }
-                    fclose(rf);
+                    a2output_rf_8.finish();
                     snprintf(result, rsz, "status=OK read bank=01 aux %d byte(s)",
                              len);
                     return true;
@@ -2636,7 +2647,7 @@ bool try_regs(const char *line, char *result, size_t rsz,
                     fwrite(&b, 1, 1, rf);
                 }
                 unreadable += io_page;
-                fclose(rf);
+                a2output_rf_8.finish();
                 /* THREE OUTCOMES, and the old code collapsed them into two.
                  *
                  * probe_peek is observation-FREE but not observation-COMPLETE:
@@ -2977,6 +2988,7 @@ bool try_regs(const char *line, char *result, size_t rsz,
                 size_t n = tb->count;
                 if (want > 0 && (size_t)want < n) n = (size_t)want;
                 FILE *f = fopen(path, "wb");
+                a2artifact::ExistingOutput a2output_f_9(f,path);
                 if (!f) {
                     snprintf(result, rsz, "status=FAIL tbuf-open-fail %s", path);
                 } else {
@@ -2990,7 +3002,7 @@ bool try_regs(const char *line, char *result, size_t rsz,
                         fprintf(f, "%s eaddr=%06X rw=%c\n", lbuf,
                                 (unsigned)(e->eaddr & 0xFFFFFF), e->f_write ? 'W' : 'R');
                     }
-                    fclose(f);
+                    a2output_f_9.finish();
                     snprintf(result, rsz, "status=OK tbuf dumped %zu of %zu entries to %s",
                              n, tb->count, path);
                 }

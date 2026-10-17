@@ -1,0 +1,52 @@
+PASS p3 help publishes output
+PASS p3 help refuses blocked output
+PASS p3 manifest publishes output
+PASS p3 manifest refuses blocked output
+PASS p3 systems publishes output
+PASS p3 systems refuses blocked output
+PASS p3 limitations publishes output
+PASS p3 limitations refuses blocked output
+PASS p3 rail env-only publishes output
+PASS p3 rail env-only refuses blocked output
+PASS p3 devstate all publishes output
+PASS p3 devstate all refuses blocked output
+PASS p3 read 000800 16 publishes output
+PASS p3 read 000800 16 refuses blocked output
+PASS p3 dis 000800 1 publishes output
+PASS p3 dis 000800 1 refuses blocked output
+PASS p3 iolog dump publishes output
+PASS p3 iolog dump refuses blocked output
+FAIL p3 screen refuses blocked sidecar
+PASS p3 remains usable after export refusal
+PASS session exits cleanly
+FAIL p3 textdump failure exits 2
+PASS p5 help publishes output
+PASS p5 help refuses blocked output
+PASS p5 manifest publishes output
+PASS p5 manifest refuses blocked output
+PASS p5 systems publishes output
+PASS p5 systems refuses blocked output
+PASS p5 limitations publishes output
+PASS p5 limitations refuses blocked output
+PASS p5 rail env-only publishes output
+PASS p5 rail env-only refuses blocked output
+PASS p5 devstate all publishes output
+PASS p5 devstate all refuses blocked output
+PASS p5 read 000800 16 publishes output
+PASS p5 read 000800 16 refuses blocked output
+PASS p5 dis 000800 1 publishes output
+PASS p5 dis 000800 1 refuses blocked output
+PASS p5 iolog dump publishes output
+PASS p5 iolog dump refuses blocked output
+FAIL p5 screen refuses blocked sidecar
+PASS p5 remains usable after export refusal
+PASS session exits cleanly
+FAIL p5 textdump failure exits 2
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\exportiocheck.py", line 33, in <module>
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--exe',type=Path,required=True);p.add_argument('--out',type=Path);a=p.parse_args();run(a.exe.resolve(),a.out)
+                                                                                                                                                      ~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\exportiocheck.py", line 28, in run
+    assert all(r['ok'] for r in rows),'exports silently failed; see checks.json'
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: exports silently failed; see checks.json

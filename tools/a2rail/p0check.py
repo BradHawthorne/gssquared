@@ -367,7 +367,7 @@ def main():
                     "--exe",str(args.exe.resolve())],check=True)
     subprocess.run([sys.executable,"-I",str(Path(__file__).with_name("guestlivecheck.py")),
                     "--exe",str(args.exe.resolve())],check=True)
-    for tool in ('capturecheck.py','contentcheck.py','faultcheck.py','inputcheck.py','devicecoveragecheck.py','socketstreamcheck.py','lifecyclecheck.py','sockettoolscheck.py','uicheck.py','mcpcheck.py','mcpclosecheck.py','artifactiocheck.py','sinkiocheck.py','contextcheck.py','experimentcheck.py','experimentinputcheck.py','readonlymediacheck.py'):
+    for tool in ('capturecheck.py','contentcheck.py','faultcheck.py','inputcheck.py','devicecoveragecheck.py','socketstreamcheck.py','lifecyclecheck.py','sockettoolscheck.py','uicheck.py','mcpcheck.py','mcpclosecheck.py','artifactiocheck.py','sinkiocheck.py','ackcheck.py','exportiocheck.py','contextcheck.py','experimentcheck.py','experimentinputcheck.py','readonlymediacheck.py'):
         subprocess.run([sys.executable,'-I',str(Path(__file__).with_name(tool)), '--exe',str(args.exe.resolve())],check=True)
     subprocess.run([sys.executable,'-I',str(Path(__file__).with_name('fleetcheck.py')),'--exe',str(args.exe.resolve()),'--expect-discovery'],check=True)
     print("P0 checks: ALL GREEN")

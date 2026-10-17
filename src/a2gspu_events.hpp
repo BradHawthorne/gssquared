@@ -80,6 +80,8 @@ inline void close_with_ops(a2artifact::WriteOps ops={}) {
     active=false;a2record::g_observer=enabled()?observe:nullptr;
 }
 inline void close(){close_with_ops();}
+inline void close_checked(){close();if(!error.empty())throw a2artifact::Error("subscription-close",error.c_str(),0);}
+inline void exit_close(){try {close_checked();}catch(const a2artifact::Error &failure){a2artifact::fatal_on_exit(failure);}}
 inline bool open(const std::vector<std::string> &filters,const std::string &file,uint64_t cap,std::string &why) {
     if(active){why="subscription-already-active; turn it off first";return false;}
     if(file.rfind("\\\\.\\",0)==0 || file.rfind("\\\\?\\",0)==0){why="subscription requires an ordinary file";return false;}
@@ -90,7 +92,8 @@ inline bool open(const std::vector<std::string> &filters,const std::string &file
     a2record::g_observer=observe;
     control("started","{\"limit\":"+std::to_string(limit)+",\"coverage\":\"a2record rails, commands/stops, IRQ edges, audio captures, SCC/WDM console and command/frame-sampled device fields; transient device changes may be missed\"}");
     if(!error.empty()){why=error;close();return false;}
-    static bool registered=false;if(!registered){std::atexit(close);registered=true;}
+    a2outputs::add("subscription",close_checked);
+    static bool registered=false;if(!registered){std::atexit(exit_close);registered=true;}
     return true;
 }
 inline std::string status() {

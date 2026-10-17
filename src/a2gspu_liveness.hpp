@@ -131,11 +131,13 @@ inline void a2gspu_liveness_close() {
            " insns=%llu cpu_stopped_since=%s screen_store=%s text_store=%s kbd_poll=%s\n",
            g_liveness_samples, g_liveness_frame, g_liveness_screen_last, a, g_liveness_text_last, b,
            (unsigned long long)g_progress_insns, c, ss, ts, kp);
-    if (g_liveness_out) { fclose(g_liveness_out); g_liveness_out = nullptr; }
+    a2outputs::finish(g_liveness_out,"A2GSPU_LIVENESS_OUT");
     fflush(stdout);
 }
 
 // ---- readback: `rail read A2GSPU_LIVENESS` ----------------------------------
+inline void a2gspu_liveness_exit_close(){try {a2gspu_liveness_close();}catch(const a2artifact::Error &error){a2artifact::fatal_on_exit(error);}}
+
 inline void a2gspu_liveness_format(char *buf, size_t n) {
     if (!g_liveness_armed) { snprintf(buf, n, "status=FAIL liveness-not-armed -- set A2GSPU_LIVENESS=N at launch, or `rail set A2GSPU_LIVENESS N`"); return; }
     char a[16], b[16], c[16], ss[24], ts[24], kp[24];
@@ -168,7 +170,7 @@ inline void a2gspu_liveness_start(int every, bool is_iigs) {
     g_liveness_prev_insns = g_progress_insns;
     g_gsdiag_extra = a2gspu_liveness_gsdiag_extra;
     static bool s_atexit = false;
-    if (!s_atexit) { s_atexit = true; atexit(a2gspu_liveness_close); }
+    if (!s_atexit) { s_atexit = true; atexit(a2gspu_liveness_exit_close); }
     g_liveness_armed = true;
     // The taps: clock from the record contract, which both arm sites register
     // first (a2record_register), so a stamp and a record's cycles= agree.

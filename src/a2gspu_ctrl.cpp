@@ -15,12 +15,14 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 // The CTRL and co-pilot rails -- moved out of gs2.cpp; see gs2_app.hpp.
+#include "a2gspu_artifact_io.hpp"
 #include "gs2_app.hpp"
 #include "a2gspu_snapdiff.hpp"
 #include "a2gspu_events.hpp"
 #include "a2gspu_fault.hpp"
 #include "a2gspu_input.hpp"
 #include "a2gspu_agent.hpp"
+#include "a2gspu_ack.hpp"
 
 
 // ---- a2gspu interactive control rail (env-gated): A2GSPU_CTRL=<dir> ----
@@ -66,15 +68,11 @@ static void a2gspu_ctrl_dump_text(computer_t *computer, const char *path) {
 // Atomic ack: write ack.N.tmp then rename, so a polling reader never sees a
 // half-written (or empty) ack file.
 static void a2gspu_ctrl_ack(const char *dir, int seq, const char *result) {
-    char tmppath[1024], ackpath[1024];
-    snprintf(tmppath, sizeof tmppath, "%s/ack.%d.tmp", dir, seq);
-    snprintf(ackpath, sizeof ackpath, "%s/ack.%d", dir, seq);
-    FILE *af = fopen(tmppath, "wb");
-    if (!af) return;
-    fprintf(af, "%s\n", result);
-    fclose(af);
-    remove(ackpath);
-    rename(tmppath, ackpath);
+    try {a2ack::publish(dir,seq,result);}
+    catch(const a2artifact::Error &error) {
+        fprintf(stderr,"A2GSPU CTRL: status=FAIL ack-publication sequence=%d effects=may-have-occurred %s\n",seq,error.what());
+        a2artifact::fatal(error);
+    }
 }
 
 // Soft-switch read-status helper for `vid`.  A free function rather than a
@@ -262,6 +260,7 @@ static bool a2gspu_dispatch_impl(GS2AppState *state, const char *line,
             dis.setAddress(addr);
             std::vector<std::string> lines = dis.disassemble(n);
             FILE *df = fopen(ftok, "wb");
+            a2artifact::ExistingOutput a2output_df_0(df,ftok);
             if (df) {
                 // THE LISTING SAYS WHAT IT ASSUMED. Entry widths are an
                 // assumption about a static byte stream, not a measurement
@@ -271,7 +270,7 @@ static bool a2gspu_dispatch_impl(GS2AppState *state, const char *line,
                         (unsigned)((addr >> 16) & 0xFF), (unsigned)(addr & 0xFFFF),
                         n, dm8 ? 8 : 16, dx8 ? 8 : 16, wsrc);
                 for (auto &l : lines) fprintf(df, "%s\n", l.c_str());
-                fclose(df);
+                a2output_df_0.finish();
                 snprintf(result, rsz,
                          "status=OK dis n=%d mx=m%dx%d@start src=%s unreadable=%d",
                          n, dm8 ? 8 : 16, dx8 ? 8 : 16, wsrc, dis.unreadable());
@@ -371,9 +370,10 @@ static bool a2gspu_dispatch_impl(GS2AppState *state, const char *line,
                page, base, lit_total);
         if (fbuf[0]) {
             FILE *hf = fopen(fbuf, "wb");
+            a2artifact::ExistingOutput a2output_hf_1(hf,fbuf);
             if (hf) {
                 for (int cy = 0; cy < 24; cy++) fprintf(hf, "%s\n", map[cy]);
-                fclose(hf);
+                a2output_hf_1.finish();
                 snprintf(result, rsz, "status=OK hgr profile=hgr-ascii-coarse page%d -> %s", page, fbuf);
             } else {
                 snprintf(result, rsz, "status=FAIL hgr-write-fail");
@@ -496,6 +496,7 @@ static bool a2gspu_dispatch_impl(GS2AppState *state, const char *line,
               if (n > 4 && !strcmp(sidecar + n - 4, ".png")) sidecar[n - 4] = 0;
               strncat(sidecar, ".txt", sizeof(sidecar) - strlen(sidecar) - 1); }
             if (FILE *sf = fopen(sidecar, "w")) {
+                a2artifact::ExistingOutput a2output_sf_2(sf,sidecar);
                 fprintf(sf, "mode=%s page=%d hgr1_lit=%ld hgr2_lit=%ld "
                             "text_rows=%d nonblank_rows=%d\n",
                         mode, p2 ? 2 : 1, litp[0], litp[1], ttext, tnb);
@@ -507,8 +508,8 @@ static bool a2gspu_dispatch_impl(GS2AppState *state, const char *line,
                     if (nb) fprintf(sf, "%s T%02d |%s|\n",
                                     rowtext[y] ? "TEXT" : "junk", y, rows[y]);
                 }
-                fclose(sf);
-            }
+                a2output_sf_2.finish();
+            } else throw a2artifact::Error("screen-sidecar-open",sidecar);
             printf("SCREEN: mode=%s page=%d  hgr1_lit=%ld hgr2_lit=%ld "
                    "text_rows=%d nonblank_rows=%d -> %s\n",
                    mode, p2 ? 2 : 1, litp[0], litp[1], ttext, tnb, sidecar);

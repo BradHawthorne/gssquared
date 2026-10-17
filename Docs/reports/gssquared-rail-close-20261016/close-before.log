@@ -1,0 +1,5 @@
+A2GSPU LIVENESS: samples=0 frames=0 screen_last_changed=0 screen_unchanged_since=none text_last_changed=0 text_unchanged_since=none insns=0 cpu_stopped_since=none screen_store=none text_store=none kbd_poll=none
+FAIL liveness latched stream error
+A2GSPU_TRAP: fixture hits=0 records=0 entries=0 exits=0 (never reached)
+FAIL trap latched stream error
+FAIL legacy title sink latched stream error

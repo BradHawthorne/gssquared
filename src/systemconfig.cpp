@@ -15,6 +15,7 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "a2gspu_artifact_io.hpp"
 #include "gs2.hpp"
 #include "systemconfig.hpp"
 #include "platforms.hpp"
@@ -545,6 +546,7 @@ int find_first_system_for_platform(int platform_id) {
 bool write_system_manifest(const char *path) {
     if (!path || !path[0]) return false;
     FILE *f = fopen(path, "wb");
+    a2artifact::ExistingOutput a2output_f_0(f,path);
     if (!f) return false;
     fprintf(f, "# a2gspu systems manifest\n");
     fprintf(f, "schema\ta2systems-v1\n");
@@ -566,6 +568,6 @@ bool write_system_manifest(const char *path) {
         for (int slot = 0; slot < NUM_SLOTS; ++slot) fprintf(f, "\tslot%d=%d", slot, (int)s->slot_devices[slot]);
         fprintf(f, "\n");
     }
-    fclose(f);
+    a2output_f_0.finish();
     return true;
 }

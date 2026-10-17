@@ -1,0 +1,26 @@
+PASS p3 tmp-directory: command effects precede failed ACK
+FAIL p3 tmp-directory: publication failure exits 2
+PASS p3 no partial ACK is published
+PASS p3 ack-directory: command effects precede failed ACK
+FAIL p3 ack-directory: publication failure exits 2
+PASS p3 blocked destination is preserved
+PASS p3 old-receipt: command effects precede failed ACK
+FAIL p3 old-receipt: publication failure exits 2
+FAIL p3 old receipt is preserved
+PASS p5 tmp-directory: command effects precede failed ACK
+FAIL p5 tmp-directory: publication failure exits 2
+PASS p5 no partial ACK is published
+PASS p5 ack-directory: command effects precede failed ACK
+FAIL p5 ack-directory: publication failure exits 2
+PASS p5 blocked destination is preserved
+PASS p5 old-receipt: command effects precede failed ACK
+FAIL p5 old-receipt: publication failure exits 2
+FAIL p5 old receipt is preserved
+Traceback (most recent call last):
+  File "D:\Projects\gssquared-fork\tools\a2rail\ackcheck.py", line 43, in <module>
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--exe',type=Path,required=True);p.add_argument('--out',type=Path);a=p.parse_args();run(a.exe.resolve(),a.out)
+                                                                                                                                                      ~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\gssquared-fork\tools\a2rail\ackcheck.py", line 38, in run
+    assert all(r['ok'] for r in rows),'ACK publication silently failed; see checks.json'
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ACK publication silently failed; see checks.json

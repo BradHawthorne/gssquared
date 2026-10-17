@@ -1695,6 +1695,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     //(void)result;
     GS2AppState *state = (GS2AppState *)appstate;
     if (!state) return;
+    std::string output_failure;
 
     // Stop the debug protocol thread before tearing down computer/SDL objects;
     // otherwise the bridge thread can race AppQuit and trip SDL object asserts.
@@ -1706,6 +1707,8 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
         state->debug_protocol.reset();
     }
 
+    try {a2outputs::finish_all();}catch(const a2artifact::Error &error){output_failure=error.what();}
+    a2record::g_observer=nullptr;
     if (osd) {
         delete osd;
         osd = nullptr;
@@ -1724,7 +1727,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     delete state->select_system;
     delete state->aa;
     delete state;
+    a2record::g_cycles_fn=nullptr;a2record::g_frame_fn=nullptr;
     try {generic_tap_close();a2record::close();}
     catch(const a2artifact::Error &error){a2artifact::fatal(error);}
+    if(!output_failure.empty())a2artifact::fatal(a2artifact::Error("output-finalization",output_failure.c_str(),0));
     // SDL_Quit() is called automatically by SDL after this returns.
 }

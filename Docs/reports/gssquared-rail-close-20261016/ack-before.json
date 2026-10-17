@@ -1,0 +1,82 @@
+{
+  "checks": [
+    {
+      "ok": true,
+      "label": "p3 tmp-directory: command effects precede failed ACK"
+    },
+    {
+      "ok": false,
+      "label": "p3 tmp-directory: publication failure exits 2",
+      "exit_code": null
+    },
+    {
+      "ok": true,
+      "label": "p3 no partial ACK is published"
+    },
+    {
+      "ok": true,
+      "label": "p3 ack-directory: command effects precede failed ACK"
+    },
+    {
+      "ok": false,
+      "label": "p3 ack-directory: publication failure exits 2",
+      "exit_code": null
+    },
+    {
+      "ok": true,
+      "label": "p3 blocked destination is preserved"
+    },
+    {
+      "ok": true,
+      "label": "p3 old-receipt: command effects precede failed ACK"
+    },
+    {
+      "ok": false,
+      "label": "p3 old-receipt: publication failure exits 2",
+      "exit_code": null
+    },
+    {
+      "ok": false,
+      "label": "p3 old receipt is preserved"
+    },
+    {
+      "ok": true,
+      "label": "p5 tmp-directory: command effects precede failed ACK"
+    },
+    {
+      "ok": false,
+      "label": "p5 tmp-directory: publication failure exits 2",
+      "exit_code": null
+    },
+    {
+      "ok": true,
+      "label": "p5 no partial ACK is published"
+    },
+    {
+      "ok": true,
+      "label": "p5 ack-directory: command effects precede failed ACK"
+    },
+    {
+      "ok": false,
+      "label": "p5 ack-directory: publication failure exits 2",
+      "exit_code": null
+    },
+    {
+      "ok": true,
+      "label": "p5 blocked destination is preserved"
+    },
+    {
+      "ok": true,
+      "label": "p5 old-receipt: command effects precede failed ACK"
+    },
+    {
+      "ok": false,
+      "label": "p5 old-receipt: publication failure exits 2",
+      "exit_code": null
+    },
+    {
+      "ok": false,
+      "label": "p5 old receipt is preserved"
+    }
+  ]
+}

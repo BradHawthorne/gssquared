@@ -282,9 +282,10 @@ inline void wiz5_keyram_dump(computer_t *computer) {
     snprintf(rp, sizeof(rp), "%s/keypress_%04d_ram.bin",
              g_wiz5_session_dir.c_str(), ++g_wiz5_keyram_seq);
     if (FILE *rf = fopen(rp, "wb")) {
+        a2artifact::ExistingOutput output(rf,rp);
         for (uint32_t a = 0x0800; a < 0xC000; a++) fputc(a2obs_peek(cpu->mmu, (uint16_t)a) & 0xFF, rf);
-        fclose(rf);
-    }
+        output.finish();
+    } else throw a2artifact::Error("keyram-open",rp);
 }
 
 inline void wiz5_inject(computer_t *computer, const std::string &keys, int frame) {
@@ -396,10 +397,11 @@ inline void wiz5_keys_close() {
 
 // ---- arm / close ------------------------------------------------------------
 inline void wiz5_config_close() {
-    if (g_wiz5_ec19_out)   { fclose(g_wiz5_ec19_out);   g_wiz5_ec19_out = nullptr; }
-    if (g_wiz5_diskwr_out) { fclose(g_wiz5_diskwr_out); g_wiz5_diskwr_out = nullptr; }
-    if (g_wiz5_csp6_out)   { fclose(g_wiz5_csp6_out);   g_wiz5_csp6_out = nullptr; }
+    std::string failures;
+    for(FILE **file:{&g_wiz5_ec19_out,&g_wiz5_diskwr_out,&g_wiz5_csp6_out})try {a2outputs::finish(*file,"WIZ5 output");}catch(const a2artifact::Error &error){if(!failures.empty())failures+="; ";failures+=error.what();}
+    if(!failures.empty())throw a2artifact::Error("title-output-close",failures.c_str(),0);
 }
+inline void wiz5_config_exit_close(){try {wiz5_config_close();}catch(const a2artifact::Error &error){a2artifact::fatal_on_exit(error);}}
 
 // Read every WIZ5_* title rail and open its sinks / load the key schedule. A
 // no-op (leaves the emulator stock) when none are set. Idempotent-guarded so
@@ -527,6 +529,7 @@ inline void wiz5_config_arm(computer_t *computer) {
     bool any_pc_trap = false;
     if (const char *ep = getenv("WIZ5_EC19_OUT")) {
         g_wiz5_ec19_out = fopen(ep, "w");
+        a2outputs::track(g_wiz5_ec19_out,ep);
         g_wiz5_ec19_lines = 0; g_wiz5_ec19_cur = -1;
         for (int i = 0; i < 256; i++) g_wiz5_ec19_subseen[i] = 0;
         if (g_wiz5_ec19_out) { printf("WIZ5_EC19_OUT: SCREENDEV driver trap -> %s\n", ep); any_pc_trap = true; }
@@ -534,6 +537,7 @@ inline void wiz5_config_arm(computer_t *computer) {
     }
     if (const char *dp = getenv("WIZ5_DISKWR_OUT")) {
         g_wiz5_diskwr_out = fopen(dp, "w");
+        a2outputs::track(g_wiz5_diskwr_out,dp);
         g_wiz5_diskwr_n = 0; g_wiz5_diskrd_pblk = -1;
         for (int i = 0; i < 2048; i++) g_wiz5_diskrd_seen[i] = false;
         if (g_wiz5_diskwr_out) { printf("WIZ5_DISKWR_OUT: disk block-write capture -> %s\n", dp); any_pc_trap = true; }
@@ -541,6 +545,7 @@ inline void wiz5_config_arm(computer_t *computer) {
     }
     if (const char *cp = getenv("WIZ5_CSP6_OUT")) {
         g_wiz5_csp6_out = fopen(cp, "w");
+        a2outputs::track(g_wiz5_csp6_out,cp);
         g_wiz5_csp6_n = 0;
         if (g_wiz5_csp6_out) { printf("WIZ5_CSP6_OUT: UNITWRITE eval-stack trap -> %s\n", cp); any_pc_trap = true; }
         else { fprintf(stderr, "WIZ5_CSP6_OUT: FAIL cannot open '%s' -- aborting (exit 2)\n", cp); exit(2); }
@@ -548,7 +553,7 @@ inline void wiz5_config_arm(computer_t *computer) {
     if (any_pc_trap) {
         g_gtap_ext = wiz5_config_step;   // register the per-instruction extension
         g_gtap.on = true;                // make base_6502.cpp visit generic_tap_check
-        atexit(wiz5_config_close);
+        atexit(wiz5_config_exit_close);
     }
     (void)computer;
 }

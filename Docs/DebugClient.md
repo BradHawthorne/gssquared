@@ -202,7 +202,19 @@ alone does not establish complete output: check the process exit and explicit
 stream close/status. Buffered record counts and observer notifications can
 precede a later close failure. See the
 [output-sink audit](reports/gssquared-sink-io-20261016/README.md) for covered
-writers, remaining per-rail lifecycle work and the emergency exit limitation.
+writers and the emergency exit limitation. The subsequent
+[per-rail/ACK continuation](reports/gssquared-rail-close-20261016/README.md)
+checks registered per-rail shutdown and additional synchronous exports. It
+closes registered outputs before destroying the clock, attempts all closures
+and exits 2 if any fail. Live close failures consume the old stream.
+
+File ACK publication uses a checked temporary write/flush/close and rename.
+An existing `ack.N` is preserved and refused: use a fresh session directory
+and increasing sequences. Failure prints `ack-publication`, sequence and
+`effects=may-have-occurred`, then exits 2. The command may already have run;
+absence of its receipt is not permission to resend. Inspect the session log,
+process exit and artifacts. A completed temporary file can remain when rename
+fails. This is not fsync or a concurrent-writer no-clobber guarantee.
 
 ## Managed close-out
 

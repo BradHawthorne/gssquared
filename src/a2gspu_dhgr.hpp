@@ -20,6 +20,7 @@
 //   GSNTSC01  version:u32 taps:u32     then 4 * 2^(2*taps+1) * RGBA8
 
 #pragma once
+#include "a2gspu_artifact_io.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -249,12 +250,13 @@ inline int golden_gate_file(const char *path, uint64_t cur_hash, const char *tag
         return 1;
     }
     gp = fopen(path, "w");
+    a2artifact::ExistingOutput golden_output(gp,path);
     if (!gp) {
         printf("%s: ERROR — cannot write bless file '%s'\n", tag, path);
         return 1;
     }
     fprintf(gp, "%016llX\n", (unsigned long long)cur_hash);
-    fclose(gp);
+    golden_output.finish();
     if (blessed) *blessed = true;
     printf("%s: blessed %s = %016llX profile=%s\n",
            tag, path, (unsigned long long)cur_hash, profile ? profile : "?");
@@ -264,6 +266,7 @@ inline int golden_gate_file(const char *path, uint64_t cur_hash, const char *tag
 inline bool export_4dot_bin(const char *path) {
     Discrete4 pal;
     FILE *f = fopen(path, "wb");
+    a2artifact::ExistingOutput a2output_f_0(f,path);
     if (!f) return false;
     fwrite("GSDHGR4D", 1, 8, f);
     uint32_t ver = 1, depth = 4;
@@ -274,7 +277,7 @@ inline bool export_4dot_bin(const char *path) {
             uint8_t rgb[3] = {pal.lut[w][p].r, pal.lut[w][p].g, pal.lut[w][p].b};
             fwrite(rgb, 1, 3, f);
         }
-    fclose(f);
+    a2output_f_0.finish();
     return true;
 }
 
@@ -282,6 +285,7 @@ inline bool export_4dot_bin(const char *path) {
 // g_hgr_LUT lives in global namespace (display/ntsc.cpp), not a2dhgr::.
 inline bool export_ntsc_lut_bin(const char *path) {
     FILE *f = fopen(path, "wb");
+    a2artifact::ExistingOutput a2output_f_1(f,path);
     if (!f) return false;
     fwrite("GSNTSC01", 1, 8, f);
     uint32_t ver = 1, taps = NUM_TAPS;
@@ -295,7 +299,7 @@ inline bool export_ntsc_lut_bin(const char *path) {
             fwrite(rgba, 1, 4, f);
         }
     }
-    fclose(f);
+    a2output_f_1.finish();
     return true;
 }
 

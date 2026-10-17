@@ -1,0 +1,44 @@
+PASS p3 help publishes output
+PASS p3 help refuses blocked output
+PASS p3 manifest publishes output
+PASS p3 manifest refuses blocked output
+PASS p3 systems publishes output
+PASS p3 systems refuses blocked output
+PASS p3 limitations publishes output
+PASS p3 limitations refuses blocked output
+PASS p3 rail env-only publishes output
+PASS p3 rail env-only refuses blocked output
+PASS p3 devstate all publishes output
+PASS p3 devstate all refuses blocked output
+PASS p3 read 000800 16 publishes output
+PASS p3 read 000800 16 refuses blocked output
+PASS p3 dis 000800 1 publishes output
+PASS p3 dis 000800 1 refuses blocked output
+PASS p3 iolog dump publishes output
+PASS p3 iolog dump refuses blocked output
+PASS p3 screen refuses blocked sidecar
+PASS p3 remains usable after export refusal
+PASS session exits cleanly
+PASS p3 textdump failure exits 2
+PASS p5 help publishes output
+PASS p5 help refuses blocked output
+PASS p5 manifest publishes output
+PASS p5 manifest refuses blocked output
+PASS p5 systems publishes output
+PASS p5 systems refuses blocked output
+PASS p5 limitations publishes output
+PASS p5 limitations refuses blocked output
+PASS p5 rail env-only publishes output
+PASS p5 rail env-only refuses blocked output
+PASS p5 devstate all publishes output
+PASS p5 devstate all refuses blocked output
+PASS p5 read 000800 16 publishes output
+PASS p5 read 000800 16 refuses blocked output
+PASS p5 dis 000800 1 publishes output
+PASS p5 dis 000800 1 refuses blocked output
+PASS p5 iolog dump publishes output
+PASS p5 iolog dump refuses blocked output
+PASS p5 screen refuses blocked sidecar
+PASS p5 remains usable after export refusal
+PASS session exits cleanly
+PASS p5 textdump failure exits 2

@@ -159,6 +159,12 @@ Rosetta's companion rules live in `docs/SHARED_FOUNDATION.md` and
 observe-without-disturbing and default-off requirements remain the acceptance
 bar for instrumentation.
 
+A future parallel IIgs+ hardware exploration is another potential consumer.
+Preserve stock-machine references and identify hypothetical hardware profiles
+explicitly; compatibility tiers and model-quality evidence must precede board
+claims. The owner's direction and review rules are in
+[`AGENTIC_ORACLE.md` section 11](AGENTIC_ORACLE.md#11-future-iigs-design-exploration).
+
 ```
 edit source  →  Rosetta (asmiigs / cciigs / linkiigs / diskiigs / …)
                     ↓

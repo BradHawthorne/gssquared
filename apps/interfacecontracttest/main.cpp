@@ -9,6 +9,7 @@
 #include "../../src/util/InterruptController.hpp"
 #include "artifact_io_checks.hpp"
 #include "sink_io_checks.hpp"
+#include "railclose_checks.hpp"
 #include <chrono>
 #include <string>
 #include <iostream>
@@ -19,6 +20,7 @@ int main() {
     auto check=[&](bool pass){if(!pass)throw std::runtime_error("interface contract check "+std::to_string(checks));++checks;};
     check(artifact_io_checks::run()==0);
     check(sink_io_checks::run()==0);
+    check(railclose_checks::run()==0);
     // Independent truth table: only request-with-no-guard combinations flush.
     const bool flush_expected[16]={false,true,true,true,false,false,false,false,false,false,false,false,false,false,false,false};
     for(unsigned bits=0;bits<16;++bits) {

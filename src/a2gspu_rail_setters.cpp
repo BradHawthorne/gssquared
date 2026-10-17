@@ -200,7 +200,8 @@ int set_livenessstall(const char *v, char *m, size_t n) {
 // or with 1 the global sink / stdout. Unset closes the sink and stops the
 // records; the map already built keeps naming PCs.
 int set_loadmap(const char *v, char *m, size_t n) {
-    if (g_iigs_loadmap_out) { fclose(g_iigs_loadmap_out); g_iigs_loadmap_out = nullptr; }
+    g_iigs_loadmap_armed=false;
+    a2outputs::finish(g_iigs_loadmap_out,"g_iigs_loadmap_out");
     g_iigs_loadmap_path.clear();
     if (!v) {
         g_iigs_loadmap_armed = false;
@@ -210,6 +211,7 @@ int set_loadmap(const char *v, char *m, size_t n) {
     if (!*v) { snprintf(m, n, "A2GSPU_LOADMAP: want a file or 1, got ''"); return SET_INVALID; }
     if (strcmp(v, "1")) {
         g_iigs_loadmap_out = fopen(v, "wb");
+    a2outputs::track(g_iigs_loadmap_out,v);
         if (!g_iigs_loadmap_out) { snprintf(m, n, "A2GSPU_LOADMAP: cannot open '%s'", v); return SET_INVALID; }
         g_iigs_loadmap_path = v;
     }
@@ -442,12 +444,13 @@ int set_keyram(const char *v, char *m, size_t n) {
 // A2GSPU_CARD_CMDLOG=<file>|1 -- every frame the host sends the card's command
 // register, and every byte run the assembler drops, as records.
 int set_card_cmdlog(const char *v, char *m, size_t n) {
-    if (g_a2gspu_cmdlog_out) { fclose(g_a2gspu_cmdlog_out); g_a2gspu_cmdlog_out = nullptr; }
+    a2outputs::finish(g_a2gspu_cmdlog_out,"g_a2gspu_cmdlog_out");
     g_a2gspu_cmdlog_path.clear();
     if (!v) { g_a2gspu_cmdlog_on = false; snprintf(m, n, "A2GSPU_CARD_CMDLOG: off"); return SET_OK; }
     if (!*v) { snprintf(m, n, "A2GSPU_CARD_CMDLOG: want a file or 1, got ''"); return SET_INVALID; }
     if (strcmp(v, "1")) {
         g_a2gspu_cmdlog_out = fopen(v, "wb");
+    a2outputs::track(g_a2gspu_cmdlog_out,v);
         if (!g_a2gspu_cmdlog_out) { snprintf(m, n, "A2GSPU_CARD_CMDLOG: cannot open '%s'", v); return SET_INVALID; }
         g_a2gspu_cmdlog_path = v;
     }
@@ -460,12 +463,13 @@ int set_card_cmdlog(const char *v, char *m, size_t n) {
 // A2GSPU_U2_EVENTS=<file>|1 -- the Uthernet II's socket commands, host-caused
 // status changes and drops, as records.
 int set_u2_events(const char *v, char *m, size_t n) {
-    if (g_u2_events_out) { fclose(g_u2_events_out); g_u2_events_out = nullptr; }
+    a2outputs::finish(g_u2_events_out,"g_u2_events_out");
     g_u2_events_path.clear();
     if (!v) { g_u2_events_on = false; snprintf(m, n, "A2GSPU_U2_EVENTS: off"); return SET_OK; }
     if (!*v) { snprintf(m, n, "A2GSPU_U2_EVENTS: want a file or 1, got ''"); return SET_INVALID; }
     if (strcmp(v, "1")) {
         g_u2_events_out = fopen(v, "wb");
+    a2outputs::track(g_u2_events_out,v);
         if (!g_u2_events_out) { snprintf(m, n, "A2GSPU_U2_EVENTS: cannot open '%s'", v); return SET_INVALID; }
         g_u2_events_path = v;
     }
@@ -690,9 +694,10 @@ int set_symbase(const char *v, char *m, size_t n) {
 // Unset closes the sink; a new value closes the old one first. An unopenable path is
 // INVALID: fatal at launch as before, a FAIL ack live with the sink left closed.
 int open_sink(FILE *&sink, const char *v, const char *rail, char *m, size_t n) {
-    if (sink) { fclose(sink); sink = nullptr; }
+    a2outputs::finish(sink,"sink");
     if (!v) { snprintf(m, n, "%s: closed", rail); return SET_OK; }
     sink = fopen(v, "wb");
+    a2outputs::track(sink,v);
     if (!sink) { snprintf(m, n, "%s: FAIL cannot open '%s'", rail, v); return SET_INVALID; }
     snprintf(m, n, "%s: -> '%s'", rail, v);
     return SET_OK;
@@ -737,7 +742,7 @@ int set_snapmax(const char *v, char *m, size_t n) {
     return SET_OK;
 }
 int set_snapout(const char *v, char *m, size_t n) {
-    if (g_snap_out) { fclose(g_snap_out); g_snap_out = nullptr; }
+    a2outputs::finish(g_snap_out,"g_snap_out");
     g_snap_count = 0;
     if (!v) { snprintf(m, n, "A2GSPU_SNAP: logging off"); return SET_OK; }
     // Arming needs the window and at least one PC. The launch block skipped a sink
@@ -748,6 +753,7 @@ int set_snapout(const char *v, char *m, size_t n) {
         return SET_REFUSED;
     }
     g_snap_out = fopen(v, "wb");
+    a2outputs::track(g_snap_out,v);
     snprintf(m, n, "A2GSPU_SNAP: %s window $%06X-$%06X at %d PC(s) -> '%s'",
              g_snap_out ? "logging" : "OPEN-FAILED", (unsigned)g_snap_lo, (unsigned)g_snap_hi, g_snap_npc, v);
     return g_snap_out ? SET_OK : SET_INVALID;

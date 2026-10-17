@@ -1038,3 +1038,24 @@ port; current reference PNG observations do not prove GPU equivalence.
 Drift B–E, the local engine merge and consumer-binary replacement remain their
 separate decisions. Details, before-failure evidence and final validation:
 [`gssquared-upstream-observability-20261015`](reports/gssquared-upstream-observability-20261015/README.md).
+
+
+## 25. Main refreshed; ancestry is not feature coverage (2026-10-16)
+
+Read-only fetch confirms main `b2b7b6db64cfafcd8e24b8b63029d83908b78749`.
+Three commits follow the previously reviewed `643e6c21` checkpoint. Inspected
+their full diffs; none was ported or behaviorally validated in this phase.
+
+| Commit | Inspected change | Disposition |
+| --- | --- | --- |
+| `d079f039` | HD20SC hover position displays the actual position without dividing by two | Candidate UI correction; pending port and windowed evidence |
+| `5b200591` | Refresh target rectangle after leaving the resized system selector | Candidate UI correction; depends on rendering APIs in the fork; pending adaptation and windowed evidence |
+| `b2b7b6db` | Record BRK/COP signature operand and display BRK/COP/WDM operands in trace/disassembly | Candidate observability improvement; next independent port with dual-platform instruction/trace fixtures |
+
+The fork intentionally records by-hand ports as single-parent commits. GitHub
+therefore reports upstream commits as behind even when their selected behavior
+is already integrated. At this refresh the ancestry count is 250 fork commits
+and 323 upstream commits. It is not a list of 323 absent features, nor a claim
+that every desired change is implemented. The entire earlier ranges were
+triaged; stages B–E and the separate development renderer remain pending as
+documented above. No upstream-parent merge is needed to change the badge.

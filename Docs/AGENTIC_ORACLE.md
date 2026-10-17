@@ -258,3 +258,33 @@ The next integration work is tracked in `AGENTIC_ROADMAP.md`; the current
 `context` and experiment interfaces remain the implemented subset described in
 `MACHINE_CONTEXT.md`. Complete data flow, all device transitions and physical
 hardware validation remain open.
+
+## 11. Future IIgs+ design exploration
+
+**Owner direction, 2026-10-16:** after this foundation reaches production
+quality, it may support a parallel hobby IIgs+ clone-mainboard project:
+identify pressure points in the ROM 1/3/4 configurations under study, model
+proposed corrections, validate software behavior and eventually consider a
+short PCB fabrication run. This is a future target, not an implemented machine
+profile or a board-design/fabrication task in the current queue.
+
+The instrument should make that exploration possible without weakening its
+role as an oracle for existing machines. Apply these review rules:
+
+| Question | Design requirement |
+| --- | --- |
+| Which machine produced the result? | Preserve stock reference profiles. A hypothetical change needs a separate explicit model/configuration identity, revision and declared differences; never silently improve the reference machine. Bind experiments, captures and snapshot compatibility to that identity. |
+| What limitation is being addressed? | Retain a minimal reproducer, affected software, relevant bus/device/clock evidence and the measured cost. Separate a modeled hardware constraint, ROM/software policy and an emulator defect before proposing a correction. |
+| What must remain compatible? | State whether existing binaries run unchanged, need a ROM/software patch, or require an enhanced-machine target. Test reset/boot, memory and I/O mapping, timing-sensitive behavior, interrupts, DMA/bus ownership where modeled, and affected peripherals under a named compatibility tier. |
+| Does the proposed change help? | Use the same workload and declared input bytes on reference and candidate profiles. Measure latency, cycles, throughput and resource use in the applicable domains; preserve regressions and counterexamples as well as gains. Explore interactions after isolated changes pass. |
+| Can it become a board contract? | Retain proposed register/bus behavior, timing assumptions and unmodeled behavior in a machine-readable specification that can later drive HDL or hardware tests. Emulator observations validate the implemented model; electrical timing, signal integrity, power and physical implementation require separate evidence. |
+
+Rosetta/CIDAR can supply recovered workloads, compatibility contracts and
+alternative software forms. Keep enhanced-machine targeting explicit and
+retain tests for existing IIgs deployments. Do not optimize libraries for an
+imagined machine while presenting the result as a stock-machine gain.
+
+Before a hardware-design phase, establish a model-quality ledger and a
+repeatable compatibility campaign, then select a bounded candidate change.
+Actual board work belongs to a separately started parallel project. Existing
+drift, baseline re-bless and model-merge decisions remain unchanged.

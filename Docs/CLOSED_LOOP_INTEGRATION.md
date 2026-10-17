@@ -114,7 +114,8 @@ run pins and `GSDIAG:` gives the final diagnostic. For matching executable,
 configuration, media/input bytes and pins, compare `hash=` and `cycles=`;
 `A2GSPU_EXPECT_HASH` makes the expected hash a gate. Equal PINS lines alone are
 not a complete replay identity. In the owner's checkout, the in-tree binary is
-protected and stale: follow [HANDOFF.md](HANDOFF.md) for the current tested build.
+protected and was separately refreshed on 2026-10-16; follow
+[HANDOFF.md](HANDOFF.md) to select the tested build for a later phase.
 
 ## Upstream-sync discipline
 

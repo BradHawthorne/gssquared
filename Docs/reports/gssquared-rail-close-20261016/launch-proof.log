@@ -1,0 +1,3 @@
+PASS frozen MCP descriptor EOF
+PASS frozen MCP descriptor explicit QUIT
+PASS both close models retain acknowledged zero-exit owner receipts without unknown effects or force

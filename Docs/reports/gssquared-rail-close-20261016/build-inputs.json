@@ -1,0 +1,134 @@
+{
+  "base_commit": "a2606e6d81b0e4085f8b963076da35d579d04266",
+  "overlay": [
+    {
+      "path": "apps/interfacecontracttest/main.cpp",
+      "sha256": "8a76aaf3c4dcaa7b4542fe31512870d33f63f88fc0e68d341fe535414ca85b0e"
+    },
+    {
+      "path": "apps/interfacecontracttest/railclose_checks.hpp",
+      "sha256": "6bfaa7feca73360f196c65ff1535487ff635a13c962b4db928585d95fcae20a2"
+    },
+    {
+      "path": "src/a2gspu_ack.hpp",
+      "sha256": "fa509e84bfd7ab8840a2e51984048a51f13a2cb9a62c784558b88e16626a7e11"
+    },
+    {
+      "path": "src/a2gspu_artifact_io.hpp",
+      "sha256": "47f57d395818245e8af824a009b4da9fbb2c0c9faca437579e14534b85ee4cab"
+    },
+    {
+      "path": "src/a2gspu_ctrl.cpp",
+      "sha256": "247be9542fbcfaecbc3f8f6a55c39d27ba5f9b4d7e8c4274e481801b4b1aabc0"
+    },
+    {
+      "path": "src/a2gspu_ctrl_cmds.cpp",
+      "sha256": "6ba85684acfa3236429591700ad00ae61766fd086522a3ab84317b08eca42422"
+    },
+    {
+      "path": "src/a2gspu_dhgr.hpp",
+      "sha256": "11fab5ef15b5808253bb7d1a0c5940f4c9c1f4886be2becb2408ddfc9dac7705"
+    },
+    {
+      "path": "src/a2gspu_events.hpp",
+      "sha256": "1a58557006b500822abcd0646de3e853b04f5f197cfa2426e4e737fe3228e754"
+    },
+    {
+      "path": "src/a2gspu_liveness.hpp",
+      "sha256": "1a422c9d6e6b97c762ba914e95bdeaef2f545f4e62e1b3556f542a37404a8db6"
+    },
+    {
+      "path": "src/a2gspu_outputs.hpp",
+      "sha256": "0ac8644f27307a899f8f09a0bf6595d2c4b717e7e05f1119f6f47f92a9d88aef"
+    },
+    {
+      "path": "src/a2gspu_rail_setters.cpp",
+      "sha256": "fc2c0c04e94b10825a44fb29af4bb26e2bc6d2363c9481e541deccbc0d23c60d"
+    },
+    {
+      "path": "src/a2gspu_spike.cpp",
+      "sha256": "d3bef64b2f94e57302a180fa1a3a1a9ec749fb3aa6cd6798e0bb2d2b350a8624"
+    },
+    {
+      "path": "src/a2gspu_trap.hpp",
+      "sha256": "382ff96671e4c24ec07fd09513c1e4ad991593c7978d44f533421a58e40bfbdf"
+    },
+    {
+      "path": "src/a2record.hpp",
+      "sha256": "9149ae5b3b037de82cef7d9fecf561d5c5c0c198b1faeecfbc7cf2c2704b2084"
+    },
+    {
+      "path": "src/generic_tap.hpp",
+      "sha256": "1c432af427ffb1f9c9d830b288c710c6c8335983a156b74cd9ade3d76cdbf4d4"
+    },
+    {
+      "path": "src/gs2.cpp",
+      "sha256": "5a60d3581d9b7703fe0d24b7cf7c645c80792aa5bb232269de924929de232c14"
+    },
+    {
+      "path": "src/io_trace.hpp",
+      "sha256": "7dc6186f3e2795958a1313e10de881010fd04bf3aa689fe2ccf2974bb23d6219"
+    },
+    {
+      "path": "src/systemconfig.cpp",
+      "sha256": "e22b5653828358f990348312693d4bb1fe33e7a05c5a21bde113e36f4a38ab46"
+    },
+    {
+      "path": "src/wiz5_config.hpp",
+      "sha256": "68c5799321f07a61e876f5b5660b56c3ce821ff3439f8255f4b7dd966472ba34"
+    },
+    {
+      "path": "tools/a2rail/ackcheck.py",
+      "sha256": "ac2cb3ba195cd9cededf86346cc5686041585e75e055a4eba56f63dcb4ab7bfc"
+    },
+    {
+      "path": "tools/a2rail/exportiocheck.py",
+      "sha256": "806e15c1570485345badb0bfdb4c6e2915a74cde3b8c5baeef5b907256c76c99"
+    },
+    {
+      "path": "tools/a2rail/p0check.py",
+      "sha256": "a785a6a2ed22ae491b9f94da8dbe554df09476abec93874022da34a929bbd1c3"
+    }
+  ],
+  "source_model": "exported commit plus digest-bound reviewed overlays; compiled revision names base",
+  "vendored_snapshot": {
+    "sha256": "f270afdb4c093769509a3dc278cfe7b7df5fad3e9372ac689488e3cd1a47d647",
+    "files": 7459
+  },
+  "dependency_origin": "unchanged verified publication export",
+  "local_inputs": {
+    "assets/roms/apple2gs3/main.rom": {
+      "sha256": "4e606469961649381216b2a61334ccb29af4da90c630df19214b08ff7fdb9bc5",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs3/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "assets/roms/apple2gs4/main.rom": {
+      "sha256": "565d8ca073e5c46367ca56d4b12827020e76e6a0bf6c2300da0989161aa34ad9",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs4/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "corpus/DOS3.3_MASTER.dsk": {
+      "sha256": "eac550ddb65ef9b8ae34f6fe3523ec6572a5672e7ae07becc950acfdd185dbb1",
+      "bytes": 143360
+    },
+    "corpus/gsos601.po": {
+      "sha256": "ae7ca90bab81f379c9ff5770d50565e0cbec4f9b633872c2119282e4a0e2778e",
+      "bytes": 33554432
+    },
+    "corpus/_finder.po": {
+      "sha256": "4f440bacbdbe8a0180479c7ebac853d41f2777042cb46343f2f14322c31b024e",
+      "bytes": 33553920
+    },
+    "corpus/mb-audit-v1.61.po": {
+      "sha256": "d1d94dd3d1254dc46c5aa3c943c9d67cd3cc77a199df5c6738ee3c78a7a38f8a",
+      "bytes": 143360
+    }
+  },
+  "protected_consumer_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e"
+}
