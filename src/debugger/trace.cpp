@@ -219,19 +219,19 @@ void system_trace_buffer::add_entry(const system_trace_entry_t &entry) {
     count++;
 }
 
-void system_trace_buffer::save_to_file(const std::string &filename) {
+void system_trace_buffer::save_to_file(const std::string &filename, a2artifact::WriteOps ops) {
     printf("Saving trace to file: %s\n", filename.c_str());
     printf("Head: %zu, Tail: %zu, Size: %zu\n", head, tail, size);
-    std::ofstream file(filename);
+    a2artifact::Output file(filename.c_str(), ops);
     size_t index = tail;
     while (index != head) {
-        file.write(reinterpret_cast<const char *>(&entries[index]), sizeof(system_trace_entry_t));
+        file.write(&entries[index], sizeof(system_trace_entry_t));
         index++;
         if (index >= size) {
             index = 0;
         }
     }
-    file.close();
+    file.finish();
 }
 
 void system_trace_buffer::read_from_file(const std::string &filename) {

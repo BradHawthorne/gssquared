@@ -1,4 +1,4 @@
-# Handoff: gssquared-fork (2026-10-16)
+# Handoff: gssquared-fork (2026-10-17)
 
 > **North star (owner, 2026-10-15):** "my goal is always for our gssquared-fork to be the definitive partner tool for full agentic ai closed loop development along side Rosetta." Every task here is judged by how much it advances that: an agent can build with Rosetta, run and observe in this emulator, and verify, closed-loop and deterministically, without a human in the loop.
 
@@ -21,6 +21,15 @@ two MCP launches; 42 pinned boot checks remain unchanged. The original whole
 build is preserved at `D:\gsqs\consumer-20261016\build-rollback`.
 Exact hashes, tested descriptor and scratch-space maintenance:
 `Docs/reports/gssquared-consumer-refresh-20261016/README.md`.
+
+**Legacy trace-export continuation, 2026-10-17:** automatic debugger exports
+now preserve binary bytes on Windows and check open/write/flush/close. Twenty
+focused native cases pass; the same real-stdio fixture reproduces the old
+40-to-43-byte alteration and silent failed-open success.
+Full trace candidate validation and publication are pending for this local checkpoint.
+Evidence: `reports/gssquared-trace-io-20261017/README.md`.
+The next audit is legacy trace reading/`gstrace` and monitor save/load, then
+device-private serializers and asynchronous UI/media output.
 
 **SCC/WDM close continuation, 2026-10-16:** byte captures now check file/pipe
 closure and join managed shutdown, with consumed ownership, released bindings

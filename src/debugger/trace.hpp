@@ -8,6 +8,7 @@
 #include "gs2.hpp"
 #include "cpus/processor_type.hpp"
 #include "debugger/trace_opcodes.hpp"
+#include "a2gspu_artifact_io.hpp"
 
 /* #define TRACE_FLAG_IRQ 0x01
 #define TRACE_FLAG_X   0x10
@@ -85,7 +86,9 @@ struct system_trace_buffer {
 
     void add_entry(const system_trace_entry_t &entry);
 
-    void save_to_file(const std::string &filename);
+    // Raw host-layout records, oldest first. Throws a2artifact::Error on any
+    // open/write/finalization failure; ops is native-test injection only.
+    void save_to_file(const std::string &filename, a2artifact::WriteOps ops = {});
 
     void read_from_file(const std::string &filename);
 

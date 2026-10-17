@@ -207,10 +207,21 @@ short-run fabrication are future phases, not current implementations. Design
 requirements: `AGENTIC_ORACLE.md` section 11. No new project or machine model
 is created by this planning entry.
 
-**Next independent output audit:** SCC/WDM binding close handling in
-`src/a2gspu_output.hpp`, then legacy debugger traces and device-private output
-paths. Keep owned file/pipe lifetime and borrowed streams explicit; use
-known-pass and known-fail close fixtures before claiming complete captures.
+**Legacy trace-export continuation, 2026-10-17:** the automatic debugger trace
+export now preserves binary bytes on Windows and refuses open/write/flush/close
+failures. Twenty focused native checks pin empty, non-wrapped and wrapped
+exports across the three CPU types, failure handling and ring preservation.
+Full trace candidate validation and publication are pending for this local checkpoint.
+Evidence: `reports/gssquared-trace-io-20261017/README.md`.
+
+**Next independent output audit:** legacy trace reading/`gstrace` and monitor
+save/load, then device-private serializers and asynchronous UI/media paths.
+The trace reader currently opens raw records in text mode without checking the
+read, and `gstrace` prints capacity rather than the loaded count. Monitor save
+ignores write/close errors; load's EOF loop can write an extra byte. These are
+identified, unmodified follow-ups. SCC/WDM closure is complete in the preceding
+phase. Keep owned file/pipe lifetime and borrowed streams explicit; use
+known-pass and known-fail fixtures before claiming complete captures.
 
 The earlier audit checkpoint was `643e6c21` (2026-10-15). A read-only refresh
 on 2026-10-16 found `b2b7b6db`: three new commits inspected, pending port/
