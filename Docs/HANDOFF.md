@@ -28,9 +28,13 @@ prints the loaded count and refuses bad inputs/options and failed stdout.
 Twenty-nine native input checks and 21 CLI checks pass locally; CLI checks join
 the regular agentic gate. The baseline reproduced reader corruption and seven
 false-success/extra-row cases without retaining decoded uninitialized memory.
-Full trace-input candidate validation and publication are pending for this local checkpoint.
+Fresh exported Release: 14/14 gates, 14/14 native CTests, 26 Python tests,
+141 I/O contract checks (29 new), 21 integrated CLI checks, 42 unchanged boots
+and two MCP launches. Protected consumer unchanged; tested candidate:
+`D:\gsqs\tracein-20261017\build\GSSquared.exe`.
 Evidence: `reports/gssquared-trace-input-20261017/README.md`.
-Next: monitor save/load, then device-private serializers and asynchronous UI/media.
+Next: monitor save/load and symbol-file I/O, then device-private serializers and
+asynchronous UI/media.
 
 **Legacy trace-export continuation, 2026-10-17:** automatic debugger exports
 now preserve binary bytes on Windows and check open/write/flush/close. Twenty

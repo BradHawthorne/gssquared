@@ -1,0 +1,74 @@
+{
+  "source_commit": "db868e65c881a933b4f40033b3240d6987ba0d47",
+  "reader_source_sha256": {
+    "src/debugger/trace.cpp": "78d00bd046c2623b920da72146e46ae1cd9bd74b690977981298a25ff85c16ed",
+    "src/debugger/trace.hpp": "36b0a54da05c947c380100a187f1c1a26f8ad99d61e3013186e566272c92e9c0",
+    "src/debugger/trace_opcodes.cpp": "2ff02674c9b29ad86bab7ffcc7047691ee05c0ce024cd2a8766ac0fed2a224c8"
+  },
+  "fixture_sha256": "432546f07020e727ba2f84d9a35c6f18818a64b7a7b725f73509825cb5a75e5a",
+  "baseline_cli": "D:\\gsqs\\traceio-20261017\\build\\gstrace.exe",
+  "baseline_cli_sha256": "144835ef1f16084573515d0b41195e0e6e6a8b0eba96298a9c154275e0ce4375",
+  "fixture_compile_argv": [
+    "g++",
+    "-std=c++17",
+    "-I",
+    "D:\\gsqs\\traceio-20261017\\src\\src",
+    "D:\\projects\\gssquared-fork\\Docs\\reports\\gssquared-trace-input-20261017\\input_fixture.cpp",
+    "D:\\gsqs\\traceio-20261017\\src\\src\\debugger\\trace.cpp",
+    "D:\\gsqs\\traceio-20261017\\src\\src\\debugger\\trace_opcodes.cpp",
+    "-o",
+    "D:\\gsqs\\tracein-20261017\\baseline-fixture.exe"
+  ],
+  "checks": [
+    {
+      "case": "valid",
+      "exit_code": 0,
+      "stdout_lines": 100000,
+      "defect_reproduced": true,
+      "stdout_retained": false
+    },
+    {
+      "case": "empty",
+      "exit_code": 0,
+      "stdout_lines": 100000,
+      "defect_reproduced": true,
+      "stdout_retained": false
+    },
+    {
+      "case": "missing",
+      "exit_code": 0,
+      "stdout_lines": 100000,
+      "defect_reproduced": true,
+      "stdout_retained": false
+    },
+    {
+      "case": "partial",
+      "exit_code": 0,
+      "stdout_lines": 100000,
+      "defect_reproduced": true,
+      "stdout_retained": false
+    },
+    {
+      "case": "large",
+      "exit_code": 0,
+      "stdout_lines": 100000,
+      "defect_reproduced": true,
+      "stdout_retained": false
+    },
+    {
+      "case": "missing-labels",
+      "exit_code": 0,
+      "stdout_lines": 100000,
+      "defect_reproduced": true,
+      "stdout_retained": false
+    },
+    {
+      "case": "missing-cpu",
+      "exit_code": 0,
+      "stdout_lines": 100001,
+      "defect_reproduced": true,
+      "stdout_retained": false
+    }
+  ],
+  "privacy": "Only row counts retained; baseline decodes uninitialized slots."
+}

@@ -1,0 +1,1850 @@
+runtime ucrt: C:\msys64\ucrt64\bin
+
+=== GATE railparity ============================================
+
+railparity: 161 rail(s) read by src/, 161 declared in the registry
+
+carve-outs this PASS does not cover:
+  record contract  a2gspu_coverage.hpp    A2COV1/A2COV2 and a2profile-v1 are standalone coverage artifacts, not NDJSON rail events; profile.py validates the JSON document
+  record contract  a2gspu_ctrl_json.hpp   the CTRL reply envelope is protocol, not a rail record
+  record contract  a2record.hpp           the writer itself
+  record contract  wiz5_config.hpp        title-specific streams (WIZ5_EC19_OUT, WIZ5_DISKWR_OUT, WIZ5_CSP6_OUT) predate the contract, and all three build their records piecemeal; they convert when their readers do
+  rail catalogue   (none)                every declared rail is described
+
+railparity: PASS - every rail the code reads is discoverable, every declared rail
+                   exists and has a row of its own under its registry family in
+                   Docs/A2GSPU_RAILS.md with a whole synopsis, no non-exempt file
+                   prints a JSON record or writes to any of the 15 rail sinks itself,
+                   all 28 declared readers and all 70 live-settable rails are registered
+                   by their rails, and all 74 CTRL verbs are both dispatched and listed.
+
+=== GATE artifacts =============================================
+artifacts.py selftest: PASS
+
+=== GATE gdiff =================================================
+========================================================================
+gdiff selftest -- durable validation against the boot campaign's truth cases
+========================================================================
+wdiff  ($E119A0 SCM notify-queue: 32 vs 64 nodes; write-24 $E06014 vs $E119D0)
+  [PASS] wdiff: ours=32 writes -- got 32
+  [PASS] wdiff: pris=64 writes -- got 64
+  [PASS] wdiff: first divergence at write-24 -- got 24
+  [PASS] wdiff: ours record ptr = $E06014 -- got $E06014
+  [PASS] wdiff: pris record ptr = $E119D0 -- got $E119D0
+  [PASS] wdiff: decode line present in report
+
+overlay  (the SIG-031 dup-dest liar: two segs both load to $01D000)
+  [SKIP] gsos_ours.omf absent (GS/OS-derived binary, not redistributed;
+         see fixtures/README.md). t_overlay_synth covers the logic IP-free.
+
+overlay  (synthetic minimal 2-seg-at-one-dest -- durable, IP-free)
+  [PASS] overlay(synth): dup at $02D000 <- [1,2] -- got [1, 2]
+  [PASS] overlay(synth): 2 covers, ambiguous w/o ITRACE
+
+watchspec  (the 'WATCH didn't fire' bare-24-bit trap + soft-switch addresses)
+  [PASS] watchspec: bare 'E119A0' REJECTED as the trap
+  [PASS] watchspec: 'E1:19A0-19A3' accepted (clean)
+  [PASS] watchspec: inverted 'E1:19A3-19A0' warned
+  [PASS] watchspec: $EE in bank $00 RAM is data, not a liar
+  [PASS] watchspec: $EE in bank $01 LC space is data, not a liar
+  [PASS] watchspec: bank $00 $C030 is a soft switch
+  [PASS] watchspec: bank $E1 $C03D is a soft switch
+  [PASS] watchspec: bank $02 $C030 is plain RAM
+  [PASS] watchspec: bank $00 $C100 is past the switch page
+  [PASS] watchspec: lint reads record-contract watch.* events -- n=2
+  [PASS] watchspec: lint flags the $C030 event only -- suspects=1
+
+itrdiff  (DATA vs CONTROL classification + interrupt-skew resync)
+  [PASS] itrdiff: differing @ea value classifies DATA-VAL -- got DATA-VAL
+  [PASS] itrdiff: different operand classifies CONTROL/PC
+  [PASS] itrdiff: interrupt-skew resyncs (<=1 divergence, no cascade) -- divs=1
+  [PASS] itrdiff: resync names the extra OURS line (interrupt/skew)
+
+bearings  (SIG-031 split: segdiff vs a dest-keyed liar; + probe_peek liar)
+  [PASS] bearings: SIG-031 disagreement is a SPLIT (not silently resolved)
+  [PASS] bearings: higher-trust segdiff marked trusted -- trusted=segdiff
+  [PASS] bearings: floating-bus placeholder flagged suspected liar on split
+  [PASS] bearings: agreeing sensors report CONSISTENT
+
+========================================================================
+gdiff selftest: 27/27 checks passed
+========================================================================
+
+=== GATE buscompare ============================================
+  PASS  identical streams compare identical
+  PASS  one changed data byte is one data mismatch
+  PASS  three dropped records are three missing, the rest matched
+  PASS  two inserted records are two extra, the rest matched
+  PASS  a ctl bit the capture sets differs...
+  PASS  ...and is ignored, and named, when masked out
+  PASS  --no-read-data ignores read data only
+  PASS  --writes-only compares writes only
+buscompare selftest: ALL GREEN
+
+=== GATE bisect ================================================
+runtime ucrt: C:\msys64\ucrt64\bin
+test_build_failure_is_inconclusive (__main__.BisectTests.test_build_failure_is_inconclusive) ... observed e597c040fef8 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed 129f38f47282 {"cycles": 10, "hash": "0000000000000002", "run": "0000000000000002", "status": "OK"}
+ok
+test_cli_wrong_expectation_fails (__main__.BisectTests.test_cli_wrong_expectation_fails) ... ok
+test_dependency_snapshot (__main__.BisectTests.test_dependency_snapshot) ... ok
+test_endpoint_reversion_is_not_none (__main__.BisectTests.test_endpoint_reversion_is_not_none) ... observed 55bc9c554620 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed ca553c5852e5 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed 237c198b0aa2 {"cycles": 10, "hash": "0000000000000002", "run": "0000000000000002", "status": "OK"}
+ok
+test_first_change_and_provenance (__main__.BisectTests.test_first_change_and_provenance) ... observed 2168dea0071f {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed 4ac214feaef4 {"cycles": 10, "hash": "0000000000000002", "run": "0000000000000002", "status": "OK"}
+observed 6c9edd98faf9 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed 0d71e3cde24f {"cycles": 10, "hash": "0000000000000002", "run": "0000000000000002", "status": "OK"}
+ok
+test_no_change (__main__.BisectTests.test_no_change) ... observed 0e0c7e362133 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed 7b82ae85cadd {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed ce831a9eed76 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed dcdc7ced0d27 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+ok
+test_nondeterminism_and_timeout (__main__.BisectTests.test_nondeterminism_and_timeout) ... observed 33ccc177e89a {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+observed 0c21754ded00 {"cycles": 10, "hash": "0000000000000001", "run": "0000000000000001", "status": "OK"}
+ok
+test_scratch_and_recipe_refusals (__main__.BisectTests.test_scratch_and_recipe_refusals) ... ok
+test_strict_output_parser (__main__.BisectTests.test_strict_output_parser) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 56.454s
+
+OK
+
+=== GATE agentic ===============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\Agent identity 8d1b2f000eea4a24ad613feed54f9ba4.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail-identity-d186f71b9328481f96e247f1f70edd75\p3
+log:       D:\gsqs\tmp\a2rail-identity-d186f71b9328481f96e247f1f70edd75\p3\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+PASS renamed executable starts on p3
+PASS renamed executable is driven on p3
+PASS a live session cannot be replaced on p3
+PASS wrong-path refuses on p3
+PASS wrong-path names identity/metadata instead of claiming process exit
+PASS wrong-path publishes no command
+PASS wrong-start refuses on p3
+PASS wrong-start names identity/metadata instead of claiming process exit
+PASS wrong-start publishes no command
+PASS unrelated-pid refuses on p3
+PASS unrelated-pid names identity/metadata instead of claiming process exit
+PASS unrelated-pid publishes no command
+PASS missing-start refuses on p3
+PASS missing-start names identity/metadata instead of claiming process exit
+PASS missing-start publishes no command
+PASS invalid-start refuses on p3
+PASS invalid-start names identity/metadata instead of claiming process exit
+PASS invalid-start publishes no command
+PASS restoring the real receipt restores control on p3
+PASS a genuinely exited process is reported as gone on p3
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\Agent identity 8d1b2f000eea4a24ad613feed54f9ba4.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail-identity-d186f71b9328481f96e247f1f70edd75\p5
+log:       D:\gsqs\tmp\a2rail-identity-d186f71b9328481f96e247f1f70edd75\p5\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+PASS renamed executable starts on p5
+PASS renamed executable is driven on p5
+PASS a live session cannot be replaced on p5
+PASS wrong-path refuses on p5
+PASS wrong-path names identity/metadata instead of claiming process exit
+PASS wrong-path publishes no command
+PASS wrong-start refuses on p5
+PASS wrong-start names identity/metadata instead of claiming process exit
+PASS wrong-start publishes no command
+PASS unrelated-pid refuses on p5
+PASS unrelated-pid names identity/metadata instead of claiming process exit
+PASS unrelated-pid publishes no command
+PASS missing-start refuses on p5
+PASS missing-start names identity/metadata instead of claiming process exit
+PASS missing-start publishes no command
+PASS invalid-start refuses on p5
+PASS invalid-start names identity/metadata instead of claiming process exit
+PASS invalid-start publishes no command
+PASS restoring the real receipt restores control on p5
+PASS a genuinely exited process is reported as gone on p5
+ALL GREEN -- session identity checks=40 baseline=False evidence=D:\gsqs\tmp\a2rail-identity-d186f71b9328481f96e247f1f70edd75
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS synthetic unreachable milestones report no observed advance
+PASS caller instrumentation environment is restored
+PASS closed receipt declares its outcome/model
+PASS bounded baseline retains one native pins/diagnostic pair
+PASS child owns a separate working/output directory
+PASS child pins are independent from inherited rails
+PASS staged media and producer logs are retained
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS existing output refuses without replacing evidence
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS synthetic unreachable milestones report no observed advance
+PASS caller instrumentation environment is restored
+PASS closed receipt declares its outcome/model
+PASS bounded baseline retains one native pins/diagnostic pair
+PASS child owns a separate working/output directory
+PASS child pins are independent from inherited rails
+PASS staged media and producer logs are retained
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS existing output refuses without replacing evidence
+PASS repeated invocations never share a run root
+PASS source image remains byte-identical
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS explicit provider setup cannot leak instrumentation environment to caller
+runtime ucrt: C:\msys64\ucrt64\bin
+PASS missing declared input refuses before output or execution
+ALL GREEN -- isolated scout checks=20 evidence=D:\gsqs\tmp\scout-check-bf2753bd9d444cd3a1fcfa126fddde80
+PASS trace CLI: 6502 exact rows
+PASS trace CLI: 6502 empty trace
+PASS trace CLI: 65c02 exact rows
+PASS trace CLI: 65c02 empty trace
+PASS trace CLI: 65816 exact rows
+PASS trace CLI: 65816 empty trace
+PASS trace CLI: missing input
+PASS trace CLI: directory input
+PASS trace CLI: partial record
+PASS trace CLI: oversized input
+PASS trace CLI: usable capacity boundary
+PASS trace CLI: missing requested labels
+PASS trace CLI: labels before CPU
+PASS trace CLI: labels after CPU
+PASS trace CLI: missing CPU
+PASS trace CLI: duplicate CPU
+PASS trace CLI: unknown CPU
+PASS trace CLI: missing option operand
+PASS trace CLI: duplicate labels
+PASS trace CLI: missing arguments
+PASS trace CLI: read-only stdout refuses without altering input
+trace CLI: 21 checks passed
+test_failed_reply_and_preexisting_pending (__main__.FileClientTests.test_failed_reply_and_preexisting_pending) ... ok
+test_lease_and_atomic_frame (__main__.FileClientTests.test_lease_and_atomic_frame) ... ok
+test_wrong_owner_and_wrong_ack (__main__.FileClientTests.test_wrong_owner_and_wrong_ack) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.108s
+
+OK
+test_bounds_and_names (__main__.GuestViews.test_bounds_and_names) ... ok
+test_compiler_marker_chain (__main__.GuestViews.test_compiler_marker_chain) ... ok
+test_kernel_binding (__main__.GuestViews.test_kernel_binding) ... ok
+test_ring_wrap (__main__.GuestViews.test_ring_wrap) ... ok
+test_source_binding (__main__.GuestViews.test_source_binding) ... ok
+test_stack_and_panic (__main__.GuestViews.test_stack_and_panic) ... ok
+test_tasks_and_cycle (__main__.GuestViews.test_tasks_and_cycle) ... ok
+test_unmapped_and_corrupt_source (__main__.GuestViews.test_unmapped_and_corrupt_source) ... ok
+test_unreadable_and_overlap (__main__.GuestViews.test_unreadable_and_overlap) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.013s
+
+OK
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.069s
+
+OK
+test_bad_observer_shapes_refuse (__main__.InputPlanTests.test_bad_observer_shapes_refuse) ... ok
+test_complete_write_footprint (__main__.InputPlanTests.test_complete_write_footprint) ... ok
+test_declared_input_and_preservation_plan (__main__.InputPlanTests.test_declared_input_and_preservation_plan) ... ok
+test_output_must_have_a_negative_control_target (__main__.InputPlanTests.test_output_must_have_a_negative_control_target) ... ok
+test_profile_totals_must_cover_measured_interval (__main__.InputPlanTests.test_profile_totals_must_cover_measured_interval) ... ok
+test_unexpected_write_and_loss_fail (__main__.InputPlanTests.test_unexpected_write_and_loss_fail) ... ok
+test_unknown_memory_check_role_refuses (__main__.InputPlanTests.test_unknown_memory_check_role_refuses) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.002s
+
+OK
+test_contract_substitution_refuses (__main__.BindingTests.test_contract_substitution_refuses) ... ok
+test_matching_bundle_and_mismatches (__main__.BindingTests.test_matching_bundle_and_mismatches) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.084s
+
+OK
+test_duplicate_or_escaping_ids_refuse (__main__.FleetPlanTests.test_duplicate_or_escaping_ids_refuse) ... ok
+test_explicit_cell_passes (__main__.FleetPlanTests.test_explicit_cell_passes) ... ok
+test_injection_unknown_fields_and_invalid_bounds_refuse (__main__.FleetPlanTests.test_injection_unknown_fields_and_invalid_bounds_refuse) ... ok
+test_missing_assertions_refuses (__main__.FleetPlanTests.test_missing_assertions_refuses) ... ok
+test_native_key_tokens_remain_native_syntax (__main__.FleetPlanTests.test_native_key_tokens_remain_native_syntax) ... ok
+test_platform_and_config_are_exclusive (__main__.FleetPlanTests.test_platform_and_config_are_exclusive) ... ok
+test_undeclared_input_and_escaping_output_refuse (__main__.FleetPlanTests.test_undeclared_input_and_escaping_output_refuse) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.002s
+
+OK
+profile selftest: PASS (roll-up, unassigned PCs, malformed counts, duplicates, stale symbols)
+PASS counts refuses unarmed coverage
+PASS platform 3 independent loop instruction/cycle totals: status=OK instr=7 cycles=16 (in-command) [cleared RESET] PC=00:0805 A=00 X=00 Y=00 SP=0029 P=36 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module instructions=7
+PASS per-function roll-up includes repeated PCs
+PASS planted off-by-one expectation fails
+PASS step reports actual instructions
+PASS reset clears per-PC counts
+PASS mapped profile identity and symbol roll-up
+PASS stale binary plan rejected by profile reader
+PASS executed-code mismatch refuses mapped counts
+PASS unarmed counts write refuses success
+PASS zero-frame run refuses success and reports zero work
+PASS session exits cleanly
+PASS counts refuses unarmed coverage
+PASS platform 5 independent loop instruction/cycle totals: status=OK instr=7 cycles=16 (in-command) PC=00:0805 A=00 X=00 Y=00 SP=0129 P=36 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch instructions=7
+PASS per-function roll-up includes repeated PCs
+PASS planted off-by-one expectation fails
+PASS step reports actual instructions
+PASS reset clears per-PC counts
+PASS mapped profile identity and symbol roll-up
+PASS stale binary plan rejected by profile reader
+PASS executed-code mismatch refuses mapped counts
+PASS unarmed counts write refuses success
+PASS zero-frame run refuses success and reports zero work
+PASS session exits cleanly
+PASS WDM runs via existing operand handlers
+PASS WDM output matches when armed; absent when disabled
+PASS WDM is two cycles and preserves A
+PASS console readback counts output
+PASS session exits cleanly
+PASS WDM runs via existing operand handlers
+PASS WDM output matches when armed; absent when disabled
+PASS WDM is two cycles and preserves A
+PASS session exits cleanly
+PASS frame run reports actual opcode executions
+PASS completed SCC A TX bytes captured exactly
+PASS wrong SCC channel stays empty (negative capture oracle)
+PASS SCC readback names emitted bytes
+PASS local SCC loopback does not appear on TX wire capture
+PASS session exits cleanly
+PASS invalid/unsupported binding fails loud: 3 {'A2GSPU_SCC_A': 'file:a.out'}
+PASS invalid/unsupported binding fails loud: 3 {'A2GSPU_WDM_CONSOLE': 'file:w.out'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_SCC_A': 'bad-binding'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_WDM_CONSOLE': 'file:missing-directory/out'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_SCC_A': 'pipe:missing-endpoint'}
+PASS invalid/unsupported binding fails loud: 5 {'A2GSPU_SCC_A': 'file:a.out', 'A2GSPU_SCC_B': 'file:./a.out'}
+PASS named-pipe fixture created
+PASS console named-pipe output reaches reader
+PASS session exits cleanly
+PASS socket manifest covers original types and native agent extensions
+PASS planted missing socket type fails discovery oracle
+PASS MANIFEST refuses nonempty payload
+PASS socket quit exits cleanly
+PASS platform 3: identical snapshot has empty state diff
+PASS snapshot diff leaves live CPU unchanged
+PASS changed A reported by name/value
+PASS planted RAM byte located exactly in physical domain
+PASS diff artifact names its schema/model
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS input overwrite refused
+PASS refused report did not modify input
+PASS truncated manifest refused before report output
+PASS invalid input preserves prior report
+PASS missing snapshot fails loud
+PASS unwritable report path fails loud
+PASS session exits cleanly
+PASS platform 5: identical snapshot has empty state diff
+PASS snapshot diff leaves live CPU unchanged
+PASS changed A reported by name/value
+PASS planted RAM byte located exactly in physical domain
+PASS diff artifact names its schema/model
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS CLI equality/difference exit contract and negative expectation
+PASS input overwrite refused
+PASS refused report did not modify input
+PASS truncated manifest refused before report output
+PASS invalid input preserves prior report
+PASS missing snapshot fails loud
+PASS unwritable report path fails loud
+PASS session exits cleanly
+snapshot checks: ALL GREEN
+PASS limitation count agrees with its own exported table
+PASS native CPU register value
+PASS native inline CPU payload
+PASS declared CPU width
+PASS devices typed artifact
+PASS signals typed artifact
+PASS capabilities typed artifact
+PASS inspection preserves saved CPU/MMU/device state
+PASS inspection preserves CPU
+PASS unmatched signal selection explicit empty list
+PASS unknown inspection refuses
+PASS missing output refuses
+PASS native in-command execution counts
+PASS native memory feeds guest views: platform=3 bytes=eaea
+PASS unreadable I/O refuses guest interpretation
+PASS oracle has no stale RTC exclusion
+PASS JSON oracle has an explicit successful status
+PASS device subscription begins with native baseline
+PASS native device field change is published at command boundary
+PASS subscription has lifecycle records
+PASS event ordering is explicit
+PASS command events exactly once
+PASS unsubscribed commands not delivered
+PASS central trap record fans out exactly once
+PASS subscription loss is visible
+PASS overflow emits terminal warning record
+PASS unknown event filter refuses
+PASS public file client reads native CPU state
+PASS public file client consumes native memory artifact
+PASS session exits cleanly
+PASS limitation count agrees with its own exported table
+PASS native CPU register value
+PASS native inline CPU payload
+PASS declared CPU width
+PASS devices typed artifact
+PASS all default IIgs handlers have native observers
+PASS native RTC/SCC/ADB fields available
+PASS SCC FIFO count and line types
+PASS signals typed artifact
+PASS capabilities typed artifact
+PASS inspection preserves saved CPU/MMU/device state
+PASS inspection preserves CPU
+PASS unmatched signal selection explicit empty list
+PASS unknown inspection refuses
+PASS missing output refuses
+PASS native in-command execution counts
+PASS native memory feeds guest views: platform=5 bytes=eaea
+PASS unreadable I/O refuses guest interpretation
+PASS oracle has no stale RTC exclusion
+PASS JSON oracle has an explicit successful status
+PASS device subscription begins with native baseline
+PASS native device field change is published at command boundary
+PASS subscription has lifecycle records
+PASS event ordering is explicit
+PASS command events exactly once
+PASS unsubscribed commands not delivered
+PASS central trap record fans out exactly once
+PASS subscription loss is visible
+PASS overflow emits terminal warning record
+PASS unknown event filter refuses
+PASS public file client reads native CPU state
+PASS public file client consumes native memory artifact
+PASS session exits cleanly
+PASS live configured guest log
+PASS live configured task list
+PASS live configured frame chain
+PASS live configured panic entry
+PASS live source binding and line lookup
+PASS live observation epoch stable
+PASS live corrupt task cycle refuses interpretation
+PASS public guestview CLI reads live CTRL memory: 
+PASS session exits cleanly
+PASS live configured guest log
+PASS live configured task list
+PASS live configured frame chain
+PASS live configured panic entry
+PASS live source binding and line lookup
+PASS live observation epoch stable
+PASS live corrupt task cycle refuses interpretation
+PASS public guestview CLI reads live CTRL memory: 
+PASS session exits cleanly
+PASS unsupported source refuses scc-a
+PASS unsupported source refuses scc-b
+PASS unsupported source refuses wdm
+PASS session exits cleanly
+PASS unarmed off refuses no-op
+PASS bad live path fails without ending emulator
+PASS duplicate sink refuses without truncation
+PASS live WDM byte capture exact
+PASS native live sink readback
+PASS armed capture refuses implicit replacement
+PASS failed rebind preserves old capture
+PASS off receipt preserves final byte count
+PASS off releases WDM handlers
+PASS off releases endpoint for another source
+PASS session exits cleanly
+PASS unchanged semantic checkpoints compare equal
+PASS actual power-on model inventory
+PASS named device semantic change detected
+PASS changed checkpoint evidence fails its hash binding
+PASS IIe refuses DOC sample capture
+PASS session exits cleanly
+PASS unchanged semantic checkpoints compare equal
+PASS actual power-on model inventory
+PASS named device semantic change detected
+PASS changed checkpoint evidence fails its hash binding
+PASS native SHR pixels resolve configured glyphs
+PASS native PNG content passes decoded-pixel oracle
+PASS real DOC samples captured with timing
+PASS real DOC samples captured with timing
+PASS native sample recording passes content oracle
+PASS planted wrong native sample fails content oracle
+PASS session exits cleanly
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS nmi entry is not counted as a completed opcode step
+PASS nmi entry cycles native=False
+PASS interrupt vector and stack width: expected PC=3fb state={'processor_type': 1, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 1019, 'a': 0, 'x': 0, 'y': 0, 'sp': 508, 'p': 52}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS non-boundary deadline reports one-cycle lateness
+PASS IIe refuses ABORT
+PASS independent IRQ line asserted with release queued
+PASS clear releases only injector state
+PASS clear refuses no-op
+PASS session exits cleanly
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS nmi entry is not counted as a completed opcode step
+PASS nmi entry cycles native=False
+PASS interrupt vector and stack width: expected PC=3fb state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 1019, 'a': 0, 'x': 0, 'y': 0, 'sp': 508, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': True}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS abort entry is not counted as a completed opcode step
+PASS abort entry cycles native=False
+PASS interrupt vector and stack width: expected PC=c079 state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 49273, 'a': 0, 'x': 0, 'y': 0, 'sp': 508, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': True}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS nmi entry is not counted as a completed opcode step
+PASS nmi entry cycles native=True
+PASS interrupt vector and stack width: expected PC=3fb state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 1019, 'a': 0, 'x': 0, 'y': 0, 'sp': 507, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': False}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS active fault state refuses misleading snapshot
+PASS restore names injector preflight refusal
+PASS abort entry is not counted as a completed opcode step
+PASS abort entry cycles native=True
+PASS interrupt vector and stack width: expected PC=c079 state={'processor_type': 2, 'sp_model': 'bank0-stack-address', 'registers': {'pc': 49273, 'a': 0, 'x': 0, 'y': 0, 'sp': 507, 'p': 52, 'a_storage': 0, 'd': 0, 'dbr': 0, 'pbr': 0, 'e': False}, 'register_widths': {'a': 8, 'x': 8, 'y': 8}, 'halt_reason': 0, 'stopped': False, 'waiting_for_interrupt': False, 'interrupts': {'irq_line': False, 'irq_pipeline': 0, 'nmi_pending': False, 'boundary_abort_pending': False, 'reset_sources': '0'}}
+PASS interrupt clears decimal, leaves I set
+PASS stack return address and emulation B bit
+PASS fault delivery has actual timestamp/lateness
+PASS non-boundary deadline reports one-cycle lateness
+PASS independent IRQ line asserted with release queued
+PASS clear releases only injector state
+PASS clear refuses no-op
+PASS session exits cleanly
+PASS cycle macro records actual boundary and lateness
+PASS input macro replays matching relative timestamps
+PASS exact-cycle demand refuses an overshot boundary
+PASS stale loaded code refuses before any input
+PASS frame macro uses native video-frame clock
+PASS key edge advances no guest time
+PASS second owned key refuses overwrite
+PASS held ownership cannot silently enter snapshot
+PASS keyup refuses no-op
+PASS IIe refuses missing ADB endpoint
+PASS session exits cleanly
+PASS cycle macro records actual boundary and lateness
+PASS input macro replays matching relative timestamps
+PASS exact-cycle demand refuses an overshot boundary
+PASS stale loaded code refuses before any input
+PASS frame macro uses native video-frame clock
+PASS key edge advances no guest time
+PASS second owned key refuses overwrite
+PASS held ownership cannot silently enter snapshot
+PASS keyup refuses no-op
+PASS unread mouse packet refuses overwrite
+PASS ADB packet exposes exact motion/button encoding
+PASS session exits cleanly
+PASS optional cards expose native typed state
+PASS every installed model declares control/snapshot coverage
+PASS optional native observers preserve saved machine state
+PASS session exits cleanly
+PASS optional cards expose native typed state
+PASS every installed model declares control/snapshot coverage
+PASS optional native observers preserve saved machine state
+PASS session exits cleanly
+PASS socket discovery names subscription requests
+PASS socket discovery lists native filter kinds
+PASS socket native subscription starts
+PASS duplicate socket arm refuses
+PASS socket close-out agrees with delivered record count
+PASS socket event sequence ordered exactly once
+PASS socket records retain native schema/filter
+PASS unselected stop records absent
+PASS unknown socket event kind refuses
+PASS malformed socket subscription frames refuse
+PASS bounded socket queue reports lost records
+PASS disconnect disarms prior subscription
+PASS socket stream session exits cleanly
+PASS socket discovery names subscription requests
+PASS socket discovery lists native filter kinds
+PASS socket native subscription starts
+PASS duplicate socket arm refuses
+PASS socket close-out agrees with delivered record count
+PASS socket event sequence ordered exactly once
+PASS socket records retain native schema/filter
+PASS unselected stop records absent
+PASS unknown socket event kind refuses
+PASS malformed socket subscription frames refuse
+PASS bounded socket queue reports lost records
+PASS disconnect disarms prior subscription
+PASS socket stream session exits cleanly
+PASS session exits cleanly
+PASS quit finalizes event stream before owner teardown
+PASS session exits cleanly
+PASS quit finalizes event stream before owner teardown
+PASS quit finalizes complete generated-audio evidence
+PASS native socket tool catalog available
+PASS socket discovers every existing instrument
+PASS catalog states ownership/pause/quit contract
+PASS public SDK returns native tool catalog
+PASS presentation tools accessible from socket
+PASS CPU state native through shared handler
+PASS unknown tool refuses
+PASS shared execution returns independent native result
+PASS shared artifact tool preserves quoted paths
+PASS socket controls expose live device readback
+PASS socket snapshot tools restore native state
+PASS malformed commands refuse before dispatch
+PASS quit uses acknowledged native shutdown path
+PASS running machine refuses invasive tool takeover
+PASS socket tool session exits cleanly
+PASS native socket tool catalog available
+PASS socket discovers every existing instrument
+PASS catalog states ownership/pause/quit contract
+PASS public SDK returns native tool catalog
+PASS presentation tools accessible from socket
+PASS CPU state native through shared handler
+PASS unknown tool refuses
+PASS shared execution returns independent native result
+PASS shared artifact tool preserves quoted paths
+PASS socket controls expose live device readback
+PASS socket snapshot tools restore native state
+PASS malformed commands refuse before dispatch
+PASS quit uses acknowledged native shutdown path
+PASS running machine refuses invasive tool takeover
+PASS socket tool session exits cleanly
+PASS completed long tool retains its result after bridge wait deadline
+PASS long command leaves owned machine paused and inspectable
+PASS native menu state available
+PASS UI discovery declares scope and unavailable paths
+PASS monitor action has native readback
+PASS presentation setting advances no guest time/state
+PASS unchanged presentation request reports changed=false
+PASS unsupported monitor value refuses
+PASS failed action preserves setting
+PASS speed request declares deferred application
+PASS speed applies through normal frame transition
+PASS effective speed repeat does not schedule a fake change
+PASS available shader action has readback
+PASS unsupported host-only action refuses with scope
+PASS malformed UI request refuses: ui monitor
+PASS malformed UI request refuses: ui speed 99
+PASS malformed UI request refuses: ui crt perhaps
+PASS malformed UI request refuses: ui status extra
+PASS session exits cleanly
+PASS native menu state available
+PASS UI discovery declares scope and unavailable paths
+PASS monitor action has native readback
+PASS presentation setting advances no guest time/state
+PASS unchanged presentation request reports changed=false
+PASS unsupported monitor value refuses
+PASS failed action preserves setting
+PASS speed request declares deferred application
+PASS speed applies through normal frame transition
+PASS effective speed repeat does not schedule a fake change
+PASS available shader action has readback
+PASS unsupported host-only action refuses with scope
+PASS malformed UI request refuses: ui monitor
+PASS malformed UI request refuses: ui speed 99
+PASS malformed UI request refuses: ui crt perhaps
+PASS malformed UI request refuses: ui status extra
+PASS session exits cleanly
+PASS windowed co-pilot shares native UI setting handler
+PASS co-pilot UI malformed value refuses
+PASS UI access preserves co-pilot splice restriction
+PASS windowed UI tool session exits cleanly
+PASS windowed co-pilot shares native UI setting handler
+PASS co-pilot UI malformed value refuses
+PASS UI access preserves co-pilot splice restriction
+PASS windowed UI tool session exits cleanly
+PASS all one-shot tail getenv rails are classified as batch-only
+PASS MCP framing/observation fixture: test_notifications_never_execute_tools
+PASS MCP framing/observation fixture: test_native_errors_remain_visible
+PASS MCP framing/observation fixture: test_bad_ids_arguments_and_unadvertised_tasks
+PASS MCP framing/observation fixture: test_bounded_lines_recover_without_stdout_noise
+PASS MCP framing/observation fixture: test_batch_has_explicit_structured_parameters
+PASS MCP framing/observation fixture: test_trace_wire_offsets_and_u64_precision
+PASS MCP framing/observation fixture: test_trace_backward_clock_is_not_a_duration
+PASS MCP framing/observation fixture: test_read_observations_refuse_bad_types_ranges_and_parameters
+PASS MCP framing/observation fixture: test_artifact_roundtrip_ranges_and_create_once
+PASS MCP framing/observation fixture: test_artifact_scope_limits_and_missing_paths
+PASS MCP framing/observation fixture: test_text_and_corrupt_image_are_not_plausible_success
+PASS MCP framing/observation fixture: test_file_client_rejects_controls_before_publishing
+PASS MCP framing/observation fixture: test_partial_reply_timeout_recovers_without_resending
+PASS MCP framing/observation fixture: test_partial_event_timeout_preserves_framing
+PASS MCP framing/observation fixture: test_bad_timeout_has_no_wire_effect
+PASS MCP framing/observation fixture: test_unrelated_events_do_not_restart_stop_deadline
+PASS MCP framing/observation fixture: test_quit_reply_wait_is_bounded_and_never_reissued
+MCP close: owned emulator did not exit; terminating
+PASS MCP framing/observation fixture: test_pending_close_reaps_its_owned_child_and_keeps_unknown_effects
+PASS MCP framing/observation fixture: test_attached_close_disconnects_without_quit_or_a_process
+PASS MCP framing/observation fixture: test_already_exited_child_does_not_erase_pending_outcome
+MCP close: RequestPending: request 8 (0x00000005) pending; wait for its original reply; timeout is not cancellation
+MCP close: owned emulator did not exit; terminating
+PASS MCP framing/observation fixture: test_unanswered_closing_quit_is_bounded_and_retained
+PASS MCP owned process and emulator close on EOF: 
+PASS stdout contains only one JSON-RPC reply per request; notifications silent
+PASS MCP initialization order enforced
+PASS MCP tools include complete runtime catalog, debugger observations, artifacts and context
+PASS MCP executes real guest code and returns native values
+PASS structured and text evidence agree
+PASS MCP presentation tool reaches native handler
+PASS execution, unknown tool and injection failures distinguished
+PASS rejected newline cannot execute reset
+PASS managed startup actually applies requested pacing
+PASS managed startup actually arms requested coverage
+PASS independent batch uses native positive memory assertion
+PASS independent batch preserves planted wrong assertion failure
+PASS batch validation and jobs leave current machine untouched
+PASS batch artifacts and verdicts retained independently
+PASS invalid JSON fails as protocol error
+PASS retained owner receipt proves startup configuration and clean emulator exit
+PASS native bootstrap proof retained; launch is not inferred from environment
+PASS existing output directory refuses without overwriting its receipt
+PASS unknown startup rail refuses and closes owned child
+PASS conflicting transport rail refuses before creating a session
+PASS one-shot rail redirects explicitly instead of silently ignoring it
+PASS invalid artifact root refuses before launch or output directory creation
+PASS MCP owned process and emulator close on EOF: 
+PASS stdout contains only one JSON-RPC reply per request; notifications silent
+PASS MCP initialization order enforced
+PASS MCP tools include complete runtime catalog, debugger observations, artifacts and context
+PASS MCP executes real guest code and returns native values
+PASS structured and text evidence agree
+PASS MCP presentation tool reaches native handler
+PASS execution, unknown tool and injection failures distinguished
+PASS rejected newline cannot execute reset
+PASS managed startup actually applies requested pacing
+PASS managed startup actually arms requested coverage
+PASS independent batch uses native positive memory assertion
+PASS independent batch preserves planted wrong assertion failure
+PASS batch validation and jobs leave current machine untouched
+PASS batch artifacts and verdicts retained independently
+PASS invalid JSON fails as protocol error
+PASS retained owner receipt proves startup configuration and clean emulator exit
+PASS native bootstrap proof retained; launch is not inferred from environment
+PASS existing output directory refuses without overwriting its receipt
+PASS observation MCP lifecycle 3: 
+PASS upstream structured observations discoverable through MCP
+PASS observation succeeds 11
+PASS trace decodes actual instructions, access direction, data and addresses
+PASS trace deltas use adjacent retained records
+PASS observation succeeds 12
+PASS memory domain byte values retained
+PASS observation succeeds 13
+PASS masked search finds independent fixture
+PASS observation succeeds 14
+PASS observation succeeds 14
+PASS I/O placeholders cannot become false zero-pattern hits
+PASS observation succeeds 15
+PASS observation succeeds 15
+PASS search reports truncated hit list
+PASS observation succeeds 17
+PASS text includes native page metadata, raw bytes and decoded lines
+PASS invalid inputs and running session explicitly refuse
+PASS IIgs-only domain fails honestly on IIe
+PASS decoding the same trace twice is stable
+PASS extended trace names recorded clock without false fixed-speed scanlines
+PASS observation MCP lifecycle 5: 
+PASS upstream structured observations discoverable through MCP
+PASS observation succeeds 11
+PASS trace decodes actual instructions, access direction, data and addresses
+PASS trace deltas use adjacent retained records
+PASS observation succeeds 12
+PASS memory domain byte values retained
+PASS observation succeeds 13
+PASS masked search finds independent fixture
+PASS observation succeeds 14
+PASS observation succeeds 14
+PASS I/O placeholders cannot become false zero-pattern hits
+PASS observation succeeds 15
+PASS observation succeeds 15
+PASS search reports truncated hit list
+PASS observation succeeds 17
+PASS text includes native page metadata, raw bytes and decoded lines
+PASS invalid inputs and running session explicitly refuse
+PASS IIgs-only domain fails honestly on IIe
+PASS decoding the same trace twice is stable
+PASS extended trace names recorded clock without false fixed-speed scanlines
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP response identity
+PASS MCP request accepted
+PASS all native/observation/artifact/context tools discoverable
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict agent_tools
+PASS native inventory retained
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pause
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict setreg
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict step
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict inspect
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP consumes native typed state artifact without filesystem access
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pngc
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS native PNG delivered as viewable MCP image content
+PASS image content is bound to returned digest and completeness
+PASS transported 4dot image independently decodes to expected doubled-height raster
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS uploaded input can be inspected byte-for-byte
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict batch
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS cold batch evidence is accessible through same artifact root
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_list
+PASS artifact discovery includes outputs and excludes rejected upload
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS agent can retrieve exact emulator binary identity
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict quit
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS evidence remains readable after guest quit
+PASS MCP owned process closes cleanly
+PASS native owned emulator closes cleanly
+PASS blocked mutation allocates no new wire sequence
+PASS real timed-out run recovers original native evidence
+PASS recovery leaves paused machine usable
+PASS recovered session exits normally
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP response identity
+PASS MCP request accepted
+PASS all native/observation/artifact/context tools discoverable
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict agent_tools
+PASS native inventory retained
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_put
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pause
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict setreg
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict load
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict step
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict assert
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict inspect
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP consumes native typed state artifact without filesystem access
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict pngc
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS native PNG delivered as viewable MCP image content
+PASS image content is bound to returned digest and completeness
+PASS transported 4dot image independently decodes to expected doubled-height raster
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS uploaded input can be inspected byte-for-byte
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict batch
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS cold batch evidence is accessible through same artifact root
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_list
+PASS artifact discovery includes outputs and excludes rejected upload
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS agent can retrieve exact emulator binary identity
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict quit
+PASS MCP response identity
+PASS MCP request accepted
+PASS MCP tool verdict artifact_read
+PASS evidence remains readable after guest quit
+PASS MCP owned process closes cleanly
+PASS native owned emulator closes cleanly
+PASS blocked mutation allocates no new wire sequence
+PASS real timed-out run recovers original native evidence
+PASS recovery leaves paused machine usable
+PASS recovered session exits normally
+PASS invalid execution request has no work: step 0
+PASS invalid execution preserves CPU: step 0
+PASS invalid execution request has no work: step -1
+PASS invalid execution preserves CPU: step -1
+PASS invalid execution request has no work: step 1junk
+PASS invalid execution preserves CPU: step 1junk
+PASS invalid execution request has no work: step 1 extra
+PASS invalid execution preserves CPU: step 1 extra
+PASS invalid execution request has no work: run 0
+PASS invalid execution preserves CPU: run 0
+PASS invalid execution request has no work: run -1
+PASS invalid execution preserves CPU: run -1
+PASS invalid execution request has no work: run 1junk
+PASS invalid execution preserves CPU: run 1junk
+PASS invalid execution request has no work: run 1 extra
+PASS invalid execution preserves CPU: run 1 extra
+PASS invalid execution request has no work: run-until 0800 0
+PASS invalid execution preserves CPU: run-until 0800 0
+PASS invalid execution request has no work: run-until 0800 -1
+PASS invalid execution preserves CPU: run-until 0800 -1
+PASS invalid execution request has no work: run-until 0800 1junk
+PASS invalid execution preserves CPU: run-until 0800 1junk
+PASS invalid execution request has no work: run-until 0800 1 extra
+PASS invalid execution preserves CPU: run-until 0800 1 extra
+PASS already-satisfied PC goal does not execute another instruction
+PASS already-satisfied goal preserves the unexecuted memory effect
+PASS PC goal reached on final instruction is success
+PASS target execution produces exactly one known memory effect
+PASS budget exhaustion is not goal completion
+PASS valid step completes its explicit instruction goal
+PASS session exits cleanly
+PASS invalid execution request has no work: step 0
+PASS invalid execution preserves CPU: step 0
+PASS invalid execution request has no work: step -1
+PASS invalid execution preserves CPU: step -1
+PASS invalid execution request has no work: step 1junk
+PASS invalid execution preserves CPU: step 1junk
+PASS invalid execution request has no work: step 1 extra
+PASS invalid execution preserves CPU: step 1 extra
+PASS invalid execution request has no work: run 0
+PASS invalid execution preserves CPU: run 0
+PASS invalid execution request has no work: run -1
+PASS invalid execution preserves CPU: run -1
+PASS invalid execution request has no work: run 1junk
+PASS invalid execution preserves CPU: run 1junk
+PASS invalid execution request has no work: run 1 extra
+PASS invalid execution preserves CPU: run 1 extra
+PASS invalid execution request has no work: run-until 0800 0
+PASS invalid execution preserves CPU: run-until 0800 0
+PASS invalid execution request has no work: run-until 0800 -1
+PASS invalid execution preserves CPU: run-until 0800 -1
+PASS invalid execution request has no work: run-until 0800 1junk
+PASS invalid execution preserves CPU: run-until 0800 1junk
+PASS invalid execution request has no work: run-until 0800 1 extra
+PASS invalid execution preserves CPU: run-until 0800 1 extra
+PASS already-satisfied PC goal does not execute another instruction
+PASS already-satisfied goal preserves the unexecuted memory effect
+PASS PC goal reached on final instruction is success
+PASS target execution produces exactly one known memory effect
+PASS budget exhaustion is not goal completion
+PASS valid step completes its explicit instruction goal
+PASS session exits cleanly
+PASS attached MCP EOF leaves externally owned emulator alive
+PASS attached session has no implicit artifact filesystem scope
+PASS explicit artifact root works on attach without taking emulator ownership
+PASS attached emulator remains controllable after MCP disconnect
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': 'invalid'}
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': '1'}
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': '1', 'A2GSPU_CTRL': 'D:\\gsqs\\tmp\\a2agent-rejections-iyujm67_\\ctrl'}
+PASS invalid agent bootstrap configuration refuses before machine start: {'A2GSPU_AGENT': '1', 'A2GSPU_SPIKE_FRAMES': '1'}
+PASS stable MCP configuration can launch again without deleting evidence
+PASS stable MCP configuration can launch again without deleting evidence
+PASS repeat launches retain separate closed ownership receipts
+PASS p3 graceful 
+MCP close: owned emulator did not exit; terminating
+PASS p3 pending 
+PASS p3 attached remains controllable
+PASS p5 graceful 
+MCP close: owned emulator did not exit; terminating
+PASS p5 pending 
+PASS p5 attached remains controllable
+PASS p3 valid payloads/sidecars pass checked reader
+PASS p3 rejects blocked spike_trace.bin
+PASS p3 rejects blocked spike_slot.bin
+PASS p3 rejects blocked spike_mmu_truth.bin
+PASS p3 rejects blocked spike_trace.bin.meta.json
+PASS p3 rejects blocked spike_slot.bin.meta.json
+PASS p3 rejects blocked spike_mmu_truth.bin.meta.json
+PASS p3 CTRL vram refuses sidecar failure
+PASS p3 CTRL remains usable after failed artifact
+PASS p3 CTRL vram succeeds after refusal
+PASS session exits cleanly
+PASS p3 tap CPU/RAM payloads pass checked reader
+PASS p3 tap rejects blocked ram_dump_periodic_t001.bin
+PASS p3 tap rejects blocked ram_dump_periodic_t001.bin.meta.json
+PASS p3 tap rejects blocked ram_full_periodic_t001.bin
+PASS p3 tap rejects blocked ram_full_periodic_t001.bin.meta.json
+PASS p5 valid payloads/sidecars pass checked reader
+PASS p5 rejects blocked spike_trace.bin
+PASS p5 rejects blocked spike_slot.bin
+PASS p5 rejects blocked spike_mmu_truth.bin
+PASS p5 rejects blocked spike_e1_init.bin
+PASS p5 rejects blocked spike_e1.bin
+PASS p5 rejects blocked spike_trace.bin.meta.json
+PASS p5 rejects blocked spike_slot.bin.meta.json
+PASS p5 rejects blocked spike_mmu_truth.bin.meta.json
+PASS p5 rejects blocked spike_e1_init.bin.meta.json
+PASS p5 rejects blocked spike_e1.bin.meta.json
+PASS p5 CTRL vram refuses sidecar failure
+PASS p5 CTRL remains usable after failed artifact
+PASS p5 CTRL vram succeeds after refusal
+PASS session exits cleanly
+PASS p5 tap CPU/RAM payloads pass checked reader
+PASS p5 tap rejects blocked ram_dump_periodic_t001.bin
+PASS p5 tap rejects blocked ram_dump_periodic_t001.bin.meta.json
+PASS p5 tap rejects blocked ram_full_periodic_t001.bin
+PASS p5 tap rejects blocked ram_full_periodic_t001.bin.meta.json
+PASS p3 shot rejects blocked output
+PASS p3 text rejects blocked output
+PASS p3 save rejects blocked output
+PASS p3 valid text contains both pages
+PASS p3 valid shot is BMP
+PASS p3 valid snapshot passes checked reader
+PASS p3 session usable after refusals
+PASS session exits cleanly
+PASS p3 SPIKE refuses bmp output failure
+PASS p3 SPIKE refuses coverage output failure
+PASS p3 SPIKE refuses tap-text_pages.ndjson output failure
+PASS p3 SPIKE refuses tap-keypress_events.ndjson output failure
+PASS p3 SPIKE refuses tap-disk_writes.ndjson output failure
+PASS p5 shot rejects blocked output
+PASS p5 text rejects blocked output
+PASS p5 save rejects blocked output
+PASS p5 valid text contains both pages
+PASS p5 valid shot is BMP
+PASS p5 valid snapshot passes checked reader
+PASS p5 session usable after refusals
+PASS session exits cleanly
+PASS p5 SPIKE refuses bmp output failure
+PASS p5 SPIKE refuses coverage output failure
+PASS p5 SPIKE refuses snapshot output failure
+PASS p5 SPIKE refuses tap-text_pages.ndjson output failure
+PASS p5 SPIKE refuses tap-keypress_events.ndjson output failure
+PASS p5 SPIKE refuses tap-disk_writes.ndjson output failure
+PASS p3 tmp-directory: command effects precede failed ACK
+PASS p3 tmp-directory: publication failure exits 2
+PASS p3 no partial ACK is published
+PASS p3 ack-directory: command effects precede failed ACK
+PASS p3 ack-directory: publication failure exits 2
+PASS p3 blocked destination is preserved
+PASS p3 old-receipt: command effects precede failed ACK
+PASS p3 old-receipt: publication failure exits 2
+PASS p3 old receipt is preserved
+PASS p5 tmp-directory: command effects precede failed ACK
+PASS p5 tmp-directory: publication failure exits 2
+PASS p5 no partial ACK is published
+PASS p5 ack-directory: command effects precede failed ACK
+PASS p5 ack-directory: publication failure exits 2
+PASS p5 blocked destination is preserved
+PASS p5 old-receipt: command effects precede failed ACK
+PASS p5 old-receipt: publication failure exits 2
+PASS p5 old receipt is preserved
+PASS p3 help publishes output
+PASS p3 help refuses blocked output
+PASS p3 manifest publishes output
+PASS p3 manifest refuses blocked output
+PASS p3 systems publishes output
+PASS p3 systems refuses blocked output
+PASS p3 limitations publishes output
+PASS p3 limitations refuses blocked output
+PASS p3 rail env-only publishes output
+PASS p3 rail env-only refuses blocked output
+PASS p3 devstate all publishes output
+PASS p3 devstate all refuses blocked output
+PASS p3 read 000800 16 publishes output
+PASS p3 read 000800 16 refuses blocked output
+PASS p3 dis 000800 1 publishes output
+PASS p3 dis 000800 1 refuses blocked output
+PASS p3 iolog dump publishes output
+PASS p3 iolog dump refuses blocked output
+PASS p3 screen refuses blocked sidecar
+PASS p3 remains usable after export refusal
+PASS session exits cleanly
+PASS p3 textdump failure exits 2
+PASS p5 help publishes output
+PASS p5 help refuses blocked output
+PASS p5 manifest publishes output
+PASS p5 manifest refuses blocked output
+PASS p5 systems publishes output
+PASS p5 systems refuses blocked output
+PASS p5 limitations publishes output
+PASS p5 limitations refuses blocked output
+PASS p5 rail env-only publishes output
+PASS p5 rail env-only refuses blocked output
+PASS p5 devstate all publishes output
+PASS p5 devstate all refuses blocked output
+PASS p5 read 000800 16 publishes output
+PASS p5 read 000800 16 refuses blocked output
+PASS p5 dis 000800 1 publishes output
+PASS p5 dis 000800 1 refuses blocked output
+PASS p5 iolog dump publishes output
+PASS p5 iolog dump refuses blocked output
+PASS p5 screen refuses blocked sidecar
+PASS p5 remains usable after export refusal
+PASS session exits cleanly
+PASS p5 textdump failure exits 2
+PASS context verdict overview
+PASS native context schema
+PASS history is explicitly off by default
+PASS context verdict pixel 0 0
+PASS pixel query reads current-machine scanner before the first frame
+PASS context verdict address 000800
+PASS RAM explains actual probe value
+PASS context verdict address 00C030
+PASS I/O explanation never returns placeholder as truth
+PASS context verdict overview
+PASS observation consumes no guest cycles
+PASS context verdict topology 0
+PASS context verdict topology 8
+PASS context verdict topology 16
+PASS context verdict topology 24
+PASS context verdict topology 32
+PASS absent models are discoverable
+PASS context verdict device 1
+PASS absent model cannot borrow another installed model observer
+PASS CPU participates in topology
+PASS topology links implementation sources
+PASS context verdict on 0
+PASS context verdict overview
+PASS invalid arm does not change history
+PASS context verdict on 128
+PASS context verdict on 128
+PASS context verdict mark 000900 1
+PASS context verdict changes 1 0
+PASS context verdict changes 1 8
+PASS instruction store joins marked memory delta
+PASS CPU register delta is typed
+PASS context verdict changes 999999
+PASS context verdict address 1000000
+PASS context verdict history 999999 4
+PASS context verdict irq
+PASS IRQ explains independent asserted source
+PASS context verdict history 0 8
+PASS context verdict history 68 8
+PASS context verdict history 76 8
+PASS context verdict history 84 8
+PASS context verdict history 92 8
+PASS context verdict history 100 8
+PASS context verdict history 108 8
+PASS context verdict history 116 8
+PASS context verdict history 124 8
+PASS context verdict history 132 8
+PASS context verdict history 139 8
+PASS context verdict history 146 8
+PASS context verdict history 151 8
+PASS context verdict history 159 8
+PASS context verdict history 164 8
+PASS context verdict history 169 8
+PASS context verdict history 177 8
+PASS context verdict history 184 8
+PASS accepted NMI has exact transition evidence
+PASS resolved vector links its actual interrupt entry
+PASS IRQ edge retained without separate subscription
+PASS context verdict stop
+PASS stop explanation links execution receipt
+PASS context verdict stop
+PASS stop explanation ignores similarly named non-execution commands
+PASS event clocks are explicit
+PASS command completion refers to its actual begin event
+PASS context verdict schedule
+PASS scheduler clocks are separate domains
+PASS context verdict snapshot "D:/gsqs/tmp/a2p0-9hdcvuo7/context snapshot.json"
+PASS full snapshot and reference have identical observation identity
+PASS producer receipt binds closed snapshot bytes
+PASS snapshot contains native device and signal observations
+PASS capture overhead is measured in host time
+PASS context verdict pixel 0 0
+PASS pixel explanation names its model and implementation
+PASS context verdict pixel 640 0
+PASS context verdict off
+PASS context verdict on 4
+PASS context verdict history 0 8
+PASS overwritten history reports loss
+PASS context verdict off
+PASS context verdict off
+PASS session exits cleanly
+PASS context MCP lifecycle: 
+PASS native and typed context tools discoverable
+PASS typed context result 4
+PASS MCP arms native history
+PASS typed context result 7
+PASS typed context result 7
+PASS live context reads while machine runs
+PASS typed context result 10
+PASS typed context result 5
+PASS live context carries native monotonic counters
+PASS observer mutation and malformed query refuse
+PASS session exits cleanly
+PASS session exits cleanly
+PASS armed context preserves actual instruction/CPU/cycle witnesses on platform 3
+PASS context verdict overview
+PASS native context schema
+PASS history is explicitly off by default
+PASS context verdict address 000800
+PASS RAM explains actual probe value
+PASS context verdict address 00C030
+PASS I/O explanation never returns placeholder as truth
+PASS context verdict overview
+PASS observation consumes no guest cycles
+PASS context verdict topology 0
+PASS context verdict topology 8
+PASS context verdict topology 16
+PASS context verdict topology 24
+PASS context verdict topology 32
+PASS absent models are discoverable
+PASS context verdict device 1
+PASS absent model cannot borrow another installed model observer
+PASS CPU participates in topology
+PASS topology links implementation sources
+PASS context verdict on 0
+PASS context verdict overview
+PASS invalid arm does not change history
+PASS context verdict on 128
+PASS context verdict on 128
+PASS context verdict mark 000900 1
+PASS context verdict changes 1 0
+PASS context verdict changes 1 8
+PASS instruction store joins marked memory delta
+PASS CPU register delta is typed
+PASS context verdict changes 999999
+PASS context verdict address 1000000
+PASS context verdict history 999999 4
+PASS context verdict irq
+PASS IRQ explains independent asserted source
+PASS context verdict history 0 8
+PASS context verdict history 335 8
+PASS context verdict history 343 8
+PASS context verdict history 351 8
+PASS context verdict history 359 8
+PASS context verdict history 366 8
+PASS context verdict history 374 8
+PASS context verdict history 382 8
+PASS context verdict history 390 8
+PASS context verdict history 398 8
+PASS context verdict history 406 8
+PASS context verdict history 413 8
+PASS context verdict history 421 8
+PASS context verdict history 427 8
+PASS context verdict history 435 8
+PASS context verdict history 440 8
+PASS context verdict history 448 8
+PASS context verdict history 453 8
+PASS accepted NMI has exact transition evidence
+PASS resolved vector links its actual interrupt entry
+PASS IRQ edge retained without separate subscription
+PASS context verdict stop
+PASS stop explanation links execution receipt
+PASS context verdict stop
+PASS stop explanation ignores similarly named non-execution commands
+PASS event clocks are explicit
+PASS command completion refers to its actual begin event
+PASS context verdict schedule
+PASS scheduler clocks are separate domains
+PASS context verdict snapshot "D:/gsqs/tmp/a2p0-qg6ysrxu/context snapshot.json"
+PASS full snapshot and reference have identical observation identity
+PASS producer receipt binds closed snapshot bytes
+PASS snapshot contains native device and signal observations
+PASS capture overhead is measured in host time
+PASS context verdict pixel 0 0
+PASS pixel explanation names its model and implementation
+PASS context verdict pixel 640 0
+PASS context verdict pixel 0 0
+PASS SHR explanation follows physical interleaving and RGB nibbles
+PASS context verdict pixel 0 0
+PASS unreconstructed fill history refuses a false RGB
+PASS context verdict pixel 0 0
+PASS 640-mode split palette group is explicit
+PASS context verdict address 000900
+PASS address explanation separates actual read/write mappings
+PASS context verdict address 000900
+PASS main read stays unchanged after aux write
+PASS context verdict address 000900
+PASS observed CPU mapping confirms explained aux destination
+PASS context verdict off
+PASS context verdict on 4
+PASS context verdict history 0 8
+PASS overwritten history reports loss
+PASS context verdict off
+PASS context verdict off
+PASS session exits cleanly
+PASS context MCP lifecycle: 
+PASS native and typed context tools discoverable
+PASS typed context result 4
+PASS MCP arms native history
+PASS typed context result 7
+PASS typed context result 7
+PASS live context reads while machine runs
+PASS typed context result 10
+PASS typed context result 5
+PASS live context carries native monotonic counters
+PASS observer mutation and malformed query refuse
+PASS session exits cleanly
+PASS session exits cleanly
+PASS armed context preserves actual instruction/CPU/cycle witnesses on platform 5
+PASS context-bound experiment p3-00-baseline: pass
+PASS context-bound experiment p3-00-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS actual wrong-result experiment fails and retains evidence
+PASS invalid experiment refuses before creating output or launching
+PASS context-bound experiment p3-7f-baseline: pass
+PASS context-bound experiment p3-7f-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p3-80-baseline: pass
+PASS context-bound experiment p3-80-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p3-ff-baseline: pass
+PASS context-bound experiment p3-ff-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p5-00-baseline: pass
+PASS context-bound experiment p5-00-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS actual wrong-result experiment fails and retains evidence
+PASS invalid experiment refuses before creating output or launching
+PASS context-bound experiment p5-7f-baseline: pass
+PASS context-bound experiment p5-7f-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p5-80-baseline: pass
+PASS context-bound experiment p5-80-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS context-bound experiment p5-ff-baseline: pass
+PASS context-bound experiment p5-ff-candidate: pass
+PASS independent cycle counts 8 -> 6
+PASS measured 25% cycle reduction and one byte saved
+PASS observed improvement does not claim optimum
+PASS wrong answer cannot win an efficiency comparison
+PASS declared source/pointer/register preservation p3
+PASS complete profiles and CPU write footprint
+PASS armed/unarmed bits and independent 54-cycle count
+PASS retained profile tampering refuses comparison
+PASS all out-of-contract writes detected
+PASS capped write evidence cannot pass
+PASS declared source/pointer/register preservation p5
+PASS complete profiles and CPU write footprint
+PASS armed/unarmed bits and independent 54-cycle count
+PASS retained profile tampering refuses comparison
+PASS all out-of-contract writes detected
+PASS capped write evidence cannot pass
+PASS managed read-only launch has native RAMDISK pin p3
+PASS native typed writeback policy proves the launch guard
+PASS nested batch inherits media policy and passes native assertion
+PASS contradictory nested launch refuses: A2GSPU_RAMDISK
+PASS contradictory nested launch refuses: A2GSPU_NO_WRITEBACK
+PASS contradictory nested launch refuses: WIZ5_NO_WRITEBACK
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p3
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p3
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p3
+PASS session exits cleanly
+PASS managed read-only launch has native RAMDISK pin p5
+PASS native typed writeback policy proves the launch guard
+PASS nested batch inherits media policy and passes native assertion
+PASS contradictory nested launch refuses: A2GSPU_RAMDISK
+PASS contradictory nested launch refuses: A2GSPU_NO_WRITEBACK
+PASS contradictory nested launch refuses: WIZ5_NO_WRITEBACK
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS same typed presence/alias policy via A2GSPU_WRITEBACK p5
+PASS same typed presence/alias policy via A2GSPU_NO_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_WRITEBACK p5
+PASS same typed presence/alias policy via WIZ5_NO_WRITEBACK p5
+PASS session exits cleanly
+PASS contradictory startup media policy refuses before launch/output
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":true,"outcome":"pass"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+PASS 2x2 platform/seed fleet reports all four passing cells
+PASS native capabilities discover the fleet companion, plan schema and schema option
+PASS aggregate order is plan order despite concurrent completion
+PASS distinct owned processes exit cleanly with media launch policy retained
+PASS each cell retains a closed, complete native event subset
+PASS at least two live native cell intervals overlap
+PASS cell retains staged inputs, context and verdict: p3-s1
+PASS cell retains staged inputs, context and verdict: p3-s2
+PASS cell retains staged inputs, context and verdict: p5-s1
+PASS cell retains staged inputs, context and verdict: p5-s2
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+{"id":"p3-s2","ok":true,"outcome":"pass"}
+{"id":"p5-s1","ok":false,"outcome":"assertion-failure"}
+{"id":"p5-s2","ok":true,"outcome":"pass"}
+PASS one planted bad cell is the only red cell
+PASS red cell identity is exact
+PASS CLI returns 1 and retains every cell for a failed matrix
+PASS CLI distinguishes invalid plans before creating output
+PASS reused output refuses without overwriting evidence
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+PASS input identity failure is inconclusive before native launch
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+PASS native budget expiry preserves unknown effects and reaps owned child
+PASS pending-budget receipt proves no owned process is left running
+{"id":"p3-s1","ok":true,"outcome":"pass"}
+PASS explicit pinned .gs2 configuration launches from a staged cell input
+{"id":"p3-s1","ok":false,"outcome":"inconclusive"}
+PASS native event loss cannot pass the aggregate
+P0 checks: ALL GREEN
+
+=== GATE dualsmoke =============================================
+
+=== DUALSMOKE (IIe + IIgs instrument gate) =====================
+  Docs/DUAL_PLATFORM.md -- shared rail changes need both platforms
+runtime ucrt: C:\msys64\ucrt64\bin
+SUITE RUN-START dualsmoke
+toolpin GSSquared: D:/gsqs/tracein-20261017/build/GSSquared.exe | git ? | mtime 2026-10-17 00:27:31
+
+##### gssquared ctest (offline) ################################
+SUITE START gssquared ctest (offline)
+Test project D:/gsqs/tracein-20261017/build
+      Start  1: cpu_conformance
+ 1/14 Test  #1: cpu_conformance ..................   Passed    0.10 sec
+      Start  2: cpu_coverage
+ 2/14 Test  #2: cpu_coverage .....................   Passed    0.08 sec
+      Start  3: cpu_cycles_6502
+ 3/14 Test  #3: cpu_cycles_6502 ..................   Passed    0.05 sec
+      Start  4: cpu_cycles_65816
+ 4/14 Test  #4: cpu_cycles_65816 .................   Passed    0.06 sec
+      Start  5: cpu_cycles_65c02
+ 5/14 Test  #5: cpu_cycles_65c02 .................   Passed    0.02 sec
+      Start  6: via_6522_t6
+ 6/14 Test  #6: via_6522_t6 ......................   Passed    0.04 sec
+      Start  7: via_6522_t7
+ 7/14 Test  #7: via_6522_t7 ......................   Passed    0.02 sec
+      Start  8: via_6522_t8
+ 8/14 Test  #8: via_6522_t8 ......................   Passed    0.01 sec
+      Start  9: via_6522_t9
+ 9/14 Test  #9: via_6522_t9 ......................   Passed    0.02 sec
+      Start 10: diskid_apm
+10/14 Test #10: diskid_apm .......................   Passed    0.07 sec
+      Start 11: systemconfigtest
+11/14 Test #11: systemconfigtest .................   Passed    0.21 sec
+      Start 12: ssgputexttest
+12/14 Test #12: ssgputexttest ....................   Passed    0.04 sec
+      Start 13: snapshot_diff
+13/14 Test #13: snapshot_diff ....................   Passed    0.02 sec
+      Start 14: interface_contract
+14/14 Test #14: interface_contract ...............   Passed    0.11 sec
+
+100% tests passed out of 14
+
+Total Test time (real) =   0.97 sec
+SUITE END gssquared ctest (offline)
+
+##### rail parity (offline) ####################################
+SUITE START rail parity (offline)
+
+railparity: 161 rail(s) read by src/, 161 declared in the registry
+
+carve-outs this PASS does not cover:
+  record contract  a2gspu_coverage.hpp    A2COV1/A2COV2 and a2profile-v1 are standalone coverage artifacts, not NDJSON rail events; profile.py validates the JSON document
+  record contract  a2gspu_ctrl_json.hpp   the CTRL reply envelope is protocol, not a rail record
+  record contract  a2record.hpp           the writer itself
+  record contract  wiz5_config.hpp        title-specific streams (WIZ5_EC19_OUT, WIZ5_DISKWR_OUT, WIZ5_CSP6_OUT) predate the contract, and all three build their records piecemeal; they convert when their readers do
+  rail catalogue   (none)                every declared rail is described
+
+railparity: PASS - every rail the code reads is discoverable, every declared rail
+                   exists and has a row of its own under its registry family in
+                   Docs/A2GSPU_RAILS.md with a whole synopsis, no non-exempt file
+                   prints a JSON record or writes to any of the 15 rail sinks itself,
+                   all 28 declared readers and all 70 live-settable rails are registered
+                   by their rails, and all 74 CTRL verbs are both dispatched and listed.
+SUITE END rail parity (offline)
+
+##### railcheck (IIe / platform 3) #############################
+SUITE START railcheck (IIe / platform 3)
+=== RAIL SELF-TEST =============================================
+  every verb challenged by an observation the verb does not control
+
+=== platform 3: Apple IIe Enhanced =============================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\GSSquared.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail\railcheck-p3
+log:       D:\gsqs\tmp\a2rail\railcheck-p3\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  session                Apple IIe Enhanced, pid 48176
+  PASS  poke -> read           $6000 = A9
+  PASS  poke -> EXECUTED       $7000 = 34 after LDA #$34 / STA $7000
+  PASS  setreg -> cpu          A register reads back
+  PASS  run-until              stopped at the requested PC
+  PASS  run-until cycles       non-zero in-command delta
+  PASS  load -> read           4 bytes landed
+  PASS  dis refuses bad args   no filename -> FAIL, not a file named after the address
+  PASS  dis writes a listing   with addr, count and path
+  PASS  save/restore           11 -> 99 -> 11
+  PASS  vram sees the screen   16384 bytes, main $2000 = 7E 7E
+  PASS  boots a real disk      text page shows the ROM banner after a floppy boot -- DOS3.3_MASTER.dsk
+  PASS  reset                  
+
+ALL GREEN -- 13 rail checks
+SUITE END railcheck (IIe / platform 3)
+
+##### railcheck (IIgs / platform 5) ############################
+SUITE START railcheck (IIgs / platform 5)
+=== RAIL SELF-TEST =============================================
+  every verb challenged by an observation the verb does not control
+
+=== platform 5: Apple IIgs =====================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\GSSquared.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail\railcheck-p5
+log:       D:\gsqs\tmp\a2rail\railcheck-p5\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+  PASS  session                Apple IIgs, pid 74500
+  PASS  poke -> read           $6000 = A9
+  PASS  poke -> EXECUTED       $7000 = 34 after LDA #$34 / STA $7000
+  PASS  setreg -> cpu          A register reads back
+  PASS  run-until              stopped at the requested PC
+  PASS  run-until cycles       non-zero in-command delta
+  PASS  load -> read           4 bytes landed
+  PASS  dis refuses bad args   no filename -> FAIL, not a file named after the address
+  PASS  dis writes a listing   with addr, count and path
+  PASS  save/restore           11 -> 99 -> 11
+  PASS  shr renders            160 pixels lit changed the count by 160
+  PASS  vram sees the screen   16384 bytes, main $2000 = 7E 7E
+  PASS  boots a real disk      text page shows the ROM banner after a floppy boot -- DOS3.3_MASTER.dsk
+  PASS  reset                  
+
+ALL GREEN -- 14 rail checks
+SUITE END railcheck (IIgs / platform 5)
+
+##### exec control (IIe) #######################################
+SUITE START exec control (IIe)
+
+=== EXEC CONTROL -- platform 3 =================================
+Session directory records a live pid; choose a fresh directory: D:\gsqs\tmp\a2rail\exec-p3
+
+=== GATE personality ===========================================
+runtime ucrt: C:\msys64\ucrt64\bin
+  PASS c0  p0 Apple II                                1584ms
+  PASS c1  p1 Apple II Plus                           1667ms
+  PASS c2  p2 Apple IIe                               1525ms
+  PASS c3  p3 Apple IIe Enhanced                      1591ms
+  PASS c4  p3 Apple IIe Enhanced w/Mouse              1591ms
+  PASS c5  p3 Apple IIe Enhanced Dual Mockingboard    1531ms
+  PASS c6  p4 Apple IIe 65816 w/Mouse                 1593ms
+  PASS c7  p3 Apple IIe Enhanced PAL                  1519ms
+  PASS c8  p5 Apple IIgs                              1908ms
+  PASS c9  p5 Apple IIgs / Disk II                    1843ms
+  PASS c10 p5 Apple IIgs + A2GSPU                     1849ms
+  PASS c11 p5 Apple IIgs + Uthernet II                1912ms
+  PASS c12 p5 Apple IIgs ROM 4 Mark Twain             1914ms
+  PASS c13 p5 Apple IIgs ROM 3 Tenspeed               1890ms
+  PASS c14 p3 Apple IIe Enhanced + Thunderclock       1461ms
+  PASS c15 p5 Apple IIgs + A2GSPU + Mouse             1869ms
+  PASS c16 p6 Apple IIgs (ROM 3), upstream platform   1903ms
+report: D:\gsqs\tmp\a2rail-personalities\personality-results.json
+ALL GREEN -- 17 of 17 built-in Apple II machine personalities
+
+=== GATE protocol ==============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\GSSquared.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail-protocol-58caab52a26c49da984c126858d2c583
+log:       D:\gsqs\tmp\a2rail-protocol-58caab52a26c49da984c126858d2c583\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+ALL GREEN -- protocol/discovery(7 platforms, 17 configs)/json/ownership/SHR differential
+
+=== GATE copilot ===============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+ALL GREEN -- windowed agent observe+control and live observation arming; poke and halting rails refused
+
+=== GATE assertparity ==========================================
+
+=== ASSERT PARITY -- platform 5 ================================
+runtime ucrt: C:\msys64\ucrt64\bin
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\GSSquared.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail-assertparity
+log:       D:\gsqs\tmp\a2rail-assertparity\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+  PASS  AGREE  peek:FFFA62 >= 0d0                env=PASS ctrl=PASS -- every byte is >= 0 -- operator >=, which CTRL did not have
+  PASS  EXPECT peek:FFFA62 >= 0d0                want=PASS got=PASS :: [2] assert peek:FFFA62 >= 0d0
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  AGREE  peek:FFFA62 <= 0d255              env=PASS ctrl=PASS -- every byte is <= 255 -- operator <=
+  PASS  EXPECT peek:FFFA62 <= 0d255              want=PASS got=PASS :: [3] assert peek:FFFA62 <= 0d255
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  AGREE  peek:FFFA62 < 0d0                 env=FAIL ctrl=FAIL -- no byte is < 0 -- a FAIL that is not an UNEVAL
+  PASS  EXPECT peek:FFFA62 < 0d0                 want=FAIL got=FAIL :: [4] assert peek:FFFA62 < 0d0
+     -> status=FAIL assert pass=0 fail=1 path=probe_peek FAIL peek:FFFA62 < $0 (0) (actual=$A9 (169))
+  PASS  AGREE  peek:FFFA62 != 0d999              env=PASS ctrl=PASS -- operator !=
+  PASS  EXPECT peek:FFFA62 != 0d999              want=PASS got=PASS :: [5] assert peek:FFFA62 != 0d999
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  AGREE  peek:FFFA62 == 22                 env=UNEVAL ctrl=UNEVAL -- ambiguous base: 22 or $22? refuse, do not guess
+  PASS  EXPECT peek:FFFA62 == 22                 want=UNEVAL got=UNEVAL :: [6] assert peek:FFFA62 == 22
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'peek:FFFA62 == 22' ambiguous base: write $22 or 0d22
+  PASS  AGREE  peek:00C029 == $EE                env=UNEVAL ctrl=UNEVAL -- handler-backed page -- CTRL used to PASS this on floating bus
+  PASS  EXPECT peek:00C029 == $EE                want=UNEVAL got=UNEVAL :: [7] assert peek:00C029 == $EE
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'peek:00C029 == $EE (238)' UNEVALUATED (see log)
+  PASS  AGREE  no_such_field == 0d1              env=UNEVAL ctrl=UNEVAL -- unknown field must not compare as a sentinel
+  PASS  EXPECT no_such_field == 0d1              want=UNEVAL got=UNEVAL :: [8] assert no_such_field == 0d1
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'no_such_field == $1 (1)' UNEVALUATED (see log)
+  PASS  AGREE  qd_carry = 0d0                    env=UNEVAL ctrl=UNEVAL -- single-= typo: a dropped clause is not a passed clause
+  PASS  EXPECT qd_carry = 0d0                    want=UNEVAL got=UNEVAL :: [9] assert qd_carry = 0d0
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'qd_carry = 0d0' has no comparison operator (== != <= >= < >)
+  PASS  AGREE  qd_carry == 0d0                   env=UNEVAL ctrl=UNEVAL -- QDStartUp never fired in either run -- no result to compare
+  PASS  EXPECT qd_carry == 0d0                   want=UNEVAL got=UNEVAL :: [10] assert qd_carry == 0d0
+     -> status=FAIL assert-unevaluated n=1 pass=0 fail=0 path=probe_peek 'qd_carry == $0 (0)' UNEVALUATED (see log)
+  PASS  AGREE  gsos_err == 0d0                   env=PASS ctrl=PASS -- no GS/OS error on either surface; a non-peek field CTRL could not even parse
+  PASS  EXPECT gsos_err == 0d0                   want=PASS got=PASS :: [11] assert gsos_err == 0d0
+     -> status=PASS assert pass=1 fail=0 path=probe_peek
+  PASS  both printed the observed byte           env='$A9 (169)' ctrl='$A9 (169)'
+  PASS  SAME byte, SAME base, SAME text          env='$A9 (169)' ctrl='$A9 (169)' -- one rail must not print two bases
+  PASS  nonzero: spike computes it               env=PASS
+  PASS  nonzero: live rail refuses               ctrl=UNEVAL -- must not invent an SHR statistic
+
+ALL GREEN -- 24 assert-parity checks
+
+=== GATE unarmedhash ===========================================
+runtime ucrt: C:\msys64\ucrt64\bin
+
+=== UNARMED HASH / OBSERVE-DON'T-DISTURB ====================
+exe: D:/gsqs/tracein-20261017/build/GSSquared.exe
+  PASS  iigs-rom: unarmed run completed              rc=0 status=OK
+  PASS  iigs-rom: armed run completed                rc=0 status=OK
+  PASS  iigs-rom: armed == unarmed (hash)            unarmed=6D9886E3B3EE0383 armed=6D9886E3B3EE0383
+  PASS  iigs-rom: armed == unarmed (cycles)          unarmed=6236744 armed=6236744
+  PASS  iigs-rom: armed == unarmed (run)             unarmed=800AEA5075763504 armed=800AEA5075763504
+  PASS  iigs-rom: armed rails all recorded           8 sinks
+  PASS  iigs-rom: SCC_A bound and accounted          capture bytes match close-out (zero allowed)
+  PASS  iigs-rom: SCC_B bound and accounted          capture bytes match close-out (zero allowed)
+  PASS  iigs-rom: WDM_CONSOLE bound and accounted    capture bytes match close-out (zero allowed)
+  PASS  iigs-rom: trap records carry names           RESET
+  PASS  iigs-rom: unarmed == baseline (hash)         baseline=6D9886E3B3EE0383 now=6D9886E3B3EE0383
+  PASS  iigs-rom: unarmed == baseline (cycles)       baseline=6236744 now=6236744
+  PASS  iigs-rom: unarmed == baseline (run)          baseline=800AEA5075763504 now=800AEA5075763504
+  PASS  iie-rom: unarmed run completed               rc=0 status=OK
+  PASS  iie-rom: armed run completed                 rc=0 status=OK
+  PASS  iie-rom: armed == unarmed (hash)             unarmed=92F1E19D6FE2A383 armed=92F1E19D6FE2A383
+  PASS  iie-rom: armed == unarmed (cycles)           unarmed=2043601 armed=2043601
+  PASS  iie-rom: armed == unarmed (run)              unarmed=9D45F479767B943C armed=9D45F479767B943C
+  PASS  iie-rom: armed rails all recorded            7 sinks
+  PASS  iie-rom: trap records carry names            RESET
+  PASS  iie-rom: unarmed == baseline (hash)          baseline=92F1E19D6FE2A383 now=92F1E19D6FE2A383
+  PASS  iie-rom: unarmed == baseline (cycles)        baseline=2043601 now=2043601
+  PASS  iie-rom: unarmed == baseline (run)           baseline=9D45F479767B943C now=9D45F479767B943C
+  PASS  iigs-gsos601: unarmed run completed          rc=0 status=OK
+  PASS  iigs-gsos601: armed run completed            rc=0 status=OK
+  PASS  iigs-gsos601: armed == unarmed (hash)        unarmed=D29F204D690D417F armed=D29F204D690D417F
+  PASS  iigs-gsos601: armed == unarmed (cycles)      unarmed=10647413 armed=10647413
+  PASS  iigs-gsos601: armed == unarmed (run)         unarmed=9CFCBEBB3B604B4E armed=9CFCBEBB3B604B4E
+  PASS  iigs-gsos601: armed rails all recorded       8 sinks
+  PASS  iigs-gsos601: SCC_A bound and accounted      capture bytes match close-out (zero allowed)
+  PASS  iigs-gsos601: SCC_B bound and accounted      capture bytes match close-out (zero allowed)
+  PASS  iigs-gsos601: WDM_CONSOLE bound and accounted capture bytes match close-out (zero allowed)
+  PASS  iigs-gsos601: trap records carry names       RESET SystemLoader. GSOS.SystemDispatchTable+ GSOS.Dispatcher+
+  PASS  iigs-gsos601: load map names the drivers     9 loads, AppleDisk3.5 AppleDisk5.25 Console.Driver Char.FST
+  PASS  iigs-gsos601: unarmed == baseline (hash)     baseline=D29F204D690D417F now=D29F204D690D417F
+  PASS  iigs-gsos601: unarmed == baseline (cycles)   baseline=10647413 now=10647413
+  PASS  iigs-gsos601: unarmed == baseline (run)      baseline=9CFCBEBB3B604B4E now=9CFCBEBB3B604B4E
+  PASS  iigs-finder: unarmed run completed           rc=0 status=OK
+  PASS  iigs-finder: the boot did not crash          GSDIAG status=OK
+  PASS  iigs-finder: unarmed == baseline (hash)      baseline=2E304BF0147B220A now=2E304BF0147B220A
+  PASS  iigs-finder: unarmed == baseline (cycles)    baseline=22377216 now=22377216
+  PASS  iigs-finder: unarmed == baseline (run)       baseline=994DCC2DF8B6A75A now=994DCC2DF8B6A75A
+
+ALL GREEN -- 42 checks over 4 boot(s), unarmed (and armed where the row asks)
+
+=== GATE hwtruth ===============================================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\GSSquared.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail-hwtruth-gate\rail
+log:       D:\gsqs\tmp\a2rail-hwtruth-gate\rail\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0129 P=34 E=1 HALT=0 STP=0 RDY=0 KBD=00 AKD=0 kbd_src=adb-latch
+hwtruth: finished after about 180 frames; results page saved to D:\gsqs\tmp\a2rail-hwtruth-gate\page.bin
+  PASS  $C02D bit 6 deselects the IWM: YES: bit 6 set takes $C0E0-$C0EF away from the IWM
+  PASS  IWM data register reads all ones with the motor off: YES
+  PASS  bank $E0 follows RAMWRT: YES
+  PASS  bank $E0 follows RAMRD: YES
+  PASS  Mega II VBL flag latches while disabled: NO
+  PASS  Mega II quarter-second flag latches while disabled: NO
+  PASS  sanity: flags set when enabled: yes
+  PASS  reading $C02E/$C02F clears a pending scan-line interrupt: NO
+  PASS  sanity: $C032 clears it: yes
+  PASS  $C011-$C01F as read (bit 7 is the switch; bits 0-6 are the question): recorded
+  PASS  buttons 0-2 ($C061-$C063): up up up
+  PASS  paddles 0-3 timers: counted counted zero zero
+  PASS  MVN with x=1 across $00FF: 16-bit stepping (read $0100/$0101)
+  PASS  MVP with x=1 across $0000: 16-bit stepping (read $FFFF/$FFFE)
+  PASS  unpopulated bank reads ($D0:1234, $D0:5678, $80:1234): bank number
+  PASS  machine: IDRoutine carry clear (IIgs), ROM version Y=$01; $C036=$84
+  PASS  IWM odd addresses drive nothing (status selected): YES: an odd address read something other than the status register
+  PASS  IWM even read with Q6 and Q7 on: $FF
+  PASS  IWM handshake bits 0-5 read ones: YES
+  PASS  IWM handshake bit 6 outside the write state: 0
+  PASS  RTC transfer: $C034 reads until bit 7 clears: write 2, read 2
+  PASS  RTC z010ab01 reaches BRAM $10-$13: YES
+  PASS  RTC z1abcd01 reaches BRAM $00-$0F: YES
+  PASS  the 65816's invalid-address cycle (VDA=VPA=0) reaches I/O: YES
+hwtruth gate: all 24 verdicts unchanged
+
+=== GATE mbaudit ===============================================
+
+=== MB-AUDIT (Mockingboard 6522 + AY, two cards) ===================
+runtime ucrt: C:\msys64\ucrt64\bin
+toolpin GSSquared: D:\gsqs\tracein-20261017\build\GSSquared.exe | git ? | mtime 2026-10-17 00:27:31
+CTRL rail: D:\gsqs\tmp\a2rail-mbaudit-gate
+log:       D:\gsqs\tmp\a2rail-mbaudit-gate\session.log
+waiting for the rail to come up...
+rail is up, CPU paused at:
+  status=OK cpu PC=00:FA62 A=00 X=00 Y=00 SP=0029 P=04 E=0 HALT=0 STP=0 RDY=0 KBD=41 AKD=0 kbd_src=module
+  PASS  MB-Audit: All tests passed (total=$000782) (Ctrl-Reset prompts answered: 2)
+
+=== GATES MATRIX ===============================================
+  PASS     railparity        2.2s  
+  PASS     artifacts         0.2s  
+  PASS     gdiff             0.2s  
+  PASS     buscompare        0.6s  
+  PASS     bisect           56.8s  
+  PASS     agentic         217.3s  
+  FAIL     dualsmoke        11.6s  
+  PASS     personality      29.3s  
+  PASS     protocol          3.5s  
+  PASS     copilot           3.9s  
+  PASS     assertparity     13.4s  
+  PASS     unarmedhash      81.3s  
+  PASS     hwtruth           6.2s  
+  PASS     mbaudit           8.6s  
+report: D:/gsqs/tracein-20261017/gates.ndjson
+1 of 14 gate(s) FAILED: dualsmoke

@@ -1,0 +1,44 @@
+{
+  "source_commit": "df5be98fe57a488087d059d5efa97bc2a9f94a06",
+  "source_model": "exact committed Git export; no working-tree overlays",
+  "vendored_snapshot": {
+    "sha256": "f270afdb4c093769509a3dc278cfe7b7df5fad3e9372ac689488e3cd1a47d647",
+    "files": 7459
+  },
+  "dependency_origin": "unchanged verified publication export",
+  "local_inputs": {
+    "assets/roms/apple2gs3/main.rom": {
+      "sha256": "4e606469961649381216b2a61334ccb29af4da90c630df19214b08ff7fdb9bc5",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs3/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "assets/roms/apple2gs4/main.rom": {
+      "sha256": "565d8ca073e5c46367ca56d4b12827020e76e6a0bf6c2300da0989161aa34ad9",
+      "bytes": 262144
+    },
+    "assets/roms/apple2gs4/char.rom": {
+      "sha256": "6fb2799866a261ba0e84cff83de5494445da10e601e093d6681699238b179181",
+      "bytes": 16384
+    },
+    "corpus/DOS3.3_MASTER.dsk": {
+      "sha256": "eac550ddb65ef9b8ae34f6fe3523ec6572a5672e7ae07becc950acfdd185dbb1",
+      "bytes": 143360
+    },
+    "corpus/gsos601.po": {
+      "sha256": "ae7ca90bab81f379c9ff5770d50565e0cbec4f9b633872c2119282e4a0e2778e",
+      "bytes": 33554432
+    },
+    "corpus/_finder.po": {
+      "sha256": "4f440bacbdbe8a0180479c7ebac853d41f2777042cb46343f2f14322c31b024e",
+      "bytes": 33553920
+    },
+    "corpus/mb-audit-v1.61.po": {
+      "sha256": "d1d94dd3d1254dc46c5aa3c943c9d67cd3cc77a199df5c6738ee3c78a7a38f8a",
+      "bytes": 143360
+    }
+  },
+  "protected_consumer_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e"
+}

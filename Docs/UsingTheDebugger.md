@@ -293,8 +293,10 @@ file, and successful close does not guarantee power-loss durability.
 For offline decoding, run `gstrace [-l labels.lbl] 6502|65c02|65816 trace.bin`.
 It reads raw binary records and prints only the loaded entries, in file order.
 An empty file prints no trace rows. Requested label files retain the existing
-label-count summary. Missing files, partial records, read/close errors and
-inputs above 99,999 records refuse with exit 2; invalid command syntax exits 1.
+label-count summary. Missing raw trace files, partial records, raw read/close
+errors and inputs above 99,999 records refuse with exit 2; invalid command
+syntax exits 1. Label text parsing retains its existing permissive behavior;
+only its open failure is checked here.
 The 100,000-slot ring reserves one slot. A failed load preserves the previous
 trace in memory, and successful loading supports subsequent append/export.
 The CLI also checks stdout write/finalization errors. Headerless raw records

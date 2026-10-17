@@ -1,0 +1,58 @@
+{
+  "schema": "gssquared-trace-input-validation-v1",
+  "source_commit": "df5be98fe57a488087d059d5efa97bc2a9f94a06",
+  "source_model": "exact committed Git export; no working-tree overlays",
+  "implementation_matches_frozen_export": true,
+  "implementation_sha256": {
+    "src/debugger/trace.cpp": "2ee8958f72dfe2a3724bf31bb7143267c73670192735255a2c5c7143faf4a124",
+    "src/debugger/trace.hpp": "f81e1a7b6babdfcf7d965fed300baeb94113e8c6d379481c5a9f3c1955dae49e",
+    "apps/gstrace/main.cpp": "6813fab4e706ec2187a8da9bb2cc15599cc497df6f183d6d1d296ecd3e0e1cde",
+    "apps/interfacecontracttest/main.cpp": "97ef3c8314b0ea6af0b57c2b399b2549334ccc56127b42ce35bfd6fe94ca5453",
+    "apps/interfacecontracttest/trace_input_checks.hpp": "04d6352c6d77cc298de65042cc779d3a3f974cab2698856b92c01a88c50d044b",
+    "tools/a2rail/gates.ps1": "e8a432cbab84ceae91e7706f7a3ab6da9e05fc622f5e2a0e68e1ba8dedda54f6",
+    "tools/a2rail/traceinputcheck.py": "0ee6a2a8e4a7f2925ec3c550261f1f09909a70db5ad6e1557eb844f3f596a80e"
+  },
+  "native_executable": "D:\\gsqs\\tracein-20261017\\build\\GSSquared.exe",
+  "native_sha256": "b18e3db38d1e18f4fd4e3d54216c08528a2de93c0d5d09c5c5887f78ad383923",
+  "gstrace_sha256": "1bb2845a6f7231364bc55714acce729d77ca8a741ea5085b591e263d5e3af7e4",
+  "protected_consumer_replaced": false,
+  "protected_consumer_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+  "gates": 14,
+  "native_ctests": 14,
+  "unchanged_pinned_boot_checks": 42,
+  "python_tests": 26,
+  "new_trace_input_checks": 29,
+  "total_io_contract_checks": 141,
+  "new_gate_integrated_cli_checks": 21,
+  "baseline_cli_defects_reproduced": 7,
+  "baseline_reader_corruption_reproduced": true,
+  "candidate_reader_exact_bytes_and_count": true,
+  "mcp_launches": 2,
+  "native_verbs": 74,
+  "mcp_tools": 85,
+  "rails": 161,
+  "wire_types": 32,
+  "stock_windowed_manual_test": "not exercised",
+  "hardware_validation": "not performed",
+  "raw_record_limits": [
+    "host struct layout; caller-selected CPU",
+    "maximum size-1 records",
+    "cannot detect missing whole records, wrong same-sized layout or concurrent writer"
+  ],
+  "remaining_io_audit": [
+    "monitor save/load",
+    "symbol-file read/close",
+    "device-private serializers",
+    "asynchronous UI/media flows"
+  ],
+  "baseline_stdout_policy": "Uninitialized decoded slot content discarded; only exit codes and row counts retained.",
+  "initial_gate_attempt": {
+    "passed": 13,
+    "failed_suite": "dualsmoke",
+    "reason": "reused global scratch directory records a live PID; guard refused before exec-control session",
+    "inspection": "Recorded PID no longer live by read-only inspection; no process changed or terminated. PID reuse is plausible, not proven.",
+    "resolution": "Repeat the full unchanged candidate with phase-private TEMP/TMP/TMPDIR and A2RAIL_DIR.",
+    "final_temp_root": "D:\\gsqs\\tracein-20261017\\tmp",
+    "final_rail_root": "D:\\gsqs\\tracein-20261017\\a2rail"
+  }
+}

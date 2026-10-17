@@ -1,0 +1,138 @@
+{
+  "schema": "gssquared-trace-input-publication-review-v1",
+  "status": "PASS",
+  "code_commit": "df5be98fe57a488087d059d5efa97bc2a9f94a06",
+  "selected_files": {
+    "Docs/AGENTIC_ROADMAP.md": "520279b1776189f67e9ebd4966d65317e207b42d345a8126d445b478e06df0e9",
+    "Docs/HANDOFF.md": "42e6ea78fb83618b41b2324f213ea72687b8bb5e6fe0d2fd462d769106ea2235",
+    "Docs/UsingTheDebugger.md": "5bbe58382acc45712cab6454e7432a5a56a812340c5f30fd78f7ce0b4668dbb0",
+    "Docs/reports/gssquared-trace-input-20261017/README.md": "bc91316f2814694f4a69a88f110c8c3574b23c8de556e29e1acd26ecfb0df645",
+    "Docs/reports/gssquared-trace-input-20261017/baseline-check.log": "802d08adf64dfad090b2d53e4157a0ac3b3525c6bf4b16f39897039e771a7b68",
+    "Docs/reports/gssquared-trace-input-20261017/baseline-check.py": "7a290bad4bf82ba650714bded3a87addbdb636d597590661dd6d1025b5e61ddc",
+    "Docs/reports/gssquared-trace-input-20261017/baseline-checks.json": "1a974c8cf9f2ccc71841fc200046db2f51c53e7b5cd643084367baefb3abf7d8",
+    "Docs/reports/gssquared-trace-input-20261017/baseline-reader.log": "12e01bc8bb1e972c048fcb06ff39bef7da1e48b596ee624da150afa48326d7d1",
+    "Docs/reports/gssquared-trace-input-20261017/build-inputs.json": "53b8f69e2230573fca821e977480613a3bd30b4d0766890a920f3a8cca5554f8",
+    "Docs/reports/gssquared-trace-input-20261017/build-transcript.log": "8d6bfd43e0943fccb4303eb538422de16ec8d9aeb88f33a0e078e2bdf7fdfd97",
+    "Docs/reports/gssquared-trace-input-20261017/candidate-reader-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "Docs/reports/gssquared-trace-input-20261017/candidate-reader.log": "8ce0b5c1cef364bbf1c5f9c38f87d8692b6144b19589ba9b0db459e0fdbcce19",
+    "Docs/reports/gssquared-trace-input-20261017/configure.log": "f23b9d72cec9ad1794aec692ee87560fe1fcaa7372405ac069a0872d8670df43",
+    "Docs/reports/gssquared-trace-input-20261017/gates.log": "602ec671fe93172fd88594fdc7c5a2b6202f78b98da71e4c26d5a133057dab30",
+    "Docs/reports/gssquared-trace-input-20261017/gates.ndjson": "c69e85038e11d8af54bed4812986055b35747f19c57c79d3e17335c64286ddfa",
+    "Docs/reports/gssquared-trace-input-20261017/initial-failed-gates.log": "16554bec612e7a091ee6f2b7282345bb6c4a8794c9680315e315d8267a461845",
+    "Docs/reports/gssquared-trace-input-20261017/initial-failed-gates.ndjson": "f5c86aef91b63c4d1d49ccfa97a53cea5cf7462bfba168f58aa3a4b58a7648ce",
+    "Docs/reports/gssquared-trace-input-20261017/initial-native-tests.log": "e6f6a5e7bb89090ff5ce6e62b121452444d98e07098bc0b54c3b204e01c45b2e",
+    "Docs/reports/gssquared-trace-input-20261017/input_fixture.cpp": "432546f07020e727ba2f84d9a35c6f18818a64b7a7b725f73509825cb5a75e5a",
+    "Docs/reports/gssquared-trace-input-20261017/launch-proof.json": "b8ec28cddb4b7047693640e9c6ece2c74c69762a727ba61e2186c4671437dea3",
+    "Docs/reports/gssquared-trace-input-20261017/launch-proof.log": "8afcc6b3d9a3c06c5fcc5963e3fa9a8176fc3bc30552af77a43da3d4a782f012",
+    "Docs/reports/gssquared-trace-input-20261017/mcp-launch.json": "480c868b827708c06e938c7b61a19b8c9e08a342f6e845f439e66a96c2636835",
+    "Docs/reports/gssquared-trace-input-20261017/native-tests.log": "eff584a1b9a3640fa3c5226d6c827971e05ab18ba39fed1da7c57b64d1519238",
+    "Docs/reports/gssquared-trace-input-20261017/prepare.log": "ae012a1e9c9031d92a479f4cd45760067da43e3a713ea5ece3a66a02857a02a1",
+    "Docs/reports/gssquared-trace-input-20261017/python-tests.log": "87ad552a80fa8219ff19741747d10d0c84c09854c138456034d79a114aedd082",
+    "Docs/reports/gssquared-trace-input-20261017/refusal-inspection.json": "755537d07849604d1b1797868ee59eb5ddec2eb8b6dd3b7ce1e531cf4c559a73",
+    "Docs/reports/gssquared-trace-input-20261017/validation.json": "5471bca44e86546fe0f63c3ded35432450227394c669fa3ee8665d5a5e4796fd",
+    "apps/gstrace/main.cpp": "6813fab4e706ec2187a8da9bb2cc15599cc497df6f183d6d1d296ecd3e0e1cde",
+    "apps/interfacecontracttest/main.cpp": "97ef3c8314b0ea6af0b57c2b399b2549334ccc56127b42ce35bfd6fe94ca5453",
+    "apps/interfacecontracttest/trace_input_checks.hpp": "04d6352c6d77cc298de65042cc779d3a3f974cab2698856b92c01a88c50d044b",
+    "src/debugger/trace.cpp": "2ee8958f72dfe2a3724bf31bb7143267c73670192735255a2c5c7143faf4a124",
+    "src/debugger/trace.hpp": "f81e1a7b6babdfcf7d965fed300baeb94113e8c6d379481c5a9f3c1955dae49e",
+    "tools/a2rail/gates.ps1": "e8a432cbab84ceae91e7706f7a3ab6da9e05fc622f5e2a0e68e1ba8dedda54f6",
+    "tools/a2rail/traceinputcheck.py": "0ee6a2a8e4a7f2925ec3c550261f1f09909a70db5ad6e1557eb844f3f596a80e"
+  },
+  "selected_file_count": 34,
+  "local_links": [
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "gs2debug.md"
+    },
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "Debugger.md"
+    },
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "DebugProtocol.md"
+    },
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "gs2debug.md"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "validation.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "build-inputs.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "build-transcript.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "gates.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "gates.ndjson"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "native-tests.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "python-tests.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "baseline-checks.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "baseline-check.py"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "baseline-reader.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "candidate-reader.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "input_fixture.cpp"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "mcp-launch.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "launch-proof.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "initial-failed-gates.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "refusal-inspection.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "initial-failed-gates.ndjson"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-input-20261017/README.md",
+      "target": "initial-native-tests.log"
+    }
+  ],
+  "credential_matches": 0,
+  "new_binary_artifacts": 0,
+  "identity_exclusion": "publication-review.json itself; avoid a circular digest",
+  "transcript_policy": "Raw logs/JSON retained byte-for-byte, including CRLF. Authored code and Markdown get whitespace checks; JSON/NDJSON parse separately.",
+  "readme_assessment": "Capabilities, interface counts and build/launch recipes remain current. Detailed offline decoding and input/error behavior updated in UsingTheDebugger.md.",
+  "scope": "checked legacy trace input/CLI and integrated regressions; no upstream push, drift, model merge or protected consumer replacement"
+}

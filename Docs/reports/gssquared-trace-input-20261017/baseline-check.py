@@ -4,6 +4,8 @@ import json
 import subprocess
 
 repo=Path('D:/gsqs/traceio-20261017/src');root=Path('D:/gsqs/tracein-20261017')
+expected='db868e65c881a933b4f40033b3240d6987ba0d47'
+assert subprocess.run(['git','-C',str(repo),'rev-parse','HEAD'],capture_output=True,check=True).stdout.decode().strip()==expected
 exe=root/'baseline-fixture.exe'
 command=['g++','-std=c++17','-I',str(repo/'src'),str(Path('D:/projects/gssquared-fork/Docs/reports/gssquared-trace-input-20261017/input_fixture.cpp')),
          str(repo/'src/debugger/trace.cpp'),str(repo/'src/debugger/trace_opcodes.cpp'),'-o',str(exe)]
@@ -25,7 +27,10 @@ for name,args in [('valid',['65816',str(fixtures/'valid.bin')]),('empty',['65816
     # Never retain uninitialized decoded host memory from the baseline.
     rows.append({'case':name,'exit_code':result.returncode,'stdout_lines':count,
                  'defect_reproduced':True,'stdout_retained':False})
-record={'source_commit':'db868e65c881a933b4f40033b3240d6987ba0d47',
+record={'source_commit':expected,
+        'reader_source_sha256':{name:hashlib.sha256((repo/name).read_bytes()).hexdigest() for name in
+                                ('src/debugger/trace.cpp','src/debugger/trace.hpp','src/debugger/trace_opcodes.cpp')},
+        'fixture_sha256':hashlib.sha256(Path(command[4]).read_bytes()).hexdigest(),
         'baseline_cli':str(cli),'baseline_cli_sha256':hashlib.sha256(cli.read_bytes()).hexdigest(),
         'fixture_compile_argv':command,'checks':rows,
         'privacy':'Only row counts retained; baseline decodes uninitialized slots.'}

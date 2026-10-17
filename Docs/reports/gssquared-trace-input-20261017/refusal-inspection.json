@@ -1,0 +1,11 @@
+{
+  "schema": "gssquared-scratch-refusal-inspection-v1",
+  "recorded_executable": "D:\\gsqs\\traceio-20261017\\build\\GSSquared.exe",
+  "recorded_pid": 36708,
+  "inspected_utc": "2026-10-17T05:36:03.2470496Z",
+  "pid_currently_live": false,
+  "current_executable_matches_receipt": false,
+  "current_start_matches_receipt": false,
+  "process_modified_or_terminated": false,
+  "scope": "Read-only identity inspection after the refusal; unrelated process details omitted"
+}
