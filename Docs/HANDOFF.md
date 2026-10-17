@@ -26,7 +26,10 @@ Exact hashes, tested descriptor and scratch-space maintenance:
 now preserve binary bytes on Windows and check open/write/flush/close. Twenty
 focused native cases pass; the same real-stdio fixture reproduces the old
 40-to-43-byte alteration and silent failed-open success.
-Full trace candidate validation and publication are pending for this local checkpoint.
+Fresh exported Release: 14/14 gates, 14/14 native CTests, 26 Python tests,
+112 I/O contract checks (20 new), 42 unchanged boots and two MCP launches.
+Protected consumer unchanged; tested candidate:
+`D:\gsqs\traceio-20261017\build\GSSquared.exe`.
 Evidence: `reports/gssquared-trace-io-20261017/README.md`.
 The next audit is legacy trace reading/`gstrace` and monitor save/load, then
 device-private serializers and asynchronous UI/media output.

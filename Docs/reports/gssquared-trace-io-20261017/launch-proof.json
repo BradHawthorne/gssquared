@@ -1,0 +1,67 @@
+{
+  "ok": true,
+  "owners": [
+    {
+      "schema": "a2mcp-session-v1",
+      "owned": true,
+      "pid": 77308,
+      "closed": true,
+      "exit_code": 0,
+      "executable": "D:\\gsqs\\traceio-20261017\\build\\GSSquared.exe",
+      "executable_sha256": "8c711013426771a1ab7b69eaf422071480815cd6c11fdcc635589bba7dfcb12d",
+      "identity_model": "SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule",
+      "requested_rails": {},
+      "startup_proof": {
+        "schema": "a2agent-mode-v1",
+        "enabled": true,
+        "bootstrap_complete": true,
+        "model": "shared-CTRL-instrument-bootstrap; paused socket ownership"
+      },
+      "artifact_root": "D:\\gsqs\\traceio-20261017\\mcp-runs\\mcp-7d23458d4d9148199588e2bc280e888d",
+      "read_only_media_launch": true,
+      "shutdown": {
+        "schema": "a2mcp-shutdown-v1",
+        "owned": true,
+        "pending_request": null,
+        "effects_unknown": false,
+        "quit_attempted": false,
+        "quit_acknowledged": true,
+        "transport_closed": true,
+        "forced_termination": false,
+        "outcome": "owned-exited",
+        "errors": []
+      }
+    },
+    {
+      "schema": "a2mcp-session-v1",
+      "owned": true,
+      "pid": 81696,
+      "closed": true,
+      "exit_code": 0,
+      "executable": "D:\\gsqs\\traceio-20261017\\build\\GSSquared.exe",
+      "executable_sha256": "8c711013426771a1ab7b69eaf422071480815cd6c11fdcc635589bba7dfcb12d",
+      "identity_model": "SHA256 of selected executable bytes at launch; assets/media are not a complete replay capsule",
+      "requested_rails": {},
+      "startup_proof": {
+        "schema": "a2agent-mode-v1",
+        "enabled": true,
+        "bootstrap_complete": true,
+        "model": "shared-CTRL-instrument-bootstrap; paused socket ownership"
+      },
+      "artifact_root": "D:\\gsqs\\traceio-20261017\\mcp-runs\\mcp-f3655e7c888a4fa79573dc8c120511d6",
+      "read_only_media_launch": true,
+      "shutdown": {
+        "schema": "a2mcp-shutdown-v1",
+        "owned": true,
+        "pending_request": null,
+        "effects_unknown": false,
+        "quit_attempted": true,
+        "quit_acknowledged": true,
+        "transport_closed": true,
+        "forced_termination": false,
+        "outcome": "owned-exited",
+        "errors": []
+      }
+    }
+  ]
+}

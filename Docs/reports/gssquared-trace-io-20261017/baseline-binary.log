@@ -1,0 +1,4 @@
+Saving trace to file: D:\gsqs\traceio-20261017\baseline.bin
+Head: 1, Tail: 0, Size: 4
+save returned success
+exact_binary=0 bytes=43 expected=40

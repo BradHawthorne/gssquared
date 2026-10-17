@@ -276,7 +276,12 @@ For everyday software debugging, use the **Video pane** or **Static** main-windo
 
 ## Trace file on exit
 
-When you quit emulation (or exit the application while a machine is running), GSSquared automatically saves the instruction trace ring buffer to a binary file named **`gssquared-trace.bin`** in your documents folder. The file contains raw `system_trace_entry_t` records for offline analysis.
+When normal windowed emulation handles a user halt (returning to selection or
+exiting an auto-launched machine), GSSquared saves the instruction trace ring
+buffer as **`gssquared-trace.bin`** in your documents folder. The file contains
+raw `system_trace_entry_t` records for offline analysis. This is not a guarantee
+for every process-exit path; headless/SPIKE workflows use their explicit capture
+outputs.
 
 The exporter writes binary bytes in oldest-first ring order and checks open,
 write, flush and close. An I/O failure raises an artifact error; the application's

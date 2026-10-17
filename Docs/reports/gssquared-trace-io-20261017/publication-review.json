@@ -1,0 +1,105 @@
+{
+  "schema": "gssquared-trace-export-publication-review-v1",
+  "status": "PASS",
+  "code_commit": "db868e65c881a933b4f40033b3240d6987ba0d47",
+  "selected_files": {
+    "Docs/AGENTIC_ROADMAP.md": "dbfc9e12fa9926619447b1436231f87be7cddac9d101e14c5e8198764bf78d62",
+    "Docs/HANDOFF.md": "5549f49178b6d9e41fafe61d8e9b1bac1aeeb1e42d0527b362559c76cec57d9f",
+    "Docs/UsingTheDebugger.md": "37594d553e10ae41a9e080d500326daf6db15fdc21f4f33bfa8de70afc72063f",
+    "Docs/reports/gssquared-trace-io-20261017/README.md": "67c4b2e3b8b2763d08d126347dd82246cf66cc860168c7882a4da828f547dacb",
+    "Docs/reports/gssquared-trace-io-20261017/baseline-binary.log": "0f57618a72cca5c033ebe61f7965b4a7cba663e0951b4eb6c37278d06648cce5",
+    "Docs/reports/gssquared-trace-io-20261017/baseline-blocked.log": "d6fb298b32b7cc3a1d6e60d2deb9ebbe2172ea30dc21a8ad21f04e37d5607911",
+    "Docs/reports/gssquared-trace-io-20261017/build-inputs.json": "b6de04760d7c0af74e9294510e90cdf33168e5457a6413c0487c70904c5f2115",
+    "Docs/reports/gssquared-trace-io-20261017/build-transcript.log": "69e8af7ab5638a27330ca9b373f482fae4ee6f9ae16a396a4428d457d964d42f",
+    "Docs/reports/gssquared-trace-io-20261017/candidate-binary.log": "4f8295ae556628727d52534f43d471eb6288e672fa29362022a447420c0c465e",
+    "Docs/reports/gssquared-trace-io-20261017/candidate-blocked.log": "a8aeef82891cf7aeebfcd2ab46b787492aabd3a7fdc3e4043e564167dd8d45a8",
+    "Docs/reports/gssquared-trace-io-20261017/configure.log": "35e4c87625277a54ebcfa1b0b513cd442e5953407a785930407cf2da69358dc5",
+    "Docs/reports/gssquared-trace-io-20261017/fixture-check.log": "de35aed6a08e5a7e506e8da2bbca9d640db5d2e21292eace2330bc949b2a7050",
+    "Docs/reports/gssquared-trace-io-20261017/fixture-check.py": "505fdd95c0c827c7df55c96bd07c45e46172b0267c97a77ceedf3e60f3844643",
+    "Docs/reports/gssquared-trace-io-20261017/fixture-checks.json": "4c343a90dc43f366e6774d77a8be6cee8621ad2fa964e24469ee56bb433cf8fb",
+    "Docs/reports/gssquared-trace-io-20261017/gates.log": "7075b10fa91eda4c81fa407e71266ffaee1ab0044361046dfd4ce40a1c381510",
+    "Docs/reports/gssquared-trace-io-20261017/gates.ndjson": "f93b1bc1c1415dabab0506133f7dd5a2d3af450c031d61f9409f65452b96047c",
+    "Docs/reports/gssquared-trace-io-20261017/launch-proof.json": "a7e73f0a369fd78b53b38c42ffef46d5bf6bb4d14c9731873f191fde747c18a6",
+    "Docs/reports/gssquared-trace-io-20261017/launch-proof.log": "8afcc6b3d9a3c06c5fcc5963e3fa9a8176fc3bc30552af77a43da3d4a782f012",
+    "Docs/reports/gssquared-trace-io-20261017/mcp-launch.json": "870a8de46ddddb4d9917f3c42af300afd6263e654120159837fb59444d0fce34",
+    "Docs/reports/gssquared-trace-io-20261017/native-tests.log": "5c65ac652e22e4a44f90bda2dbca7ad09f2cf21e02394ca6a7db1db541a1524d",
+    "Docs/reports/gssquared-trace-io-20261017/prepare.log": "69208d9a0b8757db60399abc30770b75dc28301c03c0489bfee5f45cdeee9393",
+    "Docs/reports/gssquared-trace-io-20261017/python-tests.log": "8d833feea1d99c73f4ac0aeec6a8c8842abcf798d67a8367e070f38340e175f6",
+    "Docs/reports/gssquared-trace-io-20261017/trace_fixture.cpp": "33e24fbf2240177288cc60a7824e4376fe70329a1c8201d9a8f15dd49bedb928",
+    "Docs/reports/gssquared-trace-io-20261017/validation.json": "3846abf50537458cc53672963452af3b022575cfc37d5f94c44d845c99664b47",
+    "apps/interfacecontracttest/CMakeLists.txt": "485a8acad3f86185326ae53cdb60ff85e34463ecaee2936651aaecc7bd041969",
+    "apps/interfacecontracttest/main.cpp": "f306c5e1eac4c6e688a11bc5717a651fa7ef32e16aea149e9adec6511668e52a",
+    "apps/interfacecontracttest/trace_io_checks.hpp": "cc1f5f3870a2b16de2f5bd32e88acfc601e8a483a42208a9a9858847761c08f5",
+    "src/debugger/trace.cpp": "78d00bd046c2623b920da72146e46ae1cd9bd74b690977981298a25ff85c16ed",
+    "src/debugger/trace.hpp": "36b0a54da05c947c380100a187f1c1a26f8ad99d61e3013186e566272c92e9c0"
+  },
+  "selected_file_count": 29,
+  "local_links": [
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "gs2debug.md"
+    },
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "Debugger.md"
+    },
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "DebugProtocol.md"
+    },
+    {
+      "source": "Docs/UsingTheDebugger.md",
+      "target": "gs2debug.md"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "validation.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "build-inputs.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "build-transcript.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "gates.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "gates.ndjson"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "native-tests.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "python-tests.log"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "fixture-check.py"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "fixture-checks.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "mcp-launch.json"
+    },
+    {
+      "source": "Docs/reports/gssquared-trace-io-20261017/README.md",
+      "target": "launch-proof.json"
+    }
+  ],
+  "credential_matches": 0,
+  "new_binary_artifacts": 0,
+  "identity_exclusion": "publication-review.json itself; avoid a circular digest",
+  "transcript_policy": "Raw logs/JSON retained byte-for-byte, including CRLF. Authored code and Markdown get whitespace checks; JSON/NDJSON parse separately.",
+  "readme_assessment": "Capabilities, interface counts and build/launch recipes remain current. Detailed automatic trace-export behavior updated in UsingTheDebugger.md.",
+  "scope": "checked automatic legacy trace export only; no trace-reader change, upstream push, drift, model merge or protected consumer replacement"
+}

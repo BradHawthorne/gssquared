@@ -1,0 +1,65 @@
+{
+  "baseline_commit": "0fbd0baff8ef4174cf4353940a793d82167f6853",
+  "baseline_source_sha256": {
+    "debugger/trace.cpp": "b470051d4fb51cb7398c1c18d19d84a90c76a1503ce1aa78d952937eaea8018f",
+    "debugger/trace.hpp": "b0df4c26e643786610f8ca2da40317f462f4c14ad008c2c6b849e9f81fde20f9"
+  },
+  "fixture_sha256": "33e24fbf2240177288cc60a7824e4376fe70329a1c8201d9a8f15dd49bedb928",
+  "compile_argv": {
+    "baseline": [
+      "g++",
+      "-std=c++17",
+      "-I",
+      "D:\\gsqs\\traceio-20261017\\baseline-includes",
+      "-I",
+      "D:\\gsqs\\traceio-20261017\\src\\src",
+      "D:\\gsqs\\traceio-20261017\\src\\Docs\\reports\\gssquared-trace-io-20261017\\trace_fixture.cpp",
+      "D:\\gsqs\\traceio-20261017\\baseline-includes\\debugger\\trace.cpp",
+      "D:\\gsqs\\traceio-20261017\\src\\src\\debugger\\trace_opcodes.cpp",
+      "-o",
+      "D:\\gsqs\\traceio-20261017\\baseline-fixture.exe"
+    ],
+    "candidate": [
+      "g++",
+      "-std=c++17",
+      "-I",
+      "D:\\gsqs\\traceio-20261017\\src\\src",
+      "D:\\gsqs\\traceio-20261017\\src\\Docs\\reports\\gssquared-trace-io-20261017\\trace_fixture.cpp",
+      "D:\\gsqs\\traceio-20261017\\src\\src\\debugger\\trace.cpp",
+      "D:\\gsqs\\traceio-20261017\\src\\src\\debugger\\trace_opcodes.cpp",
+      "-o",
+      "D:\\gsqs\\traceio-20261017\\candidate-fixture.exe"
+    ]
+  },
+  "checks": [
+    {
+      "variant": "baseline",
+      "mode": "binary",
+      "exit_code": 0,
+      "expected_exit": 0,
+      "expectation_met": true
+    },
+    {
+      "variant": "baseline",
+      "mode": "blocked",
+      "exit_code": 0,
+      "expected_exit": 0,
+      "expectation_met": true
+    },
+    {
+      "variant": "candidate",
+      "mode": "binary",
+      "exit_code": 0,
+      "expected_exit": 0,
+      "expectation_met": true
+    },
+    {
+      "variant": "candidate",
+      "mode": "blocked",
+      "exit_code": 2,
+      "expected_exit": 2,
+      "expectation_met": true
+    }
+  ],
+  "scope": "same fixture, real Windows stdio; candidate exception maps to exit 2 in fixture; application boundary inspected"
+}

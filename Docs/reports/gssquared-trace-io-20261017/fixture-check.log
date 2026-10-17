@@ -1,0 +1,4 @@
+PASS real-stdio baseline binary
+PASS real-stdio baseline blocked
+PASS real-stdio candidate binary
+PASS real-stdio candidate blocked

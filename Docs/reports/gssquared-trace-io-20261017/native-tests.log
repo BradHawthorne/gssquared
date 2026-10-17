@@ -1,0 +1,2582 @@
+Start testing: Oct 17 00:12 Central Daylight Time
+----------------------------------------------------------
+1/14 Testing: cpu_conformance
+1/14 Test: cpu_conformance
+Command: "D:/gsqs/traceio-20261017/build/conformtest.exe"
+Directory: D:/gsqs/traceio-20261017/build
+"cpu_conformance" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+=== OWNED 6502 semantic conformance test (core: 6502) ===
+    Asserts results/flags/memory, NOT cycle counts (cycletest covers those).
+    Coverage is the error-prone corners, not all 256 opcodes -- a pass here
+    is NOT equivalent to the Klaus Dormann functional suite.
+
+ADC #$01 (1+1=2)                 ok
+ADC # carry out (FF+01)          ok
+ADC # carry in (01+01+C)         ok
+ADC # overflow 7F+01             ok
+ADC # overflow 80+FF             ok
+ADC # BCD 19+01=20               ok
+SBC # 05-03 (C set)              ok
+SBC # borrow 03-05               ok
+SBC # BCD 21-01=20               ok
+AND #$0F                         ok
+ORA #$0F                         ok
+EOR #$FF                         ok
+ASL A (81 -> 02 +C)              ok
+LSR A (01 -> 00 +C +Z)           ok
+ROL A with carry in              ok
+ROR A with carry in              ok
+BIT $10 (N,V from mem)           ok
+CMP # equal                      ok
+CMP # A less                     ok
+LDA #$00 sets Z                  ok
+LDA #$80 sets N                  ok
+STA $20 writes memory            ok
+STA $F0,X wraps in ZP            ok
+TAX                              ok
+INX 7F->80 sets N                ok
+DEY 01->00 sets Z                ok
+INC $30                          ok
+DEC $30 to zero                  ok
+PHA writes at SP                 ok
+PLA reads and bumps SP           ok
+JMP $1234 absolute               ok
+JMP ($20FF) 6502 page bug        ok
+BEQ taken when Z set             ok
+BEQ not taken when Z clear       ok
+PHP pushes P|$30                 ok
+PLP restores flags               ok
+JSR $2000 pushes hi ($10)        ok
+JSR $2000 pushes lo ($02)        ok
+RTS pulls addr and adds 1        ok
+RTI pulls P then PC (no +1)      ok
+BRK vectors via $FFFE            ok
+
+--- systematic opcode x addressing-mode matrix (x10 operand values) ---
+matrix: 1110 opcode/mode/value cases, 0 failed
+
+--- implied, accumulator and branch instructions ---
+implied/branch: 38 instructions, 0 failed
+
+--- coverage (measured, not claimed) ---
+distinct opcode bytes executed: 151 of 256
+NOT executed by this suite (105): 02 03 04 07 0B 0C 0F 12 13 14 17 1A 1B 1C 1F 22 23 27 2B 2F 32 33 34 37 3A 3B 3C 3F 42 43 44 47 4B 4F 52 53 54 57 5A 5B 5C 5F 62 63 64 67 6B 6F 72 73 74 77 7A 7B 7C 7F 80 82 83 87 89 8B 8F 92 ... (+41 more)
+That is the COMPLETE documented 6502 instruction set (151 legal
+opcodes). The 105 unexecuted bytes are the undocumented/illegal NMOS
+slots.
+
+WHAT A GREEN RUN DOES AND DOES NOT MEAN:
+  DOES  -- every documented opcode was executed and its result, flags and
+           memory effect matched an independently written reference model,
+           across all addressing modes including zero-page wrap, (zp),Y
+           page carry and abs,X/Y indexing.
+  DOES NOT -- prove the undocumented opcodes behave like NMOS silicon;
+           prove cycle timing (that is cycletest);
+           exhaust operand VALUES -- each opcode is tested at a handful of
+           inputs chosen for their corners, not over all 2^16 combinations;
+           or catch a misconception SHARED by the model and the CPU.
+  So this is a strong breadth check, not a substitute for the Klaus
+  Dormann suite, which exercises long dependent instruction sequences.
+
+--- decimal mode, exhaustive (Clark, "Decimal Mode", Appendix A) ---
+6502         ADC: 131072 cases, 0 failed
+6502         SBC: 131072 cases, 0 failed
+65c02        ADC: 131072 cases, 0 failed
+65c02        SBC: 131072 cases, 0 failed
+stack init: 0184
+65816 (E=1)  ADC: 131072 cases, 0 failed
+65816 (E=1)  SBC: 131072 cases, 0 failed
+65816 (M=0)  ADC: 132248 valid-BCD cases, 0 failed
+65816 (M=0)  SBC: 132248 valid-BCD cases, 0 failed
+
+--- 65816 emulation mode: (d,X) pointer wrap follows DL ---
+stack init: 01E1
+DL=$10: $00FF, high byte at $0100        ok (A=$AA, want $AA)
+DL=$00: $01FF, high byte at $0100        ok (A=$CC, want $CC)
+
+Ran 1189, skipped 0. Failed tests: 0
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"cpu_conformance" end time: Oct 17 00:12 Central Daylight Time
+"cpu_conformance" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/14 Testing: cpu_coverage
+2/14 Test: cpu_coverage
+Command: "D:/gsqs/traceio-20261017/build/coveragetest.exe"
+Directory: D:/gsqs/traceio-20261017/build
+"cpu_coverage" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+A2GSPU COVERAGE: enabled $000000-$02FFFF (24576 bytes of bitmap)
+A2GSPU COVERAGE: enabled $001000-$0010FF (32 bytes of bitmap)
+A2GSPU COVERAGE: enabled $001000-$0010FF (32 bytes of bitmap)
+A2GSPU COVERAGE: enabled $001000-$001004 (1 bytes of bitmap)
+A2GSPU COVERAGE: A2COV2 wrote D:\gsqs\tmp\gs2-cov-map-420434554841200\run.cov maps=1 run=1792213939711785801 generation=64 marked=3 hash=A96487D557F499BA
+A2GSPU COVERAGE: refusing stale/ambiguous evidence: executed byte mismatch at $001003: expected=$EA observed=$A9; rebind overlay
+A2GSPU COVERAGE: enabled $001000-$001002 (1 bytes of bitmap)
+A2GSPU COVERAGE: A2COV2 wrote D:\gsqs\tmp\gs2-cov-map-420434554841200\run.cov maps=1 run=1792213939711785801 generation=67 marked=2 hash=3B90189CCDEF096A
+A2GSPU COVERAGE: refusing stale/ambiguous evidence: ambiguous execution widths at $001000; collect separate generations
+A2GSPU COVERAGE: enabled $001000-$001000 (1 bytes of bitmap)
+A2GSPU COVERAGE: refusing stale/ambiguous evidence: instruction at $001000 crosses mapping/program-bank boundary
+stack init: 01BE
+stack init: 0184
+stack init: 01D6
+stack init: 01AE
+Coverage: 80 cases, 0 failures
+<end of output>
+Test time =   0.08 sec
+----------------------------------------------------------
+Test Passed.
+"cpu_coverage" end time: Oct 17 00:12 Central Daylight Time
+"cpu_coverage" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/14 Testing: cpu_cycles_6502
+3/14 Test: cpu_cycles_6502
+Command: "D:/gsqs/traceio-20261017/build/cycletest.exe"
+Directory: D:/gsqs/traceio-20261017/build
+"cpu_cycles_6502" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+   CPU Type:  6502
+Starting CPU Cycle Counts test...
+ADC #                          [2] 0 29 00 1000: ADC  #$00 
+ADC ZP                         [3] 0 29 00 1000: ADC  $00         0000> 00 
+ADC ZP,X                       [4] 0 29 00 1000: ADC  $00,X       0000> 00 
+ADC ABS                        [4] 0 29 00 1000: ADC  $0000       0000> 00 
+ADC ABS,X                      [4] 0 29 00 1000: ADC  $0000,X     0000> 00 
+ADC ABS,X w/Crossing           [5] F 29 00 1000: ADC  $00FF,X     01FE> 00 
+ADC ABS,Y                      [4] 0 29 00 1000: ADC  $0000,Y     0000> 00 
+ADC ABS,Y w/Crossing           [5] F 29 00 1000: ADC  $00FF,Y     01FE> 00 
+ADC (IND,X)                    [6] 0 29 00 1000: ADC  ($00,X)     0000> 00 
+ADC (IND),Y                    [5] 0 29 00 1000: ADC  ($00),Y     0000> 00 
+AND #IMM                       [2] 0 29 00 1000: AND  #$00 
+AND ZP                         [3] 0 29 00 1000: AND  $00         0000> 00 
+AND ZP,X                       [4] 0 29 00 1000: AND  $00,X       0000> 00 
+AND ABS                        [4] 0 29 00 1000: AND  $0000       0000> 00 
+AND ABS,X                      [4] 0 29 00 1000: AND  $0000,X     0000> 00 
+AND ABS,X w/Crossing           [5] F 29 00 1000: AND  $00FF,X     01FE> 00 
+AND ABS,Y                      [4] 0 29 00 1000: AND  $0000,Y     0000> 00 
+AND ABS,Y w/Crossing           [5] F 29 00 1000: AND  $00FF,Y     01FE> 00 
+AND (IND,X)                    [6] 0 29 00 1000: AND  ($00,X)     0000> 00 
+AND (IND),Y                    [5] 0 29 00 1000: AND  ($00),Y     0000> 00 
+AND (IND),Y w/Crossing         [6] F 29 00 1000: AND  ($02),Y     11FE> 00 
+ASL A                          [2] 0 29 00 1000: ASL  A 
+ASL ZP                         [5] 0 29 00 1000: ASL  $00         0000< 00 
+ASL ZP,X                       [6] 0 29 00 1000: ASL  $00,X       0000< 00 
+ASL ABS                        [6] 0 29 00 1000: ASL  $0000       0000< 00 
+ASL ABS,X                      [7] 0 29 00 1000: ASL  $0000,X     0000< 00 
+ASL ABS,X page cross           [7] 0 29 00 1000: ASL  $10FF,X     1100< 00 
+BCC No Branch                  [2] 0 29 01 1000: BCC  $1072 
+BCC Branch Same Page           [3] 0 29 00 1000: BCC  $1072 
+BCC Branch Different Page      [4] 0 29 00 1000: BCC  $0FF2 
+BCS No Branch                  [2] 0 29 00 1000: BCS  $1072 
+BCS Branch Same Page           [3] 0 29 01 1000: BCS  $1072 
+BCS Branch Different Page      [4] 0 29 01 1000: BCS  $0FF2 
+BEQ No Branch                  [2] 0 29 00 1000: BEQ  $1072 
+BEQ Branch Same Page           [3] 0 29 02 1000: BEQ  $1072 
+BEQ Branch Different Page      [4] 0 29 02 1000: BEQ  $0FF2 
+BIT ZP                         [3] 0 29 00 1000: BIT  $00         0000> 00 
+BIT ABS                        [4] 0 29 00 1000: BIT  $0000       0000> 00 
+BMI No Branch                  [2] 0 29 00 1000: BMI  $1072 
+BMI Branch Same Page           [3] 0 29 80 1000: BMI  $1072 
+BMI Branch Different Page      [4] 0 29 80 1000: BMI  $0FF2 
+BNE No Branch                  [2] 0 29 02 1000: BNE  $1072 
+BNE Branch Same Page           [3] 0 29 00 1000: BNE  $1072 
+BNE Branch Different Page      [4] 0 29 00 1000: BNE  $0FF2 
+BPL No Branch                  [2] 0 29 80 1000: BPL  $1072 
+BPL Branch Same Page           [3] 0 29 00 1000: BPL  $1072 
+BPL Branch Different Page      [4] 0 29 00 1000: BPL  $0FF2 
+BRK                            [7] 0 29 00 1000: BRK   
+BVC No Branch                  [2] 0 26 40 1000: BVC  $1072 
+BVC Branch Same Page           [3] 0 26 00 1000: BVC  $1072 
+BVC Branch Different Page      [4] 0 26 00 1000: BVC  $0FF2 
+BVS No Branch                  [2] 0 26 00 1000: BVS  $1072 
+BVS Branch Same Page           [3] 0 26 40 1000: BVS  $1072 
+BVS Branch Different Page      [4] 0 26 40 1000: BVS  $0FF2 
+CLC                            [2] 1 26 00 1000: CLC   
+CLD                            [2] 0 26 08 1000: CLD   
+CLI                            [2] 0 26 04 1000: CLI   
+CLV                            [2] 0 26 40 1000: CLV   
+CMP #                          [2] 0 26 00 1000: CMP  #$42 
+CMP ZP                         [3] 0 26 00 1000: CMP  $42         0042> 00 
+CMP ZP,X                       [4] 0 26 00 1000: CMP  $40,X       0042> 00 
+CMP ABS                        [4] 0 26 00 1000: CMP  $0042       0042> 00 
+CMP ABS,X No Page Cross        [4] 0 26 00 1000: CMP  $0040,X     0042> 00 
+CMP ABS,X Page Cross           [5] 0 26 00 1000: CMP  $00FF,X     0101> 00 
+CMP ABS,Y No Page Cross        [4] 2 26 00 1000: CMP  $0040,Y     0042> 00 
+CMP ABS,Y Page Cross           [5] 2 26 00 1000: CMP  $00FF,Y     0101> 00 
+CMP (IND,X)                    [6] 0 26 00 1000: CMP  ($40,X)     0000> 00 
+CMP (IND),Y No Page Cross      [5] F 26 00 1000: CMP  ($00),Y     00FF> 00 
+CMP (IND),Y Page Cross         [6] F 26 00 1000: CMP  ($02),Y     11FE> 00 
+CPX #                          [2] 0 26 00 1000: CPX  #$42 
+CPX ZP                         [3] 0 26 00 1000: CPX  $42         0042> 00 
+CPX ABS                        [4] 0 26 00 1000: CPX  $0042       0042> 00 
+CPY #                          [2] 0 26 00 1000: CPY  #$42 
+CPY ZP                         [3] 0 26 00 1000: CPY  $42         0042> 00 
+CPY ABS                        [4] 0 26 00 1000: CPY  $0042       0042> 00 
+DEC ZP                         [5] 0 26 00 1000: DEC  $42         0042< FF 
+DEC ZP,X                       [6] 0 26 00 1000: DEC  $42,X       0042< FE 
+DEC ABS                        [6] 0 26 00 1000: DEC  $0042       0042< FD 
+DEC ABS,X                      [7] 0 26 00 1000: DEC  $0042,X     0042< FC 
+DEX                            [2] 0 26 00 1000: DEX   
+DEY                            [2] 0 26 00 1000: DEY   
+EOR #IMM                       [2] 0 26 00 1000: EOR  #$00 
+EOR ZP                         [3] 0 26 00 1000: EOR  $00         0000> 00 
+EOR ZP,X                       [4] 0 26 00 1000: EOR  $00,X       0000> 00 
+EOR ABS                        [4] 0 26 00 1000: EOR  $0000       0000> 00 
+EOR ABS,X                      [4] 0 26 00 1000: EOR  $0000,X     0000> 00 
+EOR ABS,X w/Crossing           [5] F 26 00 1000: EOR  $00FF,X     01FE> 00 
+EOR ABS,Y                      [4] 0 26 00 1000: EOR  $0000,Y     0000> 00 
+EOR ABS,Y w/Crossing           [5] F 26 00 1000: EOR  $00FF,Y     01FE> 00 
+EOR (IND,X)                    [6] 0 26 00 1000: EOR  ($00,X)     0000> 00 
+EOR (IND),Y                    [5] 0 26 00 1000: EOR  ($00),Y     0000> 00 
+EOR (IND),Y w/Crossing         [6] F 26 00 1000: EOR  ($02),Y     11FE> 00 
+INC ZP                         [5] 0 26 00 1000: INC  $00         0000< 01 
+INC ZP,X                       [6] 0 26 00 1000: INC  $00,X       0000< 01 
+INC ABS                        [6] 0 26 00 1000: INC  $0000       0000< 01 
+INC ABS,X                      [7] 0 26 00 1000: INC  $0000,X     0000< 01 
+INX                            [2] 0 26 00 1000: INX   
+INY                            [2] 0 26 00 1000: INY   
+JMP ABS                        [3] 0 26 00 1000: JMP  $0000       0000> 01 
+JMP Indirect                   [5] 0 26 00 1000: JMP  ($0000)     0000> 01 
+JSR ABS                        [6] 0 26 00 1000: JSR  $0000       0000> 1002 
+LDA #IMM                       [2] 0 24 00 1000: LDA  #$00 
+LDA ZP                         [3] 0 24 00 1000: LDA  $00         0000> 00 
+LDA ZP,X                       [4] 0 24 00 1000: LDA  $00,X       0000> 00 
+LDA ABS                        [4] 0 24 00 1000: LDA  $0000       0000> 00 
+LDA ABS,X                      [4] 0 24 00 1000: LDA  $0000,X     0000> 00 
+LDA ABS,X w/Crossing           [5] F 24 00 1000: LDA  $00FF,X     01FE> 00 
+LDA ABS,Y                      [4] 0 24 00 1000: LDA  $0000,Y     0000> 00 
+LDA ABS,Y w/Crossing           [5] F 24 00 1000: LDA  $00FF,Y     01FE> 00 
+LDA (IND,X)                    [6] 0 24 00 1000: LDA  ($00,X)     0000> 00 
+LDA (IND),Y                    [5] 0 24 00 1000: LDA  ($00),Y     0000> 00 
+LDA (IND),Y w/Crossing         [6] F 24 00 1000: LDA  ($02),Y     11FE> 00 
+LDX #IMM                       [2] 0 24 00 1000: LDX  #$00 
+LDX ZP                         [3] 0 24 00 1000: LDX  $00         0000> 00 
+LDX ZP,Y                       [4] 0 24 00 1000: LDX  $00,Y       0000> 00 
+LDX ABS                        [4] 0 24 00 1000: LDX  $0000       0000> 00 
+LDX ABS,Y                      [4] 0 24 00 1000: LDX  $0000,Y     0000> 00 
+LDX ABS,Y w/Crossing           [5] F 24 00 1000: LDX  $00FF,Y     01FE> 00 
+LDY #IMM                       [2] 0 24 00 1000: LDY  #$00 
+LDY ZP                         [3] 0 24 00 1000: LDY  $00         0000> 00 
+LDY ZP,X                       [4] 0 24 00 1000: LDY  $00,X       0000> 00 
+LDY ABS                        [4] 0 24 00 1000: LDY  $0000       0000> 00 
+LDY ABS,X                      [4] 0 24 00 1000: LDY  $0000,X     0000> 00 
+LDY ABS,X w/Crossing           [5] F 24 00 1000: LDY  $00FF,X     01FE> 00 
+LSR A                          [2] 0 24 00 1000: LSR  A 
+LSR ZP                         [5] 0 24 00 1000: LSR  $42         0042< 7E 
+LSR ZP,X                       [6] 0 24 00 1000: LSR  $40,X       0042< 3F 
+LSR ABS                        [6] 0 24 00 1000: LSR  $0042       0042< 1F 
+LSR ABS,X                      [7] 0 24 00 1000: LSR  $0040,X     0042< 0F 
+NOP                            [2] 0 24 00 1000: NOP   
+ORA #IMM                       [2] 0 24 00 1000: ORA  #$00 
+ORA ZP                         [3] 0 24 00 1000: ORA  $00         0000> 00 
+ORA ZP,X                       [4] 0 24 00 1000: ORA  $00,X       0000> 00 
+ORA ABS                        [4] 0 24 00 1000: ORA  $0000       0000> 00 
+ORA ABS,X                      [4] 0 24 00 1000: ORA  $0000,X     0000> 00 
+ORA ABS,X w/Crossing           [5] F 24 00 1000: ORA  $00FF,X     01FE> 00 
+ORA ABS,Y                      [4] 0 24 00 1000: ORA  $0000,Y     0000> 00 
+ORA ABS,Y w/Crossing           [5] F 24 00 1000: ORA  $00FF,Y     01FE> 00 
+ORA (IND,X)                    [6] 0 24 00 1000: ORA  ($00,X)     0000> 00 
+ORA (IND),Y                    [5] 0 24 00 1000: ORA  ($00,X)     0000> 00 
+ORA (IND),Y w/Crossing         [6] F 24 00 1000: ORA  ($02,X)     11FE> 00 
+PHA                            [3] 0 24 00 1000: PHA   
+PHP                            [3] 0 23 FF 1000: PHP   
+PLA                            [4] 0 22 00 1000: PLA   
+PLP                            [4] 0 23 00 1000: PLP   
+ROL A                          [2] 0 24 00 1000: ROL  A 
+ROL ZP                         [5] 0 24 00 1000: ROL  $00         0000< 00 
+ROL ZP,X                       [6] 0 24 00 1000: ROL  $00,X       0000< 00 
+ROL ABS                        [6] 0 24 00 1000: ROL  $0000       0000< 00 
+ROL ABS,X                      [7] 0 24 00 1000: ROL  $0000,X     0000< 00 
+ROR A                          [2] 0 24 00 1000: ROR  A 
+ROR ZP                         [5] 0 24 00 1000: ROR  $00         0000< 00 
+ROR ZP,X                       [6] 0 24 00 1000: ROR  $00,X       0000< 00 
+ROR ABS                        [6] 0 24 00 1000: ROR  $0000       0000< 00 
+ROR ABS,X                      [7] 0 24 00 1000: ROR  $0000,X     0000< 00 
+RTI                            [6] 0 24 00 1000: RTI   
+RTS                            [6] 0 27 00 1000: RTS   
+SBC Immediate                  [2] 0 29 01 1000: SBC  #$42 
+SBC Zero Page                  [3] 0 29 01 1000: SBC  $42         0042> 0F 
+SBC Zero Page,X                [4] 0 29 01 1000: SBC  $40,X       0042> 0F 
+SBC Absolute                   [4] 0 29 01 1000: SBC  $0042       0042> 0F 
+SBC Absolute,X No Page Cross   [4] 0 29 01 1000: SBC  $0040,X     0042> 0F 
+SBC Absolute,X Page Cross      [5] 0 29 01 1000: SBC  $00FF,X     0101> 00 
+SBC Absolute,Y No Page Cross   [4] 2 29 01 1000: SBC  $0040,Y     0042> 0F 
+SBC Absolute,Y Page Cross      [5] 2 29 01 1000: SBC  $00FF,Y     0101> 00 
+SBC (Indirect,X)               [6] 0 29 01 1000: SBC  ($40,X)     000F> 00 
+SBC (Indirect),Y No Page Cross [5] F 29 01 1000: SBC  ($00),Y     00FF> 00 
+SBC (Indirect),Y Page Cross    [6] F 29 01 1000: SBC  ($02),Y     11FE> 00 
+SEC                            [2] 0 29 00 1000: SEC   
+SED                            [2] 0 29 00 1000: SED   
+SEI                            [2] 0 29 00 1000: SEI   
+STA Zero Page                  [3] 0 29 00 1000: STA  $42         0042< 50 
+STA Zero Page,X                [4] 0 29 00 1000: STA  $40,X       0042< 50 
+STA Absolute                   [4] 0 29 00 1000: STA  $0042       0042< 50 
+STA Absolute,X                 [5] 0 29 00 1000: STA  $0040,X     0042< 50 
+STA Absolute,Y                 [5] 2 29 00 1000: STA  $0040,Y     0042< 50 
+STA (Indirect,X)               [6] 0 29 00 1000: STA  ($40,X)     0050< 50 
+STA (Indirect),Y               [6] F 29 00 1000: STA  ($00),Y     00FF< 50 
+STX Zero Page                  [3] 0 29 00 1000: STX  $42         0042< 50 
+STX Zero Page,Y                [4] 2 29 00 1000: STX  $40,Y       0042< 50 
+STX Absolute                   [4] 0 29 00 1000: STX  $0042       0042< 50 
+STY Zero Page                  [3] 0 29 00 1000: STY  $42         0042< 50 
+STY Zero Page,X                [4] 0 29 00 1000: STY  $40,X       0042< 50 
+STY Absolute                   [4] 0 29 00 1000: STY  $0042       0042< 50 
+TAX                            [2] 0 29 00 1000: TAX   
+TAY                            [2] 0 29 00 1000: TAY   
+TSX                            [2] 0 29 00 1000: TSX   
+TXA                            [2] 0 29 00 1000: TXA   
+TXS                            [2] 0 29 00 1000: TXS   
+TYA                            [2] 2 42 00 1000: TYA   
+Failed tests: 0
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"cpu_cycles_6502" end time: Oct 17 00:12 Central Daylight Time
+"cpu_cycles_6502" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/14 Testing: cpu_cycles_65816
+4/14 Test: cpu_cycles_65816
+Command: "D:/gsqs/traceio-20261017/build/cycletest816.exe"
+Directory: D:/gsqs/traceio-20261017/build
+"cpu_cycles_65816" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+   CPU Type:  65816
+Starting CPU Cycle Counts test...
+stack init: 0129
+ADC # 8                        [2]    00 0129 30 00/1000: ADC  #$00 
+ADC # 16                       [3]    00 0129 10 00/1000: ADC  #$0000 
+ADC ZP                         [3]    00 0129 30 00/1000: ADC  $00         00/0000> 00 
+ADC ZP,X                       [4]    00 0129 30 00/1000: ADC  $00,X       00/0000> 00 
+ADC ABS                        [4]    00 0129 30 00/1000: ADC  $0000       00/0000> 00 
+ADC ABS,X                      [4]    00 0129 30 00/1000: ADC  $0000,X     00/0000> 00 
+ADC ABS,X w/Crossing           [5]    FF 0129 30 00/1000: ADC  $00FF,X     00/01FE> 00 
+ADC ABS,Y                      [4]    00 0129 30 00/1000: ADC  $0000,Y     00/0000> 00 
+ADC ABS,Y w/Crossing           [5]    FF 0129 30 00/1000: ADC  $00FF,Y     00/01FE> 00 
+ADC (IND,X)                    [6]    00 0129 30 00/1000: ADC  ($00,X)     00/0000> 00 
+ADC (IND),Y                    [5]    00 0129 30 00/1000: ADC  ($00),Y     00/0000> 00 
+AND #IMM 8                     [2]    00 0129 30 00/1000: AND  #$00 
+AND #IMM 16                    [3]    00 0129 10 00/1000: AND  #$0000 
+AND ZP                         [3]    00 0129 30 00/1000: AND  $00         00/0000> 00 
+AND ZP,X                       [4]    00 0129 30 00/1000: AND  $00,X       00/0000> 00 
+AND ABS                        [4]    00 0129 30 00/1000: AND  $0000       00/0000> 00 
+AND ABS,X                      [4]    00 0129 30 00/1000: AND  $0000,X     00/0000> 00 
+AND ABS,X w/Crossing           [5]    FF 0129 30 00/1000: AND  $00FF,X     00/01FE> 00 
+AND ABS,Y                      [4]    00 0129 30 00/1000: AND  $0000,Y     00/0000> 00 
+AND ABS,Y w/Crossing           [5]    FF 0129 30 00/1000: AND  $00FF,Y     00/01FE> 00 
+AND (IND,X)                    [6]    00 0129 30 00/1000: AND  ($00,X)     00/0000> 00 
+AND (IND),Y                    [5]    00 0129 30 00/1000: AND  ($00),Y     00/0000> 00 
+AND (IND),Y w/Crossing         [6]    FF 0129 30 00/1000: AND  ($02),Y     00/11FE> 00 
+ASL A                          [2]    00 0129 30 00/1000: ASL  A 
+ASL ZP                         [5]    00 0129 30 00/1000: ASL  $00         00/0000< 00 
+ASL ZP,X                       [6]    00 0129 30 00/1000: ASL  $00,X       00/0000< 00 
+ASL ABS                        [6]    00 0129 30 00/1000: ASL  $0000       00/0000< 00 
+ASL ABS,X                      [7]    00 0129 30 00/1000: ASL  $0000,X     00/0000< 00 
+BCC No Branch                  [2]  0000 0129 01 00/1000: BCC  $1072 
+BCC Branch Same Page           [3]  0000 0129 00 00/1000: BCC  $1072 
+BCC Branch Different Page      [3]  0000 0129 00 00/1000: BCC  $0FF2 
+BCS No Branch                  [2]  0000 0129 00 00/1000: BCS  $1072 
+BCS Branch Same Page           [3]  0000 0129 01 00/1000: BCS  $1072 
+BCS Branch Different Page      [3]  0000 0129 01 00/1000: BCS  $0FF2 
+BEQ No Branch                  [2]  0000 0129 00 00/1000: BEQ  $1072 
+BEQ Branch Same Page           [3]  0000 0129 02 00/1000: BEQ  $1072 
+BEQ Branch Different Page      [3]  0000 0129 02 00/1000: BEQ  $0FF2 
+BIT ZP                         [3]    00 0129 30 00/1000: BIT  $00         00/0000> 00 
+BIT ABS                        [4]    00 0129 30 00/1000: BIT  $0000       00/0000> 00 
+BIT # 8                        [2]    00 0129 30 00/1000: BIT  #$00 
+BIT # 16                       [3]    00 0129 10 00/1000: BIT  #$0000 
+BMI No Branch                  [2]  0000 0129 00 00/1000: BMI  $1072 
+BMI Branch Same Page           [3]  0000 0129 80 00/1000: BMI  $1072 
+BMI Branch Different Page      [3]  0000 0129 80 00/1000: BMI  $0FF2 
+BNE No Branch                  [2]  0000 0129 02 00/1000: BNE  $1072 
+BNE Branch Same Page           [3]  0000 0129 00 00/1000: BNE  $1072 
+BNE Branch Different Page      [3]  0000 0129 00 00/1000: BNE  $0FF2 
+BPL No Branch                  [2]  0000 0129 80 00/1000: BPL  $1072 
+BPL Branch Same Page           [3]  0000 0129 00 00/1000: BPL  $1072 
+BPL Branch Different Page      [3]  0000 0129 00 00/1000: BPL  $0FF2 
+BRA                            [3]  0000 0129 00 00/1000: BRA  $1072 
+BRK                            [8]    00 0129 30 00/1000: BRK   
+BVC No Branch                  [2]  0000 0125 40 00/1000: BVC  $1072 
+BVC Branch Same Page           [3]  0000 0125 00 00/1000: BVC  $1072 
+BVC Branch Different Page      [3]  0000 0125 00 00/1000: BVC  $0FF2 
+BVS No Branch                  [2]  0000 0125 00 00/1000: BVS  $1072 
+BVS Branch Same Page           [3]  0000 0125 40 00/1000: BVS  $1072 
+BVS Branch Different Page      [3]  0000 0125 40 00/1000: BVS  $0FF2 
+CLC                            [2]  0001 0125 00 00/1000: CLC   
+CLD                            [2]  0000 0125 08 00/1000: CLD   
+CLI                            [2]  0000 0125 04 00/1000: CLI   
+CLV                            [2]  0000 0125 40 00/1000: CLV   
+CMP # 8                        [2]    00 0125 30 00/1000: CMP  #$42 
+CMP # 16                       [3]    00 0125 10 00/1000: CMP  #$0042 
+CMP ZP                         [3]    00 0125 30 00/1000: CMP  $42         00/0042> 00 
+CMP ZP,X                       [4]    00 0125 30 00/1000: CMP  $40,X       00/0042> 00 
+CMP ABS                        [4]    00 0125 30 00/1000: CMP  $0042       00/0042> 00 
+CMP ABS,X No Page Cross        [4]    00 0125 30 00/1000: CMP  $0040,X     00/0042> 00 
+CMP ABS,X Page Cross           [5]    00 0125 30 00/1000: CMP  $00FF,X     00/0101> 00 
+CMP ABS,Y No Page Cross        [4]    02 0125 30 00/1000: CMP  $0040,Y     00/0042> 00 
+CMP ABS,Y Page Cross           [5]    02 0125 30 00/1000: CMP  $00FF,Y     00/0101> 00 
+CMP (IND,X)                    [6]    00 0125 30 00/1000: CMP  ($40,X)     00/0000> 00 
+CMP (IND),Y No Page Cross      [5]    FF 0125 30 00/1000: CMP  ($00),Y     00/00FF> 00 
+CMP (IND),Y Page Cross         [6]    FF 0125 30 00/1000: CMP  ($02),Y     00/11FE> 00 
+CPX # 8                        [2]    00 0125 30 00/1000: CPX  #$42 
+CPX # 16                       [3]  0000 0125 20 00/1000: CPX  #$0042 
+CPX ZP                         [3]    00 0125 30 00/1000: CPX  $42         00/0042> 00 
+CPX ABS                        [4]    00 0125 30 00/1000: CPX  $0042       00/0042> 00 
+CPY #                          [2]    50 0125 30 00/1000: CPY  #$42 
+CPY ZP                         [3]    50 0125 30 00/1000: CPY  $42         00/0042> 00 
+CPY ABS                        [4]    50 0125 30 00/1000: CPY  $0042       00/0042> 00 
+DEC ZP                         [5]    00 0125 30 00/1000: DEC  $42         00/0042< FF 
+DEC ZP,X                       [6]    00 0125 30 00/1000: DEC  $42,X       00/0042< FE 
+DEC ABS                        [6]    00 0125 30 00/1000: DEC  $0042       00/0042< FD 
+DEC ABS,X                      [7]    00 0125 30 00/1000: DEC  $0042,X     00/0042< FC 
+DEX                            [2]    00 0125 30 00/1000: DEX   
+DEY                            [2]    00 0125 30 00/1000: DEY   
+EOR #IMM                       [2]    00 0125 30 00/1000: EOR  #$00 
+EOR ZP                         [3]    00 0125 30 00/1000: EOR  $00         00/0000> 00 
+EOR ZP,X                       [4]    00 0125 30 00/1000: EOR  $00,X       00/0000> 00 
+EOR ABS                        [4]    00 0125 30 00/1000: EOR  $0000       00/0000> 00 
+EOR ABS,X                      [4]    00 0125 30 00/1000: EOR  $0000,X     00/0000> 00 
+EOR ABS,X w/Crossing           [5]    FF 0125 30 00/1000: EOR  $00FF,X     00/01FE> 00 
+EOR ABS,Y                      [4]    00 0125 30 00/1000: EOR  $0000,Y     00/0000> 00 
+EOR ABS,Y w/Crossing           [5]    FF 0125 30 00/1000: EOR  $00FF,Y     00/01FE> 00 
+EOR (IND,X)                    [6]    00 0125 30 00/1000: EOR  ($00,X)     00/0000> 00 
+EOR (IND),Y                    [5]    00 0125 30 00/1000: EOR  ($00),Y     00/0000> 00 
+EOR (IND),Y w/Crossing         [6]    FF 0125 30 00/1000: EOR  ($02),Y     00/11FE> 00 
+INC ZP                         [5]    00 0125 30 00/1000: INC  $00         00/0000< 01 
+INC ZP,X                       [6]    00 0125 30 00/1000: INC  $00,X       00/0000< 01 
+INC ABS                        [6]    00 0125 30 00/1000: INC  $0000       00/0000< 01 
+INC ABS,X                      [7]    00 0125 30 00/1000: INC  $0000,X     00/0000< 01 
+INX                            [2]    00 0125 30 00/1000: INX   
+INY                            [2]    00 0125 30 00/1000: INY   
+JMP ABS                        [3]    00 0125 30 00/1000: JMP  $0000       00/0000> 01 
+JMP Indirect                   [5]    00 0125 30 00/1000: JMP  ($0000)     00/0000> 01 
+JMP (ABS,X)                    [6]    00 0125 30 00/1000: JMP  ($0000,X)   00/0000> 01 
+JSR ABS                        [6]    00 0125 30 00/1000: JSR  $0000       00/0000> 1002 
+LDA #IMM                       [2]    00 0123 30 00/1000: LDA  #$00 
+LDA ZP                         [3]    00 0123 30 00/1000: LDA  $00         00/0000> 00 
+LDA ZP,X                       [4]    00 0123 30 00/1000: LDA  $00,X       00/0000> 00 
+LDA ABS                        [4]    00 0123 30 00/1000: LDA  $0000       00/0000> 00 
+LDA ABS,X                      [4]    00 0123 30 00/1000: LDA  $0000,X     00/0000> 00 
+LDA ABS,X w/Crossing           [5]    FF 0123 30 00/1000: LDA  $00FF,X     00/01FE> 00 
+LDA ABS,Y                      [4]    00 0123 30 00/1000: LDA  $0000,Y     00/0000> 00 
+LDA ABS,Y w/Crossing           [5]    FF 0123 30 00/1000: LDA  $00FF,Y     00/01FE> 00 
+LDA (IND,X)                    [6]    00 0123 30 00/1000: LDA  ($00,X)     00/0000> 00 
+LDA (IND),Y                    [5]    00 0123 30 00/1000: LDA  ($00),Y     00/0000> 00 
+LDA (IND),Y w/Crossing         [6]    FF 0123 30 00/1000: LDA  ($02),Y     00/11FE> 00 
+LDX #IMM                       [2]    00 0123 30 00/1000: LDX  #$00 
+LDX ZP                         [3]    00 0123 30 00/1000: LDX  $00         00/0000> 00 
+LDX ZP,Y                       [4]    00 0123 30 00/1000: LDX  $00,Y       00/0000> 00 
+LDX ABS                        [4]    00 0123 30 00/1000: LDX  $0000       00/0000> 00 
+LDX ABS,Y                      [4]    00 0123 30 00/1000: LDX  $0000,Y     00/0000> 00 
+LDX ABS,Y w/Crossing           [5]    FF 0123 30 00/1000: LDX  $00FF,Y     00/01FE> 00 
+LDY #IMM                       [2]    00 0123 30 00/1000: LDY  #$00 
+LDY ZP                         [3]    00 0123 30 00/1000: LDY  $00         00/0000> 00 
+LDY ZP,X                       [4]    00 0123 30 00/1000: LDY  $00,X       00/0000> 00 
+LDY ABS                        [4]    00 0123 30 00/1000: LDY  $0000       00/0000> 00 
+LDY ABS,X                      [4]    00 0123 30 00/1000: LDY  $0000,X     00/0000> 00 
+LDY ABS,X w/Crossing           [5]    FF 0123 30 00/1000: LDY  $00FF,X     00/01FE> 00 
+LSR A                          [2]    00 0123 30 00/1000: LSR  A 
+LSR ZP                         [5]    00 0123 30 00/1000: LSR  $42         00/0042< 7E 
+LSR ZP,X                       [6]    00 0123 30 00/1000: LSR  $40,X       00/0042< 3F 
+LSR ABS                        [6]    00 0123 30 00/1000: LSR  $0042       00/0042< 1F 
+LSR ABS,X                      [7]    00 0123 30 00/1000: LSR  $0040,X     00/0042< 0F 
+NOP                            [2]    00 0123 30 00/1000: NOP   
+ORA #IMM                       [2]    00 0123 30 00/1000: ORA  #$00 
+ORA ZP                         [3]    00 0123 30 00/1000: ORA  $00         00/0000> 00 
+ORA ZP,X                       [4]    00 0123 30 00/1000: ORA  $00,X       00/0000> 00 
+ORA ABS                        [4]    00 0123 30 00/1000: ORA  $0000       00/0000> 00 
+ORA ABS,X                      [4]    00 0123 30 00/1000: ORA  $0000,X     00/0000> 00 
+ORA ABS,X w/Crossing           [5]    FF 0123 30 00/1000: ORA  $00FF,X     00/01FE> 00 
+ORA ABS,Y                      [4]    00 0123 30 00/1000: ORA  $0000,Y     00/0000> 00 
+ORA ABS,Y w/Crossing           [5]    FF 0123 30 00/1000: ORA  $00FF,Y     00/01FE> 00 
+ORA (IND,X)                    [6]    00 0123 30 00/1000: ORA  ($00,X)     00/0000> 00 
+ORA (IND),Y                    [5]    00 0123 30 00/1000: ORA  ($00,X)     00/0000> 00 
+ORA (IND),Y w/Crossing         [6]    FF 0123 30 00/1000: ORA  ($02,X)     00/11FE> 00 
+PEA $ABS 16                    [5]    00 0123 10 00/1000: PEA  $0000       00/0000> 00 
+PEI (DP) 16                    [6]    00 0121 10 00/1000: PEI  $00         00/0000> 0000 
+PEI (DP) 16 DP!=0              [7]    00 011F 10 00/1000: PEI  $00         00/1234> 0000 
+PHA                            [3]    00 011D 30 00/1000: PHA   
+PHD                            [4]    00 011C 10 00/1000: PHD   
+PLD                            [5]    00 011A 10 00/1000: PLD   
+PHP                            [3]    00 011C FF 00/1000: PHP   
+PHX 8                          [3]    00 011B 30 00/1000: PHX   
+PHX 16                         [4]  0000 011A 20 00/1000: PHX   
+PHY 8                          [3]    00 0118 30 00/1000: PHY   
+PHY 16                         [4]  0000 0117 20 00/1000: PHY   
+PLA                            [4]    00 0115 30 00/1000: PLA   
+PLP                            [4]    00 0116 30 00/1000: PLP   
+REP                            [3]    00 0117 30 00/1000: REP  #$08 
+SEP                            [3]    00 0117 30 00/1000: SEP  #$08 
+ROL A                          [2]    00 0117 30 00/1000: ROL  A 
+ROL ZP                         [5]    00 0117 30 00/1000: ROL  $00         00/0000< 00 
+ROL ZP,X                       [6]    00 0117 30 00/1000: ROL  $00,X       00/0000< 00 
+ROL ABS                        [6]    00 0117 30 00/1000: ROL  $0000       00/0000< 00 
+ROL ABS,X                      [7]    00 0117 30 00/1000: ROL  $0000,X     00/0000< 00 
+ROR A                          [2]    00 0117 30 00/1000: ROR  A 
+ROR ZP                         [5]    00 0117 30 00/1000: ROR  $00         00/0000< 00 
+ROR ZP,X                       [6]    00 0117 30 00/1000: ROR  $00,X       00/0000< 00 
+ROR ABS                        [6]    00 0117 30 00/1000: ROR  $0000       00/0000< 00 
+ROR ABS,X                      [7]    00 0117 30 00/1000: ROR  $0000,X     00/0000< 00 
+RTI                            [7]  0000 0117 00 00/1000: RTI   
+RTS                            [6]    00 011B 30 00/1000: RTS   
+SBC Immediate                  [2]    00 011D 31 00/1000: SBC  #$42 
+SBC Zero Page                  [3]    00 011D 31 00/1000: SBC  $42         00/0042> 0F 
+SBC Zero Page,X                [4]    00 011D 31 00/1000: SBC  $40,X       00/0042> 0F 
+SBC Absolute                   [4]    00 011D 31 00/1000: SBC  $0042       00/0042> 0F 
+SBC Absolute,X No Page Cross   [4]    00 011D 31 00/1000: SBC  $0040,X     00/0042> 0F 
+SBC Absolute,X Page Cross      [5]    00 011D 31 00/1000: SBC  $00FF,X     00/0101> 00 
+SBC Absolute,Y No Page Cross   [4]    02 011D 31 00/1000: SBC  $0040,Y     00/0042> 0F 
+SBC Absolute,Y Page Cross      [5]    02 011D 31 00/1000: SBC  $00FF,Y     00/0101> 00 
+SBC (Indirect,X)               [6]    00 011D 31 00/1000: SBC  ($40,X)     00/000F> 00 
+SBC (Indirect),Y No Page Cross [5]    FF 011D 31 00/1000: SBC  ($00),Y     00/00FF> 00 
+SBC (Indirect),Y Page Cross    [6]    FF 011D 31 00/1000: SBC  ($02),Y     00/11FE> 00 
+SEC                            [2]  0000 011D 00 00/1000: SEC   
+SED                            [2]  0000 011D 00 00/1000: SED   
+SEI                            [2]  0000 011D 00 00/1000: SEI   
+STA Zero Page                  [3]    00 011D 30 00/1000: STA  $42         00/0042< 50 
+STA Zero Page,X                [4]    00 011D 30 00/1000: STA  $40,X       00/0042< 50 
+STA Absolute                   [4]    00 011D 30 00/1000: STA  $0042       00/0042< 50 
+STA Absolute,X                 [5]    00 011D 30 00/1000: STA  $0040,X     00/0042< 50 
+STA Absolute,Y                 [5]    02 011D 30 00/1000: STA  $0040,Y     00/0042< 50 
+STA (Indirect,X)               [6]    00 011D 30 00/1000: STA  ($40,X)     00/0050< 50 
+STA (Indirect),Y               [6]    FF 011D 30 00/1000: STA  ($00),Y     00/00FF< 50 
+STX Zero Page 8                [3]    00 011D 30 00/1000: STX  $42         00/0042< 50 
+STX ZP 8 DP!=0                 [4]    00 011D 30 00/1000: STX  $42         00/1276< 50 
+STX ZP 16                      [4]  0000 011D 20 00/1000: STX  $42         00/0042< 0050 
+STX ZP 16 DP!=0                [5]  0000 011D 20 00/1000: STX  $42         00/1276< 0050 
+STX Zero Page,Y                [4]    02 011D 30 00/1000: STX  $40,Y       00/0042< 50 
+STX Absolute                   [4]    00 011D 30 00/1000: STX  $0042       00/0042< 50 
+STY Zero Page                  [3]    50 011D 30 00/1000: STY  $42         00/0042< 50 
+STY Zero Page,X                [4]    50 011D 30 00/1000: STY  $40,X       00/0042< 50 
+STY Absolute                   [4]    50 011D 30 00/1000: STY  $0042       00/0042< 50 
+STZ ZP                         [3]    50 011D 30 00/1000: STZ  $42         00/0042< 00 
+STZ ZP 16                      [4]    50 011D 10 00/1000: STZ  $42         00/0042< 0000 
+STZ ZP DP!=0                   [4]    50 011D 30 00/1000: STZ  $42         00/1276< 00 
+TAX                            [2]    00 011D 30 00/1000: TAX   
+TAY                            [2]    00 011D 30 00/1000: TAY   
+TCS                            [2]    00 011D 10 00/1000: TCS   
+TSB DP                         [5]    00 1234 30 00/1000: TSB  $10         00/0010< 00 
+TSB DP DP!=0                   [6]    00 1234 30 00/1000: TSB  $10         00/1244< 00 
+TSB DP 16                      [7]    00 1234 10 00/1000: TSB  $10         00/0010< 0000 
+TSB DP 16 DP!=0                [8]    00 1234 10 00/1000: TSB  $10         00/1244< 0000 
+TSB ABS                        [6]    00 1234 30 00/1000: TSB  $1010       00/1010< 00 
+TSB ABS 16                     [8]    00 1234 10 00/1000: TSB  $1010       00/1010< 0000 
+TSB ABS 16 DP!=0               [8]    00 1234 10 00/1000: TSB  $1010       00/1010< 0000 
+TSX                            [2]    00 1234 30 00/1000: TSX   
+TXA                            [2]    00 1234 30 00/1000: TXA   
+TXS                            [2]    00 1234 30 00/1000: TXS   
+TYA                            [2]    42 0042 30 00/1000: TYA   
+XBA                            [3]    00 0042 30 00/1000: XBA   
+XCE                            [2]    00 0042 30 00/1000: XCE   
+Failed tests: 0
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"cpu_cycles_65816" end time: Oct 17 00:12 Central Daylight Time
+"cpu_cycles_65816" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/14 Testing: cpu_cycles_65c02
+5/14 Test: cpu_cycles_65c02
+Command: "D:/gsqs/traceio-20261017/build/cycletest.exe" "65c02"
+Directory: D:/gsqs/traceio-20261017/build
+"cpu_cycles_65c02" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+   CPU Type:  65c02
+Starting CPU Cycle Counts test...
+ADC #                          [2] 0 29 00 1000: ADC  #$00 
+ADC ZP                         [3] 0 29 00 1000: ADC  $00         0000> 00 
+ADC ZP,X                       [4] 0 29 00 1000: ADC  $00,X       0000> 00 
+ADC ABS                        [4] 0 29 00 1000: ADC  $0000       0000> 00 
+ADC ABS,X                      [4] 0 29 00 1000: ADC  $0000,X     0000> 00 
+ADC ABS,X w/Crossing           [5] F 29 00 1000: ADC  $00FF,X     01FE> 00 
+ADC ABS,Y                      [4] 0 29 00 1000: ADC  $0000,Y     0000> 00 
+ADC ABS,Y w/Crossing           [5] F 29 00 1000: ADC  $00FF,Y     01FE> 00 
+ADC (IND,X)                    [6] 0 29 00 1000: ADC  ($00,X)     0000> 00 
+ADC (IND),Y                    [5] 0 29 00 1000: ADC  ($00),Y     0000> 00 
+AND #IMM                       [2] 0 29 00 1000: AND  #$00 
+AND ZP                         [3] 0 29 00 1000: AND  $00         0000> 00 
+AND ZP,X                       [4] 0 29 00 1000: AND  $00,X       0000> 00 
+AND ABS                        [4] 0 29 00 1000: AND  $0000       0000> 00 
+AND ABS,X                      [4] 0 29 00 1000: AND  $0000,X     0000> 00 
+AND ABS,X w/Crossing           [5] F 29 00 1000: AND  $00FF,X     01FE> 00 
+AND ABS,Y                      [4] 0 29 00 1000: AND  $0000,Y     0000> 00 
+AND ABS,Y w/Crossing           [5] F 29 00 1000: AND  $00FF,Y     01FE> 00 
+AND (IND,X)                    [6] 0 29 00 1000: AND  ($00,X)     0000> 00 
+AND (IND),Y                    [5] 0 29 00 1000: AND  ($00),Y     0000> 00 
+AND (IND),Y w/Crossing         [6] F 29 00 1000: AND  ($02),Y     11FE> 00 
+ASL A                          [2] 0 29 00 1000: ASL  A 
+ASL ZP                         [5] 0 29 00 1000: ASL  $00         0000< 00 
+ASL ZP,X                       [6] 0 29 00 1000: ASL  $00,X       0000< 00 
+ASL ABS                        [6] 0 29 00 1000: ASL  $0000       0000< 00 
+ASL ABS,X                      [7] 0 29 00 1000: ASL  $0000,X     0000< 00 
+ASL ABS,X page cross           [7] 0 29 00 1000: ASL  $10FF,X     1100< 00 
+BCC No Branch                  [2] 0 29 01 1000: BCC  $1072 
+BCC Branch Same Page           [3] 0 29 00 1000: BCC  $1072 
+BCC Branch Different Page      [4] 0 29 00 1000: BCC  $0FF2 
+BCS No Branch                  [2] 0 29 00 1000: BCS  $1072 
+BCS Branch Same Page           [3] 0 29 01 1000: BCS  $1072 
+BCS Branch Different Page      [4] 0 29 01 1000: BCS  $0FF2 
+BEQ No Branch                  [2] 0 29 00 1000: BEQ  $1072 
+BEQ Branch Same Page           [3] 0 29 02 1000: BEQ  $1072 
+BEQ Branch Different Page      [4] 0 29 02 1000: BEQ  $0FF2 
+BIT ZP                         [3] 0 29 00 1000: BIT  $00         0000> 00 
+BIT ABS                        [4] 0 29 00 1000: BIT  $0000       0000> 00 
+BMI No Branch                  [2] 0 29 00 1000: BMI  $1072 
+BMI Branch Same Page           [3] 0 29 80 1000: BMI  $1072 
+BMI Branch Different Page      [4] 0 29 80 1000: BMI  $0FF2 
+BNE No Branch                  [2] 0 29 02 1000: BNE  $1072 
+BNE Branch Same Page           [3] 0 29 00 1000: BNE  $1072 
+BNE Branch Different Page      [4] 0 29 00 1000: BNE  $0FF2 
+BPL No Branch                  [2] 0 29 80 1000: BPL  $1072 
+BPL Branch Same Page           [3] 0 29 00 1000: BPL  $1072 
+BPL Branch Different Page      [4] 0 29 00 1000: BPL  $0FF2 
+BRK                            [7] 0 29 00 1000: BRK   
+BVC No Branch                  [2] 0 26 40 1000: BVC  $1072 
+BVC Branch Same Page           [3] 0 26 00 1000: BVC  $1072 
+BVC Branch Different Page      [4] 0 26 00 1000: BVC  $0FF2 
+BVS No Branch                  [2] 0 26 00 1000: BVS  $1072 
+BVS Branch Same Page           [3] 0 26 40 1000: BVS  $1072 
+BVS Branch Different Page      [4] 0 26 40 1000: BVS  $0FF2 
+CLC                            [2] 1 26 00 1000: CLC   
+CLD                            [2] 0 26 08 1000: CLD   
+CLI                            [2] 0 26 04 1000: CLI   
+CLV                            [2] 0 26 40 1000: CLV   
+CMP #                          [2] 0 26 00 1000: CMP  #$42 
+CMP ZP                         [3] 0 26 00 1000: CMP  $42         0042> 00 
+CMP ZP,X                       [4] 0 26 00 1000: CMP  $40,X       0042> 00 
+CMP ABS                        [4] 0 26 00 1000: CMP  $0042       0042> 00 
+CMP ABS,X No Page Cross        [4] 0 26 00 1000: CMP  $0040,X     0042> 00 
+CMP ABS,X Page Cross           [5] 0 26 00 1000: CMP  $00FF,X     0101> 00 
+CMP ABS,Y No Page Cross        [4] 2 26 00 1000: CMP  $0040,Y     0042> 00 
+CMP ABS,Y Page Cross           [5] 2 26 00 1000: CMP  $00FF,Y     0101> 00 
+CMP (IND,X)                    [6] 0 26 00 1000: CMP  ($40,X)     0000> 00 
+CMP (IND),Y No Page Cross      [5] F 26 00 1000: CMP  ($00),Y     00FF> 00 
+CMP (IND),Y Page Cross         [6] F 26 00 1000: CMP  ($02),Y     11FE> 00 
+CPX #                          [2] 0 26 00 1000: CPX  #$42 
+CPX ZP                         [3] 0 26 00 1000: CPX  $42         0042> 00 
+CPX ABS                        [4] 0 26 00 1000: CPX  $0042       0042> 00 
+CPY #                          [2] 0 26 00 1000: CPY  #$42 
+CPY ZP                         [3] 0 26 00 1000: CPY  $42         0042> 00 
+CPY ABS                        [4] 0 26 00 1000: CPY  $0042       0042> 00 
+DEC ZP                         [5] 0 26 00 1000: DEC  $42         0042< FF 
+DEC ZP,X                       [6] 0 26 00 1000: DEC  $42,X       0042< FE 
+DEC ABS                        [6] 0 26 00 1000: DEC  $0042       0042< FD 
+DEC ABS,X                      [7] 0 26 00 1000: DEC  $0042,X     0042< FC 
+DEX                            [2] 0 26 00 1000: DEX   
+DEY                            [2] 0 26 00 1000: DEY   
+EOR #IMM                       [2] 0 26 00 1000: EOR  #$00 
+EOR ZP                         [3] 0 26 00 1000: EOR  $00         0000> 00 
+EOR ZP,X                       [4] 0 26 00 1000: EOR  $00,X       0000> 00 
+EOR ABS                        [4] 0 26 00 1000: EOR  $0000       0000> 00 
+EOR ABS,X                      [4] 0 26 00 1000: EOR  $0000,X     0000> 00 
+EOR ABS,X w/Crossing           [5] F 26 00 1000: EOR  $00FF,X     01FE> 00 
+EOR ABS,Y                      [4] 0 26 00 1000: EOR  $0000,Y     0000> 00 
+EOR ABS,Y w/Crossing           [5] F 26 00 1000: EOR  $00FF,Y     01FE> 00 
+EOR (IND,X)                    [6] 0 26 00 1000: EOR  ($00,X)     0000> 00 
+EOR (IND),Y                    [5] 0 26 00 1000: EOR  ($00),Y     0000> 00 
+EOR (IND),Y w/Crossing         [6] F 26 00 1000: EOR  ($02),Y     11FE> 00 
+INC ZP                         [5] 0 26 00 1000: INC  $00         0000< 01 
+INC ZP,X                       [6] 0 26 00 1000: INC  $00,X       0000< 01 
+INC ABS                        [6] 0 26 00 1000: INC  $0000       0000< 01 
+INC ABS,X                      [7] 0 26 00 1000: INC  $0000,X     0000< 01 
+INX                            [2] 0 26 00 1000: INX   
+INY                            [2] 0 26 00 1000: INY   
+JMP ABS                        [3] 0 26 00 1000: JMP  $0000       0000> 01 
+JMP Indirect                   [6] 0 26 00 1000: JMP  ($0000)     0000> 01 
+JSR ABS                        [6] 0 26 00 1000: JSR  $0000       0000> 1002 
+LDA #IMM                       [2] 0 24 00 1000: LDA  #$00 
+LDA ZP                         [3] 0 24 00 1000: LDA  $00         0000> 00 
+LDA ZP,X                       [4] 0 24 00 1000: LDA  $00,X       0000> 00 
+LDA ABS                        [4] 0 24 00 1000: LDA  $0000       0000> 00 
+LDA ABS,X                      [4] 0 24 00 1000: LDA  $0000,X     0000> 00 
+LDA ABS,X w/Crossing           [5] F 24 00 1000: LDA  $00FF,X     01FE> 00 
+LDA ABS,Y                      [4] 0 24 00 1000: LDA  $0000,Y     0000> 00 
+LDA ABS,Y w/Crossing           [5] F 24 00 1000: LDA  $00FF,Y     01FE> 00 
+LDA (IND,X)                    [6] 0 24 00 1000: LDA  ($00,X)     0000> 00 
+LDA (IND),Y                    [5] 0 24 00 1000: LDA  ($00),Y     0000> 00 
+LDA (IND),Y w/Crossing         [6] F 24 00 1000: LDA  ($02),Y     11FE> 00 
+LDX #IMM                       [2] 0 24 00 1000: LDX  #$00 
+LDX ZP                         [3] 0 24 00 1000: LDX  $00         0000> 00 
+LDX ZP,Y                       [4] 0 24 00 1000: LDX  $00,Y       0000> 00 
+LDX ABS                        [4] 0 24 00 1000: LDX  $0000       0000> 00 
+LDX ABS,Y                      [4] 0 24 00 1000: LDX  $0000,Y     0000> 00 
+LDX ABS,Y w/Crossing           [5] F 24 00 1000: LDX  $00FF,Y     01FE> 00 
+LDY #IMM                       [2] 0 24 00 1000: LDY  #$00 
+LDY ZP                         [3] 0 24 00 1000: LDY  $00         0000> 00 
+LDY ZP,X                       [4] 0 24 00 1000: LDY  $00,X       0000> 00 
+LDY ABS                        [4] 0 24 00 1000: LDY  $0000       0000> 00 
+LDY ABS,X                      [4] 0 24 00 1000: LDY  $0000,X     0000> 00 
+LDY ABS,X w/Crossing           [5] F 24 00 1000: LDY  $00FF,X     01FE> 00 
+LSR A                          [2] 0 24 00 1000: LSR  A 
+LSR ZP                         [5] 0 24 00 1000: LSR  $42         0042< 7E 
+LSR ZP,X                       [6] 0 24 00 1000: LSR  $40,X       0042< 3F 
+LSR ABS                        [6] 0 24 00 1000: LSR  $0042       0042< 1F 
+LSR ABS,X                      [7] 0 24 00 1000: LSR  $0040,X     0042< 0F 
+NOP                            [2] 0 24 00 1000: NOP   
+ORA #IMM                       [2] 0 24 00 1000: ORA  #$00 
+ORA ZP                         [3] 0 24 00 1000: ORA  $00         0000> 00 
+ORA ZP,X                       [4] 0 24 00 1000: ORA  $00,X       0000> 00 
+ORA ABS                        [4] 0 24 00 1000: ORA  $0000       0000> 00 
+ORA ABS,X                      [4] 0 24 00 1000: ORA  $0000,X     0000> 00 
+ORA ABS,X w/Crossing           [5] F 24 00 1000: ORA  $00FF,X     01FE> 00 
+ORA ABS,Y                      [4] 0 24 00 1000: ORA  $0000,Y     0000> 00 
+ORA ABS,Y w/Crossing           [5] F 24 00 1000: ORA  $00FF,Y     01FE> 00 
+ORA (IND,X)                    [6] 0 24 00 1000: ORA  ($00,X)     0000> 00 
+ORA (IND),Y                    [5] 0 24 00 1000: ORA  ($00,X)     0000> 00 
+ORA (IND),Y w/Crossing         [6] F 24 00 1000: ORA  ($02,X)     11FE> 00 
+PHA                            [3] 0 24 00 1000: PHA   
+PHP                            [3] 0 23 FF 1000: PHP   
+PLA                            [4] 0 22 00 1000: PLA   
+PLP                            [4] 0 23 00 1000: PLP   
+ROL A                          [2] 0 24 00 1000: ROL  A 
+ROL ZP                         [5] 0 24 00 1000: ROL  $00         0000< 00 
+ROL ZP,X                       [6] 0 24 00 1000: ROL  $00,X       0000< 00 
+ROL ABS                        [6] 0 24 00 1000: ROL  $0000       0000< 00 
+ROL ABS,X                      [7] 0 24 00 1000: ROL  $0000,X     0000< 00 
+ROR A                          [2] 0 24 00 1000: ROR  A 
+ROR ZP                         [5] 0 24 00 1000: ROR  $00         0000< 00 
+ROR ZP,X                       [6] 0 24 00 1000: ROR  $00,X       0000< 00 
+ROR ABS                        [6] 0 24 00 1000: ROR  $0000       0000< 00 
+ROR ABS,X                      [7] 0 24 00 1000: ROR  $0000,X     0000< 00 
+RTI                            [6] 0 24 00 1000: RTI   
+RTS                            [6] 0 27 00 1000: RTS   
+SBC Immediate                  [2] 0 29 01 1000: SBC  #$42 
+SBC Zero Page                  [3] 0 29 01 1000: SBC  $42         0042> 0F 
+SBC Zero Page,X                [4] 0 29 01 1000: SBC  $40,X       0042> 0F 
+SBC Absolute                   [4] 0 29 01 1000: SBC  $0042       0042> 0F 
+SBC Absolute,X No Page Cross   [4] 0 29 01 1000: SBC  $0040,X     0042> 0F 
+SBC Absolute,X Page Cross      [5] 0 29 01 1000: SBC  $00FF,X     0101> 00 
+SBC Absolute,Y No Page Cross   [4] 2 29 01 1000: SBC  $0040,Y     0042> 0F 
+SBC Absolute,Y Page Cross      [5] 2 29 01 1000: SBC  $00FF,Y     0101> 00 
+SBC (Indirect,X)               [6] 0 29 01 1000: SBC  ($40,X)     000F> 00 
+SBC (Indirect),Y No Page Cross [5] F 29 01 1000: SBC  ($00),Y     00FF> 00 
+SBC (Indirect),Y Page Cross    [6] F 29 01 1000: SBC  ($02),Y     11FE> 00 
+SEC                            [2] 0 29 00 1000: SEC   
+SED                            [2] 0 29 00 1000: SED   
+SEI                            [2] 0 29 00 1000: SEI   
+STA Zero Page                  [3] 0 29 00 1000: STA  $42         0042< 50 
+STA Zero Page,X                [4] 0 29 00 1000: STA  $40,X       0042< 50 
+STA Absolute                   [4] 0 29 00 1000: STA  $0042       0042< 50 
+STA Absolute,X                 [5] 0 29 00 1000: STA  $0040,X     0042< 50 
+STA Absolute,Y                 [5] 2 29 00 1000: STA  $0040,Y     0042< 50 
+STA (Indirect,X)               [6] 0 29 00 1000: STA  ($40,X)     0050< 50 
+STA (Indirect),Y               [6] F 29 00 1000: STA  ($00),Y     00FF< 50 
+STX Zero Page                  [3] 0 29 00 1000: STX  $42         0042< 50 
+STX Zero Page,Y                [4] 2 29 00 1000: STX  $40,Y       0042< 50 
+STX Absolute                   [4] 0 29 00 1000: STX  $0042       0042< 50 
+STY Zero Page                  [3] 0 29 00 1000: STY  $42         0042< 50 
+STY Zero Page,X                [4] 0 29 00 1000: STY  $40,X       0042< 50 
+STY Absolute                   [4] 0 29 00 1000: STY  $0042       0042< 50 
+TAX                            [2] 0 29 00 1000: TAX   
+TAY                            [2] 0 29 00 1000: TAY   
+TSX                            [2] 0 29 00 1000: TSX   
+TXA                            [2] 0 29 00 1000: TXA   
+TXS                            [2] 0 29 00 1000: TXS   
+TYA                            [2] 2 42 00 1000: TYA   
+Failed tests: 0
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"cpu_cycles_65c02" end time: Oct 17 00:12 Central Daylight Time
+"cpu_cycles_65c02" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/14 Testing: via_6522_t6
+6/14 Test: via_6522_t6
+Command: "D:/gsqs/traceio-20261017/build/w6522.exe" "6"
+Directory: D:/gsqs/traceio-20261017/build
+"via_6522_t6" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+Running test 6
+       0: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9142] T2[L 2458 C 503B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1L_L[06] = ff
+       1: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20FF C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20FF C: 9140] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1C_H[05] = ff
+[6522 #1 $80]: chip 0 assert irq: 0
+       2: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFF] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFF] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       3: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFF] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFE] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       4: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFE] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFD] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       5: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFD] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFC] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       6: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFC] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFB] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       7: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFB] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFA] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       8: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFA] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF9] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       9: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF9] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF8] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1C_H[05] = 00
+[6522 #1 $80]: chip 0 assert irq: 0
+      10: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FF] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FF] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      11: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FF] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FE] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      12: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FE] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FD] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      13: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FD] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FC] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      14: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FC] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FB] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      15: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FB] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FA] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      16: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FA] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F9] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      17: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F9] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F8] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      18: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F8] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F7] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      19: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F7] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F6] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      20: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F6] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F5] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      21: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F5] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F4] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      22: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F4] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F3] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      23: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F3] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F2] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) read: T1C_L[04] => [6522 #1 $80]: chip 0 assert irq: 0
+f2
+MATCH    cycle=24 reg=04 value=F2
+      24: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F2] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F1] T2[L 2458 C 5022] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) read: T1C_L[04] => [6522 #1 $80]: chip 0 assert irq: 0
+f1
+MATCH    cycle=25 reg=04 value=F1
+      25: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F1] T2[L 2458 C 5022] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F0] T2[L 2458 C 5021] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      26: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F0] T2[L 2458 C 5021] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EF] T2[L 2458 C 5020] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      27: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EF] T2[L 2458 C 5020] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EE] T2[L 2458 C 501F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      28: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EE] T2[L 2458 C 501F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00ED] T2[L 2458 C 501E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      29: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00ED] T2[L 2458 C 501E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EC] T2[L 2458 C 501D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+PASS: 2 read expectations matched
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[PASS: [1-9][0-9]* read expectations matched]
+"via_6522_t6" end time: Oct 17 00:12 Central Daylight Time
+"via_6522_t6" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/14 Testing: via_6522_t7
+7/14 Test: via_6522_t7
+Command: "D:/gsqs/traceio-20261017/build/w6522.exe" "7"
+Directory: D:/gsqs/traceio-20261017/build
+"via_6522_t7" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+Running test 7
+       0: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9142] T2[L 2458 C 503B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1L_L[06] = ff
+       1: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20FF C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20FF C: 9140] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1C_H[05] = ff
+[6522 #1 $80]: chip 0 assert irq: 0
+       2: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFF] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFF] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       3: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFF] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFE] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       4: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFE] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFD] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       5: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFD] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFC] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       6: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFC] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFB] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       7: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFB] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFA] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       8: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFFA] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF9] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       9: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF9] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF8] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      10: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF8] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF7] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      11: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF7] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF6] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      12: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF6] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF5] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      13: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF5] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF4] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      14: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF4] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF3] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      15: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF3] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF2] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      16: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF2] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF1] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      17: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF1] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF0] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      18: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFF0] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEF] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      19: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEF] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEE] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      20: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEE] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFED] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      21: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFED] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEC] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      22: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEC] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEB] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      23: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEB] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEA] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      24: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFEA] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE9] T2[L 2458 C 5022] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      25: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE9] T2[L 2458 C 5022] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE8] T2[L 2458 C 5021] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      26: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE8] T2[L 2458 C 5021] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE7] T2[L 2458 C 5020] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      27: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE7] T2[L 2458 C 5020] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE6] T2[L 2458 C 501F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      28: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE6] T2[L 2458 C 501F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE5] T2[L 2458 C 501E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      29: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE5] T2[L 2458 C 501E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE4] T2[L 2458 C 501D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      30: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE4] T2[L 2458 C 501D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE3] T2[L 2458 C 501C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      31: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE3] T2[L 2458 C 501C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE2] T2[L 2458 C 501B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      32: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE2] T2[L 2458 C 501B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE1] T2[L 2458 C 501A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      33: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE1] T2[L 2458 C 501A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE0] T2[L 2458 C 5019] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      34: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFE0] T2[L 2458 C 5019] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDF] T2[L 2458 C 5018] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      35: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDF] T2[L 2458 C 5018] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDE] T2[L 2458 C 5017] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      36: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDE] T2[L 2458 C 5017] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDD] T2[L 2458 C 5016] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      37: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDD] T2[L 2458 C 5016] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDC] T2[L 2458 C 5015] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      38: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDC] T2[L 2458 C 5015] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDB] T2[L 2458 C 5014] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      39: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDB] T2[L 2458 C 5014] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDA] T2[L 2458 C 5013] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      40: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFDA] T2[L 2458 C 5013] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD9] T2[L 2458 C 5012] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      41: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD9] T2[L 2458 C 5012] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD8] T2[L 2458 C 5011] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      42: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD8] T2[L 2458 C 5011] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD7] T2[L 2458 C 5010] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      43: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD7] T2[L 2458 C 5010] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD6] T2[L 2458 C 500F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      44: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD6] T2[L 2458 C 500F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD5] T2[L 2458 C 500E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      45: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD5] T2[L 2458 C 500E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD4] T2[L 2458 C 500D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      46: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD4] T2[L 2458 C 500D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD3] T2[L 2458 C 500C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      47: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD3] T2[L 2458 C 500C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD2] T2[L 2458 C 500B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      48: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD2] T2[L 2458 C 500B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD1] T2[L 2458 C 500A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      49: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD1] T2[L 2458 C 500A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD0] T2[L 2458 C 5009] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      50: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFD0] T2[L 2458 C 5009] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCF] T2[L 2458 C 5008] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      51: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCF] T2[L 2458 C 5008] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCE] T2[L 2458 C 5007] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      52: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCE] T2[L 2458 C 5007] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCD] T2[L 2458 C 5006] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      53: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCD] T2[L 2458 C 5006] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCC] T2[L 2458 C 5005] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      54: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCC] T2[L 2458 C 5005] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCB] T2[L 2458 C 5004] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      55: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCB] T2[L 2458 C 5004] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCA] T2[L 2458 C 5003] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      56: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFCA] T2[L 2458 C 5003] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC9] T2[L 2458 C 5002] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      57: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC9] T2[L 2458 C 5002] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC8] T2[L 2458 C 5001] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      58: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC8] T2[L 2458 C 5001] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC7] T2[L 2458 C 5000] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      59: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC7] T2[L 2458 C 5000] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC6] T2[L 2458 C 4FFF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      60: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC6] T2[L 2458 C 4FFF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC5] T2[L 2458 C 4FFE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      61: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC5] T2[L 2458 C 4FFE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC4] T2[L 2458 C 4FFD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      62: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC4] T2[L 2458 C 4FFD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC3] T2[L 2458 C 4FFC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      63: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC3] T2[L 2458 C 4FFC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC2] T2[L 2458 C 4FFB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      64: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC2] T2[L 2458 C 4FFB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC1] T2[L 2458 C 4FFA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      65: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC1] T2[L 2458 C 4FFA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC0] T2[L 2458 C 4FF9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      66: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFC0] T2[L 2458 C 4FF9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBF] T2[L 2458 C 4FF8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      67: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBF] T2[L 2458 C 4FF8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBE] T2[L 2458 C 4FF7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      68: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBE] T2[L 2458 C 4FF7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBD] T2[L 2458 C 4FF6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      69: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBD] T2[L 2458 C 4FF6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBC] T2[L 2458 C 4FF5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      70: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBC] T2[L 2458 C 4FF5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBB] T2[L 2458 C 4FF4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      71: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBB] T2[L 2458 C 4FF4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBA] T2[L 2458 C 4FF3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      72: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFBA] T2[L 2458 C 4FF3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB9] T2[L 2458 C 4FF2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      73: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB9] T2[L 2458 C 4FF2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB8] T2[L 2458 C 4FF1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      74: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB8] T2[L 2458 C 4FF1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB7] T2[L 2458 C 4FF0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      75: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB7] T2[L 2458 C 4FF0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB6] T2[L 2458 C 4FEF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      76: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB6] T2[L 2458 C 4FEF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB5] T2[L 2458 C 4FEE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      77: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB5] T2[L 2458 C 4FEE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB4] T2[L 2458 C 4FED] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      78: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB4] T2[L 2458 C 4FED] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB3] T2[L 2458 C 4FEC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      79: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB3] T2[L 2458 C 4FEC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB2] T2[L 2458 C 4FEB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      80: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB2] T2[L 2458 C 4FEB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB1] T2[L 2458 C 4FEA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      81: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB1] T2[L 2458 C 4FEA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB0] T2[L 2458 C 4FE9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      82: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFB0] T2[L 2458 C 4FE9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAF] T2[L 2458 C 4FE8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      83: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAF] T2[L 2458 C 4FE8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAE] T2[L 2458 C 4FE7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      84: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAE] T2[L 2458 C 4FE7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAD] T2[L 2458 C 4FE6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      85: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAD] T2[L 2458 C 4FE6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAC] T2[L 2458 C 4FE5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      86: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAC] T2[L 2458 C 4FE5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAB] T2[L 2458 C 4FE4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      87: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAB] T2[L 2458 C 4FE4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAA] T2[L 2458 C 4FE3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      88: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFAA] T2[L 2458 C 4FE3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA9] T2[L 2458 C 4FE2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      89: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA9] T2[L 2458 C 4FE2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA8] T2[L 2458 C 4FE1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      90: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA8] T2[L 2458 C 4FE1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA7] T2[L 2458 C 4FE0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      91: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA7] T2[L 2458 C 4FE0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA6] T2[L 2458 C 4FDF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      92: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA6] T2[L 2458 C 4FDF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA5] T2[L 2458 C 4FDE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      93: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA5] T2[L 2458 C 4FDE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA4] T2[L 2458 C 4FDD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      94: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA4] T2[L 2458 C 4FDD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA3] T2[L 2458 C 4FDC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      95: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA3] T2[L 2458 C 4FDC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA2] T2[L 2458 C 4FDB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      96: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA2] T2[L 2458 C 4FDB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA1] T2[L 2458 C 4FDA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      97: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA1] T2[L 2458 C 4FDA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA0] T2[L 2458 C 4FD9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      98: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FFA0] T2[L 2458 C 4FD9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FF9F] T2[L 2458 C 4FD8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      99: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FF9F] T2[L 2458 C 4FD8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L FFFF C: FF9E] T2[L 2458 C 4FD7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1C_H[05] = 00
+[6522 #1 $80]: chip 0 assert irq: 0
+     100: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FF] T2[L 2458 C 4FD7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FF] T2[L 2458 C 4FD6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     101: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FF] T2[L 2458 C 4FD6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FE] T2[L 2458 C 4FD5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     102: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FE] T2[L 2458 C 4FD5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FD] T2[L 2458 C 4FD4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     103: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FD] T2[L 2458 C 4FD4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FC] T2[L 2458 C 4FD3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     104: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FC] T2[L 2458 C 4FD3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FB] T2[L 2458 C 4FD2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     105: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FB] T2[L 2458 C 4FD2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FA] T2[L 2458 C 4FD1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     106: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00FA] T2[L 2458 C 4FD1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F9] T2[L 2458 C 4FD0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     107: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F9] T2[L 2458 C 4FD0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F8] T2[L 2458 C 4FCF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     108: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F8] T2[L 2458 C 4FCF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F7] T2[L 2458 C 4FCE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     109: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F7] T2[L 2458 C 4FCE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F6] T2[L 2458 C 4FCD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     110: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F6] T2[L 2458 C 4FCD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F5] T2[L 2458 C 4FCC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     111: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F5] T2[L 2458 C 4FCC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F4] T2[L 2458 C 4FCB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     112: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F4] T2[L 2458 C 4FCB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F3] T2[L 2458 C 4FCA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     113: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F3] T2[L 2458 C 4FCA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F2] T2[L 2458 C 4FC9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     114: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F2] T2[L 2458 C 4FC9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F1] T2[L 2458 C 4FC8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) read: T1C_L[04] => [6522 #1 $80]: chip 0 assert irq: 0
+f1
+MATCH    cycle=115 reg=04 value=F1
+     115: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F1] T2[L 2458 C 4FC8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F0] T2[L 2458 C 4FC7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     116: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00F0] T2[L 2458 C 4FC7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EF] T2[L 2458 C 4FC6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     117: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EF] T2[L 2458 C 4FC6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EE] T2[L 2458 C 4FC5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     118: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EE] T2[L 2458 C 4FC5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00ED] T2[L 2458 C 4FC4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     119: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00ED] T2[L 2458 C 4FC4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 00FF C: 00EC] T2[L 2458 C 4FC3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+PASS: 1 read expectations matched
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[PASS: [1-9][0-9]* read expectations matched]
+"via_6522_t7" end time: Oct 17 00:12 Central Daylight Time
+"via_6522_t7" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/14 Testing: via_6522_t8
+8/14 Test: via_6522_t8
+Command: "D:/gsqs/traceio-20261017/build/w6522.exe" "8"
+Directory: D:/gsqs/traceio-20261017/build
+"via_6522_t8" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+Running test 8
+       0: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9142] T2[L 2458 C 503B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: IER[0e] = c0
+[6522 #1 $80]: chip 0 assert irq: 0
+       1: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9140] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+(6522 #1 $80) write: ACR[0b] = 00
+       2: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9140] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 913F] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+(6522 #1 $80) write: T1L_L[06] = 06
+       3: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913F] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913E] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+       4: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913E] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913D] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+       5: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913D] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913C] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+       6: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913C] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913B] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+       7: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913B] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913A] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+       8: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 913A] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 9139] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+       9: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 9139] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2006 C: 9138] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+(6522 #1 $80) write: T1C_H[05] = 00
+[6522 #1 $80]: chip 0 assert irq: 0
+      10: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0006] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0006] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+      11: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0006] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0005] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+      12: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0005] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0004] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+      13: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0004] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0003] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+      14: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0003] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0002] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+(6522 #1 $80) read: IFR[0d] => 00
+MATCH    cycle=15 reg=0D value=00
+      15: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0002] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0001] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+(6522 #1 $80) read: IFR[0d] => 00
+MATCH    cycle=16 reg=0D value=00
+      16: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0001] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0000] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+
+(6522 #1 $80) read: IFR[0d] => 00
+MATCH    cycle=17 reg=0D value=00
+      17: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0000] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 40
+[6522 #1 $80]: chip 0 assert irq: 1
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: FFFF] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+(6522 #1 $80) read: IFR[0d] => c0
+MATCH    cycle=18 reg=0D value=C0
+      18: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: FFFF] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0006] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+(6522 #1 $80) read: IFR[0d] => c0
+MATCH    cycle=19 reg=0D value=C0
+      19: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0006] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0005] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+      20: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0005] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0004] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+      21: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0004] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0003] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+      22: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0003] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0002] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+      23: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0002] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0001] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+      24: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0001] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0006 C: 0000] T2[L 2458 C 5022] SR 00 ACR 00 PCR 00 IFR C0 IER 40
+
+PASS: 5 read expectations matched
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[PASS: [1-9][0-9]* read expectations matched]
+"via_6522_t8" end time: Oct 17 00:12 Central Daylight Time
+"via_6522_t8" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/14 Testing: via_6522_t9
+9/14 Test: via_6522_t9
+Command: "D:/gsqs/traceio-20261017/build/w6522.exe" "9"
+Directory: D:/gsqs/traceio-20261017/build
+"via_6522_t9" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+Running test 9
+       0: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9142] T2[L 2458 C 503B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: ACR[0b] = 00
+       1: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9141] T2[L 2458 C 503A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 20B7 C: 9140] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1L_L[06] = 01
+       2: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2001 C: 9140] T2[L 2458 C 5039] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 2001 C: 913F] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) write: T1C_H[05] = 01
+[6522 #1 $80]: chip 0 assert irq: 0
+       3: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0101] T2[L 2458 C 5038] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0101] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       4: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0101] T2[L 2458 C 5037] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0100] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       5: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0100] T2[L 2458 C 5036] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FF] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       6: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FF] T2[L 2458 C 5035] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FE] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       7: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FE] T2[L 2458 C 5034] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FD] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       8: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FD] T2[L 2458 C 5033] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FC] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+       9: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FC] T2[L 2458 C 5032] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FB] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      10: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FB] T2[L 2458 C 5031] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FA] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      11: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FA] T2[L 2458 C 5030] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F9] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      12: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F9] T2[L 2458 C 502F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F8] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      13: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F8] T2[L 2458 C 502E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F7] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      14: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F7] T2[L 2458 C 502D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F6] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      15: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F6] T2[L 2458 C 502C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F5] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      16: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F5] T2[L 2458 C 502B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F4] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      17: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F4] T2[L 2458 C 502A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F3] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      18: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F3] T2[L 2458 C 5029] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F2] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      19: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F2] T2[L 2458 C 5028] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F1] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      20: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F1] T2[L 2458 C 5027] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F0] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      21: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00F0] T2[L 2458 C 5026] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EF] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      22: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EF] T2[L 2458 C 5025] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EE] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      23: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EE] T2[L 2458 C 5024] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00ED] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      24: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00ED] T2[L 2458 C 5023] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EC] T2[L 2458 C 5022] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      25: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EC] T2[L 2458 C 5022] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EB] T2[L 2458 C 5021] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      26: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EB] T2[L 2458 C 5021] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EA] T2[L 2458 C 5020] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      27: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00EA] T2[L 2458 C 5020] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E9] T2[L 2458 C 501F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      28: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E9] T2[L 2458 C 501F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E8] T2[L 2458 C 501E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      29: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E8] T2[L 2458 C 501E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E7] T2[L 2458 C 501D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      30: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E7] T2[L 2458 C 501D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E6] T2[L 2458 C 501C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      31: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E6] T2[L 2458 C 501C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E5] T2[L 2458 C 501B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      32: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E5] T2[L 2458 C 501B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E4] T2[L 2458 C 501A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      33: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E4] T2[L 2458 C 501A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E3] T2[L 2458 C 5019] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      34: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E3] T2[L 2458 C 5019] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E2] T2[L 2458 C 5018] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      35: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E2] T2[L 2458 C 5018] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E1] T2[L 2458 C 5017] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      36: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E1] T2[L 2458 C 5017] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E0] T2[L 2458 C 5016] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      37: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00E0] T2[L 2458 C 5016] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DF] T2[L 2458 C 5015] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      38: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DF] T2[L 2458 C 5015] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DE] T2[L 2458 C 5014] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      39: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DE] T2[L 2458 C 5014] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DD] T2[L 2458 C 5013] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      40: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DD] T2[L 2458 C 5013] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DC] T2[L 2458 C 5012] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      41: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DC] T2[L 2458 C 5012] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DB] T2[L 2458 C 5011] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      42: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DB] T2[L 2458 C 5011] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DA] T2[L 2458 C 5010] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      43: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00DA] T2[L 2458 C 5010] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D9] T2[L 2458 C 500F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      44: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D9] T2[L 2458 C 500F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D8] T2[L 2458 C 500E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      45: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D8] T2[L 2458 C 500E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D7] T2[L 2458 C 500D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      46: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D7] T2[L 2458 C 500D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D6] T2[L 2458 C 500C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      47: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D6] T2[L 2458 C 500C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D5] T2[L 2458 C 500B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      48: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D5] T2[L 2458 C 500B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D4] T2[L 2458 C 500A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      49: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D4] T2[L 2458 C 500A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D3] T2[L 2458 C 5009] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      50: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D3] T2[L 2458 C 5009] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D2] T2[L 2458 C 5008] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      51: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D2] T2[L 2458 C 5008] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D1] T2[L 2458 C 5007] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      52: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D1] T2[L 2458 C 5007] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D0] T2[L 2458 C 5006] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      53: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00D0] T2[L 2458 C 5006] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CF] T2[L 2458 C 5005] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      54: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CF] T2[L 2458 C 5005] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CE] T2[L 2458 C 5004] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      55: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CE] T2[L 2458 C 5004] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CD] T2[L 2458 C 5003] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      56: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CD] T2[L 2458 C 5003] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CC] T2[L 2458 C 5002] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      57: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CC] T2[L 2458 C 5002] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CB] T2[L 2458 C 5001] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      58: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CB] T2[L 2458 C 5001] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CA] T2[L 2458 C 5000] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      59: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00CA] T2[L 2458 C 5000] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C9] T2[L 2458 C 4FFF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      60: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C9] T2[L 2458 C 4FFF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C8] T2[L 2458 C 4FFE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      61: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C8] T2[L 2458 C 4FFE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C7] T2[L 2458 C 4FFD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      62: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C7] T2[L 2458 C 4FFD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C6] T2[L 2458 C 4FFC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      63: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C6] T2[L 2458 C 4FFC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C5] T2[L 2458 C 4FFB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      64: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C5] T2[L 2458 C 4FFB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C4] T2[L 2458 C 4FFA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      65: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C4] T2[L 2458 C 4FFA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C3] T2[L 2458 C 4FF9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      66: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C3] T2[L 2458 C 4FF9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C2] T2[L 2458 C 4FF8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      67: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C2] T2[L 2458 C 4FF8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C1] T2[L 2458 C 4FF7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      68: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C1] T2[L 2458 C 4FF7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C0] T2[L 2458 C 4FF6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      69: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00C0] T2[L 2458 C 4FF6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BF] T2[L 2458 C 4FF5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      70: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BF] T2[L 2458 C 4FF5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BE] T2[L 2458 C 4FF4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      71: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BE] T2[L 2458 C 4FF4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BD] T2[L 2458 C 4FF3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      72: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BD] T2[L 2458 C 4FF3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BC] T2[L 2458 C 4FF2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      73: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BC] T2[L 2458 C 4FF2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BB] T2[L 2458 C 4FF1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      74: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BB] T2[L 2458 C 4FF1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BA] T2[L 2458 C 4FF0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      75: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00BA] T2[L 2458 C 4FF0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B9] T2[L 2458 C 4FEF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      76: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B9] T2[L 2458 C 4FEF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B8] T2[L 2458 C 4FEE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      77: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B8] T2[L 2458 C 4FEE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B7] T2[L 2458 C 4FED] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      78: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B7] T2[L 2458 C 4FED] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B6] T2[L 2458 C 4FEC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      79: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B6] T2[L 2458 C 4FEC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B5] T2[L 2458 C 4FEB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      80: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B5] T2[L 2458 C 4FEB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B4] T2[L 2458 C 4FEA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      81: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B4] T2[L 2458 C 4FEA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B3] T2[L 2458 C 4FE9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      82: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B3] T2[L 2458 C 4FE9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B2] T2[L 2458 C 4FE8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      83: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B2] T2[L 2458 C 4FE8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B1] T2[L 2458 C 4FE7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      84: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B1] T2[L 2458 C 4FE7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B0] T2[L 2458 C 4FE6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      85: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00B0] T2[L 2458 C 4FE6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AF] T2[L 2458 C 4FE5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      86: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AF] T2[L 2458 C 4FE5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AE] T2[L 2458 C 4FE4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      87: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AE] T2[L 2458 C 4FE4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AD] T2[L 2458 C 4FE3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      88: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AD] T2[L 2458 C 4FE3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AC] T2[L 2458 C 4FE2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      89: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AC] T2[L 2458 C 4FE2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AB] T2[L 2458 C 4FE1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      90: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AB] T2[L 2458 C 4FE1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AA] T2[L 2458 C 4FE0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      91: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00AA] T2[L 2458 C 4FE0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A9] T2[L 2458 C 4FDF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      92: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A9] T2[L 2458 C 4FDF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A8] T2[L 2458 C 4FDE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      93: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A8] T2[L 2458 C 4FDE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A7] T2[L 2458 C 4FDD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      94: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A7] T2[L 2458 C 4FDD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A6] T2[L 2458 C 4FDC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      95: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A6] T2[L 2458 C 4FDC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A5] T2[L 2458 C 4FDB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      96: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A5] T2[L 2458 C 4FDB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A4] T2[L 2458 C 4FDA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      97: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A4] T2[L 2458 C 4FDA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A3] T2[L 2458 C 4FD9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      98: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A3] T2[L 2458 C 4FD9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A2] T2[L 2458 C 4FD8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+      99: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A2] T2[L 2458 C 4FD8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A1] T2[L 2458 C 4FD7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     100: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A1] T2[L 2458 C 4FD7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A0] T2[L 2458 C 4FD6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     101: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00A0] T2[L 2458 C 4FD6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009F] T2[L 2458 C 4FD5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     102: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009F] T2[L 2458 C 4FD5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009E] T2[L 2458 C 4FD4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     103: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009E] T2[L 2458 C 4FD4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009D] T2[L 2458 C 4FD3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     104: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009D] T2[L 2458 C 4FD3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009C] T2[L 2458 C 4FD2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     105: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009C] T2[L 2458 C 4FD2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009B] T2[L 2458 C 4FD1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     106: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009B] T2[L 2458 C 4FD1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009A] T2[L 2458 C 4FD0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     107: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 009A] T2[L 2458 C 4FD0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0099] T2[L 2458 C 4FCF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     108: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0099] T2[L 2458 C 4FCF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0098] T2[L 2458 C 4FCE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     109: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0098] T2[L 2458 C 4FCE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0097] T2[L 2458 C 4FCD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     110: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0097] T2[L 2458 C 4FCD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0096] T2[L 2458 C 4FCC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     111: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0096] T2[L 2458 C 4FCC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0095] T2[L 2458 C 4FCB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     112: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0095] T2[L 2458 C 4FCB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0094] T2[L 2458 C 4FCA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     113: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0094] T2[L 2458 C 4FCA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0093] T2[L 2458 C 4FC9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     114: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0093] T2[L 2458 C 4FC9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0092] T2[L 2458 C 4FC8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     115: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0092] T2[L 2458 C 4FC8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0091] T2[L 2458 C 4FC7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     116: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0091] T2[L 2458 C 4FC7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0090] T2[L 2458 C 4FC6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     117: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0090] T2[L 2458 C 4FC6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008F] T2[L 2458 C 4FC5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     118: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008F] T2[L 2458 C 4FC5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008E] T2[L 2458 C 4FC4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     119: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008E] T2[L 2458 C 4FC4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008D] T2[L 2458 C 4FC3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     120: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008D] T2[L 2458 C 4FC3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008C] T2[L 2458 C 4FC2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     121: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008C] T2[L 2458 C 4FC2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008B] T2[L 2458 C 4FC1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     122: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008B] T2[L 2458 C 4FC1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008A] T2[L 2458 C 4FC0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     123: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 008A] T2[L 2458 C 4FC0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0089] T2[L 2458 C 4FBF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     124: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0089] T2[L 2458 C 4FBF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0088] T2[L 2458 C 4FBE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     125: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0088] T2[L 2458 C 4FBE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0087] T2[L 2458 C 4FBD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     126: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0087] T2[L 2458 C 4FBD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0086] T2[L 2458 C 4FBC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     127: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0086] T2[L 2458 C 4FBC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0085] T2[L 2458 C 4FBB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     128: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0085] T2[L 2458 C 4FBB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0084] T2[L 2458 C 4FBA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     129: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0084] T2[L 2458 C 4FBA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0083] T2[L 2458 C 4FB9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     130: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0083] T2[L 2458 C 4FB9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0082] T2[L 2458 C 4FB8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     131: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0082] T2[L 2458 C 4FB8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0081] T2[L 2458 C 4FB7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     132: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0081] T2[L 2458 C 4FB7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0080] T2[L 2458 C 4FB6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     133: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0080] T2[L 2458 C 4FB6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007F] T2[L 2458 C 4FB5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     134: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007F] T2[L 2458 C 4FB5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007E] T2[L 2458 C 4FB4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     135: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007E] T2[L 2458 C 4FB4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007D] T2[L 2458 C 4FB3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     136: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007D] T2[L 2458 C 4FB3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007C] T2[L 2458 C 4FB2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     137: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007C] T2[L 2458 C 4FB2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007B] T2[L 2458 C 4FB1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     138: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007B] T2[L 2458 C 4FB1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007A] T2[L 2458 C 4FB0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     139: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 007A] T2[L 2458 C 4FB0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0079] T2[L 2458 C 4FAF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     140: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0079] T2[L 2458 C 4FAF] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0078] T2[L 2458 C 4FAE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     141: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0078] T2[L 2458 C 4FAE] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0077] T2[L 2458 C 4FAD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     142: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0077] T2[L 2458 C 4FAD] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0076] T2[L 2458 C 4FAC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     143: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0076] T2[L 2458 C 4FAC] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0075] T2[L 2458 C 4FAB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     144: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0075] T2[L 2458 C 4FAB] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0074] T2[L 2458 C 4FAA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     145: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0074] T2[L 2458 C 4FAA] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0073] T2[L 2458 C 4FA9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     146: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0073] T2[L 2458 C 4FA9] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0072] T2[L 2458 C 4FA8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     147: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0072] T2[L 2458 C 4FA8] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0071] T2[L 2458 C 4FA7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     148: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0071] T2[L 2458 C 4FA7] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0070] T2[L 2458 C 4FA6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     149: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0070] T2[L 2458 C 4FA6] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006F] T2[L 2458 C 4FA5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     150: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006F] T2[L 2458 C 4FA5] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006E] T2[L 2458 C 4FA4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     151: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006E] T2[L 2458 C 4FA4] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006D] T2[L 2458 C 4FA3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     152: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006D] T2[L 2458 C 4FA3] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006C] T2[L 2458 C 4FA2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     153: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006C] T2[L 2458 C 4FA2] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006B] T2[L 2458 C 4FA1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     154: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006B] T2[L 2458 C 4FA1] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006A] T2[L 2458 C 4FA0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     155: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 006A] T2[L 2458 C 4FA0] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0069] T2[L 2458 C 4F9F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     156: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0069] T2[L 2458 C 4F9F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0068] T2[L 2458 C 4F9E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     157: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0068] T2[L 2458 C 4F9E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0067] T2[L 2458 C 4F9D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     158: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0067] T2[L 2458 C 4F9D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0066] T2[L 2458 C 4F9C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     159: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0066] T2[L 2458 C 4F9C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0065] T2[L 2458 C 4F9B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     160: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0065] T2[L 2458 C 4F9B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0064] T2[L 2458 C 4F9A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     161: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0064] T2[L 2458 C 4F9A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0063] T2[L 2458 C 4F99] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     162: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0063] T2[L 2458 C 4F99] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0062] T2[L 2458 C 4F98] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     163: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0062] T2[L 2458 C 4F98] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0061] T2[L 2458 C 4F97] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     164: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0061] T2[L 2458 C 4F97] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0060] T2[L 2458 C 4F96] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     165: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0060] T2[L 2458 C 4F96] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005F] T2[L 2458 C 4F95] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     166: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005F] T2[L 2458 C 4F95] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005E] T2[L 2458 C 4F94] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     167: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005E] T2[L 2458 C 4F94] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005D] T2[L 2458 C 4F93] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     168: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005D] T2[L 2458 C 4F93] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005C] T2[L 2458 C 4F92] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     169: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005C] T2[L 2458 C 4F92] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005B] T2[L 2458 C 4F91] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     170: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005B] T2[L 2458 C 4F91] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005A] T2[L 2458 C 4F90] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     171: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 005A] T2[L 2458 C 4F90] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0059] T2[L 2458 C 4F8F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     172: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0059] T2[L 2458 C 4F8F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0058] T2[L 2458 C 4F8E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     173: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0058] T2[L 2458 C 4F8E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0057] T2[L 2458 C 4F8D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     174: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0057] T2[L 2458 C 4F8D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0056] T2[L 2458 C 4F8C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     175: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0056] T2[L 2458 C 4F8C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0055] T2[L 2458 C 4F8B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     176: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0055] T2[L 2458 C 4F8B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0054] T2[L 2458 C 4F8A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     177: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0054] T2[L 2458 C 4F8A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0053] T2[L 2458 C 4F89] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     178: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0053] T2[L 2458 C 4F89] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0052] T2[L 2458 C 4F88] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     179: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0052] T2[L 2458 C 4F88] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0051] T2[L 2458 C 4F87] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     180: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0051] T2[L 2458 C 4F87] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0050] T2[L 2458 C 4F86] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     181: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0050] T2[L 2458 C 4F86] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004F] T2[L 2458 C 4F85] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     182: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004F] T2[L 2458 C 4F85] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004E] T2[L 2458 C 4F84] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     183: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004E] T2[L 2458 C 4F84] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004D] T2[L 2458 C 4F83] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     184: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004D] T2[L 2458 C 4F83] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004C] T2[L 2458 C 4F82] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     185: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004C] T2[L 2458 C 4F82] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004B] T2[L 2458 C 4F81] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     186: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004B] T2[L 2458 C 4F81] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004A] T2[L 2458 C 4F80] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     187: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 004A] T2[L 2458 C 4F80] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0049] T2[L 2458 C 4F7F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     188: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0049] T2[L 2458 C 4F7F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0048] T2[L 2458 C 4F7E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     189: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0048] T2[L 2458 C 4F7E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0047] T2[L 2458 C 4F7D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     190: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0047] T2[L 2458 C 4F7D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0046] T2[L 2458 C 4F7C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     191: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0046] T2[L 2458 C 4F7C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0045] T2[L 2458 C 4F7B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     192: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0045] T2[L 2458 C 4F7B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0044] T2[L 2458 C 4F7A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     193: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0044] T2[L 2458 C 4F7A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0043] T2[L 2458 C 4F79] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     194: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0043] T2[L 2458 C 4F79] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0042] T2[L 2458 C 4F78] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     195: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0042] T2[L 2458 C 4F78] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0041] T2[L 2458 C 4F77] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     196: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0041] T2[L 2458 C 4F77] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0040] T2[L 2458 C 4F76] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     197: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0040] T2[L 2458 C 4F76] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003F] T2[L 2458 C 4F75] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     198: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003F] T2[L 2458 C 4F75] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003E] T2[L 2458 C 4F74] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     199: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003E] T2[L 2458 C 4F74] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003D] T2[L 2458 C 4F73] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     200: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003D] T2[L 2458 C 4F73] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003C] T2[L 2458 C 4F72] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     201: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003C] T2[L 2458 C 4F72] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003B] T2[L 2458 C 4F71] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     202: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003B] T2[L 2458 C 4F71] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003A] T2[L 2458 C 4F70] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     203: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 003A] T2[L 2458 C 4F70] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0039] T2[L 2458 C 4F6F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     204: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0039] T2[L 2458 C 4F6F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0038] T2[L 2458 C 4F6E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     205: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0038] T2[L 2458 C 4F6E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0037] T2[L 2458 C 4F6D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     206: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0037] T2[L 2458 C 4F6D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0036] T2[L 2458 C 4F6C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     207: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0036] T2[L 2458 C 4F6C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0035] T2[L 2458 C 4F6B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     208: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0035] T2[L 2458 C 4F6B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0034] T2[L 2458 C 4F6A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     209: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0034] T2[L 2458 C 4F6A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0033] T2[L 2458 C 4F69] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     210: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0033] T2[L 2458 C 4F69] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0032] T2[L 2458 C 4F68] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     211: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0032] T2[L 2458 C 4F68] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0031] T2[L 2458 C 4F67] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     212: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0031] T2[L 2458 C 4F67] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0030] T2[L 2458 C 4F66] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     213: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0030] T2[L 2458 C 4F66] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002F] T2[L 2458 C 4F65] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     214: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002F] T2[L 2458 C 4F65] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002E] T2[L 2458 C 4F64] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     215: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002E] T2[L 2458 C 4F64] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002D] T2[L 2458 C 4F63] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     216: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002D] T2[L 2458 C 4F63] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002C] T2[L 2458 C 4F62] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     217: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002C] T2[L 2458 C 4F62] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002B] T2[L 2458 C 4F61] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     218: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002B] T2[L 2458 C 4F61] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002A] T2[L 2458 C 4F60] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     219: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 002A] T2[L 2458 C 4F60] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0029] T2[L 2458 C 4F5F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     220: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0029] T2[L 2458 C 4F5F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0028] T2[L 2458 C 4F5E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     221: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0028] T2[L 2458 C 4F5E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0027] T2[L 2458 C 4F5D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     222: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0027] T2[L 2458 C 4F5D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0026] T2[L 2458 C 4F5C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     223: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0026] T2[L 2458 C 4F5C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0025] T2[L 2458 C 4F5B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     224: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0025] T2[L 2458 C 4F5B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0024] T2[L 2458 C 4F5A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     225: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0024] T2[L 2458 C 4F5A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0023] T2[L 2458 C 4F59] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     226: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0023] T2[L 2458 C 4F59] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0022] T2[L 2458 C 4F58] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     227: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0022] T2[L 2458 C 4F58] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0021] T2[L 2458 C 4F57] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     228: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0021] T2[L 2458 C 4F57] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0020] T2[L 2458 C 4F56] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     229: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0020] T2[L 2458 C 4F56] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001F] T2[L 2458 C 4F55] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     230: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001F] T2[L 2458 C 4F55] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001E] T2[L 2458 C 4F54] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     231: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001E] T2[L 2458 C 4F54] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001D] T2[L 2458 C 4F53] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     232: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001D] T2[L 2458 C 4F53] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001C] T2[L 2458 C 4F52] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     233: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001C] T2[L 2458 C 4F52] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001B] T2[L 2458 C 4F51] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     234: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001B] T2[L 2458 C 4F51] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001A] T2[L 2458 C 4F50] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     235: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 001A] T2[L 2458 C 4F50] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0019] T2[L 2458 C 4F4F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     236: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0019] T2[L 2458 C 4F4F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0018] T2[L 2458 C 4F4E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     237: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0018] T2[L 2458 C 4F4E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0017] T2[L 2458 C 4F4D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     238: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0017] T2[L 2458 C 4F4D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0016] T2[L 2458 C 4F4C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     239: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0016] T2[L 2458 C 4F4C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0015] T2[L 2458 C 4F4B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     240: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0015] T2[L 2458 C 4F4B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0014] T2[L 2458 C 4F4A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     241: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0014] T2[L 2458 C 4F4A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0013] T2[L 2458 C 4F49] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     242: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0013] T2[L 2458 C 4F49] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0012] T2[L 2458 C 4F48] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     243: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0012] T2[L 2458 C 4F48] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0011] T2[L 2458 C 4F47] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     244: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0011] T2[L 2458 C 4F47] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0010] T2[L 2458 C 4F46] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     245: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0010] T2[L 2458 C 4F46] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000F] T2[L 2458 C 4F45] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     246: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000F] T2[L 2458 C 4F45] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000E] T2[L 2458 C 4F44] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     247: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000E] T2[L 2458 C 4F44] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000D] T2[L 2458 C 4F43] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     248: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000D] T2[L 2458 C 4F43] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000C] T2[L 2458 C 4F42] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     249: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000C] T2[L 2458 C 4F42] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000B] T2[L 2458 C 4F41] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     250: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000B] T2[L 2458 C 4F41] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000A] T2[L 2458 C 4F40] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     251: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 000A] T2[L 2458 C 4F40] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0009] T2[L 2458 C 4F3F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     252: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0009] T2[L 2458 C 4F3F] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0008] T2[L 2458 C 4F3E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     253: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0008] T2[L 2458 C 4F3E] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0007] T2[L 2458 C 4F3D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     254: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0007] T2[L 2458 C 4F3D] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0006] T2[L 2458 C 4F3C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     255: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0006] T2[L 2458 C 4F3C] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0005] T2[L 2458 C 4F3B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     256: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0005] T2[L 2458 C 4F3B] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0004] T2[L 2458 C 4F3A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     257: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0004] T2[L 2458 C 4F3A] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0003] T2[L 2458 C 4F39] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     258: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0003] T2[L 2458 C 4F39] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0002] T2[L 2458 C 4F38] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     259: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0002] T2[L 2458 C 4F38] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0001] T2[L 2458 C 4F37] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+(6522 #1 $80) read: T1C_H[05] => 00
+MATCH    cycle=260 reg=05 value=00
+     260: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0001] T2[L 2458 C 4F37] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0000] T2[L 2458 C 4F36] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+
+     261: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0000] T2[L 2458 C 4F36] SR 00 ACR 00 PCR 00 IFR 00 IER 00
+[6522 #1 $80]: chip 0 assert irq: 0
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: FFFF] T2[L 2458 C 4F35] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+     262: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: FFFF] T2[L 2458 C 4F35] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0101] T2[L 2458 C 4F34] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+(6522 #1 $80) read: T1C_H[05] => 01
+MATCH    cycle=263 reg=05 value=01
+     263: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0101] T2[L 2458 C 4F34] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0100] T2[L 2458 C 4F33] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+     264: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 0100] T2[L 2458 C 4F33] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FF] T2[L 2458 C 4F32] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+     265: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FF] T2[L 2458 C 4F32] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FE] T2[L 2458 C 4F31] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+     266: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FE] T2[L 2458 C 4F31] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FD] T2[L 2458 C 4F30] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+     267: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FD] T2[L 2458 C 4F30] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FC] T2[L 2458 C 4F2F] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+     268: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FC] T2[L 2458 C 4F2F] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FB] T2[L 2458 C 4F2E] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+     269: DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FB] T2[L 2458 C 4F2E] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+after   : DDRA 00 DDRB 00 ORA 00 ORB 00 IRA FF IRB FF T1[L 0101 C: 00FA] T2[L 2458 C 4F2D] SR 00 ACR 00 PCR 00 IFR 40 IER 00
+
+PASS: 2 read expectations matched
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[PASS: [1-9][0-9]* read expectations matched]
+"via_6522_t9" end time: Oct 17 00:12 Central Daylight Time
+"via_6522_t9" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/14 Testing: diskid_apm
+10/14 Test: diskid_apm
+Command: "D:/gsqs/traceio-20261017/build/diskid.exe" "--self-test"
+Directory: D:/gsqs/traceio-20261017/build/apps/diskid
+"diskid_apm" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+APM self-test passed
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"diskid_apm" end time: Oct 17 00:12 Central Daylight Time
+"diskid_apm" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/14 Testing: systemconfigtest
+11/14 Test: systemconfigtest
+Command: "D:/gsqs/traceio-20261017/build/systemconfigtest.exe" "--self-test"
+Directory: D:/gsqs/traceio-20261017/build/apps/systemconfigtest
+"systemconfigtest" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+Running minimal...
+  PASS
+Running apple2plus...
+  PASS
+Running platforms...
+  PASS
+Running clock_scanner...
+  PASS
+Running aliases...
+  PASS
+Running dual_mockingboard...
+  PASS
+Running storage_multivolume...
+  PASS
+Running parallel_output...
+  PASS
+Running clipboard_connection...
+  PASS
+Running connections...
+  PASS
+Running connections_save_roundtrip...
+  PASS
+Running errors...
+  PASS
+Running voc...
+  PASS
+Running settings_choplifter...
+  PASS
+Running settings_global...
+  PASS
+Running settings_no_machine_default...
+  PASS
+Running settings_slot7_not_overridden...
+  PASS
+Running settings_machine_multi...
+  PASS
+Running settings_machine_unsupported...
+  PASS
+Running settings_filename_gate...
+  PASS
+Running detect_config_kind...
+  PASS
+Running settings_duplicate_key...
+  PASS
+Running settings_unknown_keys_warn...
+  PASS
+Running save_roundtrip...
+  PASS
+24/24 tests passed
+<end of output>
+Test time =   0.22 sec
+----------------------------------------------------------
+Test Passed.
+"systemconfigtest" end time: Oct 17 00:12 Central Daylight Time
+"systemconfigtest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/14 Testing: ssgputexttest
+12/14 Test: ssgputexttest
+Command: "D:/gsqs/traceio-20261017/build/ssgputexttest.exe"
+Directory: D:/gsqs/traceio-20261017/build/apps/ssgputexttest
+"ssgputexttest" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+SecondSight: GPUText $95 arg=00 yielded 0->1
+SecondSight: GPUText $95 arg=02 yielded 1->1
+SecondSight: GPUText $95 arg=01 yielded 1->0
+ssgputexttest: 11 tests ok
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"ssgputexttest" end time: Oct 17 00:12 Central Daylight Time
+"ssgputexttest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/14 Testing: snapshot_diff
+13/14 Test: snapshot_diff
+Command: "D:/gsqs/traceio-20261017/build/snapdiff.exe" "--selftest"
+Directory: D:/gsqs/traceio-20261017/build/apps/snapdifftest
+"snapshot_diff" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+snapshot diff: PASS 31 checks
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"snapshot_diff" end time: Oct 17 00:12 Central Daylight Time
+"snapshot_diff" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/14 Testing: interface_contract
+14/14 Test: interface_contract
+Command: "D:/gsqs/traceio-20261017/build/interfacecontracttest.exe"
+Directory: D:/gsqs/traceio-20261017/build/apps/interfacecontracttest
+"interface_contract" start time: Oct 17 00:12 Central Daylight Time
+Output:
+----------------------------------------------------------
+A2GSPU COVERAGE: enabled $000000-$0000FF (32 bytes of bitmap)
+A2GSPU COVERAGE: FAIL write 'D:\gsqs\tmp\a2sink-420435182012800\cov': No space left on device
+A2GSPU PNG: FAIL write 'D:\gsqs\tmp\a2sink-420435182012800\gray': No space left on device
+A2GSPU PNG: FAIL write 'D:\gsqs\tmp\a2sink-420435182012800\rgb': No space left on device
+A2GSPU COVERAGE: FAIL flush 'D:\gsqs\tmp\a2sink-420435182012800\cov': No space left on device
+A2GSPU COVERAGE: FAIL flush 'D:\gsqs\tmp\a2sink-420435182012800\profile': No space left on device
+A2GSPU PNG: FAIL flush 'D:\gsqs\tmp\a2sink-420435182012800\gray': No space left on device
+A2GSPU PNG: FAIL flush 'D:\gsqs\tmp\a2sink-420435182012800\rgb': No space left on device
+A2GSPU COVERAGE: FAIL close 'D:\gsqs\tmp\a2sink-420435182012800\cov': Input/output error
+A2GSPU COVERAGE: FAIL close 'D:\gsqs\tmp\a2sink-420435182012800\profile': Input/output error
+A2GSPU PNG: FAIL close 'D:\gsqs\tmp\a2sink-420435182012800\gray': Input/output error
+A2GSPU PNG: FAIL close 'D:\gsqs\tmp\a2sink-420435182012800\rgb': Input/output error
+A2GSPU COVERAGE: wrote D:\gsqs\tmp\a2sink-420435182012800\valid-cov -- 0/256 bytes executed (0.0%) range=$000000-$0000FF hash=171BB79DC8E18503
+A2GSPU SUBSCRIPTION: FAIL subscription-finalization-failed: flush 'D:\gsqs\tmp\a2sink-420435182012800\events': No space left on device
+A2GSPU SUBSCRIPTION: FAIL subscription-finalization-failed: close 'D:\gsqs\tmp\a2sink-420435182012800\events': Input/output error
+A2GSPU OUTPUT: FAIL fixture-callback 'failure'
+A2GSPU OUTPUT: FAIL flush 'failed fixture'
+PASS real zero-record trace is valid
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-420435174925500\empty.bin format=bus-trace-v1 count=0 bytes=0 content-hash=14650FB0739D0383 file-hash=14650FB0739D0383 meta=D:\gsqs\tmp\a2artifact-420435174925500\empty.bin.meta.json
+PASS empty payload can receive a sidecar
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-420435174925500\missing.bin NO-DESCRIPTION -- read-open 'D:\gsqs\tmp\a2artifact-420435174925500\missing.bin': No such file or directory
+PASS missing payload is not a zero-record capture
+PASS missing payload does not publish metadata
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-420435174925500\mismatch.bin NO-DESCRIPTION -- length-not-count-times-record-size 'D:\gsqs\tmp\a2artifact-420435174925500\mismatch.bin'
+PASS wrong payload length refuses before sidecar publication
+PASS invalid payload does not truncate an existing sidecar
+PASS SHR dump refuses failed open without a valid count
+PASS slot dump refuses failed open without a valid count
+PASS MMU dump refuses failed open without a valid count
+PASS short write refuses and closes
+PASS flush failure refuses and closes
+PASS close failure refuses without a double close
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-420435174925500\empty.bin NO-DESCRIPTION -- flush 'D:\gsqs\tmp\a2artifact-420435174925500\empty.bin.meta.json': No space left on device
+PASS failed sidecar finalization refuses
+PASS failed sidecar is removed
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-420435174925500\empty.bin NO-DESCRIPTION -- close 'D:\gsqs\tmp\a2artifact-420435174925500\empty.bin.meta.json': Input/output error
+PASS failed sidecar finalization refuses
+PASS failed sidecar is removed
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-420435174925500\empty.bin NO-DESCRIPTION -- invalid-record-size-or-count 'D:\gsqs\tmp\a2artifact-420435174925500\empty.bin'
+PASS zero record size refuses
+SPIKE ARTIFACT: D:\gsqs\tmp\a2artifact-420435174925500\empty.bin NO-DESCRIPTION -- invalid-record-size-or-count 'D:\gsqs\tmp\a2artifact-420435174925500\empty.bin'
+PASS record length overflow refuses
+PASS failed record write does not publish a successful observer event
+PASS void record writer refuses failed write
+PASS global readback refuses a latched stream error
+PASS global close refuses a latched error and clears ownership
+PASS owned FILE close consumes pointer on finalization failure
+PASS owned FILE close consumes pointer on finalization failure
+PASS coverage fixture arms
+PASS coverage refuses injected write/flush/close failure
+PASS gray PNG refuses injected write/flush/close failure
+PASS RGB PNG refuses injected write/flush/close failure
+PASS coverage refuses injected write/flush/close failure
+PASS profile refuses finalization failure
+PASS gray PNG refuses injected write/flush/close failure
+PASS RGB PNG refuses injected write/flush/close failure
+PASS coverage refuses injected write/flush/close failure
+PASS profile refuses finalization failure
+PASS gray PNG refuses injected write/flush/close failure
+PASS RGB PNG refuses injected write/flush/close failure
+PASS coverage succeeds after refused output
+PASS profile succeeds after refused output
+PASS PNG writers succeed after refused output
+PASS subscription opens before injected close fault
+PASS subscription refuses complete close receipt after finalization fault
+PASS subscription opens before injected close fault
+PASS subscription refuses complete close receipt after finalization fault
+A2GSPU LIVENESS: samples=0 frames=0 screen_last_changed=0 screen_unchanged_since=none text_last_changed=0 text_unchanged_since=none insns=0 cpu_stopped_since=none screen_store=none text_store=none kbd_poll=none
+PASS liveness close refuses latched I/O error
+A2GSPU_TRAP: fixture hits=0 records=0 entries=0 exits=0 (never reached)
+PASS trap close refuses latched I/O error
+PASS legacy title close refuses latched I/O error
+PASS managed shutdown reports failures after attempting all outputs
+PASS failed finalizer does not skip other callbacks or owned streams
+PASS tracking replacement updates one owner entry
+PASS live sink close propagates error
+PASS failed live close clears registry and poinA2GSPU SCC_A: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\SCC_A resolved=D:\gsqs\tmp\a2byteclose-420435202557300\SCC_A
+A2GSPU SCC_B: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\SCC_B resolved=D:\gsqs\tmp\a2byteclose-420435202557300\SCC_B
+A2GSPU WDM: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\WDM resolved=D:\gsqs\tmp\a2byteclose-420435202557300\WDM
+A2GSPU WDM: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\WDM
+A2GSPU SCC_B: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\SCC_B
+A2GSPU SCC_A: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\SCC_A
+A2GSPU empty: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\empty resolved=D:\gsqs\tmp\a2byteclose-420435202557300\empty
+A2GSPU empty: closed bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\empty
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected resolved=D:\gsqs\tmp\a2byteclose-420435202557300\injected
+A2GSPU injected: FAIL capture-finalization bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected flush 'file:D:\gsqs\tmp\a2byteclose-420435202557300\injected': No space left on device
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected resolved=D:\gsqs\tmp\a2byteclose-420435202557300\injected
+A2GSPU injected: closed bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected resolved=D:\gsqs\tmp\a2byteclose-420435202557300\injected
+A2GSPU injected: FAIL capture-finalization bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected close 'file:D:\gsqs\tmp\a2byteclose-420435202557300\injected': Input/output error
+A2GSPU injected: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected resolved=D:\gsqs\tmp\a2byteclose-420435202557300\injected
+A2GSPU injected: closed bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\injected
+A2GSPU latched: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\latched resolved=D:\gsqs\tmp\a2byteclose-420435202557300\latched
+A2GSPU latched: FAIL capture-finalization bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\latched flush 'file:D:\gsqs\tmp\a2byteclose-420435202557300\latched'
+A2GSPU bad-first: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-first resolved=D:\gsqs\tmp\a2byteclose-420435202557300\bad-first
+A2GSPU bad-second: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-second resolved=D:\gsqs\tmp\a2byteclose-420435202557300\bad-second
+A2GSPU healthy: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\healthy resolved=D:\gsqs\tmp\a2byteclose-420435202557300\healthy
+A2GSPU healthy: closed bytes=1 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\healthy
+A2GSPU bad-second: FAIL capture-finalization bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-second flush 'file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-second'
+A2GSPU bad-first: FAIL capture-finalization bytes=0 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-first flush 'file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-first'
+A2GSPU OUTPUT: FAIL byte-capture-finalization 'capture-finalization 'bad-second file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-second flush 'file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-second''; capture-finalization 'bad-first file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-first flush 'file:D:\gsqs\tmp\a2byteclose-420435202557300\bad-first'''
+A2GSPU preserved: armed binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\preserved resolved=D:\gsqs\tmp\a2byteclose-420435202557300\preserved
+A2GSPU preserved: closed bytes=2 binding=file:D:\gsqs\tmp\a2byteclose-420435202557300\preserved
+A2GSPU pipe-fixture: closed bytes=0 binding=pipe:fixture
+A2GSPU pipe-fixture: FAIL capture-finalization bytes=0 binding=pipe:fixture pipe-close win32-error=29
+ter
+PASS scoped export refuses existing stream error
+PASS scoped export does not double close after refusal
+PASS early return ownership clears scoped FILE view
+PASS ACK publishes one complete newline-terminated receipt
+PASS ACK collision refuses
+PASS ACK collision preserves prior receipt
+PASS ACK blocked temporary output refuses
+PASS ACK failed write never publishes final file
+PASS ACK short-write/flush/close fault refuses
+PASS ACK finalization fault leaves no final receipt
+PASS ACK short-write/flush/close fault refuses
+PASS ACK finalization fault leaves no final receipt
+PASS ACK short-write/flush/close fault refuses
+PASS ACK finalization fault leaves no final receipt
+PASS ACK rename failure refuses
+PASS ACK rename failure retains complete temporary evidence
+PASS unarmed byte capture owns no output
+PASS all byte captures register with managed shutdown
+PASS managed close consumes all byte captures
+PASS managed close preserves independent exact capture bytes
+PASS zero-byte capture closes successfully
+PASS byte capture refuses injected flush failure
+PASS failed byte close releases state and endpoint reservation
+PASS failed byte close is consumed exactly once
+PASS failed binding can be armed again with a fresh counter
+PASS byte capture refuses injected fclose failure
+PASS failed byte close releases state and endpoint reservation
+PASS failed byte close is consumed exactly once
+PASS failed binding can be armed again with a fresh counter
+PASS byte close refuses a real latched stdio error
+PASS latched-error close leaves capture disabled
+PASS managed close reports aggregate byte-capture failures
+PASS failed captures do not skip other captures during shutdown
+PASS healthy capture completes beside failed captures
+PASS repeated managed cleanup does not retry consumed failures
+PASS rebind refusal preserves the already armed capture
+PASS rebind refusal preserves bytes and creates no replacement
+PASS valid pipe handle closes successfully
+PASS pipe close consumes handle even when finalization fails
+PASS pipe close failure refuses
+PASS pipe close consumes handle even when finalization fails
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 0, Tail: 0, Size: 4
+PASS legacy trace: empty ring produces a valid empty binary
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 2, Tail: 0, Size: 4
+PASS legacy trace: non-wrapped records preserve all binary bytes and order
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 2, Tail: 3, Size: 4
+PASS legacy trace: wrapped records export oldest first without stale slots
+PASS legacy trace: export leaves ring state unchanged
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 0, Tail: 0, Size: 4
+PASS legacy trace: empty ring produces a valid empty binary
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 2, Tail: 0, Size: 4
+PASS legacy trace: non-wrapped records preserve all binary bytes and order
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 2, Tail: 3, Size: 4
+PASS legacy trace: wrapped records export oldest first without stale slots
+PASS legacy trace: export leaves ring state unchanged
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 0, Tail: 0, Size: 4
+PASS legacy trace: empty ring produces a valid empty binary
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 2, Tail: 0, Size: 4
+PASS legacy trace: non-wrapped records preserve all binary bytes and order
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 2, Tail: 3, Size: 4
+PASS legacy trace: wrapped records export oldest first without stale slots
+PASS legacy trace: export leaves ring state unchanged
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 1, Tail: 0, Size: 4
+PASS legacy trace: short write refuses and closes once
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 1, Tail: 0, Size: 4
+PASS legacy trace: flush failure refuses and closes once
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 1, Tail: 0, Size: 4
+PASS legacy trace: close failure refuses without double close
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 0, Tail: 0, Size: 4
+PASS legacy trace: empty export still checks finalization
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 0, Tail: 0, Size: 4
+PASS legacy trace: empty export still checks finalization
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800
+Head: 1, Tail: 0, Size: 4
+PASS legacy trace: failed open refuses with destination context
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\missing\trace.bin
+Head: 1, Tail: 0, Size: 4
+PASS legacy trace: failed open refuses with destination context
+Saving trace to file: D:\gsqs\tmp\a2trace-io-420435210569800\trace.bin
+Head: 1, Tail: 0, Size: 4
+PASS legacy trace: retry after failure exports retained records
+interface contract: 64 checks passed
+<end of output>
+Test time =   0.09 sec
+----------------------------------------------------------
+Test Passed.
+"interface_contract" end time: Oct 17 00:12 Central Daylight Time
+"interface_contract" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 17 00:12 Central Daylight Time

@@ -1,0 +1,44 @@
+{
+  "schema": "gssquared-trace-export-validation-v1",
+  "source_commit": "db868e65c881a933b4f40033b3240d6987ba0d47",
+  "source_model": "exact committed Git export; no working-tree overlays",
+  "implementation_matches_frozen_export": true,
+  "implementation_sha256": {
+    "src/debugger/trace.cpp": "78d00bd046c2623b920da72146e46ae1cd9bd74b690977981298a25ff85c16ed",
+    "src/debugger/trace.hpp": "36b0a54da05c947c380100a187f1c1a26f8ad99d61e3013186e566272c92e9c0",
+    "apps/interfacecontracttest/CMakeLists.txt": "485a8acad3f86185326ae53cdb60ff85e34463ecaee2936651aaecc7bd041969",
+    "apps/interfacecontracttest/main.cpp": "f306c5e1eac4c6e688a11bc5717a651fa7ef32e16aea149e9adec6511668e52a",
+    "apps/interfacecontracttest/trace_io_checks.hpp": "cc1f5f3870a2b16de2f5bd32e88acfc601e8a483a42208a9a9858847761c08f5"
+  },
+  "native_executable": "D:\\gsqs\\traceio-20261017\\build\\GSSquared.exe",
+  "native_sha256": "8c711013426771a1ab7b69eaf422071480815cd6c11fdcc635589bba7dfcb12d",
+  "protected_consumer_replaced": false,
+  "protected_consumer_sha256": "364c78f7402381b1b323977293a492336b633712e22dd3f51ffd8b815684991e",
+  "gates": 14,
+  "native_ctests": 14,
+  "unchanged_pinned_boot_checks": 42,
+  "python_tests": 26,
+  "new_trace_export_checks": 20,
+  "total_io_contract_checks": 112,
+  "stdio_baseline_candidate_checks": 4,
+  "mcp_launches": 2,
+  "native_verbs": 74,
+  "mcp_tools": 85,
+  "rails": 161,
+  "wire_types": 32,
+  "stock_windowed_manual_test": "not exercised",
+  "hardware_validation": "not performed",
+  "remaining_output_audit": [
+    "legacy trace input and gstrace",
+    "monitor save/load",
+    "device-private serializers",
+    "asynchronous UI/media flows"
+  ],
+  "application_failure_boundary": "Both save_to_file calls are inside app_iterate_impl; existing SDL_AppIterate catches a2artifact::Error and exits 2. Reviewed; interactive GUI failure not exercised.",
+  "close_contract": [
+    "exact binary host-layout records",
+    "existing reserved-slot ring behavior",
+    "checked open/write/flush/close",
+    "no atomic replacement or fsync guarantee"
+  ]
+}

@@ -1,0 +1,3 @@
+Saving trace to file: D:\gsqs\traceio-20261017\candidate-blocked
+Head: 1, Tail: 0, Size: 4
+refused: open 'D:\gsqs\traceio-20261017\candidate-blocked': Permission denied
