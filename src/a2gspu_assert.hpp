@@ -198,10 +198,8 @@ inline Tally eval(const char *spec, cpu_state *cpu, const uint8_t *e1,
     Tally t;
     size_t dlen = 0;
     if (detail && detailsz) detail[0] = 0;
-    char buf[512];
-    strncpy(buf, spec ? spec : "", sizeof buf - 1);
-    buf[sizeof buf - 1] = 0;
-    for (char *tok = strtok(buf, ";,"); tok; tok = strtok(nullptr, ";,")) {
+    std::vector<char> buf = a2gspu_assert_copy(spec);
+    for (char *tok = strtok(buf.data(), ";,"); tok; tok = strtok(nullptr, ";,")) {
         while (*tok == ' ') tok++;
         size_t tl = strlen(tok);
         while (tl > 0 && tok[tl-1] == ' ') tok[--tl] = 0;

@@ -1454,7 +1454,11 @@ endif()
 #   rtctest      prints a register trace, asserts nothing
 # Registering those would add tests that cannot fail, which is worse than
 # having none: a green ctest would then mean less than it does now.
+add_executable(assertbuftest apps/assertbuftest/main.cpp)
+
 enable_testing()
+
+add_test(NAME assert_past_byte_511 COMMAND assertbuftest)
 
 add_test(NAME cpu_conformance COMMAND conformtest)
 add_test(NAME cpu_coverage COMMAND coveragetest)

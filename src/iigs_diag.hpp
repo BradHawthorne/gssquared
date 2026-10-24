@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 #include "cpu.hpp"
 #include "iigs_toolbox.hpp"
 #include "iigs_shr_layout.hpp"
@@ -197,6 +198,17 @@ inline bool a2gspu_assert_armed(const char *spec) {
     return false;
 }
 
+// The whole spec, mutable for strtok. A 512-byte copy dropped every clause
+// past byte 511. When the kept clauses passed, the summary was ALL PASS and
+// the dropped clause was never evaluated (LOOPA-07).
+inline std::vector<char> a2gspu_assert_copy(const char *spec) {
+    const char *s = spec ? spec : "";
+    const size_t n = std::strlen(s);
+    std::vector<char> buf(n + 1);
+    std::memcpy(buf.data(), s, n + 1);
+    return buf;
+}
+
 inline int iigs_eval_asserts(const char *spec, cpu_state *cpu, const uint8_t *e1,
                              int nonzero, int distinct) {
     int allpass = 1, nchk = 0, ndrop = 0;
@@ -205,9 +217,8 @@ inline int iigs_eval_asserts(const char *spec, cpu_state *cpu, const uint8_t *e1
     // verdicts: an unset-but-exported spec is no gate, a spec whose every
     // clause was unparseable is a failed one.
     const bool spec_nonempty = a2gspu_assert_armed(spec);
-    char buf[512];
-    strncpy(buf, spec, sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
-    for (char *tok = strtok(buf, ";,"); tok; tok = strtok(nullptr, ";,")) {
+    std::vector<char> buf = a2gspu_assert_copy(spec);
+    for (char *tok = strtok(buf.data(), ";,"); tok; tok = strtok(nullptr, ";,")) {
         while (*tok == ' ') tok++;
         char *op = nullptr; int oplen = 0;
         for (char *q = tok; *q; q++) {
