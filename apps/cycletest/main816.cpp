@@ -75,7 +75,13 @@ struct test_record {
     uint16_t y_in = 0;
     uint16_t p_in = m8x8; // for 816 tests default to 8-bit regs
     uint16_t dp_in = 0;
+    int setup = 0;        // SETUP_* below: state the record needs beyond registers
 };
+
+// Records that time something other than one plain instruction fetch say so
+// here; the main loop prepares the state before the timed execute_next.
+constexpr int SETUP_NONE = 0;
+constexpr int SETUP_IRQ  = 1;   // IRQ asserted, I=0, pipeline primed: the timed step is the IRQ entry sequence
 
 test_record test_records[] = {
 
@@ -1499,6 +1505,68 @@ test_record test_records[] = {
         {0xFB},
         2,
         0, 0, 0, m8x8  // native (E=0), C=0: stay native; phantom read is cycle 2
+    },
+
+    // Bank-register stack operations (WDC W65C816S datasheet table 5-7, native).
+    {
+        "PHB",
+        {0x8B},
+        3
+    },
+    {
+        "PHK",
+        {0x4B},
+        3
+    },
+    {
+        "PLB",
+        {0xAB},
+        4      // opcode, 2 internal, pull
+    },
+
+    // WAI: opcode + 2 cycles, then the part waits (RDY low) for an interrupt.
+    // The record times the instruction itself, not the wait.
+    {
+        "WAI",
+        {0xCB},
+        3
+    },
+
+    // Block moves: each execution of the opcode moves ONE byte and costs 7
+    // cycles (opcode, 2 bank operands, read, write, 2 internal); A=0 moves one
+    // byte and falls through. Index width does not change the count.
+    {
+        "MVN 16-bit index",
+        {0x54, 0x00, 0x00},
+        7,
+        0, 0x2000, 0x3000, m16x16
+    },
+    {
+        "MVN 8-bit index",
+        {0x54, 0x00, 0x00},
+        7,
+        0, 0x20, 0x30, m16x8
+    },
+    {
+        "MVP 16-bit index",
+        {0x44, 0x00, 0x00},
+        7,
+        0, 0x2000, 0x3000, m16x16
+    },
+    {
+        "MVP 8-bit index",
+        {0x44, 0x00, 0x00},
+        7,
+        0, 0x20, 0x30, m16x8
+    },
+
+    // IRQ entry, native mode: 8 cycles (2 internal, push PBR, push PCH, push
+    // PCL, push P, vector low, vector high). Emulation mode is 7 (no PBR push).
+    {
+        "IRQ entry (native)",
+        {0xEA},   // NOP at PC; it must NOT execute -- the IRQ is taken first
+        8,
+        0, 0, 0, m8x8, 0, SETUP_IRQ
     }
 };
 
@@ -1609,12 +1677,32 @@ int main(int argc, char **argv) {
         cpu->y = test_records[i].y_in;
         cpu->p = test_records[i].p_in;
         cpu->d = test_records[i].dp_in;
+        // No interrupt or wait state carries over from the previous record
+        // (WAI leaves RDY low; the IRQ record leaves I=1 and a primed pipe).
+        cpu->rdy = false;
+        cpu->halt = 0;
+        cpu->irq_asserted = 0;
+        cpu->irq_pipe = 0;
+        if (test_records[i].setup == SETUP_IRQ) {
+            // Line asserted and sampled with I=0 long enough that the core's
+            // two-cycle look-back sees it at this instruction boundary.
+            cpu->I = 0;
+            cpu->irq_asserted = 1;
+            cpu->irq_pipe = 0x03;
+        }
         mmu->write(0x1000, test_records[i].operation.op[0]);
         mmu->write(0x1001, test_records[i].operation.op[1]);
         mmu->write(0x1002, test_records[i].operation.op[2]);
 
         uint64_t start_cycles = clock->get_cycles();
         bool result = test_instruction(cpu->cpun, cpu, &test_records[i], clock);
+        if (test_records[i].setup == SETUP_IRQ) {
+            // The entry must have happened (vector fetched, PC not past the NOP),
+            // not a 2-cycle NOP that a miscounted table would also mistime.
+            if (!(cpu->I == 1 && cpu->pb == 0x00 && cpu->pc != 0x1001)) result = false;
+            cpu->irq_asserted = 0;
+            cpu->irq_pipe = 0;
+        }
         char * trace_entry = cpu->trace_buffer->decode_trace_entry(&cpu->trace_entry);
         // trim the start (cycles always 0 is not informative)
         trace_entry[90] = '\0';

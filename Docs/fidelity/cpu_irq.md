@@ -170,7 +170,7 @@ Rules are from [doc: Clark, "Decimal Mode", Appendix A]. "bin" means the flag co
 
 | # | Step | Size | Risk |
 |---|---|---|---|
-| 0 | Before porting upstream CPU commits: add XCE, PLB, WAI and IRQ-entry records to `cycletest816`; resolve §1.9 by hand | S | Low |
+| 0 | Before porting upstream CPU commits: add XCE, PLB, WAI and IRQ-entry records to `cycletest816`; resolve §1.9 by hand. **Records done:** XCE was present; PHB, PHK, PLB, WAI, MVN/MVP (8- and 16-bit index, 7 per byte) and native IRQ entry (8, entry verified, not just timed) added | S | Low |
 | 1 | Remove the 65816 16-bit-index double access (abs,X/abs,Y/(d),Y) → IO cycle; audit every full `phantom_read`/`phantom_write` for datasheet address and kind | M | Med: IIgs I/O timing |
 | 2 | IRQ timestamps and exact recognition; IRQ-entry cycle order; clear pipe on reset | M | Med: raster titles, golden hashes move |
 | 3 | MVN/MVP: width-aware stepping plus explicit bank; `set_p()` rule helper | S | Low |
