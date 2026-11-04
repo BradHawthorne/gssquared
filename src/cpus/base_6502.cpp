@@ -2218,13 +2218,13 @@ inline void move_memory(cpu_state *cpu) {
     uint8_t DBA = fetch_pc(cpu); // cycle 2
     uint8_t SBA = fetch_pc(cpu); // cycle 3
 
-    // MVN/MVP always use 16-bit X/Y for the block-move addresses, even when
-    // the X flag selects 8-bit index mode for other instructions (W65C816).
-    // Form bank:offset explicitly: setting only cpu->db left unused_db stale
-    // and _X()/_Y() under x_8 truncated the offset to 8 bits (writes missed
-    // e.g. $00/3100 and hit $00/00nn instead).
-    uint32_t src = ((uint32_t)SBA << 16) | (uint16_t)cpu->x;
-    uint32_t dst = ((uint32_t)DBA << 16) | (uint16_t)cpu->y;
+    // Form bank:offset explicitly from the operand banks (setting only cpu->db
+    // left unused_db stale). The offset is the index register at its current
+    // width: with x=1 (and always in emulation mode) X and Y are 8 bits wide
+    // and their high bytes are zero, so a move can only reach $00-$FF of the
+    // source and destination banks. The caller steps X/Y at the same width.
+    uint32_t src = ((uint32_t)SBA << 16) | (uint16_t)_X(cpu);
+    uint32_t dst = ((uint32_t)DBA << 16) | (uint16_t)_Y(cpu);
     uint8_t N = bus_read(cpu, src); // cycle 4
     bus_write(cpu, dst, N); // cycle 5
     cpu->db = DBA; // DBR becomes destination bank after the move
@@ -4470,9 +4470,10 @@ int execute_next(cpu_state *cpu) override {
         case OP_INOP_44: /* INOP 44 */
             if constexpr (CPUTraits::has_65816_ops) {
                 move_memory(cpu);
-                // Always 16-bit index adjust (independent of X flag).
-                cpu->x--;
-                cpu->y--;
+                // Step X/Y at the index width: with x=1 or e=1 they wrap
+                // within 8 bits ($00 -> $FF) and the high bytes stay zero.
+                _X(cpu)--;
+                _Y(cpu)--;
             } else if constexpr (CPUTraits::has_65c02_ops) {
                 invalid_nop(cpu, 2, 3);
             } else invalid_opcode(cpu, opcode);
@@ -4481,9 +4482,10 @@ int execute_next(cpu_state *cpu) override {
         case OP_INOP_54: /* INOP 54 */ /* OP_MVN_MOVE */
             if constexpr (CPUTraits::has_65816_ops) {
                 move_memory(cpu);
-                // Always 16-bit index adjust (independent of X flag).
-                cpu->x++;
-                cpu->y++;
+                // Step X/Y at the index width: with x=1 or e=1 they wrap
+                // within 8 bits ($FF -> $00) and the high bytes stay zero.
+                _X(cpu)++;
+                _Y(cpu)++;
             } else if constexpr (CPUTraits::has_65c02_ops) {
                 invalid_nop(cpu, 2, 4);
             } else invalid_opcode(cpu, opcode);

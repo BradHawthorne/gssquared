@@ -833,6 +833,7 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(apps/snapdifftest)
     add_subdirectory(apps/interfacecontracttest)
     add_subdirectory(apps/featurestest)
+    add_subdirectory(apps/blockmovetest)
 endif()
 
 ################################################################################

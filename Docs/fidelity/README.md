@@ -88,7 +88,7 @@ Its answers today are in `tools/hwtruth/emulator_verdicts.json`.
 
 - **[hwtruth]** Game switches with nothing attached (the IIe manual puts the pull-downs in the hand controller, which favours upstream's floating reads).
 - **[hwtruth]** The low bits of `$C011-$C01F`, and whether reading `$C02E`/`$C02F` clears the scan-line interrupt. The fork's fixes 5 and 6 contradict MAME.
-- **[hwtruth]** MVN/MVP stepping with x=1 (the documentation favours upstream's 8-bit stepping, with the fork's explicit banks).
+- **[hwtruth]** MVN/MVP stepping with x=1 (the documentation favours upstream's 8-bit stepping, with the fork's explicit banks). **Emulator changed:** the core now steps X/Y at the index width (8-bit wrap with x=1 or e=1, high bytes zero) and keeps the explicit banks; the SingleStepTests 65816 vectors agree, and `blockmovetest` (ctest `cpu_block_move`) holds it. The `BLKMOVE` verdicts in `tools/hwtruth/emulator_verdicts.json` were updated to match; a hardware run is still the final answer.
 - VBL and scan-line interrupt alignment; `$C035`/`$C036` reset values; **[hwtruth]** ROM 3 `$FF` float (unpopulated bank reads) and ghosting.
 - The 3.5 drive's status polarities (disk-switched, drive-installed, head select).
 - W5100 `MR` bit 0 (IND) after reset on the Uthernet II.

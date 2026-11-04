@@ -49,11 +49,11 @@
   },
   {
     "question": "MVN with x=1 across $00FF",
-    "answer": "16-bit stepping (read $0100/$0101)"
+    "answer": "8-bit wrap (read $0000/$0001)"
   },
   {
     "question": "MVP with x=1 across $0000",
-    "answer": "16-bit stepping (read $FFFF/$FFFE)"
+    "answer": "8-bit wrap (read $00FF/$00FE)"
   },
   {
     "question": "unpopulated bank reads ($D0:1234, $D0:5678, $80:1234)",
