@@ -62,7 +62,7 @@ def run(exe):
                 tools=wire.rpc('tools/list')['tools'];names={row['name'] for row in tools}
                 check(len(tools)==85 and {'gs2_artifact_list','gs2_artifact_read','gs2_artifact_put','gs2_context_read','gs2_context_track'}<=names,'all native/observation/artifact/context tools discoverable')
                 catalog=wire.tool('agent_tools')['structuredContent']
-                check(len(catalog['capabilities']['commands'])==74,'native inventory retained')
+                check(len(catalog['capabilities']['commands'])==76,'native inventory retained')
                 program=bytes.fromhex('a9428d0009ea');checksum=hashlib.sha256(program).hexdigest()
                 upload={'path':'program input.bin','base64':base64.b64encode(program).decode(),'sha256':checksum}
                 uploaded=wire.tool('artifact_put',upload)['structuredContent']
