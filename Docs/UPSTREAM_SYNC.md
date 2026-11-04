@@ -1085,4 +1085,4 @@ Read-only fetch confirms main `0b71e028` (2026-11-01). There are 44 commits afte
 - a byte-level host/card protocol reference (`Second-Sight-Card-API.md`);
 - the manuals.
 
-It is the nearest historical precedent for the A2GSPU card model (section 22), and a candidate device to emulate. It has no licence file. The owner ruled on 2026-11-04 that this is not an issue: secondsight and gssquared are by the same developer, so its sources can be used like upstream's.
+It is the nearest historical precedent for the A2GSPU card model (section 22), and a candidate device to emulate. It has no licence file. The owner ruled on 2026-11-04 that this is not an issue: Jawaid Bazyar wrote both gssquared and the original Second Sight firmware, so its sources can be used like upstream's.
