@@ -162,7 +162,7 @@ The owner's agentic emulator layer on top of upstream gssquared, an Apple II/IIg
 | Item | State |
 | --- | --- |
 | Branch `a2gspu` | Integrated checkpoint `bd276467` published and independently verified on GitHub, including the previous 68 local commits. Fresh exported-tree Release: 14/14 gates, 14/14 native CTests, 21/21 Python tests, 3/3 affected Rosetta tests. Documentation receipts follow the same phase-end sync; see `gssquared-publication-20261016/` |
-| Upstream main | Read-only refresh 2026-10-16: `b2b7b6db`; three new commits inspected but not ported (UPSTREAM_SYNC section 25). Earlier main audit checkpoint `643e6c21`; separate `1.1/ntscshader @0aed0214` assessment remains historical |
+| Upstream main | Read-only refresh 2026-11-04: `0b71e028`; 34 new commits triaged, none ported, `cf828d2a` (GS/OS DIB write-protect) is next (UPSTREAM_SYNC section 26). Prior refresh 2026-10-16 `b2b7b6db` (section 25). Earlier main audit checkpoint `643e6c21`; separate `1.1/ntscshader @0aed0214` assessment remains historical |
 | Drift stage A | **Done:** nine upstream commits cherry-picked with `-x` (`7481a130`..`053a4e14`) |
 | Drift stages B-E | **Awaiting the owner's approval** (`Docs/AGENTIC_ROADMAP.md` §1) |
 | Branch `local/slot-engine-model` | Head `0dd0216d`: the `pico2lite_engine` slot-card model (v1: registers, IRQ tick, TRNG, a bootable ProDOS block device). 92 unit checks. **Not merged into `a2gspu`; merging is the owner's choice** |

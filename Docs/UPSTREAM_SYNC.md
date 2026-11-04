@@ -1059,3 +1059,30 @@ and 323 upstream commits. It is not a list of 323 absent features, nor a claim
 that every desired change is implemented. The entire earlier ranges were
 triaged; stages B–E and the separate development renderer remain pending as
 documented above. No upstream-parent merge is needed to change the badge.
+
+## 26. Main refreshed to `0b71e028`; Second Sight noted as a reference (2026-11-04)
+
+Read-only fetch confirms main `0b71e028` (2026-11-01). There are 44 commits after the section 25 checkpoint `b2b7b6db`, 34 of them non-merge.
+
+**Method.** Commits were triaged by subject, file list and `git apply --check` against fork `6f8ef9f0`. Full diffs were read only for `cf828d2a` and `c93553fa`. Nothing was ported.
+
+| Commit(s) | Change | Applies | Disposition |
+| --- | --- | --- | --- |
+| `cf828d2a` | pdblock3 DIB status for an empty unit returns a full DIB (offline, write allowed). Previously GS/OS inherited the previous unit's write-protect bit, so after an APM CD every later volume was protected. | clean | **Take next.** A GS/OS-visible correctness fix that matters for GSOS61 boot testing. Needs a fixture: mount an empty unit after a protected one. |
+| `c93553fa` | Drop a DOC audio frame when the host queue holds more than ~100 ms (#211, macOS resize drift) | clean | Take; small and host-side |
+| `78b5c458` `4414b015` `0f9c380b` `3f9cec4a` | Ensoniq honors the system volume register `$C03C` (x64 sample multiple, fixed 20 ms glide; instrumentation removed) | conflicts individually | Candidate series. Port as one unit, applying in order, with a `$C03C` volume fixture. |
+| `06fedf21` | "Held bit" fix in the OE/NTSC algorithm | clean | Candidate; renderer, needs visual evidence |
+| `573e2709` | ADB buggy-behavior test program (`testdev/adbtest`) | clean | Take as a test asset; possible hardware-truth input |
+| `6fef4ab0` | RamWorks (upstream: "still requires code review") | conflicts | Defer until upstream finishes review |
+| `c04d50ca` `5b200591` `d079f039` | #205, #208, HD20SC hover | mixed | UI. `d079f039` applies clean; the others need adaptation (`5b200591` as in section 25). |
+| `f5032117` `d8f45e7b` `b8fe6ef2` `62d4f4e5` `1b31bf09` | IIe OSD Aux slot, pause on minimize / power-efficient mode (#212), Edit panel (#210), modal styling, debug window title | — | UI/quality of life; optional |
+| `e41b74f6` `2dc94731` `ed4b0306` `c9ba2315` `0aed0214` `578b6bbc` `147ffb22` `e3f59ac8` `ab7b2129` `f8b88dd2` `126f580b` `1a255042` `437c4f0c` | NTSC/composite shader pipeline, phosphor persistence, colorburst latency | — | Development-renderer track (section 25, stage E); assess as a block |
+| `162d7696` `7833083a` `eada379a` `41fb1718` `73b7e073` `f3b6f497` | Notes, design notes, cleanup, CONTRIBUTING, debug output | — | Read only |
+
+**Reference source.** `jawaidbazyar2/secondsight`, at `fc922ca` (2026-11-01), was added by the owner as a reference. It covers the Sequential Systems Second Sight VGA card: a Z180 card in a IIgs slot that takes uploaded pixel data and runs code on the card. The repo has:
+- the ORCA/C and ORCA/M host library (`VGALOW.ASM`, `VGALIB.C`);
+- the disassembled firmware (`ROM_BEEF.asm`);
+- a byte-level host/card protocol reference (`Second-Sight-Card-API.md`);
+- the manuals.
+
+It is the nearest historical precedent for the A2GSPU card model (section 22), and a candidate device to emulate. It has no licence file, so it is reference only: nothing is copied into the fork until the owner decides the licence posture.
