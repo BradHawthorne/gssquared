@@ -59,6 +59,12 @@ function Q([string]$c){$global:LASTEXITCODE=0;$o=& (Join-Path $h 'ctl.ps1') -Dir
 . (Join-Path $h 'runtime.ps1')
 
 $p=Q 'protocol';if($p-notmatch 'version=2'){throw $p}
+# Versioned extensions: `features` must agree with the minor `protocol` reports,
+# list itself, and refuse a name it does not know.
+if($p-notmatch ' minor=(\d+)'){throw "protocol reply carries no minor=: $p"};$minor=[int]$Matches[1]
+$f=Q 'features';if($f-notmatch "features protocol=2\.$minor count=(\d+) list=(\S+)"){throw "features does not agree with protocol minor=$minor : $f"}
+if(@($Matches[2]-split',')-notcontains 'features/1'){throw "features does not list itself: $f"}
+$u=Q 'features no-such-extension';if($u-notmatch 'status=FAIL features-unknown'){throw "unknown extension was not refused: $u"}
 
 # NUM_SYSTEM_CONFIGS is sizeof(BuiltinSystemConfigs)/sizeof(...) in
 # src/systemconfig.cpp, and num_platforms the same over platforms[] in

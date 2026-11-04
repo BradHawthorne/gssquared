@@ -188,7 +188,8 @@ Agents must pick a model. Toolchain recipes pin models in scripts.
 | `help <file>` | full verb catalog written to file |
 | `manifest <file>` | machine-oriented capability dump (verbs + env groups + models + contracts) |
 | `oracle` | one-screen north-star + cycle/colour rules |
-| `protocol` | version/framing/ownership/JSON contract |
+| `protocol` | version/framing/ownership/JSON contract; `minor=` is the protocol minor |
+| `features [name]` | versioned extension list (`protocol=2.<minor>`, `name/version` pairs) on one line; feature-detect by name |
 | `systems [file]` | running binary's platform/config/ROM/device inventory |
 | `limitations [file]` | machine-readable known fidelity gaps |
 

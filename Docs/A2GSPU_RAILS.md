@@ -855,7 +855,8 @@ cross-process no-clobber promise. Evidence and covered exports:
 | `tbtrace [status]` / `on` / `off` / `bank <hex>` | LIVE toolbox/GS-OS dispatch trace, optionally scoped to one bank | CTRL-verb (trace) |
 | `callstream on <file>` / `off` / `status` | LIVE NDJSON toolbox/GSOS call stream | CTRL-verb (trace) |
 | `key` | inject key + wait for consume receipt | CTRL-verb (manipulate) |
-| `protocol` | CTRL v2 framing, ownership and `json <command>` reply wrapper | CTRL-verb (meta) |
+| `protocol` | CTRL v2 framing, ownership and `json <command>` reply wrapper; `minor=` is the protocol minor version | CTRL-verb (meta) |
+| `features [name]` | versioned protocol extensions on one line: `protocol=2.<minor> count=<n> list=<name>/<version>,...`; `features <name>` answers one row (`version=`, `since=`, `summary=`) or refuses an unknown name. Each additive extension adds a row whose `since` is the next minor; the reported minor is the largest `since` (`src/a2gspu_features.hpp`) | CTRL-verb (meta) |
 | `json <command>` | run any CTRL command and wrap its reply as an `a2ctrl-reply-v2` JSON envelope (`ok`, `status`, `command`, `text`), for a consumer that must not scrape human-oriented text. `status` is the reply's own word (`OK`, `PASS`, `HALT`, `BUDGET`, `HANG`, `FAIL`); `ok` is true for `OK`, `PASS` (an assertion held) and `HALT` (a run stopped where a breakpoint asked) -- it used to be true for `OK` alone | CTRL-verb (meta) |
 | `systems [file]` | platform/configuration/ROM/slot-device inventory | CTRL-verb (meta) |
 | `limitations [file]` | known unsupported or partial fidelity surfaces | CTRL-verb (meta) |

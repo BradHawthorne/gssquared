@@ -1029,7 +1029,8 @@ void a2gspu_copilot_poll(computer_t *computer) {
     // --- observe / discover ---
     a2events::begin_command(line);
     try {
-    if (!strcmp(line,"protocol") || !strcmp(line,"systems") || !strncmp(line,"systems ",8) ||
+    if (!strcmp(line,"protocol") || !strcmp(line,"features") || !strncmp(line,"features ",9) ||
+        !strcmp(line,"systems") || !strncmp(line,"systems ",8) ||
         !strncmp(line,"manifest ",9) || !strcmp(line,"limitations") || !strncmp(line,"limitations ",12) ||
         !strcmp(line,"help") || !strncmp(line,"help ",5) ||
         !strcmp(line,"oracle") || !strcmp(line,"copilot"))

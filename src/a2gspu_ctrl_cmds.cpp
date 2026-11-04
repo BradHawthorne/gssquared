@@ -27,6 +27,7 @@
 #include "a2gspu_fault.hpp"
 #include "a2gspu_input.hpp"
 #include "a2gspu_ui.hpp"
+#include "a2gspu_features.hpp"
 
 namespace a2ctrl {
 // A2CTRL-DISPATCH-BEGIN -- railparity.ps1 reads CTRL command words (strncmp/strcmp
@@ -998,7 +999,7 @@ bool try_meta(const char *line, char *result, size_t rsz) {
            instrumentation env (COVERAGE/SPIKE/CTRL takeover) stays off. */
         snprintf(result, rsz,
                  "status=OK copilot transport=atomic-files mode=windowed-agent thread=SDL-frame "
-                 "observe=protocol,systems,manifest,help,oracle,cpu,read,assert,png,pngc,speaker,audio,pause-status,inspect,context "
+                 "observe=protocol,features,systems,manifest,help,oracle,cpu,read,assert,png,pngc,speaker,audio,pause-status,inspect,context "
                  "instrument=rail(list,find,live,read,schema,set,unset:windowed-safe),trap,subscribe,capture json_wrapper='json <command>' "
                  "control=pause,resume,reset,quit,press,key,keys,holdkey,input,paddle,pbutton,joymode,mount,ui(status+settings)");
         return true;
@@ -1006,8 +1007,17 @@ bool try_meta(const char *line, char *result, size_t rsz) {
     if (!strcmp(line, "protocol")) {
         snprintf(result, rsz,
                  "status=OK protocol version=2 transport=atomic-files sequence=strict ownership=session-json(enforced-by-client-script) replies=text json_wrapper='json <command>' schemas=a2systems-v1,a2suite-event-v1"
-                 " poll=1ms-for-1s-after-ack,then-50ms cmd_guard=%s",
-                 SDL_getenv("A2GSPU_CTRL_ATOMIC") ? "none(client-declares-atomic)" : "20ms-reread");
+                 " poll=1ms-for-1s-after-ack,then-50ms cmd_guard=%s minor=%d extensions='features'",
+                 SDL_getenv("A2GSPU_CTRL_ATOMIC") ? "none(client-declares-atomic)" : "20ms-reread",
+                 a2features::protocol_minor());
+        return true;
+    }
+    // Versioned extensions: one line, no file (see a2gspu_features.hpp).
+    if (!strcmp(line, "features") || !strncmp(line, "features ", 9)) {
+        const char *name = line[8] ? line + 9 : nullptr;
+        while (name && *name == ' ') name++;
+        if (!name || !*name) a2features::format_list(result, rsz);
+        else a2features::format_one(name, result, rsz);
         return true;
     }
     if (!strcmp(line,"limitations") || !strncmp(line,"limitations ",12)) {
