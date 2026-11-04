@@ -21,6 +21,7 @@
 
 #include "cpu.hpp"
 #include "iigs_toolbox.hpp"
+#include "a2gspu_writelog.hpp" // CTRL `writes`: CPU write log since a mark (off => 1 branch)
 
 #include "opcodes.hpp"
 
@@ -142,6 +143,7 @@ inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     if (g_trap_store_on) a2gspu_trap_store(cpu, addr & 0xFFFFFF, data);  // A2GSPU_TRAP store= (off => 1 branch)
     if (g_progress_taps) { g_progress_stores++; a2gspu_progress_note_store(addr & 0xFFFFFF); }  // run hash + A2GSPU_LIVENESS (off => 1 branch)
     if (g_watch_on) iigs_watch_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH (off => 1 branch)
+    if (a2writelog::g_on) a2writelog::note(addr & 0xFFFFFF, data, false);  // CTRL `writes` (off => 1 branch)
     if (g_valtrap_on) iigs_valtrap_check(cpu, addr & 0xFFFFFF, data);  // A2GSPU_VALTRAP (off => 1 branch)
     if (g_loadtrace_on) iigs_loadtrace_write(cpu, addr & 0xFFFFFF, data);  // A2GSPU_LOADTRACE (off => 1 branch)
     if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, true);    // A2GSPU_LCTRACE
@@ -177,10 +179,14 @@ inline void phantom_read_ign(cpu_state *cpu, uint32_t address) {
     incr_cycles(cpu);
 }
 
-// Phantom write - always performs
+// Phantom write - always performs. It is a real bus write (a soft switch at the
+// address sees it), so the watch and the write log report it like any other
+// write, marked as phantom; they used to see only bus_write.
 inline void phantom_write(cpu_state *cpu, uint32_t address, uint8_t value) {
     cpu->mmu->write(address, value);
     if (memvu_sv_on) memvu_sv_note_store(address & 0xFFFFFF, true);  // MEMVU_STOREVIS (off => 1 branch)
+    if (g_watch_on) iigs_watch_check(cpu, address & 0xFFFFFF, value, "phantom-write");  // A2GSPU_WATCH
+    if (a2writelog::g_on) a2writelog::note(address & 0xFFFFFF, value, true);  // CTRL `writes`
     incr_cycles(cpu);
 }
 
@@ -189,6 +195,8 @@ inline void phantom_write_ign(cpu_state *cpu, uint32_t address, uint8_t value) {
     if constexpr (CPUTraits::full_phantom_reads) {
         cpu->mmu->write(address, value);
         if (memvu_sv_on) memvu_sv_note_store(address & 0xFFFFFF, true);  // MEMVU_STOREVIS
+        if (g_watch_on) iigs_watch_check(cpu, address & 0xFFFFFF, value, "phantom-write");  // A2GSPU_WATCH
+        if (a2writelog::g_on) a2writelog::note(address & 0xFFFFFF, value, true);  // CTRL `writes`
     }
     incr_cycles(cpu);
 }

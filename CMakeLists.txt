@@ -839,6 +839,7 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(apps/img816)
     add_subdirectory(apps/setregtest)
     add_subdirectory(apps/assertregtest)
+    add_subdirectory(apps/writelogtest)
 endif()
 
 ################################################################################

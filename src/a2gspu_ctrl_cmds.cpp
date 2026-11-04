@@ -29,6 +29,7 @@
 #include "a2gspu_ui.hpp"
 #include "a2gspu_features.hpp"
 #include "a2gspu_setreg.hpp"
+#include "a2gspu_writelog.hpp"
 
 namespace a2ctrl {
 // A2CTRL-DISPATCH-BEGIN -- railparity.ps1 reads CTRL command words (strncmp/strcmp
@@ -107,6 +108,44 @@ inline void soft_watch_after(computer_t *computer, char *buf, size_t bufsz) {
 }
 
 bool try_watch(const char *line, char *result, size_t rsz, computer_t *computer) {
+    // CPU write log since a mark, phantom writes included (a2gspu_writelog.hpp).
+    if (!strcmp(line, "writes") || !strncmp(line, "writes ", 7)) {
+        const char *arg = line[6] ? line + 7 : "";
+        while (*arg == ' ') arg++;
+        if (!*arg) {
+            a2writelog::format_report(result, rsz);
+        } else if (!strncmp(arg, "mark", 4) && (arg[4] == 0 || arg[4] == ' ')) {
+            unsigned long cap = a2writelog::kDefaultCap;
+            const char *cs = arg + 4;
+            while (*cs == ' ') cs++;
+            char *end = nullptr;
+            if (*cs) cap = strtoul(cs, &end, 10);
+            if (*cs && (*end || cap == 0)) {
+                snprintf(result, rsz, "status=FAIL writes-parse 'writes mark [cap]' (cap: decimal, > 0)");
+            } else {
+                a2writelog::mark(cap);
+                snprintf(result, rsz, "status=OK writes mark cap=%zu", a2writelog::g_cap);
+            }
+        } else if (!strcmp(arg, "off")) {
+            a2writelog::off();
+            snprintf(result, rsz, "status=OK writes off n=%zu", a2writelog::g_log.size());
+        } else if (!strncmp(arg, "dump ", 5)) {
+            const char *path = arg + 5;
+            while (*path == ' ') path++;
+            FILE *wf = *path ? fopen(path, "wb") : nullptr;
+            a2artifact::ExistingOutput a2output_wf_w(wf, path);
+            if (!wf) {
+                snprintf(result, rsz, "status=FAIL writes-dump-open-fail %s", path);
+            } else {
+                a2writelog::dump(wf);
+                a2output_wf_w.finish();
+                snprintf(result, rsz, "status=OK writes dump n=%zu wrote %s", a2writelog::g_log.size(), path);
+            }
+        } else {
+            snprintf(result, rsz, "status=FAIL writes-need: (report) | mark [cap] | off | dump <file>");
+        }
+        return true;
+    }
     if (strncmp(line, "watch ", 6) != 0) return false;
     const char *rest = line + 6;
     while (*rest == ' ') rest++;

@@ -234,20 +234,26 @@ inline void iigs_watch_emit(cpu_state *cpu, uint32_t addr, uint8_t data, const c
            .u("s", cpu->sp).u("d", cpu->d).u("dbr", cpu->db).u("ipc", w_ipc).u("ts", (unsigned)g_iigs_cur_frame);
         rec.write(sink, false);
     } else
-        printf("IIGS WATCH: PC=%02X/%04X %s $%02X %s %02X/%04X  S=$%04X D=$%04X DBR=$%02X\n",
+        // A phantom write prints as a write with " (phantom)" at the end of
+        // the line; ordinary write and read lines are unchanged.
+        printf("IIGS WATCH: PC=%02X/%04X %s $%02X %s %02X/%04X  S=$%04X D=$%04X DBR=$%02X%s\n",
                (unsigned)((cpu->full_pc >> 16) & 0xFF), (unsigned)(cpu->full_pc & 0xFFFF),
-               kind[0] == 'w' ? "wrote" : "read ", data,
-               kind[0] == 'w' ? "->" : "<-",
+               kind[0] == 'r' ? "read " : "wrote", data,
+               kind[0] == 'r' ? "<-" : "->",
                (unsigned)((addr >> 16) & 0xFF), (unsigned)(addr & 0xFFFF),
-               (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db);
+               (unsigned)cpu->sp, (unsigned)cpu->d, (unsigned)cpu->db,
+               kind[0] == 'p' ? " (phantom)" : "");
 }
 
-inline void iigs_watch_check(cpu_state *cpu, uint32_t addr, uint8_t data) {
+// kind is "write" (bus_write) or "phantom-write" (the dummy write of a
+// read-modify-write in emulation mode, which the CPU really performs).
+inline void iigs_watch_check(cpu_state *cpu, uint32_t addr, uint8_t data,
+                             const char *kind = "write") {
     for (int i = 0; i < g_watch_count; i++) {
         if (addr >= g_watch_ranges[i].lo && addr <= g_watch_ranges[i].hi) {
             if (g_watch_change_only && (int)data == g_watch_last[i]) return;
             g_watch_last[i] = data;
-            iigs_watch_emit(cpu, addr, data, "write");
+            iigs_watch_emit(cpu, addr, data, kind);
             return;
         }
     }

@@ -86,6 +86,14 @@ if(@($f-split'list=')[1]-split','-contains 'assert-registers/1'){
   $a=Q ('assert reg:dbr!=${0:X2}'-f$d);if($a-notmatch 'status=FAIL assert pass=0 fail=1'){throw "false register assert did not fail: $a"}
   $a=Q 'assert reg:p&10==0';if($a-notmatch 'status=FAIL assert-unevaluated'){throw "base-less mask was not refused: $a"}
 }
+# writes (2.4): a marked log is empty, a bad cap is refused, and `writes off`
+# stops recording.
+if(@($f-split'list=')[1]-split','-contains 'writes/1'){
+  $w=Q 'writes mark';if($w-notmatch 'status=OK writes mark cap=65536'){throw "writes mark not accepted: $w"}
+  $w=Q 'writes';if($w-notmatch 'status=OK writes on=1 n=0 phantom=0 unique=0 dropped=0 wr=$'){throw "fresh write log is not empty: $w"}
+  $w=Q 'writes mark x';if($w-notmatch 'status=FAIL writes-parse'){throw "bad cap was not refused: $w"}
+  $w=Q 'writes off';if($w-notmatch 'status=OK writes off'){throw "writes off not accepted: $w"}
+}
 
 # NUM_SYSTEM_CONFIGS is sizeof(BuiltinSystemConfigs)/sizeof(...) in
 # src/systemconfig.cpp, and num_platforms the same over platforms[] in
