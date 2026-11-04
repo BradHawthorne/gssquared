@@ -839,7 +839,7 @@ cross-process no-clobber promise. Evidence and covered exports:
 | `A2GSPU_DHGR_GOLDEN=<file>` | SPIKE-end IIe DHGR gate (bless if missing; MATCH/DIFF exit). A bless compared nothing, so it reports `gate=BLESSED` rather than `gate=PASS` and raises a `WARNING` that `A2GSPU_STRICT=1` turns into exit 3 | assert |
 | `A2GSPU_DHGR_PAGE=1\|2` | which page for DHGR SPIKE golden (default 1) | assert |
 | `A2GSPU_DHGR_GOLDEN_PROFILE=` | `vram-raw` (default) or `4dot` — must match how the golden file was blessed | assert |
-| `assert peek:…==…[;…]` | live probe_peek checks; `status=PASS\|FAIL` | CTRL-verb (observe) |
+| `assert peek:…==…[;…]` | live probe_peek checks; `status=PASS\|FAIL`. Since protocol 2.3 (`features assert-registers`) also CPU registers: `reg:a`, `x`, `y`, `s`, `d` (16-bit as held), `p`, `dbr`, `pbr`, `pc` (low 16 bits), `e`, each with an optional mask that states its base, e.g. `assert reg:a==$1234;reg:p&$01==$01;reg:dbr==$7E` (the same fields work in `A2GSPU_ASSERT`) | CTRL-verb (observe) |
 | `watch add\|list\|sample\|clear` | soft watch: sample peeks across run/step | CTRL-verb (observe) |
 | `watch bus add bank:lo-hi` | **LIVE** bus write-watch (same as A2GSPU_WATCH, mid-session) | CTRL-verb (break) |
 | `watch bus list\|hits\|clear\|read\|change` | bus watch control | CTRL-verb (break) |

@@ -71,6 +71,7 @@ inline void iigs_mem_range_dump(cpu_state *cpu, const uint8_t *megaii_base,
 
 // ---- Assertion gate (#2): evaluate A2GSPU_ASSERT and return 0=pass / 1=fail --
 // Named values an assertion can test:
+//   reg:a|x|y|s|d|p|dbr|pbr|pc|e[&MASK] -> CPU registers (see iigs_assert_reg_value)
 //   scb_mode  -> 320 or 640 (from line-0 SCB bit7)   gsos_err -> last GS/OS error
 //   qd_carry/qd_err  (QDStartUp $0204)   lt_carry (LoadTools $0E01)
 //   cs_carry (ClearScreen $1504)   pr_carry (PaintRect $5404)
@@ -87,6 +88,57 @@ inline void iigs_mem_range_dump(cpu_state *cpu, const uint8_t *megaii_base,
 // as an ordinary number is how `totally_bogus_field != 5` and `qd_carry != 0`
 // on a run where QDStartUp never fired both reported PASS. The caller must
 // fail the clause, not compare the sentinel.
+inline long iigs_assert_parse_value(const char *vs, bool *explicit_base,
+                                    bool *ambiguous_hex);
+// reg:NAME[&MASK] -> a CPU register, optionally ANDed with a mask, so a gate
+// can check the machine's state at a stop point, not only memory:
+//   reg:a reg:x reg:y  16-bit as held (with x=1 the index high bytes are 0)
+//   reg:s reg:d        16-bit stack pointer, direct page
+//   reg:p              status byte (native: bit 5 = m, bit 4 = x)
+//   reg:dbr reg:pbr    bank registers;  reg:pc  PC low 16 bits;  reg:e  0/1
+// The mask must say its base ($HH, 0xHH or 0dNN): `reg:p&$01==$01` is the
+// carry. A mask with no base is refused, for the same reason a peek: comparand
+// is: `&10` is $10 or 0d10 and nothing in the text says which.
+inline long iigs_assert_reg_value(const char *name, cpu_state *cpu, bool *ok) {
+    char rn[16];
+    const char *amp = strchr(name, '&');
+    size_t n = amp ? (size_t)(amp - name) : strlen(name);
+    auto refuse = [&](const char *why) -> long {
+        char m[192];
+        snprintf(m, sizeof m, "'%s' %s -- the clause cannot be evaluated", name, why);
+        a2gspu_warn("IIGS ASSERT", m);
+        if (ok) *ok = false;
+        return -999999;
+    };
+    if (n <= 4 || n - 4 >= sizeof rn) return refuse("names no register");
+    memcpy(rn, name + 4, n - 4);
+    rn[n - 4] = 0;
+    long mask = -1;
+    if (amp) {
+        bool expl = false, ambig = false;
+        const char *ms = amp + 1;
+        if (!*ms) return refuse("has an empty mask");
+        for (const char *q = (ms[0] == '$') ? ms + 1 : (ms[0] == '0' && (ms[1] == 'x' || ms[1] == 'X' || ms[1] == 'd' || ms[1] == 'D')) ? ms + 2 : ms; *q; q++)
+            if (!isxdigit((unsigned char)*q)) return refuse("has a mask that is not a number");
+        mask = iigs_assert_parse_value(ms, &expl, &ambig);
+        if (!expl) return refuse("has a mask with no base (write $HH, 0xHH or 0dNN)");
+    }
+    if (!cpu) return refuse("needs a CPU, and none is in hand");
+    long v;
+    if      (!strcmp(rn, "a"))   v = cpu->a;
+    else if (!strcmp(rn, "x"))   v = cpu->x;
+    else if (!strcmp(rn, "y"))   v = cpu->y;
+    else if (!strcmp(rn, "s"))   v = cpu->sp;
+    else if (!strcmp(rn, "d"))   v = cpu->d;
+    else if (!strcmp(rn, "p"))   v = cpu->p;
+    else if (!strcmp(rn, "dbr")) v = cpu->db;
+    else if (!strcmp(rn, "pbr")) v = cpu->pb;
+    else if (!strcmp(rn, "pc"))  v = cpu->pc;
+    else if (!strcmp(rn, "e"))   v = cpu->E ? 1 : 0;
+    else return refuse("is not a register (a x y s d p dbr pbr pc e)");
+    return v & mask;
+}
+
 inline long iigs_assert_value(const char *name, cpu_state *cpu, const uint8_t *e1,
                               int nonzero, int distinct, bool *ok) {
     auto tf = [&](uint16_t tw, int which) -> long {
@@ -106,6 +158,7 @@ inline long iigs_assert_value(const char *name, cpu_state *cpu, const uint8_t *e
     // e.g. peek:E11E00 (a command-ring byte) or peek:0003FC (a bank-0 work-area
     // pointer byte). Via MMU::probe_peek (no soft-switch/slot/clock side effect) —
     // the introspection floor's structural-assert primitive.
+    if (!strncmp(name, "reg:", 4)) return iigs_assert_reg_value(name, cpu, ok);
     if (!strncmp(name, "peek:", 5)) {
         uint32_t a = (uint32_t)strtoul(name + 5, nullptr, 16) & 0xFFFFFF;
         if (!cpu || !cpu->mmu) {

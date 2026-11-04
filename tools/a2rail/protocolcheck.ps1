@@ -78,6 +78,14 @@ if(@($f-split'list=')[1]-split','-contains 'setreg-banks/1'){
   $r=Q 'setreg dbr 100';if($r-notmatch 'status=FAIL setreg-range'){throw "out-of-range dbr was not refused: $r"}
   $null=Q ('setreg dbr {0:X2}'-f$dbr0)
 }
+# assert-registers (2.3): a register clause is evaluated against the live CPU
+# (true, false), and a mask with no base is refused as unevaluated.
+if(@($f-split'list=')[1]-split','-contains 'assert-registers/1'){
+  $c=Q 'json cpu';if($c-notmatch '"dbr"\s*:\s*(\d+)'){throw "json cpu carries no dbr: $c"};$d=[int]$Matches[1]
+  $a=Q ('assert reg:dbr==${0:X2};reg:e<=1'-f$d);if($a-notmatch 'status=PASS assert pass=2'){throw "true register assert did not pass: $a"}
+  $a=Q ('assert reg:dbr!=${0:X2}'-f$d);if($a-notmatch 'status=FAIL assert pass=0 fail=1'){throw "false register assert did not fail: $a"}
+  $a=Q 'assert reg:p&10==0';if($a-notmatch 'status=FAIL assert-unevaluated'){throw "base-less mask was not refused: $a"}
+}
 
 # NUM_SYSTEM_CONFIGS is sizeof(BuiltinSystemConfigs)/sizeof(...) in
 # src/systemconfig.cpp, and num_platforms the same over platforms[] in

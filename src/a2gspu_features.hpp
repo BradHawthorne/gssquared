@@ -39,6 +39,7 @@ inline const Feature *features(int &count) {
     static const Feature rows[] = {
         {"features", 1, 1, "this query: protocol minor version and the list of versioned extensions"},
         {"setreg-banks", 1, 2, "setreg dbr and setreg pbr set the data and program bank registers ($00-$FF)"},
+        {"assert-registers", 1, 3, "assert reg:a|x|y|s|d|p|dbr|pbr|pc|e with an optional &MASK compares CPU registers and masked flags"},
     };
     count = (int)(sizeof rows / sizeof rows[0]);
     return rows;

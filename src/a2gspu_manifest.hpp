@@ -130,7 +130,7 @@ inline const char *verb_when(const char *name) {
 // Keep sorted by name for stable manifests. Update when adding CTRL verbs.
 inline const Verb *verbs(int *count) {
     static const Verb v[] = {
-        {"assert", "observe", "assert peek:ADDR==VAL[;…] — probe_peek checks; status=PASS|FAIL", "memory-peek"},
+        {"assert", "observe", "assert peek:ADDR==VAL[;…] | reg:a|x|y|s|d|p|dbr|pbr|pc|e[&MASK]==VAL — probe_peek and CPU-register checks; status=PASS|FAIL", "memory-peek"},
         {"audio", "observe", "audio [status]|doc|sfx|on|off|reset | capture doc|sfx <file> [maxframes] | capture off|status — source-specific generated samples and aggregates; bounded a2audio-v1 signed-int16 content, DOC c14m timing, SFX rate; host mix/speaker excluded; overflow and errors explicit", "sample-stream|generated-source-before-host-resampling"},
         {"boot", "run", "boot <slot> — enter slot firmware at $Cs00 (slot 1-7), as autoboot would", "enter-slot-firmware"},
         {"bp", "manipulate", "bp [addr|off] — interactive breakpoint; bare reports state. A hit halts before the instruction executes; run/step/resume execute it once and continue", "force-control"},
