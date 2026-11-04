@@ -704,7 +704,7 @@ red, green and blue from `cmd_buffer[1..4]`, and upstream's own command-length t
 command byte. The window was 3, so blue came from whatever the previous command left in
 `cmd_buffer[4]`. The guest's fourth byte arrived after the DMA had closed: it was dropped, or in
 GPU Text mode pushed into the text ring as a character. The window is now 4 (upstream has the same
-3 at `d380e055`). **OPEN:** confirm against the card's own library when a copy is available.
+3 at `d380e055`). **Confirmed 2026-11-04** against the card's own library: in secondsight `fc922ca`, `VGALOW.ASM` `_SetPaletteEntry` (Sequential Systems, 1994, Jawaid Bazyar) sends `CMD_SetPaletteEntry` (`$07`) and then four data bytes: `entry`, `rgb`, `rgb+1`, `rgb+2`. `Second-Sight-Card-API.md` lists `$07` with 4 parameter bytes.
 
 **Instrumentation:** `devstate ss` now shows the command in progress, the handshake hold and
 long-run read counters, the DMA window (direction, buffer, offset, bytes remaining) and palette
