@@ -1783,8 +1783,10 @@ inline absaddr_t get_operand_address_absolute_indirect_x(cpu_state *cpu) {
         // '816 pulls this from the Program Bank, not the Data Bank.
         uint16_t base = addr + _X(cpu);
 
+        // Both pointer bytes come from the program bank: a pointer at $FFFF
+        // takes its high byte from $0000 of the same bank, not the next one.
         taddr = bus_read(cpu, make_pb_addr(cpu, (uint16_t) base));
-        taddr |= bus_read(cpu, make_pb_addr(cpu, (uint16_t) base) + 1) << 8; 
+        taddr |= bus_read(cpu, make_pb_addr(cpu, (uint16_t) (base + 1))) << 8;
     } else {
         taddr = read_word(cpu,(uint16_t)(addr + cpu->x_lo));  
     }
@@ -4553,8 +4555,10 @@ int execute_next(cpu_state *cpu) override {
 
                 absaddr_t indexed = base + _X(cpu);
                 
+                // Both pointer bytes come from the program bank (a pointer at
+                // $FFFF wraps to $0000 of the same bank).
                 absaddr_t indaddr = bus_read(cpu, make_pb_addr(cpu, (uint16_t) indexed));
-                indaddr |= bus_read(cpu, make_pb_addr(cpu, (uint16_t) indexed) + 1) << 8; 
+                indaddr |= bus_read(cpu, make_pb_addr(cpu, (uint16_t) (indexed + 1))) << 8;
 
                 cpu->pc = indaddr;
                 stack_fix_new(cpu);

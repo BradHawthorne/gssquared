@@ -1,0 +1,119 @@
+# indirectjumptest fixture: JMP (a,x) ($7C) and JSR (a,x) ($FC), one instruction per case.
+#
+# case <name> pc= s= p= a= x= y= dbr= d= pbr= e=   initial registers (hex)
+# init <addr24>=<byte> ...      initial memory (everything else is zero)
+# want <reg>=<hex> ... cycles=<decimal>   expected registers and cycle count after one instruction
+# wantmem <addr24>=<byte> ...   expected memory bytes
+# end
+#
+# Rule under test: the pointer for JMP (a,x) / JSR (a,x) is read from the program bank, and both of its
+# bytes stay in that bank: a+X wraps at $FFFF, and a pointer at $FFFF takes its high byte from $0000 of the
+# same bank (not of the next bank). hand-* cases were worked by hand; each wrap case has a decoy byte in
+# the next bank. sst-* cases are vectors from the SingleStepTests ProcessorTests 65816 v1 set (MIT licence,
+# upstream commit bb11756436da8fd16cce86aef63dc6725f48836f; e.g. sst-fcn7140-wrap is "fc n 7140" of fc.n.json):
+# "wrap" = every vector of 7c.n/7c.e/fc.n/fc.e whose pointer sits at $FFFF, "ctl" = the first 3 others of
+# each file. For e=1 the initial S, P, X, Y are given with the 65816 invariant applied (SH=$01, M=X=1,
+# XH=YH=0). fc.e controls avoid S=$0100 (a separate emulation-mode stack-wrap question, not tested here).
+
+# JMP (a,x), native x=0: pointer at 05:FFFF, high byte from 05:0000 (06:0000 is a decoy)
+case hand-jmp-ptr-ffff pc=1000 s=1FF p=0 a=0 x=F y=0 dbr=0 d=0 pbr=5 e=0
+init 051000=7C 051001=F0 051002=FF 05FFFF=34 050000=12 060000=EE
+want pc=1234 pbr=5 s=1FF cycles=6
+end
+
+# JSR (a,x), native x=0: pointer at 05:FFFF; return address $2002 pushed at 00:01FF/01FE
+case hand-jsr-ptr-ffff pc=2000 s=1FF p=0 a=0 x=1 y=0 dbr=0 d=0 pbr=5 e=0
+init 052000=FC 052001=FE 052002=FF 05FFFF=78 050000=56 060000=EE
+want pc=5678 pbr=5 s=1FD cycles=8
+wantmem 0001FF=20 0001FE=02
+end
+
+# JMP (a,x) control: a+X = $FFF0+$0011 wraps to $0001 inside bank 05 (06:0001 is a decoy)
+case hand-jmp-index-wrap pc=1000 s=1FF p=0 a=0 x=11 y=0 dbr=0 d=0 pbr=5 e=0
+init 051000=7C 051001=F0 051002=FF 050001=CD 050002=AB 060001=EE
+want pc=ABCD pbr=5 s=1FF cycles=6
+end
+
+case sst-7cn1-ctl pc=E8E6 s=8759 p=26 a=6BD9 x=9D97 y=3CE9 dbr=45 d=FAC9 pbr=E4 e=0
+init E4B454=01 E4B455=38 E4E8E6=7C E4E8E7=BD E4E8E8=16
+want pc=3801 s=8759 p=26 a=6BD9 x=9D97 y=3CE9 dbr=45 d=FAC9 pbr=E4 e=0 cycles=6
+wantmem E4B454=01 E4B455=38 E4E8E6=7C E4E8E7=BD E4E8E8=16
+end
+
+case sst-7cn2-ctl pc=7C59 s=C089 p=C3 a=E66D x=4CAE y=7135 dbr=9E d=35E7 pbr=C5 e=0
+init C55B50=54 C55B51=6D C57C59=7C C57C5A=A2 C57C5B=0E
+want pc=6D54 s=C089 p=C3 a=E66D x=4CAE y=7135 dbr=9E d=35E7 pbr=C5 e=0 cycles=6
+wantmem C55B50=54 C55B51=6D C57C59=7C C57C5A=A2 C57C5B=0E
+end
+
+case sst-7cn3-ctl pc=2151 s=748B p=EE a=4931 x=D386 y=3D09 dbr=80 d=D9D1 pbr=EB e=0
+init EB2151=7C EB2152=72 EB2153=DD EBB0F8=71 EBB0F9=AB
+want pc=AB71 s=748B p=EE a=4931 x=D386 y=3D09 dbr=80 d=D9D1 pbr=EB e=0 cycles=6
+wantmem EB2151=7C EB2152=72 EB2153=DD EBB0F8=71 EBB0F9=AB
+end
+
+case sst-7ce2841-wrap pc=113C s=1D6 p=F7 a=F8C7 x=C5 y=F5 dbr=3A d=7CC7 pbr=20 e=1
+init 200000=7E 20113C=7C 20113D=3A 20113E=FF 20FFFF=83
+want pc=7E83 s=1D6 p=F7 a=F8C7 x=C5 y=F5 dbr=3A d=7CC7 pbr=20 e=1 cycles=6
+wantmem 200000=7E 20113C=7C 20113D=3A 20113E=FF 20FFFF=83
+end
+
+case sst-7ce1-ctl pc=AFA4 s=144 p=37 a=5042 x=62 y=D2 dbr=51 d=3988 pbr=72 e=1
+init 72AFA4=7C 72AFA5=08 72AFA6=CB 72CB6A=11 72CB6B=A7
+want pc=A711 s=144 p=37 a=5042 x=62 y=D2 dbr=51 d=3988 pbr=72 e=1 cycles=6
+wantmem 72AFA4=7C 72AFA5=08 72AFA6=CB 72CB6A=11 72CB6B=A7
+end
+
+case sst-7ce2-ctl pc=68C1 s=1A7 p=7B a=88EB x=C y=DC dbr=1D d=A0B9 pbr=7D e=1
+init 7D59D0=A5 7D59D1=F7 7D68C1=7C 7D68C2=C4 7D68C3=59
+want pc=F7A5 s=1A7 p=7B a=88EB x=C y=DC dbr=1D d=A0B9 pbr=7D e=1 cycles=6
+wantmem 7D59D0=A5 7D59D1=F7 7D68C1=7C 7D68C2=C4 7D68C3=59
+end
+
+case sst-7ce3-ctl pc=8145 s=14D p=B4 a=9CBF x=96 y=8B dbr=A9 d=9552 pbr=63 e=1
+init 630722=91 630723=9A 638145=7C 638146=8C 638147=06
+want pc=9A91 s=14D p=B4 a=9CBF x=96 y=8B dbr=A9 d=9552 pbr=63 e=1 cycles=6
+wantmem 630722=91 630723=9A 638145=7C 638146=8C 638147=06
+end
+
+case sst-fcn7140-wrap pc=DF7E s=D084 p=5A a=45C0 x=13 y=33 dbr=F1 d=6C1A pbr=98 e=0
+init 980000=4B 98DF7E=FC 98DF7F=EC 98DF80=FF 98FFFF=72
+want pc=4B72 s=D082 p=5A a=45C0 x=13 y=33 dbr=F1 d=6C1A pbr=98 e=0 cycles=8
+wantmem 00D083=80 00D084=DF 980000=4B 98DF7E=FC 98DF7F=EC 98DF80=FF 98FFFF=72
+end
+
+case sst-fcn1-ctl pc=DFEE s=A996 p=84 a=9C2F x=9BC6 y=433 dbr=B9 d=9916 pbr=42 e=0
+init 42CC7A=B7 42CC7B=71 42DFEE=FC 42DFEF=B4 42DFF0=30
+want pc=71B7 s=A994 p=84 a=9C2F x=9BC6 y=433 dbr=B9 d=9916 pbr=42 e=0 cycles=8
+wantmem 00A995=F0 00A996=DF 42CC7A=B7 42CC7B=71 42DFEE=FC 42DFEF=B4 42DFF0=30
+end
+
+case sst-fcn2-ctl pc=C5C4 s=F862 p=68 a=7C0B x=C082 y=BB0A dbr=12 d=5C3F pbr=69 e=0
+init 69C5C4=FC 69C5C5=11 69C5C6=2C 69EC93=05 69EC94=19
+want pc=1905 s=F860 p=68 a=7C0B x=C082 y=BB0A dbr=12 d=5C3F pbr=69 e=0 cycles=8
+wantmem 00F861=C6 00F862=C5 69C5C4=FC 69C5C5=11 69C5C6=2C 69EC93=05 69EC94=19
+end
+
+case sst-fcn3-ctl pc=356A s=E065 p=44 a=CBC4 x=E1E8 y=74D8 dbr=44 d=1198 pbr=D7 e=0
+init D7356A=FC D7356B=27 D7356C=FA D7DC0F=7D D7DC10=83
+want pc=837D s=E063 p=44 a=CBC4 x=E1E8 y=74D8 dbr=44 d=1198 pbr=D7 e=0 cycles=8
+wantmem 00E064=6C 00E065=35 D7356A=FC D7356B=27 D7356C=FA D7DC0F=7D D7DC10=83
+end
+
+case sst-fce1-ctl pc=8B66 s=1A8 p=BF a=7116 x=CF y=E8 dbr=BD d=D12A pbr=71 e=1
+init 7117FE=3C 7117FF=EE 718B66=FC 718B67=2F 718B68=17
+want pc=EE3C s=1A6 p=BF a=7116 x=CF y=E8 dbr=BD d=D12A pbr=71 e=1 cycles=8
+wantmem 0001A7=68 0001A8=8B 7117FE=3C 7117FF=EE 718B66=FC 718B67=2F 718B68=17
+end
+
+case sst-fce2-ctl pc=894A s=173 p=F4 a=F6DC x=AF y=68 dbr=C7 d=B642 pbr=94 e=1
+init 94894A=FC 94894B=DB 94894C=DC 94DD8A=D2 94DD8B=72
+want pc=72D2 s=171 p=F4 a=F6DC x=AF y=68 dbr=C7 d=B642 pbr=94 e=1 cycles=8
+wantmem 000172=4C 000173=89 94894A=FC 94894B=DB 94894C=DC 94DD8A=D2 94DD8B=72
+end
+
+case sst-fce3-ctl pc=3392 s=196 p=B0 a=5D75 x=5A y=F dbr=4D d=8C84 pbr=FD e=1
+init FD3392=FC FD3393=AD FD3394=7F FD8007=17 FD8008=AC
+want pc=AC17 s=194 p=B0 a=5D75 x=5A y=F dbr=4D d=8C84 pbr=FD e=1 cycles=8
+wantmem 000195=94 000196=33 FD3392=FC FD3393=AD FD3394=7F FD8007=17 FD8008=AC
+end

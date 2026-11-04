@@ -834,6 +834,7 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(apps/interfacecontracttest)
     add_subdirectory(apps/featurestest)
     add_subdirectory(apps/blockmovetest)
+    add_subdirectory(apps/indirectjumptest)
 endif()
 
 ################################################################################
