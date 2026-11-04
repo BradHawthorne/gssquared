@@ -428,12 +428,24 @@ public:
                     case 0x03: { // device information block (DIB)
                         uint8_t effunit = cmdlist.unit - 1;
                         if (!check_valid_unit(effunit)) break;
-                        if (!check_online(effunit)) break;
 
-                        Stat03 s;
-                        auto [st, blkcount] = get_drive_info(effunit);
-                        s.status    = st;
-                        s.blk_count = blkcount;
+                        /* Upstream cf828d2a. GS/OS copies this status byte into the
+                           device characteristics once, and does not refresh
+                           write-allowed when media is mounted later. An empty unit must
+                           still return a full DIB: answering "offline" and leaving the
+                           caller's buffer as it was made the unit inherit the previous
+                           unit's write-protect bit (an APM CD, then every later volume).
+                           Same answer as STATUS $00 gives an empty unit, above.
+                           Test: apps/pdbdibtest. */
+                        Stat03 s{};
+                        if (drives[effunit].media == nullptr) {
+                            s.status    = 0b1110'0000; // offline, write allowed
+                            s.blk_count = 0;
+                        } else {
+                            auto [st, blkcount] = get_drive_info(effunit);
+                            s.status    = st;
+                            s.blk_count = blkcount;
+                        }
                         s.id_str_length = 9;
                         memcpy(s.id_str, "BAZFAST3        ", 16);
                         s.id_str[8]      = 'A' + effunit;

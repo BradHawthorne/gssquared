@@ -1064,11 +1064,11 @@ documented above. No upstream-parent merge is needed to change the badge.
 
 Read-only fetch confirms main `0b71e028` (2026-11-01). There are 44 commits after the section 25 checkpoint `b2b7b6db`, 34 of them non-merge.
 
-**Method.** Commits were triaged by subject, file list and `git apply --check` against fork `6f8ef9f0`. Full diffs were read only for `cf828d2a` and `c93553fa`. Nothing was ported.
+**Method.** Commits were triaged by subject, file list and `git apply --check` against fork `6f8ef9f0`. Full diffs were read only for `cf828d2a` and `c93553fa`. `cf828d2a` has since been ported (row below); nothing else was.
 
 | Commit(s) | Change | Applies | Disposition |
 | --- | --- | --- | --- |
-| `cf828d2a` | pdblock3 DIB status for an empty unit returns a full DIB (offline, write allowed). Previously GS/OS inherited the previous unit's write-protect bit, so after an APM CD every later volume was protected. | clean | **Take next.** A GS/OS-visible correctness fix that matters for GSOS61 boot testing. Needs a fixture: mount an empty unit after a protected one. |
+| `cf828d2a` | pdblock3 DIB status for an empty unit returns a full DIB (offline, write allowed). Previously GS/OS inherited the previous unit's write-protect bit, so after an APM CD every later volume was protected. | clean (hand-applied: the fork's case also had `check_online`) | **Ported** 2026-11-04. Fixture `apps/pdbdibtest` (ctest `pdblock3_dib_empty_unit`): DIB of a protected unit 1, then of the empty unit 2 into the same buffer, standard and extended. Before the port the empty unit answered `$2F` offline and the buffer kept `$B4`/`$B5`; after, error 0, status `$E0`, 0 blocks, a full DIB. |
 | `c93553fa` | Drop a DOC audio frame when the host queue holds more than ~100 ms (#211, macOS resize drift) | clean | Take; small and host-side |
 | `78b5c458` `4414b015` `0f9c380b` `3f9cec4a` | Ensoniq honors the system volume register `$C03C` (x64 sample multiple, fixed 20 ms glide; instrumentation removed) | conflicts individually | Candidate series. Port as one unit, applying in order, with a `$C03C` volume fixture. |
 | `06fedf21` | "Held bit" fix in the OE/NTSC algorithm | clean | Candidate; renderer, needs visual evidence |
