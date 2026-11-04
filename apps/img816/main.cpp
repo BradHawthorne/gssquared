@@ -26,7 +26,9 @@
  *   limit N                      instruction limit (default 1000000)
  *   run                          end of the case
  * With e=1 the 65816 invariant is applied before the run (S high byte $01,
- * X/Y high bytes 0, P bits 4-5 set).
+ * X/Y high bytes 0, P bits 4-5 set). With e=0 and x=1 (P bit 4) the index
+ * high bytes are forced to 0 the same way: the CPU cannot hold a non-zero
+ * XH/YH with 8-bit index registers, so `x=1234 p=10` runs as X=$0034.
  *
  * Output: one line per case, tab-separated:
  *   NAME STATUS cyc=N last=N insn=N pc=PPPPPP a=AAAA x=XXXX y=YYYY s=SSSS
@@ -207,6 +209,7 @@ static std::string run_case(Machine &m, const Case &c) {
     uint16_t s = c.s, x = c.x, y = c.y;
     uint8_t p = c.p;
     if (c.e) { s = 0x100 | (s & 0xFF); p |= 0x30; x &= 0xFF; y &= 0xFF; }
+    else if (p & 0x10) { x &= 0xFF; y &= 0xFF; }   // native, 8-bit index: XH = YH = 0
     cpu->halt = 0; cpu->clock_stopped = false; cpu->rdy = false;
     cpu->irq_asserted = 0; cpu->irq_pipe = 0; cpu->nmi_pending = false; cpu->boundary_abort_pending = false;
     cpu->E = c.e;

@@ -46,6 +46,16 @@ reg pc=005000 s=01FF p=00
 stop 00F000
 run
 
+# Native mode with x=1: the index high bytes cannot be non-zero in that state,
+# so the input X=$1234 / Y=$5678 is taken as X=$0034 / Y=$0078. TXA with m=0
+# copies the 8-bit X, zero-extended, into the 16-bit A: A=$0034, N=0, Z=0,
+# 2 cycles, no writes.
+case x8_input_high_bytes
+load 007100 8A
+reg pc=007100 x=1234 y=5678 s=01FF p=10
+stop 007101
+run
+
 # Instruction limit: BRA to itself, native mode, 3 cycles each, 10 instructions.
 case limit_bra_self
 load 006000 80FE
