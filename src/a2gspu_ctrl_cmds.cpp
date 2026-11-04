@@ -1005,11 +1005,13 @@ bool try_meta(const char *line, char *result, size_t rsz) {
         return true;
     }
     if (!strcmp(line, "protocol")) {
+        char ext[512];
+        a2features::format_protocol_tail(ext, sizeof ext);
         snprintf(result, rsz,
                  "status=OK protocol version=2 transport=atomic-files sequence=strict ownership=session-json(enforced-by-client-script) replies=text json_wrapper='json <command>' schemas=a2systems-v1,a2suite-event-v1"
-                 " poll=1ms-for-1s-after-ack,then-50ms cmd_guard=%s minor=%d extensions='features'",
+                 " poll=1ms-for-1s-after-ack,then-50ms cmd_guard=%s%s",
                  SDL_getenv("A2GSPU_CTRL_ATOMIC") ? "none(client-declares-atomic)" : "20ms-reread",
-                 a2features::protocol_minor());
+                 ext);
         return true;
     }
     // Versioned extensions: one line, no file (see a2gspu_features.hpp).

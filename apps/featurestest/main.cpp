@@ -73,6 +73,50 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < got.size() && i < want.size(); ++i)
         check(got[i] == want[i], "reply " + std::to_string(i + 1) + "\n  got:  " + got[i] + "\n  want: " + want[i]);
 
+    // `protocol` names every row of the table, in table order, with the same
+    // minor -- so a new row cannot be listed by `features` and missing from
+    // `protocol`. Expected text is built here from the rows, not by the code
+    // under test.
+    {
+        std::string want_tail = " minor=" + std::to_string(minor) + " extensions='";
+        for (int i = 0; i < n; ++i) want_tail += std::string(i ? "," : "") + rows[i].name;
+        want_tail += "'";
+        a2features::format_protocol_tail(buf, sizeof buf);
+        const std::string tail = buf;
+        check(tail == want_tail, "protocol tail lists every row\n  got:  " + tail + "\n  want: " + want_tail);
+        const size_t q = tail.find("extensions='");
+        std::set<std::string> listed;
+        if (q != std::string::npos) {
+            const size_t b = q + 12, e = tail.find('\'', b);
+            std::string list = tail.substr(b, e == std::string::npos ? std::string::npos : e - b);
+            for (size_t p = 0; p <= list.size();) {
+                size_t c = list.find(',', p);
+                if (c == std::string::npos) c = list.size();
+                listed.insert(list.substr(p, c - p));
+                p = c + 1;
+            }
+        }
+        for (int i = 0; i < n; ++i)
+            check(listed.count(rows[i].name) == 1, std::string("protocol extensions= names row: ") + rows[i].name);
+    }
+    // The same formatter over a hand-written three-row table: every name, in
+    // order, and the minor from the largest `since` (not the last row's).
+    {
+        static const a2features::Feature three[] = {
+            {"alpha", 1, 1, "first"},
+            {"beta-two", 2, 3, "second"},
+            {"gamma", 1, 2, "third"},
+        };
+        a2features::format_protocol_tail(three, 3, buf, sizeof buf);
+        check(std::string(buf) == " minor=3 extensions='alpha,beta-two,gamma'",
+              std::string("protocol tail over a three-row table\n  got:  ") + buf +
+              "\n  want:  minor=3 extensions='alpha,beta-two,gamma'");
+        char small[12];
+        std::memset(small, 'X', sizeof small);
+        a2features::format_protocol_tail(three, 3, small, 8);
+        check(std::strlen(small) < 8 && small[11] == 'X', "format_protocol_tail respects the buffer size");
+    }
+
     // A buffer too small must truncate, not overrun.
     char tiny[16];
     std::memset(tiny, 'X', sizeof tiny);

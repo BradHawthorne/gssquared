@@ -85,4 +85,32 @@ inline void format_one(const char *name, char *buf, size_t bufsz) {
                       f->name, f->version, kProtocolMajor, f->since, f->summary);
 }
 
+// The tail of the `protocol` reply: " minor=<minor> extensions='<name>,<name>,...'"
+// with every row of `rows`, in table order, and the minor taken from the same
+// rows. The live reply passes the table above, so `protocol` names exactly the
+// extensions `features` lists and a new row reaches both without another edit.
+// Truncates to fit the buffer.
+inline void format_protocol_tail(const Feature *rows, int n, char *buf, size_t bufsz) {
+    if (!bufsz) return;
+    buf[0] = '\0';
+    int minor = 0;
+    for (int i = 0; i < n; i++)
+        if (rows[i].since > minor) minor = rows[i].since;
+    int w = std::snprintf(buf, bufsz, " minor=%d extensions='", minor);
+    if (w < 0) return;
+    size_t used = (size_t)w;
+    for (int i = 0; i < n && used < bufsz; i++) {
+        w = std::snprintf(buf + used, bufsz - used, "%s%s", i ? "," : "", rows[i].name);
+        if (w < 0) return;
+        used += (size_t)w;
+    }
+    if (used < bufsz) std::snprintf(buf + used, bufsz - used, "'");
+}
+
+inline void format_protocol_tail(char *buf, size_t bufsz) {
+    int n = 0;
+    const Feature *r = features(n);
+    format_protocol_tail(r, n, buf, bufsz);
+}
+
 } // namespace a2features

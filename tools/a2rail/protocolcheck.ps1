@@ -62,6 +62,10 @@ $p=Q 'protocol';if($p-notmatch 'version=2'){throw $p}
 # Versioned extensions: `features` must agree with the minor `protocol` reports,
 # list itself, and refuse a name it does not know.
 if($p-notmatch ' minor=(\d+)'){throw "protocol reply carries no minor=: $p"};$minor=[int]$Matches[1]
+# `protocol` must name every extension `features` lists, in the same order.
+if($p-notmatch " extensions='([^']*)'"){throw "protocol reply carries no extensions=: $p"};$pext=$Matches[1]
+$fl=Q 'features';$fnames=(@(($fl-split'list=')[1].Trim()-split',')|%{($_-split'/')[0]})-join','
+if($pext-ne$fnames){throw "protocol extensions='$pext' does not match the features list '$fnames': $p"}
 $f=Q 'features';if($f-notmatch "features protocol=2\.$minor count=(\d+) list=(\S+)"){throw "features does not agree with protocol minor=$minor : $f"}
 if(@($Matches[2]-split',')-notcontains 'features/1'){throw "features does not list itself: $f"}
 $u=Q 'features no-such-extension';if($u-notmatch 'status=FAIL features-unknown'){throw "unknown extension was not refused: $u"}
