@@ -69,6 +69,15 @@ if($pext-ne$fnames){throw "protocol extensions='$pext' does not match the featur
 $f=Q 'features';if($f-notmatch "features protocol=2\.$minor count=(\d+) list=(\S+)"){throw "features does not agree with protocol minor=$minor : $f"}
 if(@($Matches[2]-split',')-notcontains 'features/1'){throw "features does not list itself: $f"}
 $u=Q 'features no-such-extension';if($u-notmatch 'status=FAIL features-unknown'){throw "unknown extension was not refused: $u"}
+# setreg-banks (2.2): DBR and PBR are settable, read back through `json cpu`,
+# and an out-of-range bank is refused. The machine's own DBR is put back.
+if(@($f-split'list=')[1]-split','-contains 'setreg-banks/1'){
+  $c0=Q 'json cpu';if($c0-notmatch '"dbr"\s*:\s*(\d+)'){throw "json cpu carries no dbr: $c0"};$dbr0=[int]$Matches[1]
+  $s=Q 'setreg dbr 7E';if($s-notmatch 'status=OK setreg dbr=\$7E'){throw "setreg dbr not accepted: $s"}
+  $c1=Q 'json cpu';if($c1-notmatch '"dbr"\s*:\s*126\b'){throw "setreg dbr 7E did not reach DBR: $c1"}
+  $r=Q 'setreg dbr 100';if($r-notmatch 'status=FAIL setreg-range'){throw "out-of-range dbr was not refused: $r"}
+  $null=Q ('setreg dbr {0:X2}'-f$dbr0)
+}
 
 # NUM_SYSTEM_CONFIGS is sizeof(BuiltinSystemConfigs)/sizeof(...) in
 # src/systemconfig.cpp, and num_platforms the same over platforms[] in

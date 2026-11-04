@@ -831,7 +831,7 @@ cross-process no-clobber promise. Evidence and covered exports:
 | `stack [n]` | stack contents above SP | CTRL-verb (observe) |
 | `png` / `pngc` | mono (`profile=bits-mono`) / named-colour (`profile=4dot`, `profile=mono`) DHGR from RAM | CTRL-verb (observe) |
 | `vram` | 8K aux + 8K main raw, with `<file>.meta.json` (`vram-raw-v1`, page, hashes) for `artifacts.py raw` | CTRL-verb (observe) |
-| `load` / `poke` / `setreg` | deliberate RAM/reg splice | CTRL-verb (manipulate) |
+| `load` / `poke` / `setreg` | deliberate RAM/reg splice. `setreg <reg> <hex>` takes `a x y sp p d`, `pc` (24-bit, sets PBR too), `e` (1 applies the emulation-mode invariant) and, since protocol 2.2 (`features setreg-banks`), `dbr` and `pbr` ($00-$FF; larger values answer `setreg-range`) | CTRL-verb (manipulate) |
 | `load <addr> <file>` | binary load with readback verification; quote filenames containing spaces. Malformed, missing or extra arguments fail before memory writes. MCP inputs can come from create-once `gs2_artifact_put` with a checked SHA256 | CTRL-verb (manipulate) |
 | `cycles` / `cycles reset` | the absolute guest cycle counter. `cycles reset` sets a mark; a later `cycles` adds `delta_from_mark=N model=cross-command(every-command-since-mark)` — true, but it counts every command run since the mark, so it is a routine's cost only when nothing else ran. A routine's cost is the `cycles=` on `run`/`step`/`run-until` | CTRL-verb (observe) |
 | `dhgr-calibrate` / `dhgr-export` | 4-dot self-test + profile files for a2tile | CTRL-verb (calibrate) |

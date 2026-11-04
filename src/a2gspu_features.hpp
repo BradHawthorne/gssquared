@@ -38,6 +38,7 @@ struct Feature {
 inline const Feature *features(int &count) {
     static const Feature rows[] = {
         {"features", 1, 1, "this query: protocol minor version and the list of versioned extensions"},
+        {"setreg-banks", 1, 2, "setreg dbr and setreg pbr set the data and program bank registers ($00-$FF)"},
     };
     count = (int)(sizeof rows / sizeof rows[0]);
     return rows;

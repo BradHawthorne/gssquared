@@ -202,7 +202,7 @@ inline const Verb *verbs(int *count) {
         {"run-until", "run", "run-until <addr> [max_attempts] — check current PC before execution; positive decimal boundary-attempt budget (default 2000000, max 2147483647); native target_reached/completed/stop_reason; IN-COMMAND cycles and actual instructions; idle/interrupt-only attempts consume budget", "cycles-in-cmd"},
         {"save", "snapshot", "save <file> — CPU+MMU+RAM snapshot plus the machine's device blocks; class= is derived from what was written", "time-travel"},
         {"screen", "observe", "screen — screen/text helper", "text-page"},
-        {"setreg", "manipulate", "setreg <reg> <hex> — force CPU register", "force-control"},
+        {"setreg", "manipulate", "setreg <reg> <hex> — force CPU register: a x y sp p d, pc (24-bit), e, dbr pbr (bank registers, $00-$FF)", "force-control"},
         {"shot", "observe", "shot <file> — SDL backbuffer BMP (HUMAN eyeball; not art oracle)", "sdl-human"},
         {"speaker", "observe", "speaker — $C030 toggle count and c14m stamp of the last one; sound is WHEN, not whether", "speaker-toggles"},
         {"stack", "observe", "stack [n] — bytes above SP bank0", "cpu-state"},
