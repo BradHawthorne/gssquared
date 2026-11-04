@@ -54,7 +54,7 @@ def run(exe):
             check(len(rows)==20 and len(byid)==20,'stdout contains only one JSON-RPC reply per request; notifications silent')
             check('error' in byid[1] and byid[2]['result']['protocolVersion']=='2025-11-25','MCP initialization order enforced')
             tools=byid[3]['result']['tools'];names={tool['name'] for tool in tools}
-            check(len(tools)==85 and {'gs2_cpu','gs2_ui','gs2_capture','gs2_agent_tools','gs2_quit','gs2_batch','gs2_trace_read','gs2_memory_read','gs2_memory_search','gs2_video_text_read','gs2_artifact_put','gs2_artifact_read','gs2_artifact_list','gs2_context_read','gs2_context_track'}<=names,'MCP tools include complete runtime catalog, debugger observations, artifacts and context')
+            check(len(tools)==87 and {'gs2_features','gs2_writes','gs2_cpu','gs2_ui','gs2_capture','gs2_agent_tools','gs2_quit','gs2_batch','gs2_trace_read','gs2_memory_read','gs2_memory_search','gs2_video_text_read','gs2_artifact_put','gs2_artifact_read','gs2_artifact_list','gs2_context_read','gs2_context_track'}<=names,'MCP tools include complete runtime catalog, debugger observations, artifacts and context')
             executed=byid[7]['result'];native=executed['structuredContent']
             check(not executed['isError'] and native['data']['instructions']=='1' and native['data']['cpu_after']['registers']['a']==66,'MCP executes real guest code and returns native values')
             check(json.loads(executed['content'][0]['text'])==native,'structured and text evidence agree')

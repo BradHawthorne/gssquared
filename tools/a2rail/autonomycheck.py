@@ -60,7 +60,7 @@ def run(exe):
                 wire.rpc('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'autonomous-loop-test','version':'1'}})
                 wire.rpc('notifications/initialized',notification=True)
                 tools=wire.rpc('tools/list')['tools'];names={row['name'] for row in tools}
-                check(len(tools)==85 and {'gs2_artifact_list','gs2_artifact_read','gs2_artifact_put','gs2_context_read','gs2_context_track'}<=names,'all native/observation/artifact/context tools discoverable')
+                check(len(tools)==87 and {'gs2_features','gs2_writes','gs2_artifact_list','gs2_artifact_read','gs2_artifact_put','gs2_context_read','gs2_context_track'}<=names,'all native/observation/artifact/context tools discoverable')
                 catalog=wire.tool('agent_tools')['structuredContent']
                 check(len(catalog['capabilities']['commands'])==76,'native inventory retained')
                 program=bytes.fromhex('a9428d0009ea');checksum=hashlib.sha256(program).hexdigest()
