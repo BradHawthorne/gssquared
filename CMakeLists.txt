@@ -836,6 +836,7 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(apps/blockmovetest)
     add_subdirectory(apps/indirectjumptest)
     add_subdirectory(apps/sst816)
+    add_subdirectory(apps/img816)
 endif()
 
 ################################################################################

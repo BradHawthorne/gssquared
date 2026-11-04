@@ -1,0 +1,8 @@
+# Expected img816 output for cases.txt. Each cycle count, register and write set was worked out by hand
+# from the WDC 65C816 datasheet before the first run, and the first run agreed with every line.
+add16_rts	ok	cyc=20	last=6	insn=5	pc=00F000 a=1335 x=0000 y=0000 s=01FF p=00 d=0000 dbr=00 e=0	win=000020:341201013513	nw=2	wr=000024,000025
+dbr_absolute	ok	cyc=10	last=5	insn=2	pc=128006 a=ABCD x=0000 y=0000 s=01FF p=80 d=0000 dbr=7F e=0	win=7F1234:CDABCDAB	nw=2	wr=7F1236,7F1237
+emu_rmw_write_count	ok	cyc=6	last=6	insn=1	pc=000303 a=0000 x=0000 y=0000 s=01FF p=30 d=0000 dbr=00 e=1	win=007000:42	nw=2	wr=007000
+mvn_three_bytes	ok	cyc=21	last=7	insn=3	pc=004003 a=FFFF x=1003 y=2003 s=01FF p=00 d=0000 dbr=06 e=0	win=062000:AABBCC	nw=3	wr=062000,062001,062002
+wai_halts	halt	cyc=3	last=3	insn=1	pc=005001 a=0000 x=0000 y=0000 s=01FF p=00 d=0000 dbr=00 e=0	win=	nw=0	wr=
+limit_bra_self	limit	cyc=30	last=3	insn=10	pc=006000 a=0000 x=0000 y=0000 s=01FF p=00 d=0000 dbr=00 e=0	win=	nw=0	wr=

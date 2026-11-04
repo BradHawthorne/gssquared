@@ -1,0 +1,55 @@
+# img816 test cases. Cycle counts expected from the WDC 65C816 datasheet tables.
+
+# i16 add through the direct page, returning to a stop address via RTS.
+# CLC 2 + LDA dp 4 + ADC dp 4 + STA dp 4 + RTS 6 = 20 cycles.
+case add16_rts
+load 002000 18A5206522852460
+load 0001FE FFEF
+load 000020 34120101
+reg pc=002000 s=01FD p=00 d=0000 dbr=00 e=0
+stop 00F000
+window 000020 6
+run
+
+# DBR selects the data bank for absolute addressing (code in bank $12, data in bank $7F).
+# LDA abs 5 + STA abs 5 = 10 cycles.
+case dbr_absolute
+load 128000 AD34128D3612
+load 7F1234 CDAB
+reg pc=128000 s=01FF p=00 dbr=7F
+stop 128006
+window 7F1234 4
+run
+
+# Emulation-mode INC abs: 6 cycles; the read-modify-write writes twice (old value, then new).
+case emu_rmw_write_count
+load 000300 EE0070
+load 007000 41
+reg pc=000300 s=01FF p=30 e=1
+stop 000303
+window 007000 1
+run
+
+# MVN moving 3 bytes from bank $05 to bank $06: 7 cycles per byte = 21, DBR ends as the destination bank.
+case mvn_three_bytes
+load 004000 540605
+load 051000 AABBCC
+reg pc=004000 a=0002 x=1000 y=2000 s=01FF p=00
+stop 004003
+window 062000 3
+run
+
+# WAI stops the processor: 3 cycles, status halt.
+case wai_halts
+load 005000 CB
+reg pc=005000 s=01FF p=00
+stop 00F000
+run
+
+# Instruction limit: BRA to itself, native mode, 3 cycles each, 10 instructions.
+case limit_bra_self
+load 006000 80FE
+reg pc=006000 s=01FF p=00
+stop 00F000
+limit 10
+run
