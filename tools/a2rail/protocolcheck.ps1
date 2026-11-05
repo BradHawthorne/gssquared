@@ -94,6 +94,20 @@ if(@($f-split'list=')[1]-split','-contains 'writes/1'){
   $w=Q 'writes mark x';if($w-notmatch 'status=FAIL writes-parse'){throw "bad cap was not refused: $w"}
   $w=Q 'writes off';if($w-notmatch 'status=OK writes off'){throw "writes off not accepted: $w"}
 }
+# buslog (2.5): a mark names format v1 and starts empty; one step logs one timed record
+# per CPU cycle (every record fast or slow); a dump starts with the v1 header; a bad cap
+# is refused, and `buslog off` stops recording.
+if(@($f-split'list=')[1]-split','-contains 'buslog/1'){
+  $b=Q 'buslog mark';if($b-notmatch 'status=OK buslog mark v=1 cap=1048576'){throw "buslog mark not accepted: $b"}
+  $b=Q 'buslog';if($b-notmatch 'status=OK buslog v=1 on=1 dropped=0 n=0 cycles=0 '){throw "fresh bus log is not empty: $b"}
+  $null=Q 'step 1'
+  $b=Q 'buslog';if($b-notmatch ' n=(\d+) cycles=(\d+) c14m=(\d+) fast=(\d+) fast_c14m=\d+ slow=(\d+) '){throw "no timed bus log summary after a step: $b"}
+  if([int]$Matches[1]-lt 2 -or $Matches[1]-ne $Matches[2] -or ([int]$Matches[4]+[int]$Matches[5])-ne [int]$Matches[1]){throw "a step did not log one timed record per cycle: $b"}
+  $bf=Join-Path $Dir 'buslog-dump.txt';$b=Q "buslog dump $bf";if($b-notmatch 'status=OK buslog dump n=\d+ wrote'){throw "buslog dump failed: $b"}
+  if((Get-Content -LiteralPath $bf -TotalCount 1)-ne '# buslog v1 fields: seq cycle t14m addr kind value side c14m base wait refresh stretch reasons'){throw "buslog dump has no v1 header: $bf"}
+  $b=Q 'buslog mark x';if($b-notmatch 'status=FAIL buslog-parse'){throw "bad cap was not refused: $b"}
+  $b=Q 'buslog off';if($b-notmatch 'status=OK buslog off'){throw "buslog off not accepted: $b"}
+}
 
 # NUM_SYSTEM_CONFIGS is sizeof(BuiltinSystemConfigs)/sizeof(...) in
 # src/systemconfig.cpp, and num_platforms the same over platforms[] in

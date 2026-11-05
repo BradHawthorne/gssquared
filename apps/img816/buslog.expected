@@ -1,0 +1,118 @@
+# Expected bus access log records for buslog_cases.txt (img816 --machine iigs),
+# worked out by hand from the WDC 65C816 bus cycles and the fork's IIgs timing
+# model (src/NClock.hpp, NClockIIgs at 2.8 MHz) before the first run:
+#   fast cycle      5 14M ticks; the refresh counter gains 5, and when it
+#                   reaches 50 it drops by 50 and the cycle costs 5 more
+#                   (so every 10th fast cycle from a cold start costs 10)
+#   fast-ROM cycle  5 ticks, counter gains 5, no refresh penalty
+#   slow cycle      14 ticks plus the wait to the next 1 MHz edge, which is
+#                   (14 - t mod 14) mod 14 for a cycle starting at tick t
+#                   while no scan line has ended; the counter gains the cost,
+#                   no refresh penalty
+#   scan line       after 65 video cycles (14 ticks each) the cycle that
+#                   completes it costs 2 ticks more
+# The 65816 cycles: implied DEX/NOP = opcode fetch + one cycle at PBR:PC that
+# the core counts without a bus access (skipped-read); a taken native branch
+# = opcode, offset, one internal cycle.
+# Columns: seq cycle t14m addr kind value side c14m base wait refresh stretch reasons
+
+case fast_ram_loop
+0 0 0 001000 fetch A2 fast 5 5 0 0 0 -
+1 1 5 001001 fetch 03 fast 5 5 0 0 0 -
+2 2 10 001002 fetch CA fast 5 5 0 0 0 -
+3 3 15 001003 skipped-read -- fast 5 5 0 0 0 -
+4 4 20 001003 fetch D0 fast 5 5 0 0 0 -
+5 5 25 001004 fetch FD fast 5 5 0 0 0 -
+6 6 30 ------ internal -- fast 5 5 0 0 0 -
+7 7 35 001002 fetch CA fast 5 5 0 0 0 -
+8 8 40 001003 skipped-read -- fast 5 5 0 0 0 -
+9 9 45 001003 fetch D0 fast 10 5 0 5 0 refresh
+10 10 55 001004 fetch FD fast 5 5 0 0 0 -
+11 11 60 ------ internal -- fast 5 5 0 0 0 -
+12 12 65 001002 fetch CA fast 5 5 0 0 0 -
+13 13 70 001003 skipped-read -- fast 5 5 0 0 0 -
+14 14 75 001003 fetch D0 fast 5 5 0 0 0 -
+15 15 80 001004 fetch FD fast 5 5 0 0 0 -
+16 16 85 001005 fetch 8D fast 5 5 0 0 0 -
+17 17 90 001006 fetch 00 fast 5 5 0 0 0 -
+18 18 95 001007 fetch 11 fast 5 5 0 0 0 -
+19 19 100 001100 write 42 fast 10 5 0 5 0 refresh
+end
+expect fast_ram_loop n=20 c14m=110 fast=20 slow=0 refresh=2 stretch=0
+
+# The sample: a 16-bit LDA long, bank $00 versus bank $E1.
+case lda16_bank00
+0 0 0 001000 fetch AF fast 5 5 0 0 0 -
+1 1 5 001001 fetch 34 fast 5 5 0 0 0 -
+2 2 10 001002 fetch 12 fast 5 5 0 0 0 -
+3 3 15 001003 fetch 00 fast 5 5 0 0 0 -
+4 4 20 001234 read CD fast 5 5 0 0 0 -
+5 5 25 001235 read AB fast 5 5 0 0 0 -
+end
+expect lda16_bank00 n=6 c14m=30 fast=6 slow=0
+
+case lda16_bank_e1
+0 0 0 001000 fetch AF fast 5 5 0 0 0 -
+1 1 5 001001 fetch 34 fast 5 5 0 0 0 -
+2 2 10 001002 fetch 12 fast 5 5 0 0 0 -
+3 3 15 001003 fetch E1 fast 5 5 0 0 0 -
+4 4 20 E11234 read CD slow 22 14 8 0 0 megaii
+5 5 42 E11235 read AB slow 14 14 0 0 0 megaii
+end
+expect lda16_bank_e1 n=6 c14m=56 fast=4 slow=2 slow_c14m=36 megaii=2
+
+case io_megaii_rw
+0 0 0 001000 fetch AF fast 5 5 0 0 0 -
+1 1 5 001001 fetch 00 fast 5 5 0 0 0 -
+2 2 10 001002 fetch 30 fast 5 5 0 0 0 -
+3 3 15 001003 fetch E0 fast 5 5 0 0 0 -
+4 4 20 E03000 read 5A slow 22 14 8 0 0 megaii
+5 5 42 001004 fetch 8F fast 5 5 0 0 0 -
+6 6 47 001005 fetch 00 fast 10 5 0 5 0 refresh
+7 7 57 001006 fetch 30 fast 5 5 0 0 0 -
+8 8 62 001007 fetch E1 fast 5 5 0 0 0 -
+9 9 67 E13000 write 5A slow 17 14 3 0 0 megaii
+10 10 84 001008 fetch AD fast 5 5 0 0 0 -
+11 11 89 001009 fetch 29 fast 5 5 0 0 0 -
+12 12 94 00100A fetch C0 fast 5 5 0 0 0 -
+13 13 99 00C029 read 01 slow 27 14 13 0 0 io
+14 14 126 00100B fetch 8D fast 5 5 0 0 0 -
+15 15 131 00100C fetch 29 fast 5 5 0 0 0 -
+16 16 136 00100D fetch C0 fast 5 5 0 0 0 -
+17 17 141 00C029 write 01 slow 27 14 13 0 0 io
+18 18 168 00100E fetch AD fast 5 5 0 0 0 -
+19 19 173 00100F fetch 36 fast 5 5 0 0 0 -
+20 20 178 001010 fetch C0 fast 5 5 0 0 0 -
+21 21 183 00C036 read 80 fast 5 5 0 0 0 fastrom
+22 22 188 001011 fetch AF fast 5 5 0 0 0 -
+23 23 193 001012 fetch 29 fast 5 5 0 0 0 -
+24 24 198 001013 fetch C0 fast 5 5 0 0 0 -
+25 25 203 001014 fetch E1 fast 10 5 0 5 0 refresh
+26 26 213 E1C029 read 01 slow 25 14 11 0 0 io
+end
+expect io_megaii_rw n=27 c14m=238 slow=5 megaii=2 io=3 fastrom=1 refresh=2
+
+case shadow_write_bank0
+0 0 0 001000 fetch 8D fast 5 5 0 0 0 -
+1 1 5 001001 fetch 00 fast 5 5 0 0 0 -
+2 2 10 001002 fetch 04 fast 5 5 0 0 0 -
+3 3 15 000400 write 77 slow 27 14 13 0 0 shadow
+4 4 42 001003 fetch 8D fast 5 5 0 0 0 -
+5 5 47 001004 fetch 00 fast 10 5 0 5 0 refresh
+6 6 57 001005 fetch 14 fast 5 5 0 0 0 -
+7 7 62 001400 write 77 fast 5 5 0 0 0 -
+end
+expect shadow_write_bank0 n=8 c14m=67 slow=1 shadow=1
+
+case slow_machine
+0 0 0 001000 fetch 8D fast 5 5 0 0 0 -
+1 1 5 001001 fetch 36 fast 5 5 0 0 0 -
+2 2 10 001002 fetch C0 fast 5 5 0 0 0 -
+3 3 15 00C036 write 00 slow 27 14 13 0 0 slowmode
+4 4 42 001003 fetch EA slow 14 14 0 0 0 slowmode
+5 5 56 001004 skipped-read -- slow 14 14 0 0 0 slowmode
+end
+expect slow_machine n=6 c14m=70 slow=3 slowmode=3
+
+# 321 fast cycles: 32 refreshes, and the 65th video cycle ends one scan line.
+expect fast_loop_scanline n=321 c14m=1767 fast=321 slow=0 refresh=32 stretch=1

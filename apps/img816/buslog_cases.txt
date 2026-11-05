@@ -1,0 +1,66 @@
+# img816 --machine iigs cases for the bus access log (buslog.expected has the
+# hand-derived records). All native mode, code in bank $00 at $1000 (not a
+# shadowed page), DBR $00. Every case starts at 14M tick 0 on a 1 MHz edge with
+# the refresh counter at 0 (see img816 --machine iigs).
+
+# Fast RAM only: LDX #$03; DEX; BNE back; STA $1100. 2 + 5 + 5 + 4 + 4 = 20 cycles.
+case fast_ram_loop
+load 001000 A203CAD0FD8D0011
+reg pc=001000 a=0042 s=01FF p=30
+stop 001008
+window 001100 1
+run
+
+# 16-bit LDA long from bank $00: 6 cycles, all fast.
+case lda16_bank00
+load 001000 AF341200
+load 001234 CDAB
+reg pc=001000 s=01FF p=00
+stop 001004
+window 001234 2
+run
+
+# The same 16-bit LDA long from bank $E1: 6 cycles, the two data reads slow.
+case lda16_bank_e1
+load 001000 AF3412E1
+load E11234 CDAB
+reg pc=001000 s=01FF p=00
+stop 001004
+window E11234 2
+run
+
+# Mega II and I/O: LDA $E03000; STA $E13000; LDA $C029; STA $C029; LDA $C036;
+# LDA $E1C029. 5 + 5 + 4 + 4 + 4 + 5 = 27 cycles.
+case io_megaii_rw
+load 001000 AF0030E08F0030E1AD29C08D29C0AD36C0AF29C0E1
+load E03000 5A
+reg pc=001000 s=01FF p=30
+stop 001015
+window E13000 1
+run
+
+# Shadowed bank-$00 write (text page 1) next to an unshadowed one: STA $0400;
+# STA $1400. 4 + 4 = 8 cycles. The shadow copy lands in bank $E0.
+case shadow_write_bank0
+load 001000 8D00048D0014
+reg pc=001000 a=0077 s=01FF p=30
+stop 001006
+window 000400 1
+window E00400 1
+window 001400 1
+run
+
+# STA $C036 with A=$00 drops the machine to 1 MHz; then NOP. 4 + 2 = 6 cycles.
+case slow_machine
+load 001000 8D36C0EA
+reg pc=001000 a=0000 s=01FF p=30
+stop 001004
+run
+
+# Long enough to reach the end of a scan line (65 video cycles): LDX #$40;
+# DEX; BNE back. 2 + 63 * 5 + 4 = 321 cycles.
+case fast_loop_scanline
+load 001000 A240CAD0FD
+reg pc=001000 s=01FF p=30
+stop 001005
+run

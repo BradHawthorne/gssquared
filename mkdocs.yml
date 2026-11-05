@@ -32,6 +32,7 @@ nav:
     - Debug Wire Protocol: DebugProtocol.md
     - Rails (env contract): A2GSPU_RAILS.md
     - PC Traps: A2GSPU_TRAP.md
+    - Bus Access Log: BUS_ACCESS_LOG.md
     - Closed-Loop Integration: CLOSED_LOOP_INTEGRATION.md
     - Shared Foundation: SHARED_FOUNDATION.md
     - Dual-Platform Bar (IIe + IIgs): DUAL_PLATFORM.md

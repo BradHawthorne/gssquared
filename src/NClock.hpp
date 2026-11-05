@@ -24,6 +24,7 @@
 #include "util/EventTimer.hpp"
 #include "obs_signal.hpp"   // Observatory: reclaim the discarded per-cycle 14M timing cost
 #include "util/DebugFormatter.hpp"
+#include "a2gspu_buslog.hpp"  // bus access log: per-cycle bus side and 14M cost (off => 1 branch per cycle)
 #include <functional>
 
 // Max CPU cycles per 14M tick in ludicrous (auto) mode (~229 MHz).
@@ -282,6 +283,7 @@ public:
     // When cpu_per_14m > 1 (ludicrous): N CPU cycles share one 14M tick / scanner step.
     inline virtual void slow_incr_cycles() override {
         cycles++;
+        if (a2buslog::g_on) a2buslog::end_cycle(cycles - 1);   // bus access log: no bus-side model here
         if (cpu_per_14m > 1) {
             if (++cpu_div < cpu_per_14m) {
                 return;
@@ -344,6 +346,9 @@ protected:
     // Fast path: N CPU cycles per 14M when ludicrous. SYNC / slow / 1 MHz ignore N.
     inline void slow_incr_cycles() override {
         cycles++;
+        // Bus access log: what the MMU asked for, before the machine-wide 1 MHz override.
+        const cycle_type_t requested_type = cycle_type;
+        const uint64_t start_c14m = c_14M;
         if (slow_mode) cycle_type = CYCLE_TYPE_SYNC;
         if (current.hz_rate == 1020484) cycle_type = CYCLE_TYPE_SYNC; // also get refresh for "free" here.
 
@@ -353,6 +358,7 @@ protected:
             cpu_div = 0;
         } else if (cpu_per_14m > 1) {
             if (++cpu_div < cpu_per_14m) {
+                if (a2buslog::g_on) a2buslog::note_cycle(cycles - 1, (uint8_t)requested_type, (uint8_t)cycle_type, false, 0, 0, 0, 0, start_c14m);
                 cycle_type = CYCLE_TYPE_FAST;
                 return;
             }
@@ -387,6 +393,7 @@ protected:
             } 
         }
         c_14M += c14m_this_cycle;
+        const uint64_t cost_before_stretch = c14m_this_cycle;
 
         // KEYSTONE RECLAIM: c14m_this_cycle and cycle_type are the MEASURED true cost of
         // this CPU cycle (SYNC ~14+, FAST/FAST_ROM 5, +5 on a refresh) — the machine's real
@@ -432,6 +439,19 @@ protected:
                 c_14M += current.extra_per_scanline;
                 video_c14m += current.extra_per_scanline;
             }
+        }
+        // Bus access log: split this cycle's cost into its parts. A slow cycle is one 1 MHz
+        // cycle (14) plus the wait for its edge; a fast one is the mode's base plus the
+        // refresh when it landed here; the scan-line long cycle is whatever c_14M gained
+        // after the cost above. Reads locals and members only, so emulation is unchanged.
+        if (a2buslog::g_on) {
+            const uint64_t stretch = (c_14M - start_c14m) - cost_before_stretch;
+            uint64_t base, wait = 0, refresh = 0;
+            if (sync_cycle) { base = 14; wait = cost_before_stretch - 14; }
+            else { base = current.c_14M_per_cpu_cycle; refresh = cost_before_stretch - base; }
+            a2buslog::note_cycle(cycles - 1, (uint8_t)requested_type, (uint8_t)cycle_type,
+                                 slow_mode || current.hz_rate == 1020484, (uint32_t)base, (uint32_t)wait,
+                                 (uint32_t)refresh, (uint32_t)stretch, start_c14m);
         }
         cycle_type = CYCLE_TYPE_FAST; // reset here so MMU doesn't have to set for all possible addresses
     }

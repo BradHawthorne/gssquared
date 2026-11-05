@@ -41,6 +41,7 @@ inline const Feature *features(int &count) {
         {"setreg-banks", 1, 2, "setreg dbr and setreg pbr set the data and program bank registers ($00-$FF)"},
         {"assert-registers", 1, 3, "assert reg:a|x|y|s|d|p|dbr|pbr|pc|e with an optional &MASK compares CPU registers and masked flags"},
         {"writes", 1, 4, "writes mark/report/dump/off: every CPU write since a mark, phantom writes included; watch also reports phantom writes"},
+        {"buslog", 1, 5, "buslog mark/report/dump/off: one record per CPU cycle since a mark -- access, bus side (fast/slow) and 14M cost with its reasons (format v1)"},
     };
     count = (int)(sizeof rows / sizeof rows[0]);
     return rows;

@@ -22,6 +22,7 @@
 #include "cpu.hpp"
 #include "iigs_toolbox.hpp"
 #include "a2gspu_writelog.hpp" // CTRL `writes`: CPU write log since a mark (off => 1 branch)
+#include "a2gspu_buslog.hpp"   // CTRL `buslog` / img816 --buslog: per-cycle bus access log (off => 1 branch)
 
 #include "opcodes.hpp"
 
@@ -82,6 +83,8 @@ public:
         cpu->irq_sample0 = (!cpu->I) ? cpu->irq_asserted : 0; */
         //printf(">> [%llu] [%llu %llu]\n", this->clock->get_cycles(), cpu->irq_sample1, cpu->irq_sample0);
         this->clock->incr_cycles(); 
+        // Bus access log: the clock writes the record for this cycle -- the access the
+        // helpers below noted, or none (an internal cycle) -- with what it charged.
     }
 
     void reset(cpu_state* cpu) override {
@@ -128,8 +131,9 @@ inline word_t word(uint8_t lo, uint8_t hi) { return lo | (hi << 8); }
  We (almost) universally need to access bus followed by incr_cycles.
  So bake those two things here together.
 */
-inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
+inline uint8_t bus_read(cpu_state *cpu, uint32_t addr, uint8_t buslog_kind = a2buslog::K_READ) {
     uint8_t data = cpu->mmu->read(addr & 0xFFFFFF);
+    if (a2buslog::g_on) a2buslog::pend(addr, data, buslog_kind);  // bus access log (off => 1 branch)
     if (memvu_lv_on) memvu_lv_note_load(addr & 0xFFFFFF, MEMVU_K_DATA);  // MEMVU_LOADVIS (off => 1 branch)
     if (g_lctrace_on) iigs_lc_trace(cpu, addr & 0xFFFFFF, false);   // A2GSPU_LCTRACE (off => 1 branch)
     if (g_watch_read_on) iigs_watch_check_read(cpu, addr & 0xFFFFFF, data);  // A2GSPU_WATCH_READ (off => 1 branch)
@@ -139,6 +143,7 @@ inline uint8_t bus_read(cpu_state *cpu, uint32_t addr) {
 }
 inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
     cpu->mmu->write(addr & 0xFFFFFF, data);
+    if (a2buslog::g_on) a2buslog::pend(addr, data, a2buslog::K_WRITE);  // bus access log (off => 1 branch)
     if (memvu_sv_on) memvu_sv_note_store(addr & 0xFFFFFF, false);  // MEMVU_STOREVIS (off => 1 branch)
     if (g_trap_store_on) a2gspu_trap_store(cpu, addr & 0xFFFFFF, data);  // A2GSPU_TRAP store= (off => 1 branch)
     if (g_progress_taps) { g_progress_stores++; a2gspu_progress_note_store(addr & 0xFFFFFF); }  // run hash + A2GSPU_LIVENESS (off => 1 branch)
@@ -152,6 +157,7 @@ inline void bus_write(cpu_state *cpu, uint32_t addr, uint8_t data) {
 
 inline uint8_t vp_read(cpu_state *cpu, uint32_t addr) {
     uint8_t data = cpu->mmu->vp_read(addr);
+    if (a2buslog::g_on) a2buslog::pend(addr, data, a2buslog::K_VECTOR);  // bus access log
     if (memvu_lv_on) memvu_lv_note_load(addr & 0xFFFFFF, MEMVU_K_VECTOR);  // MEMVU_LOADVIS
     incr_cycles(cpu);
     return data;
@@ -165,7 +171,8 @@ inline uint8_t vp_read(cpu_state *cpu, uint32_t addr) {
  */
 // Normal phantom read - always performs
 inline void phantom_read(cpu_state *cpu, uint32_t address) {
-    cpu->mmu->read(address);
+    uint8_t data = cpu->mmu->read(address);
+    if (a2buslog::g_on) a2buslog::pend(address, data, a2buslog::K_PHANTOM_READ);  // bus access log
     if (memvu_lv_on) memvu_lv_note_load(address & 0xFFFFFF, MEMVU_K_PHANTOM);  // MEMVU_LOADVIS
     incr_cycles(cpu);
 }
@@ -173,8 +180,12 @@ inline void phantom_read(cpu_state *cpu, uint32_t address) {
 // Phantom read - only performs if full_phantom_reads is true. This is used for PRs that just re-read program counter etc and can't affect I/O in Apple II..
 inline void phantom_read_ign(cpu_state *cpu, uint32_t address) {
     if constexpr (CPUTraits::full_phantom_reads) {
-        cpu->mmu->read(address);
+        uint8_t data = cpu->mmu->read(address);
+        if (a2buslog::g_on) a2buslog::pend(address, data, a2buslog::K_PHANTOM_READ);  // bus access log
         if (memvu_lv_on) memvu_lv_note_load(address & 0xFFFFFF, MEMVU_K_PHANTOM);  // MEMVU_LOADVIS
+    } else {
+        // Counted, not performed: the log says so, with the address the cycle names.
+        if (a2buslog::g_on) a2buslog::pend(address, 0, a2buslog::K_SKIPPED_READ);
     }
     incr_cycles(cpu);
 }
@@ -184,6 +195,7 @@ inline void phantom_read_ign(cpu_state *cpu, uint32_t address) {
 // write, marked as phantom; they used to see only bus_write.
 inline void phantom_write(cpu_state *cpu, uint32_t address, uint8_t value) {
     cpu->mmu->write(address, value);
+    if (a2buslog::g_on) a2buslog::pend(address, value, a2buslog::K_PHANTOM_WRITE);  // bus access log
     if (memvu_sv_on) memvu_sv_note_store(address & 0xFFFFFF, true);  // MEMVU_STOREVIS (off => 1 branch)
     if (g_watch_on) iigs_watch_check(cpu, address & 0xFFFFFF, value, "phantom-write");  // A2GSPU_WATCH
     if (a2writelog::g_on) a2writelog::note(address & 0xFFFFFF, value, true);  // CTRL `writes`
@@ -194,6 +206,7 @@ inline void phantom_write(cpu_state *cpu, uint32_t address, uint8_t value) {
 inline void phantom_write_ign(cpu_state *cpu, uint32_t address, uint8_t value) {
     if constexpr (CPUTraits::full_phantom_reads) {
         cpu->mmu->write(address, value);
+        if (a2buslog::g_on) a2buslog::pend(address, value, a2buslog::K_PHANTOM_WRITE);  // bus access log
         if (memvu_sv_on) memvu_sv_note_store(address & 0xFFFFFF, true);  // MEMVU_STOREVIS
         if (g_watch_on) iigs_watch_check(cpu, address & 0xFFFFFF, value, "phantom-write");  // A2GSPU_WATCH
         if (a2writelog::g_on) a2writelog::note(address & 0xFFFFFF, value, true);  // CTRL `writes`
@@ -274,10 +287,10 @@ inline uint32_t make_pc_long(cpu_state *cpu, uint16_t address) {
 /** consume a word value from the program counter, and increment the PC accordingly. */
 inline uint16_t read_word_from_pc(cpu_state *cpu) {
     // make sure this is read lo-byte first.
-    byte_t al = bus_read(cpu, make_pc_long(cpu, cpu->pc));
+    byte_t al = bus_read(cpu, make_pc_long(cpu, cpu->pc), a2buslog::K_FETCH);
     if (g_cov_on) a2gspu_cov_fetch(make_pc_long(cpu, cpu->pc), 1, &al);
     cpu->pc++;
-    byte_t ah = bus_read(cpu, make_pc_long(cpu, cpu->pc));
+    byte_t ah = bus_read(cpu, make_pc_long(cpu, cpu->pc), a2buslog::K_FETCH);
     if (g_cov_on) a2gspu_cov_fetch(make_pc_long(cpu, cpu->pc), 1, &ah);
     cpu->pc++;
     
@@ -422,6 +435,7 @@ inline uint32_t _PC(cpu_state *cpu) {
 
 inline uint8_t fetch_pc(cpu_state *cpu) {
     uint8_t b = cpu->mmu->read(_PC(cpu));
+    if (a2buslog::g_on) a2buslog::pend(_PC(cpu), b, a2buslog::K_FETCH);  // bus access log (off => 1 branch)
     if (g_cov_on) a2gspu_cov_fetch(_PC(cpu), 1, &b);
     if (memvu_lv_on) memvu_lv_note_load(_PC(cpu) & 0xFFFFFF, MEMVU_K_FETCH);  // MEMVU_LOADVIS
     incr_cycles(cpu);

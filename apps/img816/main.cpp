@@ -37,6 +37,31 @@
  * (WAI/STP stopped the processor; the run ends there).
  *
  * Options:
+ *   --machine flat|iigs
+ *                flat (the default) is the memory model above. iigs runs the
+ *                same cases on the Apple IIgs memory map: the FPI (MMU_IIgs)
+ *                with its Mega II, the 2.8 MHz IIgs clock (NClockIIgs) and a
+ *                IIgs video scanner, which is what advances the 1 MHz phase a
+ *                slow-side cycle waits for. The ROM image is 128 KB of zeros
+ *                (ROM01 size; nothing is read from disk) and RAM is the
+ *                motherboard plus 8 MB. Before each case the FPI registers go
+ *                back to their reset values ($C036 fast, $C035 = $00: every
+ *                shadow on, language card ROM) and the clock and scanner
+ *                restart at 0, so a case starts at 14M tick 0 on a 1 MHz edge
+ *                with the refresh counter at 0; Mega II soft switches the CPU
+ *                changed are not reset. load, window and the clear between
+ *                cases go through the MMU's observation-free probe_poke and
+ *                probe_peek (a load the map cannot take -- ROM, $C0xx -- is
+ *                an input error, exit 2); the write set comes from the CPU
+ *                write log. cyc= stays the CPU cycle count.
+ *   --buslog F   write the bus access log (src/a2gspu_buslog.hpp, format v1)
+ *                to F: its header line, then for each case `case NAME`, one
+ *                record per CPU cycle of the case, and
+ *                `end NAME runner_cyc=N clock_c14m=N|- dropped=N` -- the cycle
+ *                count of the case line and the clock's 14M ticks over the
+ *                case (`-` on the flat machine, which has no bus-side model:
+ *                its records carry side and costs `-`). Only the first pass of
+ *                --repeat is logged. apps/img816/buslogcheck checks a log.
  *   --repeat N   run the whole batch N times; every pass must produce output
  *                identical to the first (reported as repeat_mismatch); only
  *                the first pass is printed
@@ -54,7 +79,13 @@
 #include "gs2.hpp"
 #include "cpus/cpu_implementations.cpp"
 #include "mmus/mmu.hpp"
+#include "mmus/mmu_iie.hpp"
+#include "mmus/mmu_iigs.hpp"
+#include "mmus/iigs_memory.hpp"
+#include "devices/displaypp/VideoScannerIIgs.hpp"
 #include "NClock.hpp"
+#include "a2gspu_buslog.hpp"
+#include "a2gspu_writelog.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -77,6 +108,32 @@ public:
     uint8_t vp_read(uint32_t a) override { return mem[a & 0xFFFFFF]; }
     void write(uint32_t a, uint8_t v) override { a &= 0xFFFFFF; mem[a] = v; wlog.push_back(a); }
     uint8_t probe_peek(uint32_t a) override { return mem[a & 0xFFFFFF]; }
+};
+
+// The flat machine's clock when --buslog is given: the plain clock, plus the bus access
+// log's record for each cycle (the plain NClock writes none, so without --buslog the
+// flat runner pays nothing for the log).
+class FlatLogClock : public NClock {
+public:
+    FlatLogClock() : NClock(CLOCK_SET_US, CLOCK_FREE_RUN) {}
+    void slow_incr_cycles() override {
+        cycles++;
+        if (a2buslog::g_on) a2buslog::end_cycle(cycles - 1);
+    }
+};
+
+// The IIgs clock, restartable between cases (its counters are protected members).
+class CaseClock : public NClockIIgs {
+public:
+    CaseClock() : NClockIIgs(CLOCK_SET_US, CLOCK_2_8MHZ) {}
+    void restart() {
+        cycles = 0; c_14M = 0; video_cycles = 0;
+        video_cycle_14M_count = 0; scanline_14M_count = 0;
+        frame_start_c14M = 0; frame_end_c14M = current.c14M_per_frame; frame_count = 0;
+        cpu_div = 0;
+        ram_refresh_cycles = 0; vidlinecycles = 0; video_c14m = 0;
+        cycle_type = CYCLE_TYPE_FAST;
+    }
 };
 
 struct Load { uint32_t addr; std::vector<uint8_t> bytes; };
@@ -195,16 +252,38 @@ static bool parse_input(FILE *f, std::vector<Case> &cases) {
 }
 
 struct Machine {
-    FlatMMU *mmu;
+    FlatMMU *mmu = nullptr;          // flat machine
+    MMU_IIgs *gs = nullptr;          // iigs machine
+    VideoScannerIIgs *scanner = nullptr;
+    CaseClock *gs_clock = nullptr;
     cpu_state *cpu;
     NClock *clock;
+    FILE *buslog = nullptr;          // --buslog, first pass only
 };
 
-static std::string run_case(Machine &m, const Case &c) {
+static uint8_t peek(Machine &m, uint32_t a) { return m.gs ? m.gs->probe_peek(a) : m.mmu->mem[a]; }
+
+static std::string run_case(Machine &m, const Case &c, bool &input_error) {
     FlatMMU *mmu = m.mmu;
     cpu_state *cpu = m.cpu;
-    for (const Load &ld : c.loads) std::copy(ld.bytes.begin(), ld.bytes.end(), mmu->mem.begin() + ld.addr);
-    mmu->wlog.clear();
+    if (m.gs) {
+        m.gs->reset(false);
+        m.gs_clock->restart();
+        m.scanner->reset();
+        for (const Load &ld : c.loads)
+            for (size_t k = 0; k < ld.bytes.size(); k++)
+                if (!m.gs->probe_poke(ld.addr + (uint32_t)k, ld.bytes[k])) {
+                    fprintf(stderr, "img816: case %s: the iigs map cannot load %06X\n", c.name.c_str(),
+                            ld.addr + (unsigned)k);
+                    input_error = true;
+                    return std::string();
+                }
+        a2writelog::mark(a2writelog::kMaxCap);
+    } else {
+        for (const Load &ld : c.loads) std::copy(ld.bytes.begin(), ld.bytes.end(), mmu->mem.begin() + ld.addr);
+        mmu->wlog.clear();
+    }
+    if (m.buslog) a2buslog::mark(a2buslog::kMaxCap);
 
     uint16_t s = c.s, x = c.x, y = c.y;
     uint8_t p = c.p;
@@ -219,6 +298,7 @@ static std::string run_case(Machine &m, const Case &c) {
     cpu->sp = s; cpu->a = c.a; cpu->x = x; cpu->y = y; cpu->d = c.d;
 
     uint64_t c0 = m.clock->get_cycles();
+    uint64_t t0 = m.clock->get_c14m();
     uint64_t last = 0;
     long insn = 0;
     const char *status = "ok";
@@ -233,6 +313,27 @@ static std::string run_case(Machine &m, const Case &c) {
         if (cpu->halt || cpu->clock_stopped || cpu->rdy) { status = "halt"; break; }
     }
     uint64_t total = m.clock->get_cycles() - c0;
+    if (m.buslog) {
+        a2buslog::off();
+        std::fprintf(m.buslog, "case %s\n", c.name.c_str());
+        a2buslog::dump_range(m.buslog, 0, a2buslog::g_log.size());
+        if (m.gs)
+            std::fprintf(m.buslog, "end %s runner_cyc=%llu clock_c14m=%llu dropped=%llu\n", c.name.c_str(),
+                         (unsigned long long)total, (unsigned long long)(m.clock->get_c14m() - t0),
+                         (unsigned long long)a2buslog::g_dropped);
+        else
+            std::fprintf(m.buslog, "end %s runner_cyc=%llu clock_c14m=- dropped=%llu\n", c.name.c_str(),
+                         (unsigned long long)total, (unsigned long long)a2buslog::g_dropped);
+        a2buslog::g_log.clear();
+    }
+    // The write set: the flat memory's own log, or the CPU write log on the iigs map.
+    static std::vector<uint32_t> gs_wlog;
+    if (m.gs) {
+        a2writelog::off();
+        gs_wlog.clear();
+        for (const a2writelog::Entry &e : a2writelog::g_log) gs_wlog.push_back(e.addr);
+    }
+    const std::vector<uint32_t> &wlog = m.gs ? gs_wlog : mmu->wlog;
 
     char buf[256];
     std::string out = c.name;
@@ -249,14 +350,14 @@ static std::string run_case(Machine &m, const Case &c) {
         snprintf(buf, sizeof buf, "%06X:", c.windows[i].addr);
         out += buf;
         for (uint32_t k = 0; k < c.windows[i].len; k++) {
-            uint8_t b = mmu->mem[c.windows[i].addr + k];
+            uint8_t b = peek(m, c.windows[i].addr + k);
             out += hx[b >> 4]; out += hx[b & 15];
         }
     }
-    std::vector<uint32_t> ws(mmu->wlog);
+    std::vector<uint32_t> ws(wlog);
     std::sort(ws.begin(), ws.end());
     ws.erase(std::unique(ws.begin(), ws.end()), ws.end());
-    snprintf(buf, sizeof buf, "\tnw=%zu\twr=", mmu->wlog.size());
+    snprintf(buf, sizeof buf, "\tnw=%zu\twr=", wlog.size());
     out += buf;
     for (size_t i = 0; i < ws.size(); i++) {
         snprintf(buf, sizeof buf, i ? ",%06X" : "%06X", ws[i]);
@@ -264,23 +365,34 @@ static std::string run_case(Machine &m, const Case &c) {
     }
 
     // clear everything this case loaded or wrote
-    for (const Load &ld : c.loads) std::fill(mmu->mem.begin() + ld.addr, mmu->mem.begin() + ld.addr + ld.bytes.size(), 0);
-    for (uint32_t ad : mmu->wlog) mmu->mem[ad] = 0;
+    if (m.gs) {
+        // probe_poke refuses $C0xx and ROM; those were not memory to begin with.
+        for (const Load &ld : c.loads)
+            for (size_t k = 0; k < ld.bytes.size(); k++) m.gs->probe_poke(ld.addr + (uint32_t)k, 0);
+        for (uint32_t ad : wlog) m.gs->probe_poke(ad, 0);
+        a2writelog::g_log.clear();
+    } else {
+        for (const Load &ld : c.loads) std::fill(mmu->mem.begin() + ld.addr, mmu->mem.begin() + ld.addr + ld.bytes.size(), 0);
+        for (uint32_t ad : mmu->wlog) mmu->mem[ad] = 0;
+    }
     return out;
 }
 
 int main(int argc, char **argv) {
-    const char *path = nullptr, *check = nullptr;
+    const char *path = nullptr, *check = nullptr, *buslog_path = nullptr, *machine = "flat";
     long repeat = 1;
     bool quiet = false;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--repeat") && i + 1 < argc) repeat = atol(argv[++i]);
+        else if (!strcmp(argv[i], "--machine") && i + 1 < argc) machine = argv[++i];
+        else if (!strcmp(argv[i], "--buslog") && i + 1 < argc) buslog_path = argv[++i];
         else if (!strcmp(argv[i], "--quiet")) quiet = true;
         else if (!strcmp(argv[i], "--check") && i + 1 < argc) check = argv[++i];
         else path = argv[i];
     }
-    if (!path || repeat < 1) {
-        fprintf(stderr, "usage: img816 [--repeat N] [--quiet] [--check EXPECTED] FILE|-\n");
+    const bool iigs = !strcmp(machine, "iigs");
+    if (!path || repeat < 1 || (!iigs && strcmp(machine, "flat"))) {
+        fprintf(stderr, "usage: img816 [--machine flat|iigs] [--buslog FILE] [--repeat N] [--quiet] [--check EXPECTED] FILE|-\n");
         return 2;
     }
     FILE *f = strcmp(path, "-") ? fopen(path, "rb") : stdin;
@@ -295,26 +407,56 @@ int main(int argc, char **argv) {
     gs2_app_inues.console_mode = false;
 
     Machine m;
-    m.mmu = new FlatMMU();
     m.cpu = new cpu_state(PROCESSOR_65816);
-    m.clock = new NClock(CLOCK_SET_US, CLOCK_FREE_RUN);
+    static std::vector<uint8_t> rom;
+    if (iigs) {
+        // All-zero ROM01-sized image: the map, not the firmware, is under test.
+        const size_t rom_size = 128 * 1024;
+        rom.assign(rom_size, 0);
+        const size_t fast_ram = iigs_memory::fast_ram_bytes(rom_size);
+        MMU_IIe *megaii = new MMU_IIe(256, 128 * 1024, rom.data() + (rom_size - 65536) + 0xC000);
+        m.gs = new MMU_IIgs(256, (int)fast_ram, (uint32_t)rom_size, rom.data(), megaii);
+        m.gs->init_map();
+        m.gs_clock = new CaseClock();
+        m.clock = m.gs_clock;
+        m.gs->set_clock(m.gs_clock);
+        m.scanner = new VideoScannerIIgs(megaii);
+        m.scanner->initialize();
+        m.gs_clock->set_video_scanner(m.scanner);
+    } else {
+        m.mmu = new FlatMMU();
+        if (buslog_path) m.clock = new FlatLogClock();
+        else m.clock = new NClock(CLOCK_SET_US, CLOCK_FREE_RUN);
+    }
     m.cpu->cpun = createCPU(PROCESSOR_65816, m.clock);
     m.cpu->core = m.cpu->cpun.get();
     m.cpu->trace = false;
-    m.cpu->set_mmu(m.mmu);
+    if (iigs) m.cpu->set_mmu(m.gs);
+    else m.cpu->set_mmu(m.mmu);
     m.cpu->reset();
+    FILE *blf = nullptr;
+    if (buslog_path) {
+        blf = fopen(buslog_path, "wb");
+        if (!blf) { fprintf(stderr, "img816: cannot open %s\n", buslog_path); return 2; }
+        a2buslog::header(blf);
+        fprintf(blf, "# img816 machine=%s\n", machine);
+    }
 
     std::vector<std::string> first(cases.size());
     long mismatch = 0;
     auto t0 = std::chrono::steady_clock::now();
     for (long r = 0; r < repeat; r++) {
+        m.buslog = r == 0 ? blf : nullptr;
         for (size_t i = 0; i < cases.size(); i++) {
-            std::string line = run_case(m, cases[i]);
+            bool input_error = false;
+            std::string line = run_case(m, cases[i], input_error);
+            if (input_error) return 2;
             if (r == 0) first[i] = std::move(line);
             else if (line != first[i]) mismatch++;
         }
     }
     double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    if (blf && fclose(blf) != 0) { fprintf(stderr, "img816: cannot write %s\n", buslog_path); return 2; }
     if (!quiet) for (const std::string &l : first) printf("%s\n", l.c_str());
     long runs = (long)cases.size() * repeat;
     fprintf(stderr, "img816: cases=%zu runs=%ld run_s=%.3f runs_per_s=%.0f repeat_mismatch=%ld\n", cases.size(), runs,

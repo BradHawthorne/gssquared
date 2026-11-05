@@ -1,0 +1,8 @@
+# Expected img816 --machine iigs output for buslog_cases.txt, worked out by hand before the first run.
+fast_ram_loop	ok	cyc=20	last=4	insn=8	pc=001008 a=0042 x=0000 y=0000 s=01FF p=32 d=0000 dbr=00 e=0	win=001100:42	nw=1	wr=001100
+lda16_bank00	ok	cyc=6	last=6	insn=1	pc=001004 a=ABCD x=0000 y=0000 s=01FF p=80 d=0000 dbr=00 e=0	win=001234:CDAB	nw=0	wr=
+lda16_bank_e1	ok	cyc=6	last=6	insn=1	pc=001004 a=ABCD x=0000 y=0000 s=01FF p=80 d=0000 dbr=00 e=0	win=E11234:CDAB	nw=0	wr=
+io_megaii_rw	ok	cyc=27	last=5	insn=6	pc=001015 a=0001 x=0000 y=0000 s=01FF p=30 d=0000 dbr=00 e=0	win=E13000:5A	nw=2	wr=00C029,E13000
+shadow_write_bank0	ok	cyc=8	last=4	insn=2	pc=001006 a=0077 x=0000 y=0000 s=01FF p=30 d=0000 dbr=00 e=0	win=000400:77,E00400:77,001400:77	nw=2	wr=000400,001400
+slow_machine	ok	cyc=6	last=2	insn=2	pc=001004 a=0000 x=0000 y=0000 s=01FF p=30 d=0000 dbr=00 e=0	win=	nw=1	wr=00C036
+fast_loop_scanline	ok	cyc=321	last=2	insn=129	pc=001005 a=0000 x=0000 y=0000 s=01FF p=32 d=0000 dbr=00 e=0	win=	nw=0	wr=

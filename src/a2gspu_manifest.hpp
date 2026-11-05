@@ -122,6 +122,7 @@ inline const char *verb_when(const char *name) {
         {"vram",       "raw 8K aux + 8K main video memory"},
         {"watch",      "memory watch"},
         {"writes",     "the set of addresses a routine wrote, phantom writes included: mark before the run, report after"},
+        {"buslog",     "what a routine's memory accesses cost: which went to the 1 MHz side, and the 14M ticks each cycle was charged"},
         {"joymode",    "pick the controller shape at $C061-$C063. The only way to reach Atari/mouse modes headlessly"},
     };
     for (const VerbUse &e : u) if (!strcmp(e.name, name)) return e.when;
@@ -224,6 +225,9 @@ inline const Verb *verbs(int *count) {
         {"writes", "observe",
          "writes mark [cap] | writes | writes dump <file> | writes off — CPU write log since the mark: n, phantom, unique, sorted 24-bit write set",
          "bus_write"},
+        {"buslog", "observe",
+         "buslog mark [cap] | buslog | buslog dump <file> | buslog off — one record per CPU cycle since the mark: address, kind, value, fast/slow side, 14M cost and reasons (format v1)",
+         "incr_cycles"},
     };
     *count = (int)(sizeof v / sizeof v[0]);
     return v;

@@ -32,7 +32,7 @@ def run(exe):
                     catalog=json.loads(client.request(TOOLS,b'').decode('utf-8'))
                     check(catalog['schema']=='a2agent-tools-v1','native socket tool catalog available')
                     commands=catalog['capabilities']['commands'];names={row['name'] for row in commands}
-                    check(len(commands)==76 and {'features','writes','inspect','capture','fault','input','save','restore','shr','rail','subscribe','ui','context'} <= names,'socket discovers every existing instrument')
+                    check(len(commands)==77 and {'features','writes','buslog','inspect','capture','fault','input','save','restore','shr','rail','subscribe','ui','context'} <= names,'socket discovers every existing instrument')
                     check(catalog['control']['requires_paused'] and catalog['control']['quit_request']=='QUIT','catalog states ownership/pause/quit contract')
                     check(client.agent_tools()==catalog,'public SDK returns native tool catalog')
                     check(client.agent_command('ui status')['data']['schema']=='a2ui-v1','presentation tools accessible from socket')

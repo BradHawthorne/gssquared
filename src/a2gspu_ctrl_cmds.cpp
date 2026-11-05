@@ -30,6 +30,7 @@
 #include "a2gspu_features.hpp"
 #include "a2gspu_setreg.hpp"
 #include "a2gspu_writelog.hpp"
+#include "a2gspu_buslog.hpp"
 
 namespace a2ctrl {
 // A2CTRL-DISPATCH-BEGIN -- railparity.ps1 reads CTRL command words (strncmp/strcmp
@@ -108,6 +109,45 @@ inline void soft_watch_after(computer_t *computer, char *buf, size_t bufsz) {
 }
 
 bool try_watch(const char *line, char *result, size_t rsz, computer_t *computer) {
+    // Bus access log since a mark: one record per CPU cycle, bus side and 14M cost
+    // (a2gspu_buslog.hpp).
+    if (!strcmp(line, "buslog") || !strncmp(line, "buslog ", 7)) {
+        const char *arg = line[6] ? line + 7 : "";
+        while (*arg == ' ') arg++;
+        if (!*arg) {
+            a2buslog::format_report(result, rsz);
+        } else if (!strncmp(arg, "mark", 4) && (arg[4] == 0 || arg[4] == ' ')) {
+            unsigned long cap = a2buslog::kDefaultCap;
+            const char *cs = arg + 4;
+            while (*cs == ' ') cs++;
+            char *end = nullptr;
+            if (*cs) cap = strtoul(cs, &end, 10);
+            if (*cs && (*end || cap == 0)) {
+                snprintf(result, rsz, "status=FAIL buslog-parse 'buslog mark [cap]' (cap: decimal, > 0)");
+            } else {
+                a2buslog::mark(cap);
+                snprintf(result, rsz, "status=OK buslog mark v=%d cap=%zu", a2buslog::kFormatVersion, a2buslog::g_cap);
+            }
+        } else if (!strcmp(arg, "off")) {
+            a2buslog::off();
+            snprintf(result, rsz, "status=OK buslog off n=%zu", a2buslog::g_log.size());
+        } else if (!strncmp(arg, "dump ", 5)) {
+            const char *path = arg + 5;
+            while (*path == ' ') path++;
+            FILE *bf = *path ? fopen(path, "wb") : nullptr;
+            a2artifact::ExistingOutput a2output_bf_w(bf, path);
+            if (!bf) {
+                snprintf(result, rsz, "status=FAIL buslog-dump-open-fail %s", path);
+            } else {
+                a2buslog::dump(bf);
+                a2output_bf_w.finish();
+                snprintf(result, rsz, "status=OK buslog dump n=%zu wrote %s", a2buslog::g_log.size(), path);
+            }
+        } else {
+            snprintf(result, rsz, "status=FAIL buslog-need: (report) | mark [cap] | off | dump <file>");
+        }
+        return true;
+    }
     // CPU write log since a mark, phantom writes included (a2gspu_writelog.hpp).
     if (!strcmp(line, "writes") || !strncmp(line, "writes ", 7)) {
         const char *arg = line[6] ? line + 7 : "";
