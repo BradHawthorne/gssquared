@@ -48,3 +48,22 @@ add_test(NAME img816_buslog_iigs_same_image COMMAND img816 --machine iigs
 set_tests_properties(img816_buslog_iigs_same_image PROPERTIES FIXTURES_SETUP buslog_iigs_cases)
 add_test(NAME img816_buslog_iigs_same_image_records COMMAND buslogcheck ${CMAKE_CURRENT_BINARY_DIR}/buslog_iigs_cases.txt)
 set_tests_properties(img816_buslog_iigs_same_image_records PROPERTIES FIXTURES_REQUIRED buslog_iigs_cases)
+
+# One access per cycle: a second access pended in one CPU cycle is counted (overlap=)
+# and, built with A2_BUSLOG_ASSERT, asserts. buslogunit checks the counter, the report
+# and the cap ceiling; buslogunit_assert is the same header with the assertion on and
+# must stop on it. buslogcheck must refuse a log whose end line
+# reports an overlap (buslog.overlap, a planted log).
+add_executable(buslogunit buslogunit.cpp)
+target_include_directories(buslogunit PRIVATE ${PROJECT_SOURCE_DIR}/src)
+add_test(NAME buslog_unit COMMAND buslogunit)
+add_executable(buslogunit_assert buslogunit.cpp)
+target_include_directories(buslogunit_assert PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_compile_definitions(buslogunit_assert PRIVATE BUSLOGUNIT_ASSERT)
+add_test(NAME buslog_unit_assert COMMAND buslogunit_assert)
+set_tests_properties(buslog_unit_assert PROPERTIES
+    PASS_REGULAR_EXPRESSION "a second bus access was pended in one CPU cycle"
+    FAIL_REGULAR_EXPRESSION "did not assert")
+add_test(NAME img816_buslog_rejects_overlap COMMAND buslogcheck ${CMAKE_CURRENT_SOURCE_DIR}/buslog.overlap)
+set_tests_properties(img816_buslog_rejects_overlap PROPERTIES
+    PASS_REGULAR_EXPRESSION "pended a second bus access")

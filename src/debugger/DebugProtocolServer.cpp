@@ -404,7 +404,11 @@ bool DebugProtocolServer::start() {
     sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
     if (socket_path_.size() >= sizeof(addr.sun_path)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "DebugProtocolServer: path too long: %s", socket_path_.c_str());
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "DebugProtocolServer: socket path is %u bytes; the AF_UNIX limit is %u (sun_path): %s -- "
+                     "use a shorter directory (for a path under the temporary directory, a shorter TEMP/TMP)",
+                     (unsigned)socket_path_.size(), (unsigned)(sizeof(addr.sun_path) - 1),
+                     socket_path_.c_str());
         close_socket(lfd);
 #if defined(_WIN32)
         ::WSACleanup();

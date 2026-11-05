@@ -51,15 +51,33 @@
 //
 // Since protocol minor 5 (`features buslog`):
 //   buslog mark [cap]   clear the log and record every CPU cycle from now on
-//                       (default cap 1048576 records; later cycles are counted
-//                       as dropped, not stored)
+//                       (default cap 1048576 records, 32 MiB; at most kMaxCap;
+//                       later cycles are counted as dropped, not stored)
 //   buslog              one-line summary (see format_report)
 //   buslog dump <file>  the records above, in order
 //   buslog off          stop recording; the log is kept for report/dump
 //
+// Memory: a record (Entry) is 32 bytes. The default cap, 2^20 records, is
+// 32 MiB once full; the ceiling, kMaxCap = 2^24 records (about 6 s of a
+// 2.8 MHz machine), is 512 MiB, and while the vector grows to it the old and
+// new buffers coexist for a moment: about 768 MiB at the last doubling. A
+// larger request is clamped to kMaxCap (the mark reply names the cap in force).
+//
+// One access per cycle: the core's bus helpers pend at most one access per
+// counted cycle. A second pend before the clock consumes the first means a
+// cycle performed two accesses (or an access whose cycle was never counted);
+// the later access is the one recorded and the event is counted in g_overlap
+// (`overlap=` in the report). Built with A2_BUSLOG_ASSERT defined, it also
+// asserts. The assertion is opt-in rather than tied to NDEBUG because this
+// tree's Release flags keep assert() live (no -DNDEBUG): an NDEBUG-gated
+// assert would stop the shipping emulator over a diagnostic. (The plain
+// NClock writes no records, so the log must not be on with it: every access
+// after the first would count as an overlap.)
+//
 // Off => one branch per bus access in the CPU core and one per cycle in the
 // clock. Header-only so apps/img816 can use it without a running machine.
 
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -102,14 +120,16 @@ struct Entry {
     uint16_t c14m;
     uint8_t  base, wait, refresh, stretch;
 };
+static_assert(sizeof(Entry) == 32, "the memory figures above assume a 32-byte record");
 
 inline bool               g_on      = false;
 inline std::vector<Entry> g_log;
 inline size_t             g_cap     = 1u << 20;
 inline uint64_t           g_dropped = 0;
+inline uint64_t           g_overlap = 0;   // cycles in which a second access was pended
 
-constexpr size_t kDefaultCap = 1u << 20;
-constexpr size_t kMaxCap     = 1u << 26;
+constexpr size_t kDefaultCap = 1u << 20;   // 32 MiB of records
+constexpr size_t kMaxCap     = 1u << 24;   // 512 MiB of records (about 768 MiB while the vector grows)
 
 // The access the core made in the cycle now ending (set by the core's bus
 // helpers, consumed by end_cycle).
@@ -130,6 +150,12 @@ struct ClockNote {
 inline ClockNote g_clock = {};
 
 inline void pend(uint32_t addr, uint8_t value, uint8_t kind) {
+    if (g_pend) {
+        g_overlap++;
+#if defined(A2_BUSLOG_ASSERT)
+        assert(!"buslog: a second bus access was pended in one CPU cycle");
+#endif
+    }
     g_pend = true; g_pend_addr = addr & 0xFFFFFF; g_pend_val = value; g_pend_kind = kind;
 }
 
@@ -192,6 +218,7 @@ inline void note_cycle(uint64_t cycle, uint8_t requested, uint8_t type, bool slo
 inline void mark(size_t cap = kDefaultCap) {
     g_log.clear();
     g_dropped = 0;
+    g_overlap = 0;
     g_cap = cap ? (cap > kMaxCap ? kMaxCap : cap) : kDefaultCap;
     g_log.reserve(g_cap < 65536 ? g_cap : 65536);
     g_pend = false;
@@ -243,13 +270,17 @@ inline int format_summary(char *buf, size_t bufsz, const Summary &s) {
     return (int)used;
 }
 
-// "status=OK buslog v=1 on=1 dropped=0 n=... (format_summary)"
+// "status=OK buslog v=1 on=1 dropped=0 n=... (format_summary) overlap=0"
 inline void format_report(char *buf, size_t bufsz) {
     if (!bufsz) return;
     int w = std::snprintf(buf, bufsz, "status=OK buslog v=%d on=%d dropped=%llu ", kFormatVersion, g_on ? 1 : 0,
                           (unsigned long long)g_dropped);
     if (w < 0 || (size_t)w >= bufsz) return;
-    format_summary(buf + w, bufsz - (size_t)w, summarize());
+    size_t used = (size_t)w;
+    w = format_summary(buf + used, bufsz - used, summarize());
+    if (w < 0 || (size_t)w >= bufsz - used) return;
+    used += (size_t)w;
+    std::snprintf(buf + used, bufsz - used, " overlap=%llu", (unsigned long long)g_overlap);
 }
 
 inline void header(FILE *f) {

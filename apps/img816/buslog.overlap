@@ -1,0 +1,7 @@
+# Negative control for buslogcheck: a well-formed two-cycle log whose end line
+# reports one overlap (two accesses pended in one cycle). buslogcheck must fail it.
+# buslog v1 fields: seq cycle t14m addr kind value side c14m base wait refresh stretch reasons
+case planted_overlap
+0 0 0 001000 fetch EA fast 5 5 0 0 0 -
+1 1 5 001001 read 11 fast 5 5 0 0 0 -
+end planted_overlap runner_cyc=2 clock_c14m=10 dropped=0 overlap=1

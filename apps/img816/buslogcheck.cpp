@@ -9,6 +9,8 @@
  *     consecutive, so there is exactly one record per CPU cycle;
  *   - the number of records equals the runner's own cycle count for the case
  *     (`end NAME runner_cyc=N`, the same count as the case line's cyc=);
+ *   - no cycle pended a second access (`overlap=0` on the end line, when the
+ *     logger reports it);
  *   - with a timing model: each record's c14m is base+wait+refresh+stretch,
  *     the next record starts where this one ended (t14m + c14m), the side is
  *     slow exactly when base is 14, each reason flag matches its column
@@ -45,6 +47,7 @@ struct Case {
     bool ended = false;
     long long runner_cyc = -1;
     long long clock_c14m = -1;   // -1: no timing model
+    long long overlap = -1;      // -1: not reported
 };
 
 static int failures = 0;
@@ -149,6 +152,7 @@ int main(int argc, char **argv) {
                 std::string k = kv.substr(0, eq), v = kv.substr(eq + 1);
                 if (k == "runner_cyc") cur->runner_cyc = atoll(v.c_str());
                 if (k == "clock_c14m" && v != "-") cur->clock_c14m = atoll(v.c_str());
+                if (k == "overlap") cur->overlap = atoll(v.c_str());
             }
             if (name != cur->name) fail(cur->name, "end names another case: " + name);
             cur->ended = true;
@@ -165,6 +169,10 @@ int main(int argc, char **argv) {
     for (const Case &c : cases) {
         char m[256];
         if (c.runner_cyc < 0) fail(c.name, "no runner_cyc on the end line");
+        if (c.overlap > 0) {
+            snprintf(m, sizeof m, "%lld cycle(s) pended a second bus access (overlap)", c.overlap);
+            fail(c.name, m);
+        }
         else if ((long long)c.recs.size() != c.runner_cyc) {
             snprintf(m, sizeof m, "%zu records but the runner counted %lld cycles", c.recs.size(), c.runner_cyc);
             fail(c.name, m);

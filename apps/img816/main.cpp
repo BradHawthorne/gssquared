@@ -318,12 +318,14 @@ static std::string run_case(Machine &m, const Case &c, bool &input_error) {
         std::fprintf(m.buslog, "case %s\n", c.name.c_str());
         a2buslog::dump_range(m.buslog, 0, a2buslog::g_log.size());
         if (m.gs)
-            std::fprintf(m.buslog, "end %s runner_cyc=%llu clock_c14m=%llu dropped=%llu\n", c.name.c_str(),
-                         (unsigned long long)total, (unsigned long long)(m.clock->get_c14m() - t0),
-                         (unsigned long long)a2buslog::g_dropped);
+            std::fprintf(m.buslog, "end %s runner_cyc=%llu clock_c14m=%llu dropped=%llu overlap=%llu\n",
+                         c.name.c_str(), (unsigned long long)total,
+                         (unsigned long long)(m.clock->get_c14m() - t0), (unsigned long long)a2buslog::g_dropped,
+                         (unsigned long long)a2buslog::g_overlap);
         else
-            std::fprintf(m.buslog, "end %s runner_cyc=%llu clock_c14m=- dropped=%llu\n", c.name.c_str(),
-                         (unsigned long long)total, (unsigned long long)a2buslog::g_dropped);
+            std::fprintf(m.buslog, "end %s runner_cyc=%llu clock_c14m=- dropped=%llu overlap=%llu\n",
+                         c.name.c_str(), (unsigned long long)total, (unsigned long long)a2buslog::g_dropped,
+                         (unsigned long long)a2buslog::g_overlap);
         a2buslog::g_log.clear();
     }
     // The write set: the flat memory's own log, or the CPU write log on the iigs map.

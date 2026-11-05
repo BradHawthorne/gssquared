@@ -49,3 +49,29 @@ def test_batch_has_explicit_structured_parameters():
     assert any(tool['name']=='gs2_batch' and 'frames' in tool['inputSchema']['required'] for tool in tools)
     result=server.handle({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'gs2_batch','arguments':{'frames':1,'rails':{}}}})['result']
     assert result['structuredContent']['exit_code']==0 and backend.calls==[('batch',{'frames':1,'rails':{}})]
+
+def test_long_socket_path_refused_before_launch():
+    # A managed launch whose socket path cannot fit sun_path (107 bytes) is refused
+    # before any session directory or process exists, naming the limit and the fix.
+    import tempfile
+    from pathlib import Path
+    from types import SimpleNamespace
+    from gs2debug.mcp import Backend as LaunchBackend
+    from gs2debug.unix_socket import check_path, connect_unix, MAX_PATH_BYTES
+    assert MAX_PATH_BYTES==107
+    with tempfile.TemporaryDirectory(prefix='a2longsock-') as temporary:
+        base=Path(temporary);exe=base/'not-launched.exe';exe.write_bytes(b'\0')
+        deep=base/('d'*(MAX_PATH_BYTES+1))
+        args=SimpleNamespace(exe=exe,socket=None,out_dir=None,out_root=deep,artifact_root=None,read_only_media=False,
+                             config=None,platform=None,seed=None,rail=[])
+        backend=LaunchBackend(args)
+        try:
+            backend.open();raise AssertionError('a socket path over 107 bytes was accepted')
+        except ValueError as error:
+            text=str(error)
+            assert 'limit is 107' in text and 'TEMP' in text and 'debug.sock' in text,text
+        assert backend.process is None and backend.root is None and not list(deep.glob('mcp-*'))
+        try:
+            connect_unix(str(deep/'debug.sock'));raise AssertionError('connect accepted a socket path over 107 bytes')
+        except ValueError as error:assert 'limit is 107' in str(error)
+        assert len(check_path('x'*MAX_PATH_BYTES))==MAX_PATH_BYTES   # exactly at the limit is accepted

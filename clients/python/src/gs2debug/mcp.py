@@ -14,6 +14,7 @@ import time
 import uuid
 import hashlib
 from .client import Client
+from .unix_socket import check_path
 from .errors import ProtocolError
 from .observations import TOOLS as OBSERVATION_TOOLS, TOOL_NAMES as OBSERVATION_NAMES, observe
 from .artifacts import Artifacts, TOOLS as ARTIFACT_TOOLS, TOOL_NAMES as ARTIFACT_NAMES
@@ -60,6 +61,7 @@ class Backend:
             if self.args.out_root is not None:
                 parent=self.args.out_root.resolve();parent.mkdir(parents=True,exist_ok=True);root=parent/('mcp-'+uuid.uuid4().hex)
             else:root=self.args.out_dir.resolve()
+            check_path(str(root/'debug.sock'))   # before any directory or process exists
             root.mkdir(parents=True,exist_ok=False);self.root=root
             endpoint=str(self.root/'debug.sock')
             env={k:v for k,v in os.environ.items() if not k.startswith(('A2GSPU_','MEMVU_','WIZ5_'))}

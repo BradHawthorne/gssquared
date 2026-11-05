@@ -36,6 +36,10 @@
       .\tools\a2rail\gates.ps1 -Skip copilot    # name suites to leave out; they are REPORTED as skipped
       .\tools\a2rail\gates.ps1 -SkipCorpus      # unarmedhash without the GS/OS image (PARTIAL), mbaudit skipped
 
+    The agentic fixtures create AF_UNIX sockets under the temporary directory, and a socket
+    path holds at most 107 bytes. The gate checks the deepest one before it starts and, if
+    TEMP is too long, fails at once saying so (set TEMP and TMP to a shorter directory).
+
     Exit 0 only when every suite that ran returned 0. A skipped suite is printed as SKIPPED
     in the matrix and in the exit line, never folded into the green.
 
@@ -61,6 +65,29 @@ Remove-Item $Report -ErrorAction SilentlyContinue
 $envBefore = @{}
 Get-ChildItem Env: | Where-Object { $_.Name -match '^(A2GSPU_|MEMVU_|WIZ5_)' } | ForEach-Object { $envBefore[$_.Name] = $_.Value }
 
+# AF_UNIX: sockaddr_un.sun_path holds 108 bytes, NUL included, on Windows and Linux. The
+# agentic fixtures put their sockets under Python's temporary directory; the deepest is
+# mcpcheck's repeat launch, <temp>\a2mcp-repeat-XXXXXXXX\mcp-<32 hex>\debug.sock. Past the
+# limit the emulator cannot bind and the fixture fails far from the cause, so check first.
+$SocketPathLimit = 107
+function Assert-SocketTempBudget {
+    $temp = & python -I -c 'import tempfile;print(tempfile.gettempdir())' | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0 -or -not $temp) { throw 'socket path check: cannot read the temporary directory from python' }
+    $temp = $temp.Trim()
+    $sep = [IO.Path]::DirectorySeparatorChar
+    $deepest = $temp + $sep + 'a2mcp-repeat-' + ('x' * 8) + $sep + 'mcp-' + ('0' * 32) + $sep + 'debug.sock'
+    $utf8 = [Text.Encoding]::UTF8
+    $bytes = $utf8.GetByteCount($deepest)
+    if ($bytes -gt $SocketPathLimit) {
+        $tempBytes = $utf8.GetByteCount($temp)
+        throw (("socket path too long: the agentic fixtures create AF_UNIX sockets under the temporary directory " +
+               "{0} ({1} bytes); the deepest is {2} bytes and the AF_UNIX limit is {3} bytes (sun_path). " +
+               "Fix: set TEMP and TMP (and TMPDIR if set) to a directory of at most {4} bytes, then rerun.") -f
+               $temp, $tempBytes, $bytes, $SocketPathLimit, ($SocketPathLimit - ($bytes - $tempBytes)))
+    }
+    Write-Host ("socket path check: deepest fixture socket {0} of {1} bytes (temporary directory {2})" -f $bytes, $SocketPathLimit, $temp)
+}
+
 $suites = [ordered]@{
     'railparity'   = @{ offline = $true;  run = { & (Join-Path $here 'railparity.ps1') } }
     'artifacts'    = @{ offline = $true;  run = { python (Join-Path $here 'artifacts.py') selftest } }
@@ -68,6 +95,7 @@ $suites = [ordered]@{
     'buscompare'   = @{ offline = $true;  run = { python (Join-Path $here 'buscompare.py') selftest } }
     'bisect'       = @{ offline = $true;  run = { & (Join-Path $here 'bisect.ps1') -SelfTest } }
     'agentic'      = @{ offline = $false; run = {
+        Assert-SocketTempBudget
         & (Join-Path $here 'sessionidentitycheck.ps1') -Exe (Get-GSSquaredExe)
         if ($LASTEXITCODE -ne 0) { throw 'Session identity fixture failed' }
         & (Join-Path $root 'tools/scout/scoutcheck.ps1') -Exe (Get-GSSquaredExe)

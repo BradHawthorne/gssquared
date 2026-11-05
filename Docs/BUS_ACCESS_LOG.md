@@ -20,9 +20,18 @@ per cycle:
 | --- | --- | --- |
 | `base` | 5 | a fast cycle at 2.8 MHz (the mode's ticks per CPU cycle) |
 | `base` | 14 | a slow cycle: one 1 MHz (Mega II) cycle |
-| `wait` | 0-13 | a slow cycle waits for the next 1 MHz edge first |
+| `wait` | 0-13 | a slow cycle waits for the next 1 MHz edge first (only with a video scanner attached; see below) |
 | `refresh` | 5 | fast RAM refresh: the counter gains each cycle's ticks; when it reaches 50 it drops by 50 and a fast RAM cycle costs 5 more (slow and fast-ROM cycles add their ticks and drop it by 50 without paying) |
-| `stretch` | 2 | the scan line's long cycle, added to the cycle that completes the 65th video cycle |
+| `stretch` | 2 | the scan line's long cycle, added to the cycle that completes the 65th video cycle (only with a video scanner attached) |
+
+The 1 MHz phase lives in the video scanner's bookkeeping: `NClockIIgs` advances its
+count of 14M ticks into the current 1 MHz cycle only in the block that runs the
+attached video scanner. Without a scanner the count stays 0, so the edge wait is
+never computed: every slow cycle costs exactly 14 ticks (`wait` 0) and no cycle
+carries a `stretch`. GSSquared always attaches a scanner to a IIgs, and
+`img816 --machine iigs` attaches one too; a clock driven without one (a test
+harness, a headless tool) gets the flat 14-tick slow cycle, which is not the
+machine's timing.
 
 The log records those parts next to the access the CPU core made in that cycle.
 The record point is the clock (`NClockIIgs::slow_incr_cycles`), so every counted
@@ -45,9 +54,38 @@ Reasons (comma-joined, or `-`):
 the log derives them from the address and the access kind with the MMU's own
 decode. A cycle that is slow only because the machine is at 1 MHz says `slowmode`.
 
+One access per cycle: the core's bus helpers note at most one access per counted
+cycle, and the clock's record consumes it. If a second access is noted before the
+clock counts the cycle (a cycle that made two accesses, or an access whose cycle was
+never counted), the later access is the one recorded; the event is counted as
+`overlap=` at the end of the `buslog` report and on img816's `end` lines; a build
+with `A2_BUSLOG_ASSERT` defined also stops on an assertion. (The assertion is
+opt-in, not tied to `NDEBUG`, because the Release flags here keep `assert()` live.) `buslogcheck` fails a log whose
+`end` line reports an overlap, and `protocolcheck.ps1` requires `overlap=0` after a
+live step.
+
 Off, the log costs one branch per bus access in the core and one per cycle in the
 IIgs clock. Measured on img816's flat runner (no bus-side model, 587k-cycle loop,
 300 passes, four alternating runs): 1.375-1.408 s before the change, 1.378-1.403 s after.
+
+### Memory
+
+A record is 32 bytes (`static_assert` in the header), and the log is an in-memory
+vector that grows by doubling up to the cap:
+
+| Cap | Records | Memory when full | Peak while growing |
+| --- | --- | --- | --- |
+| default | 1,048,576 (2^20; about 0.37 s at 2.8 MHz) | 32 MiB | 48 MiB |
+| ceiling (`kMaxCap`) | 16,777,216 (2^24; about 6 s at 2.8 MHz) | 512 MiB | 768 MiB |
+
+The peak is the moment of the last doubling, when the old buffer (half the cap) and
+the new one (the cap) both exist. `buslog mark N` raises the cap for one recording;
+a request above the ceiling is clamped to it, and the reply names the cap in force
+(`cap=16777216`). Records past the cap are not stored and are counted as `dropped=`.
+`img816 --buslog` marks each case with the ceiling. The ceiling was 2^26 records
+(2 GiB, 3 GiB at the last doubling) before; it was lowered because one mistyped cap
+could take that much from a desktop emulator, while a cost-model window of seconds
+of machine time fits well under 2^24.
 
 ## How to call it
 
@@ -56,10 +94,11 @@ no bus-side model):
 
 ```
 buslog mark [cap]    clear the log and record every CPU cycle from now on
-                     (default cap 1048576 records; later cycles count as dropped)
+                     (default cap 1048576 records, at most 16777216; later cycles
+                     count as dropped)
 buslog               status=OK buslog v=1 on=1 dropped=0 n=6 cycles=6 c14m=56 fast=4
                      fast_c14m=20 slow=2 slow_c14m=36 megaii=2 io=0 shadow=0
-                     slowmode=0 refresh=0 stretch=0 fastrom=0
+                     slowmode=0 refresh=0 stretch=0 fastrom=0 overlap=0
 buslog dump <file>   the records, format v1 (below)
 buslog off           stop recording; the log is kept for report and dump
 ```
@@ -77,13 +116,14 @@ all-zero 128 KB ROM image and 8 MB of expansion RAM). Each case starts with the 
 registers at their reset values, at 14M tick 0 on a 1 MHz edge with the refresh
 counter at 0. The case lines are unchanged (`cyc=` is still the CPU cycle count).
 `--buslog` writes, per case, `case NAME`, one record per cycle and
-`end NAME runner_cyc=N clock_c14m=N dropped=N`. `--buslog` also works on the flat
+`end NAME runner_cyc=N clock_c14m=N dropped=N overlap=N`. `--buslog` also works on the flat
 machine, whose records have side and costs `-`.
 
 `buslogcheck` parses a log on its own: records numbered 0..n-1 with consecutive
 cycle numbers, n equal to the runner's cycle count, each `c14m` the sum of its
 parts, each record starting where the previous one ended, side slow exactly when
-`base` is 14, and the 14M total equal to the clock's own advance. With EXPECTED it
+`base` is 14, the 14M total equal to the clock's own advance, and no overlap on
+the `end` line. With EXPECTED it
 also compares hand-written records (`case NAME` ... `end`) and summaries
 (`expect NAME key=value ...`).
 
@@ -153,6 +193,15 @@ into a 1 MHz cycle), the second starts on the edge.
   `cases.txt` on both machines with the log on; the case lines must still match
   `cases.expected`, and `buslogcheck` checks that each log holds one record per
   counted cycle (and, on the IIgs map, that the 14M total equals the clock's).
+- `buslog_unit` checks the header alone: the default cap, a cap above the ceiling
+  clamped to it, the 32 MiB and 512 MiB figures, no overlap for one access per
+  cycle, and for two accesses in one cycle an overlap count of 1, the later access
+  recorded, still one record per cycle, `overlap=1` at the end of the report, and
+  the count cleared by a mark. `buslog_unit_assert` builds the same header with
+  `A2_BUSLOG_ASSERT` and must stop on the assertion.
+- `img816_buslog_rejects_overlap`: `buslogcheck` must fail `buslog.overlap`, a
+  planted, otherwise consistent log whose `end` line reports one overlap.
 
 `tools/a2rail/protocolcheck.ps1` checks the verb live: mark, an empty log, one step
-logging one timed record per cycle, the v1 dump header, cap refusal, off.
+logging one timed record per cycle with `overlap=0`, the v1 dump header, cap
+refusal, a cap above the ceiling clamped to 16777216, off.
