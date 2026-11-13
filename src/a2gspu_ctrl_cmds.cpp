@@ -2642,8 +2642,9 @@ bool try_regs(const char *line, char *result, size_t rsz,
         // rail_CPU_ram_base, not rail_video_base: `01:` means the bank guest
         // code addresses, which is what `load 01:` writes. Reading the Mega II
         // image here made a rail write unreadable through the rail on a IIgs.
+        // Not on a IIgs, where probe_peek is the CPU's view: rail_bank01_needs_flat.
         const uint8_t *flatv = rail_cpu_ram_base(computer);
-        const bool wants_aux = (((addr >> 16) & 0xFF) == 1);
+        const bool wants_aux = (((addr >> 16) & 0xFF) == 1) && rail_bank01_needs_flat(computer);
         if (wants_aux && !flatv) {
             // Refuse rather than silently reading somewhere else. A verb that
             // answers about memory it could not reach is worse than one that
@@ -2694,8 +2695,10 @@ bool try_regs(const char *line, char *result, size_t rsz,
                 // MMU_II returns null on a IIgs, and this branch then fell
                 // through to the main-memory path below -- answering status=OK
                 // about the wrong bank for a request that explicitly named 01.
-                const uint8_t *flat = rail_cpu_ram_base(computer);
-                if (((addr >> 16) & 0xFF) == 1 && !flat) {
+                // Not on a IIgs: rail_bank01_needs_flat says why.
+                const uint8_t *flat = rail_bank01_needs_flat(computer)
+                    ? rail_cpu_ram_base(computer) : nullptr;
+                if (((addr >> 16) & 0xFF) == 1 && !flat && rail_bank01_needs_flat(computer)) {
                     a2output_rf_8.finish();
                     snprintf(result, rsz,
                              "status=FAIL read-no-aux-image -- bank 01 requested but this "

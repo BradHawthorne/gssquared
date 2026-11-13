@@ -208,6 +208,28 @@ if ($Platform -eq 5) {
     $m = Grab "E0:2000" 1
     Check "`$C035 inhibits shadowing" ($f.Length -and $m.Length -and $f[0] -eq 0xBB -and $m[0] -eq 0xAA) `
           ("FPI `$00:2000={0:X2}  MegaII `$E0:2000={1:X2}  (want BB / AA)" -f $f[0], $m[0])
+
+    # --- 8. the rail reads bank $01's language card as the CPU does --------
+    # Bank $01 shares bank $00's language-card switches: with LC bank 1 selected,
+    # `LDA $01D000` reads the RAM at $01:C000. `read 01:D000` took a flat-image
+    # path written for the IIe's aux 64K and answered the raw $01:D000 -- LC bank
+    # 2's byte -- while the CPU ran bank 1's. A rail session watching GS/OS code at
+    # $01:DDD7 executing `JSL $E100A8` was shown `A2 AD EE D1`. Differential: a
+    # different byte in each LC bank; the CPU's own read is the truth.
+    #   $C083 x2 (LC bank 2 RAM read+write), STA $01D000 = E2
+    #   $C08B x2 (LC bank 1 RAM read+write), STA $01D000 = E1, LDA $01D000 -> $7010
+    RunProg ("AD 83 C0 AD 83 C0 A9 E2 8F 00 D0 01 " +
+             "AD 8B C0 AD 8B C0 A9 E1 8F 00 D0 01 " +
+             "AF 00 D0 01 8D 10 70 4C 1F 60") "601F"
+    $cpu = Grab "00:7010" 1
+    $rail = Grab "01:D000" 1
+    Check "read 01:D000 = the CPU's" ($cpu.Length -and $rail.Length -and $cpu[0] -eq 0xE1 -and $rail[0] -eq 0xE1) `
+          ("CPU `$01:D000={0:X2}  rail={1:X2}  (want E1 / E1, LC bank 1)" -f $cpu[0], $rail[0])
+    $vf = Join-Path $tmp "az_e1.bin"
+    [System.IO.File]::WriteAllBytes($vf, [byte[]](0xE1))
+    $v = Say ("verify 01:D000 1 {0}" -f $vf.Replace('\','/'))
+    Check "verify 01:D000 = the CPU's" ($v -match 'status=OK') $v
+    RunProg "AD 82 C0 4C 03 60" "6003"      # back to ROM reads
 }
 
 Write-Host ""

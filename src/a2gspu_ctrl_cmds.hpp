@@ -153,6 +153,21 @@ static inline uint8_t *rail_cpu_ram_base(computer_t *computer) {
     return nullptr;
 }
 
+// `read 01:` / `verify 01:` and the flat image. On a IIe bank 01 is the aux 64K,
+// and the flat image at +0x10000 is the only way to it: MMU_II's probe_peek drops
+// the bank bits. On a IIgs the flat image at +0x10000 is the RAM BENEATH bank $01,
+// not what the CPU reads there: bank $01 shares bank $00's language card, so with
+// LC bank 1 selected the CPU's $01:D000-$DFFF is the RAM at $01:C000-$CFFF, and
+// with LC reads off $D000-$FFFF is ROM. MMU_IIgs::probe_peek resolves all of that
+// as bank_shadow_read does. Reading the flat image there showed a rail session
+// GS/OS's $01:DDD7 from LC bank 2 while the CPU executed bank 1's `JSL $E100A8`
+// (gs816/altzpcheck.ps1 "read 01:D000 = the CPU's"). So the flat image serves
+// bank 01 only where the MMU cannot.
+static inline bool rail_bank01_needs_flat(computer_t *computer) {
+    MMU *m = rail_mmu(computer);
+    return m && !dynamic_cast<MMU_IIgs *>(m);
+}
+
 
 #include <vector>
 #include "util/audio_probe.hpp"
