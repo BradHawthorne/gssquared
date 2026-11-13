@@ -169,16 +169,23 @@ function Write-ToolPin {
         } catch { $ver = "" }
     }
     $mtime = $item.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+    # `git` names the repo's HEAD, not the commit the binary was built from. A
+    # binary built before the newest source therefore pinned to a commit it does
+    # not contain: build\GSSquared.exe from 2026-11-05 pinned "git bb1edbc8" after
+    # bb1edbc8 changed src/. The staleness was a console WARN only, so the pin
+    # line in the report file -- what another session reads -- never carried it.
+    # It now does.
+    $stale = Test-ExeStale -Exe $Exe -Repo $repo -RepoHint $RepoHint
+    $staleTag = if ($stale) { " | STALE: built before " + $stale.Name + " changed" } else { "" }
     $line = if ($ver) {
-        "toolpin {0}: {1} | {2} | git {3}{4} | {5}" -f $Label, $Exe, $ver, $hash, $dirty, $mtime
+        "toolpin {0}: {1} | {2} | git {3}{4} | {5}{6}" -f $Label, $Exe, $ver, $hash, $dirty, $mtime, $staleTag
     } else {
-        "toolpin {0}: {1} | git {2}{3} | mtime {4}" -f $Label, $Exe, $hash, $dirty, $mtime
+        "toolpin {0}: {1} | git {2}{3} | mtime {4}{5}" -f $Label, $Exe, $hash, $dirty, $mtime, $staleTag
     }
     Write-Host $line -ForegroundColor DarkCyan
     if ($ReportFile) {
         Add-Content -Path $ReportFile -Value $line
     }
-    $stale = Test-ExeStale -Exe $Exe -Repo $repo -RepoHint $RepoHint
     if ($stale) {
         $msg = ("{0} may be STALE: source {1} is newer than the binary ({2})" -f `
                 $Label, $stale.FullName, $Exe)
