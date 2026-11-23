@@ -44,9 +44,17 @@ inline uint64_t (*g_a2gspu_timesource_c14m)(void *ctx) = nullptr;
 inline void *g_a2gspu_timesource_ctx = nullptr;
 constexpr uint64_t A2GSPU_C14M_PER_SECOND = 14'318'180;   // every NClock mode's c14M_per_second
 
+// Unpinned wall-clock origin (unix seconds at emulated time zero). Relatched
+// when a new machine installs a timesource. The time-of-day the guest reads
+// is this origin plus emulated seconds -- never a fresh host time() -- so a
+// freeze or halt does not jump the clock AppleTalk QtrSched catch-up uses.
+inline long long g_a2gspu_unpinned_origin_unix = 0;
+inline bool g_a2gspu_unpinned_origin_latched = false;
+
 inline void a2gspu_timesource_install(uint64_t (*c14m)(void *), void *ctx) {
     g_a2gspu_timesource_c14m = c14m;
     g_a2gspu_timesource_ctx = ctx;
+    g_a2gspu_unpinned_origin_latched = false;
 }
 
 inline bool a2gspu_faketime_ticking() {
@@ -77,16 +85,32 @@ inline void a2gspu_faketime_field(char *buf, size_t n) {
     snprintf(buf, n, "%s%s", e, a2gspu_faketime_ticking() ? "/tick" : "");
 }
 
-// The calendar fields a clock card shows now: the pinned clock's fields under
-// A2GSPU_FAKETIME (frozen, or ticking in emulated time), else the host's local time.
-// False only when the host conversion fails.
+// The unix instant every guest-visible clock shows now. Under A2GSPU_FAKETIME
+// this is the pin (plus emulated seconds when ticking). Unpinned, the origin is
+// host wall-clock latched once (so the Control Panel still shows the time of
+// day) and then advances one second per 14,318,180 emulated 14M ticks -- never
+// host time. A 2 s LToUDP collect or a rail HALT, with C14M frozen, adds 0.
+inline void a2gspu_guest_now_unix(long long *out) {
+    if (a2gspu_pinned_now_unix(out)) return;
+    if (!g_a2gspu_unpinned_origin_latched) {
+        g_a2gspu_unpinned_origin_unix = (long long)std::time(nullptr) - a2gspu_emulated_seconds();
+        g_a2gspu_unpinned_origin_latched = true;
+    }
+    *out = g_a2gspu_unpinned_origin_unix + a2gspu_emulated_seconds();
+}
+
+// The calendar fields a clock card shows now: pinned (UTC, no host timezone)
+// or the unpinned guest clock converted as local time. False only when the
+// conversion fails.
 inline bool a2gspu_clock_fields(struct tm *out) {
-    long long pinned = 0;
-    const bool is_pinned = a2gspu_pinned_now_unix(&pinned);
-    const time_t t = is_pinned ? (time_t)pinned : std::time(nullptr);
+    long long now = 0;
+    a2gspu_guest_now_unix(&now);
+    const time_t t = (time_t)now;
+    long long pin = 0;
+    const bool pinned = a2gspu_faketime_unix(&pin);
 #ifdef _WIN32
-    return (is_pinned ? gmtime_s(out, &t) : localtime_s(out, &t)) == 0;
+    return (pinned ? gmtime_s(out, &t) : localtime_s(out, &t)) == 0;
 #else
-    return (is_pinned ? gmtime_r(&t, out) : localtime_r(&t, out)) != nullptr;
+    return (pinned ? gmtime_r(&t, out) : localtime_r(&t, out)) != nullptr;
 #endif
 }

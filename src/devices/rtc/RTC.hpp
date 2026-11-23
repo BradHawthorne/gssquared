@@ -257,10 +257,14 @@ public:
             last_seconds = seconds;
             return;
         }
-        // Get current UTC time
-        time_t now;
-        time(&now);
-        
+        // Unpinned: the time-of-day ORIGIN is host wall-clock (latched once
+        // by a2gspu_guest_now_unix). After that, seconds advance only with
+        // emulated 14M time, so a guest freeze never jumps the value
+        // AppleTalk QtrSched compares against (10-second catch-up burst).
+        long long guest_unix = 0;
+        a2gspu_guest_now_unix(&guest_unix);
+        time_t now = (time_t)guest_unix;
+
         // Get local time to access timezone offset
         struct tm *local_tm = localtime(&now);
         

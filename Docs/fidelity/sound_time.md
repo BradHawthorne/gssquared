@@ -184,3 +184,32 @@ Sources: fork `ed2c00fc`, upstream `upstream/main` (`d380e055`), read with `git 
 | 7 | 6522 timing and AY mixer, tone and period-0 fixes | M/medium | Mockingboard music and timing |
 | 8 | Ludicrous N as a pinned input (e169b2bc shape) | M/high | Determinism in fast runs |
 | 9 | Evidence-gated DOC quirks (wrap rule, slot timing, swap 0x80, IRQ order, `$E1`/`$E2`, volume readback, busy timing) | S each/low | Needs the hardware test programs from §1-2 first |
+
+## Guest clocks and frozen time (C14M, not host wall-clock)
+
+The VGC 1/4-second interrupt is already paced by the video scanner (one
+`VS_EVENT_QTR` at scanline 256 each frame, asserted every 16 frames). The
+VGC 1-second interrupt is scheduled on the 14M EventTimer. VBL is scanner-
+paced. Ensoniq/SoundGlu sample time is C14M. Mouse/ADB device timers that
+ride the scanner or EventTimer are C14M; host time is only used to *deliver*
+input events (key/mouse) and to pace the windowed frame *wait* (`A2GSPU_PACE`).
+
+What used to be host-paced, and is not any more:
+
+- Unpinned IIgs RTC seconds, and the ProDOS clock / ThunderClock calendar
+  fields (`a2gspu_guest_now_unix`). The time-of-day *origin* is still host
+  wall-clock, latched once, so the Control Panel shows the real time of day
+  at power-on. After that, seconds advance only with emulated 14M time.
+- The first VGC one-second edge, which used to be aligned to
+  `SDL_GetCurrentTime`.
+
+This is required because AppleTalk `QtrSched` (ATP_includes.aii) catch-up-
+bursts `tickcount` by 4 times any 10+ second jump it sees in RTC seconds
+(`$E1008C` / `$E103E1`). A 2 s LToUDP collect-peer-fault, or a rail HALT,
+with the guest frozen, used to pile up host time and fire that catch-up,
+expiring PAP `conntimer` (480 quarter-seconds) in a fraction of a second of
+CPU. Frozen or halted time must never count.
+
+Under `A2GSPU_FAKETIME` the origin is the pin, optionally ticking with
+`A2GSPU_FAKETIME_TICK` (unchanged).
+

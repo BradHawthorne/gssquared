@@ -1084,27 +1084,15 @@ void init_mb_device_display_common(computer_t *computer, SlotType_t slot, bool c
     });
 
     if (ds->video_scanner_type == Scanner_AppleIIgs) {
-        // For generating the 1sec interrupt, try to sync to real time as close to a 1 second increment as possible,
-        // based on module startup time.
-        SDL_Time time;
-        SDL_GetCurrentTime(&time); // get current time in nanoseconds.
-        uint64_t remain = 1000000000 - (time % 1000000000);
-        // how many nanoseconds is a 14M
-        uint64_t ns_14m = 1000000000 / ds->clock->get_c14m_per_second() /* 14318180 */;
-        // calculate number of 14M ticks (14318180hz) are in remain nanoseconds
-        uint64_t ticks_14m = remain / ns_14m;
-        // FORK: under A2GSPU_FAKETIME the phase is pinned too -- the first edge one
-        // second after power-on -- or a pinned run with the interrupt enabled took
-        // its IRQ timing from the host clock and did not repeat.
-        long long pinned = 0;
-        if (a2gspu_faketime_unix(&pinned)) ticks_14m = ds->clock->get_c14m_per_second();
-        // A ticking pin steps its seconds at whole multiples of the 14M second; the edge
-        // lands on the next one, so the RTC and this interrupt change together.
-        if (a2gspu_faketime_unix(&pinned) && a2gspu_faketime_ticking()) {
-            const uint64_t per = ds->clock->get_c14m_per_second();
-            ticks_14m = per - (ds->clock->get_c14m() % per);
-        }
-        // set the 14M timer to the number of ticks
+        // FORK: the VGC one-second interrupt is paced only by emulated 14M time,
+        // like VBL. Aligning the first edge to the host's wall-clock second
+        // (SDL_GetCurrentTime) made a freeze or halt pile up host time and
+        // slip the phase; a pinned run with the interrupt enabled did not
+        // repeat. The first edge is the next whole emulated second, the same
+        // edge a2gspu_guest_now_unix / a ticking FAKETIME pin steps on.
+        const uint64_t per = ds->clock->get_c14m_per_second();
+        uint64_t ticks_14m = per - (ds->clock->get_c14m() % per);
+        if (ticks_14m == 0) ticks_14m = per;
         ds->onesec_next_14m = ds->clock->get_c14m() + ticks_14m;
         computer->event_timer->scheduleEvent(ds->onesec_next_14m, rtc_pram_1sec_interrupt, 0xFF112200, ds, "display.rtc_pram_1sec_interrupt", "src/display/display.cpp");
     }
