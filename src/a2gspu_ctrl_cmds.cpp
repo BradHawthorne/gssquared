@@ -605,7 +605,132 @@ bool apply_env_loads(computer_t *computer, const char *env) {
     return fail_n == 0 && ok_n > 0;
 }
 
+// Physical language-card RAM for the additive `read phys` / `poke phys` verbs.
+// Banks $00/$01 live in FPI RAM (get_memory_base) at (bank<<16)|a16.
+// Banks $E0/$E1 live in the Mega II 128K image (get_megaii_memory_base):
+// $E0 at offset 0, $E1 at $10000 (the same base e1_aux_index uses).
+// In both arrays, LC bank 1 parks $D000-$DFFF at $C000 of that bank's image
+// (bank_shadow_read / e1_aux_index). $E000-$FFFF is the common 8K; lc1/lc2
+// do not move it. Aux linearization remaps only $E1 $2000-$9FFF, which is
+// disjoint from this range. Soft-switch mapping (ROM read-enable, write
+// inhibit) is ignored; selected bank (FF_BANK_1) is the default for $D000.
+static bool rail_lc_phys_bank(unsigned bank) {
+    return bank <= 1 || bank == 0xE0 || bank == 0xE1;
+}
+static uint8_t *rail_lc_phys_base(MMU_IIgs *gs, unsigned bank) {
+    if (!gs) return nullptr;
+    return (bank <= 1) ? gs->get_memory_base() : gs->get_megaii_memory_base();
+}
+static uint32_t rail_lc_phys_index(unsigned bank, uint16_t a16, int lc_sel) {
+    uint32_t idx = (bank <= 1)
+        ? (((uint32_t)bank << 16) | a16)
+        : (((bank == 0xE1) ? 0x10000u : 0) | a16);
+    if (a16 >= 0xD000 && a16 <= 0xDFFF && lc_sel == 1)
+        idx -= 0x1000;
+    return idx;
+}
+
 bool try_inject(const char *line, char *result, size_t rsz, computer_t *computer) {
+
+    if (!strncmp(line, "poke phys ", 10)) {
+        // Additive (this fork only): write physical language-card RAM in banks
+        // $00/$01/$E0/$E1, ignoring the current soft-switch mapping (ROM
+        // read-enable and write-inhibit included). Does not change machine
+        // state. $D000-$DFFF: lc1/lc2 select the 4K bank; if omitted, use the
+        // bank the machine currently has selected (FF_BANK_1), ignoring only
+        // read-enable. $E000-$FFFF is the common 8K. $00/$01 are FPI RAM;
+        // $E0/$E1 are the Mega II 128K image ($E1 at $10000). Usage:
+        //   poke phys <BB:AAAA> [lc1|lc2] <hexbytes...>
+        //   poke phys <BB:AAAA> <hexbytes...> [lc1|lc2]
+        uint32_t addr = 0; int off = 0;
+        char abuf[64] = {0};
+        if (sscanf(line + 10, "%63s %n", abuf, &off) == 1 && parse_addr(abuf, &addr)) {
+            const unsigned bank = (addr >> 16) & 0xFF;
+            if (!rail_lc_phys_bank(bank)) {
+                snprintf(result, rsz,
+                         "status=FAIL poke-phys-bank -- only language-card RAM "
+                         "of banks $00, $01, $E0, or $E1 (got $%02X)", bank);
+                return true;
+            }
+            MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(rail_mmu(computer));
+            if (!gs) {
+                snprintf(result, rsz, "status=FAIL poke-phys-requires-IIgs");
+                return true;
+            }
+            uint8_t *mb = rail_lc_phys_base(gs, bank);
+            if (!mb) {
+                snprintf(result, rsz, "status=FAIL poke-phys-no-ram-image");
+                return true;
+            }
+            int lc_sel = 0, lc_defaulted = 0, n = 0;
+            const char *p = line + 10 + off;
+            bool overlap_d000 = false;
+            const unsigned start16 = addr & 0xFFFF;
+            // First pass: collect tokens so a trailing or leading lc1/lc2 is
+            // not stored as a data byte, then write.
+            unsigned bytes[256];
+            while (*p) {
+                while (*p == ' ' || *p == ',') p++;
+                if (!*p) break;
+                if ((!strncmp(p, "lc1", 3) || !strncmp(p, "LC1", 3)) &&
+                    (p[3] == 0 || p[3] == ' ' || p[3] == ',' || p[3] == '\t')) {
+                    lc_sel = 1; p += 3; continue;
+                }
+                if ((!strncmp(p, "lc2", 3) || !strncmp(p, "LC2", 3)) &&
+                    (p[3] == 0 || p[3] == ' ' || p[3] == ',' || p[3] == '\t')) {
+                    lc_sel = 2; p += 3; continue;
+                }
+                char *end = nullptr;
+                unsigned long v = strtoul(p, &end, 16);
+                if (end == p) break;
+                if (n >= (int)(sizeof bytes / sizeof bytes[0])) {
+                    snprintf(result, rsz, "status=FAIL poke-phys-too-long");
+                    return true;
+                }
+                bytes[n++] = (unsigned)(v & 0xFF);
+                p = end;
+            }
+            if (!n) {
+                snprintf(result, rsz, "status=FAIL poke-phys-no-bytes");
+                return true;
+            }
+            if (n > (int)(0x10000u - start16)) {
+                snprintf(result, rsz,
+                         "status=FAIL poke-phys-range -- %d byte(s) from $%04X "
+                         "crosses the 64K bank", n, start16);
+                return true;
+            }
+            for (int i = 0; i < n; i++) {
+                unsigned a16 = start16 + (unsigned)i;
+                if (a16 >= 0xD000 && a16 <= 0xDFFF) overlap_d000 = true;
+            }
+            if (overlap_d000 && lc_sel == 0) {
+                lc_sel = gs->is_lc_bank1() ? 1 : 2;
+                lc_defaulted = 1;
+            }
+            for (int i = 0; i < n; i++) {
+                uint16_t a16 = (uint16_t)(start16 + (unsigned)i);
+                mb[rail_lc_phys_index(bank, a16, lc_sel)] = (uint8_t)bytes[i];
+            }
+            if (overlap_d000)
+                snprintf(result, rsz,
+                         "status=OK poke phys bank=%02X lc=%d%s addr=%02X:%04X "
+                         "%d byte(s) (language-card RAM, soft-switches unchanged)",
+                         bank, lc_sel, lc_defaulted ? " selected" : "",
+                         bank, start16, n);
+            else
+                snprintf(result, rsz,
+                         "status=OK poke phys bank=%02X addr=%02X:%04X "
+                         "%d byte(s) (language-card RAM $E000-$FFFF, "
+                         "soft-switches unchanged)",
+                         bank, bank, start16, n);
+        } else {
+            snprintf(result, rsz,
+                     "status=FAIL poke-phys-parse-fail -- usage: poke phys "
+                     "<BB:AAAA> [lc1|lc2] <hexbytes...>");
+        }
+        return true;
+    }
     if (!strncmp(line, "poke ", 5)) {
         uint32_t addr = 0;
         int off = 0;
@@ -2669,6 +2794,133 @@ bool try_regs(const char *line, char *result, size_t rsz,
             snprintf(result, rsz,
                      "status=FAIL verify-differs at %d guest=$%02X file=$%02X (of %d)",
                      diff, gb, want[(size_t)diff], len);
+        }
+        return true;
+    }
+    if (!strncmp(line, "read phys ", 10)) {
+        // Additive (this fork only): physical language-card RAM in banks
+        // $00/$01/$E0/$E1, taken from the RAM arrays, ignoring the current
+        // soft-switch mapping. Does not change machine state (no $C08x access,
+        // no LC flag writes).
+        //
+        // `read` answers what the CPU would read, so at the idle Finder
+        // `read 01:FC00` is often ROM $EF while GS/OS's JML still sits in LC RAM.
+        // $D000-$DFFF is the switched 4K: trailing lc1 selects the image parked
+        // at $C000 in the array, lc2 the image at $D000. If omitted, the bank
+        // the machine currently has selected (FF_BANK_1) is used, ignoring only
+        // read-enable. $E000-$FFFF is the common 8K (lc1/lc2 are ignored).
+        // $00/$01 are FPI RAM; $E0/$E1 are the Mega II 128K image ($E1 at $10000).
+        // Usage:
+        //   read phys <BB:AAAA> <len> <file> [lc1|lc2]
+        // BB is 00, 01, E0, or E1.
+        uint32_t addr = 0; int len = 0, off = 0;
+        char abuf[64] = {0};
+        if (sscanf(line + 10, "%63s %d %n", abuf, &len, &off) >= 2 && len > 0 &&
+            parse_addr(abuf, &addr)) {
+            const char *rest = line + 10 + off;
+            while (*rest == ' ') rest++;
+            if (!*rest) {
+                snprintf(result, rsz,
+                         "status=FAIL read-phys-parse-fail -- usage: read phys "
+                         "<BB:AAAA> <len> <file> [lc1|lc2]");
+                return true;
+            }
+            // Trailing lc1 / lc2 is the 4K language-card bank, not part of the path.
+            char pathbuf[1024];
+            strncpy(pathbuf, rest, sizeof pathbuf - 1);
+            pathbuf[sizeof pathbuf - 1] = 0;
+            // trim trailing space
+            size_t pl = strlen(pathbuf);
+            while (pl && (pathbuf[pl - 1] == ' ' || pathbuf[pl - 1] == '\t'))
+                pathbuf[--pl] = 0;
+            int lc_sel = 0;   // 0 = not specified, 1 = lc1, 2 = lc2
+            char *sp = strrchr(pathbuf, ' ');
+            if (sp && sp[1]) {
+                const char *tok = sp + 1;
+                if (!strcmp(tok, "lc1") || !strcmp(tok, "LC1")) {
+                    lc_sel = 1; *sp = 0;
+                } else if (!strcmp(tok, "lc2") || !strcmp(tok, "LC2")) {
+                    lc_sel = 2; *sp = 0;
+                }
+            }
+            while (pl && (pathbuf[strlen(pathbuf) - 1] == ' ' ||
+                          pathbuf[strlen(pathbuf) - 1] == '\t'))
+                pathbuf[strlen(pathbuf) - 1] = 0;
+            if (!pathbuf[0]) {
+                snprintf(result, rsz,
+                         "status=FAIL read-phys-parse-fail -- usage: read phys "
+                         "<BB:AAAA> <len> <file> [lc1|lc2]");
+                return true;
+            }
+            const unsigned bank = (addr >> 16) & 0xFF;
+            if (!rail_lc_phys_bank(bank)) {
+                snprintf(result, rsz,
+                         "status=FAIL read-phys-bank -- only language-card RAM "
+                         "of banks $00, $01, $E0, or $E1 (got $%02X)", bank);
+                return true;
+            }
+            const unsigned start16 = addr & 0xFFFF;
+            if (len > (int)(0x10000u - start16)) {
+                snprintf(result, rsz,
+                         "status=FAIL read-phys-range -- %d byte(s) from $%04X "
+                         "crosses the 64K bank", len, start16);
+                return true;
+            }
+            bool overlap_d000 = false;
+            for (int i = 0; i < len; i++) {
+                unsigned a16 = (start16 + (unsigned)i) & 0xFFFF;
+                if (a16 >= 0xD000 && a16 <= 0xDFFF) { overlap_d000 = true; break; }
+            }
+            MMU_IIgs *gs = dynamic_cast<MMU_IIgs *>(rail_mmu(computer));
+            if (!gs) {
+                snprintf(result, rsz, "status=FAIL read-phys-requires-IIgs");
+                return true;
+            }
+            // No lc1/lc2: use the bank the machine currently has selected
+            // (FF_BANK_1), ignoring only read-enable, so a ROM-mapped $D000
+            // still yields the selected LC RAM. Explicit lc1/lc2 still wins.
+            int lc_defaulted = 0;
+            if (overlap_d000 && lc_sel == 0) {
+                lc_sel = gs->is_lc_bank1() ? 1 : 2;
+                lc_defaulted = 1;
+            }
+            uint8_t *mb = rail_lc_phys_base(gs, bank);
+            if (!mb) {
+                snprintf(result, rsz, "status=FAIL read-phys-no-ram-image");
+                return true;
+            }
+            FILE *rf = fopen(pathbuf, "wb");
+            a2artifact::ExistingOutput a2output_phys(rf, pathbuf);
+            if (!rf) {
+                snprintf(result, rsz, "status=FAIL read-phys-fail");
+                return true;
+            }
+            for (int i = 0; i < len; i++) {
+                uint16_t a16 = (uint16_t)(start16 + (unsigned)i);
+                // LC bank 1's 4K is parked in the $C000 I/O hole of this bank's
+                // RAM array (the same slide bank_shadow_read / e1_aux_index use
+                // when FF_BANK_1 is set). $E000-$FFFF is the common 8K; lc1/lc2
+                // do not move it. $E0/$E1 use the Mega II image ($E1 at $10000).
+                uint32_t idx = rail_lc_phys_index(bank, a16, lc_sel);
+                fwrite(&mb[idx], 1, 1, rf);
+            }
+            a2output_phys.finish();
+            if (overlap_d000)
+                snprintf(result, rsz,
+                         "status=OK read phys bank=%02X lc=%d%s addr=%02X:%04X "
+                         "%d byte(s) (language-card RAM, soft-switches unchanged)",
+                         bank, lc_sel, lc_defaulted ? " selected" : "",
+                         bank, start16, len);
+            else
+                snprintf(result, rsz,
+                         "status=OK read phys bank=%02X addr=%02X:%04X "
+                         "%d byte(s) (language-card RAM $E000-$FFFF, "
+                         "soft-switches unchanged)",
+                         bank, bank, start16, len);
+        } else {
+            snprintf(result, rsz,
+                     "status=FAIL read-phys-parse-fail -- usage: read phys "
+                     "<BB:AAAA> <len> <file> [lc1|lc2]");
         }
         return true;
     }
