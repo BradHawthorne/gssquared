@@ -847,6 +847,7 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(apps/setregtest)
     add_subdirectory(apps/assertregtest)
     add_subdirectory(apps/writelogtest)
+    add_subdirectory(apps/sccltoudptest)
     add_subdirectory(apps/pdbdibtest)
 endif()
 
