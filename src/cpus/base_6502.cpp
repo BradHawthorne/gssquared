@@ -705,7 +705,12 @@ inline uint32_t address_abs_x(cpu_state *cpu, uint32_t index) {
                 phantom_read(cpu, (base & 0xFFFF00) | ((base + index) & 0xFF) );
             }
         } else {
-            phantom_read(cpu, eaddr); // TODO: not sure this is the correct phantom read.
+            // FORK: X=0 (16-bit index) always adds this cycle, and it is the
+            // datasheet's invalid-address cycle (WDC W65C816S table 5-7, note 4: DBR,AAH,AAL+XL,
+            // VDA=VPA=0), so no bus access takes place and it must not touch I/O. Reading the
+            // effective address here pulled a second byte from the Apple II SCSI Card's
+            // pseudo-DMA port on every LDA $C008,X (tool gap gsquared-a2scsi-scsihd).
+            phantom_read_ign(cpu, (base & 0xFFFF00) | ((base + index) & 0xFF));
         }
     } else {
         base = address_abs(cpu);
@@ -730,7 +735,12 @@ inline uint32_t address_abs_x_write(cpu_state *cpu, uint32_t index) {
         if constexpr ((CPUTraits::e_mode) || (!CPUTraits::x_16)) {
             phantom_read(cpu, (base & 0xFFFF00) | ((base + index) & 0xFF) );
         } else {
-            phantom_read(cpu, eaddr); // TODO: not sure this is the correct phantom read.
+            // FORK: X=0 (16-bit index) always adds this cycle, and it is the
+            // datasheet's invalid-address cycle (WDC W65C816S table 5-7, note 4: DBR,AAH,AAL+XL,
+            // VDA=VPA=0), so no bus access takes place and it must not touch I/O. Reading the
+            // effective address here pulled a second byte from the Apple II SCSI Card's
+            // pseudo-DMA port on every LDA $C008,X (tool gap gsquared-a2scsi-scsihd).
+            phantom_read_ign(cpu, (base & 0xFFFF00) | ((base + index) & 0xFF));
         }
     } else {
         base = address_abs(cpu);
@@ -770,7 +780,12 @@ inline uint32_t address_rmw_abs_x(cpu_state *cpu, uint32_t index) {
         if constexpr ((CPUTraits::e_mode) || (!CPUTraits::x_16)) {
             phantom_read(cpu, (base & 0xFFFF00) | ((base + index) & 0xFF) );
         } else {
-            phantom_read(cpu, eaddr); // TODO: not sure this is the correct phantom read.
+            // FORK: X=0 (16-bit index) always adds this cycle, and it is the
+            // datasheet's invalid-address cycle (WDC W65C816S table 5-7, note 4: DBR,AAH,AAL+XL,
+            // VDA=VPA=0), so no bus access takes place and it must not touch I/O. Reading the
+            // effective address here pulled a second byte from the Apple II SCSI Card's
+            // pseudo-DMA port on every LDA $C008,X (tool gap gsquared-a2scsi-scsihd).
+            phantom_read_ign(cpu, (base & 0xFFFF00) | ((base + index) & 0xFF));
         }
     } else {
         base = address_abs(cpu);

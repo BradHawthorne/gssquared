@@ -6,3 +6,4 @@ io_megaii_rw	ok	cyc=27	last=5	insn=6	pc=001015 a=0001 x=0000 y=0000 s=01FF p=30 
 shadow_write_bank0	ok	cyc=8	last=4	insn=2	pc=001006 a=0077 x=0000 y=0000 s=01FF p=30 d=0000 dbr=00 e=0	win=000400:77,E00400:77,001400:77	nw=2	wr=000400,001400
 slow_machine	ok	cyc=6	last=2	insn=2	pc=001004 a=0000 x=0000 y=0000 s=01FF p=30 d=0000 dbr=00 e=0	win=	nw=1	wr=00C036
 fast_loop_scanline	ok	cyc=321	last=2	insn=129	pc=001005 a=0000 x=0000 y=0000 s=01FF p=32 d=0000 dbr=00 e=0	win=	nw=0	wr=
+lda_absx_x16_invalid_cycle	ok	cyc=5	last=5	insn=1	pc=001003 a=005A x=0010 y=0000 s=01FF p=20 d=0000 dbr=00 e=0	win=	nw=0	wr=

@@ -116,3 +116,14 @@ expect slow_machine n=6 c14m=70 slow=3 slowmode=3
 
 # 321 fast cycles: 32 refreshes, and the 65th video cycle ends one scan line.
 expect fast_loop_scanline n=321 c14m=1767 fast=321 slow=0 refresh=32 stretch=1
+
+# LDA $10F8,X with a 16-bit X ($0010): the fourth cycle is the invalid-address cycle at
+# DBR,AAH,AAL+XL = $001008, counted without a bus access; one data read at $001108.
+case lda_absx_x16_invalid_cycle
+0 0 0 001000 fetch BD fast 5 5 0 0 0 -
+1 1 5 001001 fetch F8 fast 5 5 0 0 0 -
+2 2 10 001002 fetch 10 fast 5 5 0 0 0 -
+3 3 15 001008 skipped-read -- fast 5 5 0 0 0 -
+4 4 20 001108 read 5A fast 5 5 0 0 0 -
+end
+expect lda_absx_x16_invalid_cycle n=5 c14m=25 fast=5 slow=0

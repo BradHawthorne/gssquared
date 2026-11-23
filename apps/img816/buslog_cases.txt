@@ -64,3 +64,15 @@ load 001000 A240CAD0FD
 reg pc=001000 s=01FF p=30
 stop 001005
 run
+
+# 16-bit index (X=0), 8-bit A: LDA $10F8,X with X=$0010. 4 cycles + 1 for X=0 = 5. The extra
+# cycle is the datasheet's invalid-address cycle (WDC W65C816S table 5-7, note 4: DBR,AAH,AAL+XL
+# = $001008, VDA=VPA=0): counted, no bus access. Before the fix the core read the effective
+# address $001108 there, which pulled a byte from an I/O port such as the Apple II SCSI Card's
+# pseudo-DMA register (found by a test harness).
+case lda_absx_x16_invalid_cycle
+load 001000 BDF810
+load 001108 5A
+reg pc=001000 x=0010 s=01FF p=20
+stop 001003
+run
