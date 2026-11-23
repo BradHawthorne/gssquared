@@ -387,6 +387,8 @@ add_library(gs2_devices_pdblock2 src/devices/pdblock2/pdblock2.cpp )
 
 add_library(gs2_devices_pdblock3 src/devices/pdblock3/pdblock3.cpp )
 
+add_library(gs2_devices_a2scsi src/devices/a2scsi/a2scsi.cpp )
+
 add_library(gs2_devices_prodos_clock src/devices/prodos_clock/prodos_clock.cpp )
 
 add_library(gs2_devices_tcp    src/devices/thunderclock_plus/thunderclockplus.cpp )
@@ -620,6 +622,7 @@ set(GS2_DEVICE_REGISTRY_LIBS
     gs2_devices_videx
     gs2_devices_pdblock2
     gs2_devices_pdblock3
+    gs2_devices_a2scsi
     gs2_devices_mockingboard
     gs2_devices_iiememory
     gs2_devices_ensoniq
@@ -739,6 +742,7 @@ target_link_libraries(GSSquared
     gs2_devices_videx
     gs2_devices_pdblock2
     gs2_devices_pdblock3
+    gs2_devices_a2scsi
     gs2_devices_mockingboard
     gs2_devices_iiememory
     gs2_devices_ensoniq

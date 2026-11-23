@@ -31,6 +31,7 @@
 #include "devices/thunderclock_plus/thunderclockplus.hpp"
 #include "devices/pdblock2/pdblock2.hpp"
 #include "devices/pdblock3/pdblock3.hpp"
+#include "devices/a2scsi/a2scsi.hpp"
 #include "devices/parallel/parallel.hpp"
 #include "devices/videx/videx.hpp"
 #include "devices/mockingboard/mb.hpp"
@@ -111,6 +112,7 @@ Device_t Devices[NUM_DEVICE_IDS] = {
     make_device(DEVICE_ID_SUPER_SERIAL, init_slot_ssc, NULL),
     make_device(DEVICE_ID_VOC, init_voc, NULL),
     make_device(DEVICE_ID_A2GSPU, init_slot_a2gspu, NULL),
+    make_device(DEVICE_ID_A2SCSI, init_slot_a2scsi, NULL),
 };
 
 Device_t *get_device(device_id id) {

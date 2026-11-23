@@ -39,5 +39,6 @@ typedef enum device_id {
     // Devices[] in devices.cpp is positional (get_device returns Devices[id-1]) and
     // must follow this order.
     DEVICE_ID_A2GSPU,
+    DEVICE_ID_A2SCSI,      // FORK: Apple II SCSI Card, devices/a2scsi
     NUM_DEVICE_IDS
 } device_id;

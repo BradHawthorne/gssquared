@@ -167,6 +167,7 @@ std::optional<device_id> parse_card_type(const std::string& value, std::string& 
         {"super_serial", DEVICE_ID_SUPER_SERIAL},
         {"voc", DEVICE_ID_VOC},
         {"a2gspu", DEVICE_ID_A2GSPU},   // FORK: nameable in a config file and in a run's identity
+        {"apple_scsi", DEVICE_ID_A2SCSI},   // FORK
     };
     const std::string canonical = canonical_card_name(value);
     const auto it = map.find(canonical);
@@ -441,6 +442,7 @@ const char* card_type_name(device_id id) {
         case DEVICE_ID_SUPER_SERIAL: return "super_serial";
         case DEVICE_ID_VOC: return "voc";
         case DEVICE_ID_A2GSPU: return "a2gspu";
+        case DEVICE_ID_A2SCSI: return "apple_scsi";
         default: return "none";
     }
 }
@@ -464,6 +466,7 @@ static const char* card_display_name(device_id id) {
         case DEVICE_ID_UTHERNET2: return "Uthernet II";
         case DEVICE_ID_SUPER_SERIAL: return "Super Serial Card";
         case DEVICE_ID_VOC: return "Video Overlay Card";
+        case DEVICE_ID_A2SCSI: return "Apple II SCSI Card";
         default: return "None";
     }
 }

@@ -34,6 +34,7 @@ inline A2DeviceCoverage a2_device_coverage(device_id id) {
         case DEVICE_ID_SUPER_SERIAL:return {"ssc","ssc","guest-mmio,rail set SSC faults"};
         case DEVICE_ID_VOC:return {"voc","voc","guest-mmio"};
         case DEVICE_ID_A2GSPU:return {"A2GSPU","a2gspu","guest-mmio,launch-mode-binding"};
+        case DEVICE_ID_A2SCSI:return {"a2scsi","a2scsi","guest-mmio,mount"};
         default:return {"","","undeclared"};
     }
 }

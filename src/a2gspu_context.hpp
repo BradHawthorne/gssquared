@@ -163,6 +163,7 @@ inline const char *device_source(device_id id) {
         case DEVICE_ID_SUPER_SERIAL:return "src/devices/ssc/ssc.cpp";
         case DEVICE_ID_VOC:return "src/devices/voc/voc.cpp";
         case DEVICE_ID_A2GSPU:return "src/devices/a2gspu/a2gspu.cpp";
+        case DEVICE_ID_A2SCSI:return "src/devices/a2scsi/a2scsi.cpp";
         default:return "src/devices.cpp";
     }
 }

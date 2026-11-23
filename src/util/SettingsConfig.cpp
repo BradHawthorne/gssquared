@@ -212,6 +212,7 @@ std::optional<device_id> parse_card_type(const std::string& value, std::string& 
         {"super_serial", DEVICE_ID_SUPER_SERIAL},
         {"voc", DEVICE_ID_VOC},
         {"a2gspu", DEVICE_ID_A2GSPU},
+        {"apple_scsi", DEVICE_ID_A2SCSI},
     };
     const std::string canonical = canonical_card_name(value);
     const auto it = map.find(canonical);

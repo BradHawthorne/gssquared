@@ -66,6 +66,8 @@ static const DeviceInfo_t DeviceInfos[NUM_DEVICE_IDS - 1] = {
     {DEVICE_ID_VOC, "Video Overlay Card", false, 0b00001000, PLATFLAG_ANY_IIGS},
     // FORK: the A2GSPU card, after upstream's IDs (Device_ID.hpp).
     {DEVICE_ID_A2GSPU, "A2GSPU Video Card", true, 0b11111110, PLATFLAG_ANY_IIGS},
+    // FORK: the Apple II SCSI Card (devices/a2scsi).
+    {DEVICE_ID_A2SCSI, "Apple II SCSI Card", false, 0b11111110, PLATFLAG_ANY_IIGS},
 };
 
 const DeviceInfo_t *get_device_info(device_id id) {
