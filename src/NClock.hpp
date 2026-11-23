@@ -27,6 +27,16 @@
 #include "a2gspu_buslog.hpp"  // bus access log: per-cycle bus side and 14M cost (off => 1 branch per cycle)
 #include <functional>
 
+// LTG1 conservative lockstep (Docs/LToUDP.md): optional cap on C14M.
+// c14m_limit is the last guest tick the guest may reach; c14m_wait is
+// called when the next increment would pass it, and blocks until a new
+// peer grant (or a safety timeout lifts the cap). Null means no cap
+// (plain peers, or LTG1 before the first grant).
+namespace nclock_hooks {
+    extern uint64_t (*c14m_limit)();
+    extern void (*c14m_wait)(uint64_t want);
+}
+
 // Max CPU cycles per 14M tick in ludicrous (auto) mode (~229 MHz).
 static constexpr uint32_t LUDICROUS_CPU_PER_14M_MAX = 20;
 static constexpr uint32_t LUDICROUS_CPU_PER_14M_MIN = 2;
@@ -391,6 +401,14 @@ protected:
                 ram_refresh_cycles -= 50;
                 c14m_this_cycle += 5; // a refresh cycle is 10 14M's long total.
             } 
+        }
+        // LTG1 lockstep: never let C14M run past the peer's granted horizon.
+        // A2GSPU_PACE=fast must not change guest-visible arrival ticks.
+        if (nclock_hooks::c14m_limit) {
+            const uint64_t lim = nclock_hooks::c14m_limit();
+            const uint64_t next = c_14M + c14m_this_cycle;
+            if (next > lim && nclock_hooks::c14m_wait)
+                nclock_hooks::c14m_wait(next);
         }
         c_14M += c14m_this_cycle;
         const uint64_t cost_before_stretch = c14m_this_cycle;

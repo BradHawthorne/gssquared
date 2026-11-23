@@ -12,7 +12,7 @@ These functions are inherently I/O bound, and rather than try to implement them 
 
 AppleTalk is a dead, legacy protocol. While someone might get a kick out of connecting a GS to an ancient Mac via AppleTalk, it would be a huge amount of work for very little benefit.
 
-So we skip for now. However, the architecture described herein would be amenable to an AppleTalk option.
+The async path described here still stands. AppleTalk is no longer skipped for the idle-port case: see the SDLC/hunt and $C044/$C045 notes under Synchronous Modes below. A LocalTalk-over-UDP bridge is layer 2; see [LToUDP.md](LToUDP.md).
 
 ## Clocking
 
@@ -20,7 +20,7 @@ The master clock into the SCC is 3.6864MHz. We need to know this to determine ho
 
 ## Communication Modes
 
-The SCC supports various synchronous modes, to be used for HDLC, SDLC, etc. These will never be engaged on an Apple IIgs, and we can disregard this functionality.
+The SCC supports various synchronous modes, to be used for HDLC, SDLC, etc. AppleTalk LAP does engage SDLC (WR4 bits 5-4 = 10, bits 3-2 = 00) and Enter Hunt (WR3 D4 / RR0 D4). Layer 1 of gsquared-localtalk models that register and status path, plus Mega II $C044/$C045 as clear-on-read line-activity counters, so an unconnected port idles. FM0 and DPLL are not modelled here. Flag/CRC handling for a received LToUDP frame, and the UDP bridge itself, are in [LToUDP.md](LToUDP.md).
 
 The SCC "contains facilities for modem controls" this will be things like hangup, DSR/DTR, etc.
 

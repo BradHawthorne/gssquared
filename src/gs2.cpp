@@ -23,6 +23,8 @@
 #include "a2gspu_console.hpp"
 #include "a2gspu_scc_capture.hpp"
 #include "devices/scc8530/scc8530.hpp"
+#include "cpu.hpp"
+#include "mmus/mmu.hpp"
 
 // The record contract's clock and frame, registered at arm so a rail that holds
 // only a cpu_state (WATCH, CALLSTREAM) can still stamp every record.
@@ -1732,4 +1734,23 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     catch(const a2artifact::Error &error){a2artifact::fatal(error);}
     if(!output_failure.empty())a2artifact::fatal(a2artifact::Error("output-finalization",output_failure.c_str(),0));
     // SDL_Quit() is called automatically by SDL after this returns.
+}
+
+
+extern "C" uint32_t z85c30_query_guest_pc(void) {
+    cpu_state *cpu = g_a2gspu_cpu_for_names;
+    return cpu ? (cpu->full_pc & 0xFFFFFF) : 0u;
+}
+
+extern "C" uint8_t z85c30_query_guest_p(void) {
+    cpu_state *cpu = g_a2gspu_cpu_for_names;
+    return cpu ? cpu->p : 0u;
+}
+
+extern "C" int z85c30_query_guest_peek(uint32_t addr, uint8_t *dst, size_t n) {
+    cpu_state *cpu = g_a2gspu_cpu_for_names;
+    if (!cpu || !cpu->mmu || !dst) return -1;
+    for (size_t i = 0; i < n; i++)
+        dst[i] = cpu->mmu->probe_peek((addr + (uint32_t)i) & 0xFFFFFFu);
+    return 0;
 }

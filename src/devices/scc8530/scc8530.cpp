@@ -2,6 +2,7 @@
 #include "computer.hpp"
 #include "obs_signal.hpp"   // Observatory: obs_add_memwindow for the SCC register file
 #include "Z85C30.hpp"
+#include "ltoudp.hpp"
 
 #include "util/Connections.hpp"
 #include "util/DebugHandlerIDs.hpp"
@@ -66,6 +67,7 @@ void init_scc8530_slot(computer_t *computer, SlotType_t slot) {
     Z85C30 *scc = new Z85C30(st->irq_control, computer->event_timer, computer->clock);
     st->scc = scc;
     g_a2gspu_scc = scc;
+    ltoudp_open();
     // Observatory: register the SCC per-channel RR/WR register file as a memory window.
     obs_add_memwindow(OBS_SUB_SCC, 0, "scc.regs", scc->obs_reg_window(), scc->obs_reg_len(), OBS_F_INTERNAL_ONLY);
 
@@ -120,6 +122,7 @@ void init_scc8530_slot(computer_t *computer, SlotType_t slot) {
         // SerialDevices are owned by Connections; only clear chip pointers here.
         st->channel_a_device = nullptr;
         st->channel_b_device = nullptr;
+        ltoudp_close();
         if (g_a2gspu_scc == st->scc) g_a2gspu_scc = nullptr;
         delete st->scc;
         delete st;

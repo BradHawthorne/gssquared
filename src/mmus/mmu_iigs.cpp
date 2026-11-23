@@ -527,6 +527,34 @@ void c037_write(void *context, uint32_t address, uint8_t value) {
     mmu_iigs->set_dma_bank_register(value);
 }
 
+// FORK: $C044/$C045 (MMDELTAX/Y). AppleTalk LAP WLFLoop/WLineBusy treats a read as
+// clear-and-return of the SCC line-activity count. With no handler these addresses
+// returned the floating bus and an unconnected port never looked idle.
+uint8_t read_c044(void *context, uint32_t address) {
+    (void)address;
+    MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
+    return mmu_iigs->read_clear_line_activity(true);
+}
+uint8_t read_c045(void *context, uint32_t address) {
+    (void)address;
+    MMU_IIgs *mmu_iigs = (MMU_IIgs *)context;
+    mmu_iigs->set_next_cycle_type(CYCLE_TYPE_FAST_ROM);
+    return mmu_iigs->read_clear_line_activity(false);
+}
+
+static MMU_IIgs *g_line_activity_mmu = nullptr;
+
+void iigs_line_activity_bind(void *mmu) {
+    g_line_activity_mmu = (MMU_IIgs *)mmu;
+}
+void iigs_line_activity_unbind(void *mmu) {
+    if (g_line_activity_mmu == mmu) g_line_activity_mmu = nullptr;
+}
+void iigs_line_activity_pulse(bool port_a) {
+    if (g_line_activity_mmu) g_line_activity_mmu->pulse_line_activity(port_a);
+}
+
 /*
 IIe Memory Mapping for Main/AUX:
     | 7 | ALTZP | 1 = ZP, Stack, LC are in Main; 0 = in Aux |
@@ -744,6 +772,11 @@ void MMU_IIgs::init_c0xx_handlers() {
 
     megaii->set_C0XX_read_handler(0xC068, {read_c068, this});
     megaii->set_C0XX_write_handler(0xC068, {write_c068, this});
+
+    // FORK: MMDELTAX/Y as clear-on-read line-activity counters (no gate).
+    megaii->set_C0XX_read_handler(0xC044, {read_c044, this});
+    megaii->set_C0XX_read_handler(0xC045, {read_c045, this});
+    iigs_line_activity_bind(this);
 }
 
 void MMU_IIgs::set_ram_shadow_banks() {

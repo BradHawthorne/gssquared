@@ -990,6 +990,11 @@ Every change is proven to leave the **normal windowed emulator** unchanged: laun
 `GSSquared -p 5 -d s7d1=<image>` with **no** `A2GSPU_*` env set — identical interactive
 behavior. Instrumentation OFF-by-default is a gate, not a preference.
 
+LocalTalk-over-UDP is a cable model, not a rail: it is on by default and
+binds 127.0.0.1 only (`IP_MULTICAST_TTL=0`, membership on loopback, never a
+real NIC). `A2GSPU_LTOUDP=0` disables it. Optional `A2GSPU_LTOUDP_PORT`
+(default 1954). See [LToUDP.md](LToUDP.md).
+
 ## Worked examples
 
 **Who wrote address X, who first made value V.** `WATCH` keys on the destination address,

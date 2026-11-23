@@ -11,6 +11,29 @@
 #include "serial_devices/SerialDevice.hpp"
 #include "a2gspu_scc_capture.hpp"
 #include "serial_devices/host/HostSerial.hpp"
+#include "iigs_line_activity.hpp"
+#include "ltoudp.hpp"
+#include <vector>
+#include <cstdarg>
+#include <cstdlib>
+#include <chrono>
+
+// Defined in the emulator (cpu.cpp). Weak so sccltoudptest can link without a CPU.
+extern "C" uint32_t z85c30_query_guest_pc(void) __attribute__((weak));
+static inline uint32_t z85c30_query_guest_pc_safe(void) {
+    return z85c30_query_guest_pc ? z85c30_query_guest_pc() : 0u;
+}
+
+extern "C" uint8_t z85c30_query_guest_p(void) __attribute__((weak));
+static inline uint8_t z85c30_query_guest_p_safe(void) {
+    return z85c30_query_guest_p ? z85c30_query_guest_p() : 0u;
+}
+// Gated guest-memory peek (A2GSPU_LTOUDP_TRACE). probe_peek: no cycles.
+extern "C" int z85c30_query_guest_peek(uint32_t addr, uint8_t *dst, size_t n)
+    __attribute__((weak));
+static inline int z85c30_query_guest_peek_safe(uint32_t addr, uint8_t *dst, size_t n) {
+    return z85c30_query_guest_peek ? z85c30_query_guest_peek(addr, dst, n) : -1;
+}
 
 constexpr bool SCDEBUG = 0;
 
@@ -297,8 +320,78 @@ class Z85C30 {
         //   Tx Buffer Empty (RR0 D2) and Tx IP return at once and a second character can wait
         //   in the buffer; All Sent (RR1 D0) follows the shift register. All Sent used to be a
         //   copy of Tx Buffer Empty, and Tx IP waited for the whole character time.
-        struct rx_fifo_t { uint8_t data[3]; uint8_t count; };
+        struct rx_fifo_t { uint8_t data[3]; uint8_t eof[3]; uint8_t count; };
         rx_fifo_t rx_fifo[SCC_CHANNEL_COUNT] = {};
+        // FORK: layer-2 LToUDP. sdlc_tx accumulates guest data bytes; rx_pending
+        // feeds the 3-byte FIFO so a long LLAP frame does not overrun it.
+        std::vector<uint8_t> sdlc_tx[SCC_CHANNEL_COUNT];
+        struct rx_pend_t { uint8_t data; uint8_t eof; };
+        std::vector<rx_pend_t> rx_pending[SCC_CHANNEL_COUNT];
+        // Complete LLAP frames waiting to go onto the virtual LocalTalk
+        // wire. The physical line is half-duplex: one SDLC frame at a time.
+        // UDP can deliver a burst; the inbox holds later frames until
+        // ltoudp_rx_ready (pending empty, FIFO empty or leftover EOF CRC).
+        // This serializes the cable; it does not replace RTS/CTS (the sender
+        // still waits for CTS before putting a data frame on the line).
+        struct ltoudp_in_t {
+            std::vector<uint8_t> llap;
+            uint64_t due_14m = 0;
+            bool has_due = false;
+            ltoudp_in_t() = default;
+            ltoudp_in_t(const uint8_t *a, const uint8_t *b) : llap(a, b) {}
+            size_t size() const { return llap.size(); }
+            uint8_t operator[](size_t i) const { return llap[i]; }
+            const uint8_t *data() const { return llap.data(); }
+        };
+        std::vector<ltoudp_in_t> ltoudp_inbox;
+        // Guest-time cable (Docs/LToUDP.md): solicited replies are collected
+        // with the guest frozen, then delivered at TX EOF + IFG (~200 us).
+        static constexpr uint64_t LTOUDP_IFG_14M = (MASTER_CLOCK * 200ull + 500000ull) / 1000000ull; // 2864
+        // Inter-dialog gap: 400 us, 5727 C14M ticks. A new dialog (RTS/ENQ)
+        // waits this long after the previous frame, not just one IFG.
+        static constexpr uint64_t LTOUDP_IDG_14M = (MASTER_CLOCK * 400ull + 500000ull) / 1000000ull; // 5727
+        // LocalTalk 230.4 kbps FM0, 8 data bits/character (~34.7 us, 497 C14M ticks).
+        static constexpr uint64_t LTOUDP_BITRATE = 230400ull;
+        static constexpr uint64_t LTOUDP_BYTE_14M =
+            (MASTER_CLOCK * 8ull + LTOUDP_BITRATE / 2ull) / LTOUDP_BITRATE; // 497
+        static constexpr int LTOUDP_REPLY_MS = 5;          // plain-peer host collect
+        static constexpr int LTOUDP_LTG1_SAFETY_MS = 2000;  // logged as peer-fault, not a collision
+        const char *ltoudp_last_collect_reason = "none";
+        int64_t ltoudp_last_reply_host_us = -1;
+        bool ltoudp_after_data = false;
+        uint64_t ltoudp_test_now = 0;
+        uint64_t ltoudp_tx_eof_14m = 0;
+        bool ltoudp_after_cts = false;
+        bool ltoudp_tifgap_open = false;
+        bool ltoudp_atp1_bank_known = false;
+        uint32_t ltoudp_atp1_bank = 0;
+        const char *ltoudp_atp1_reg = nullptr;
+        uint64_t ltoudp_atp1_reg_14m = 0;
+        uint32_t ltoudp_atp1_reg_pc = 0;
+          // used when no NClockII (host tests)
+        uint64_t ltoudp_ifg_id = 0;
+        bool ltoudp_ifg_scheduled = false;
+        bool ltoudp_peer_ltg1 = false;
+        inline static Z85C30 *ltoudp_hook_scc = nullptr;
+        bool ltoudp_lockstep = false;
+        bool ltoudp_in_horizon_wait = false;
+        uint64_t ltoudp_grant_14m = ~uint64_t(0);
+        uint64_t ltoudp_clamp_14m = 0;      // post-TX clamp; 0 = none
+        uint64_t ltoudp_horizon_faults = 0;
+        uint64_t ltoudp_beacon_id = 0;
+        bool ltoudp_beacon_scheduled = false;
+        uint64_t ltoudp_last_beacon_14m = 0;
+        uint64_t ltoudp_rx_eof_14m = 0;
+        static constexpr uint64_t LTOUDP_BEACON_14M = MASTER_CLOCK / 1000; // 1 ms coarse
+        static constexpr uint64_t LTOUDP_TIFGAP1_14M = (MASTER_CLOCK * 448ull + 500000ull) / 1000000ull;
+        // Byte-paced LToUDP RX (Z8530: wire -> shift register -> 3-byte FIFO).
+        uint64_t ltoudp_rx_byte_id[SCC_CHANNEL_COUNT] = { 0, 0 };
+        bool ltoudp_rx_byte_scheduled[SCC_CHANNEL_COUNT] = { false, false };
+        uint64_t ltoudp_rx_due_14m[SCC_CHANNEL_COUNT] = { 0, 0 };
+        size_t ltoudp_rx_frame_n[SCC_CHANNEL_COUNT] = { 0, 0 };
+        size_t ltoudp_rx_frame_i[SCC_CHANNEL_COUNT] = { 0, 0 };
+        struct ltoudp_due_t { std::vector<uint8_t> llap; uint64_t due_14m; };
+        std::vector<ltoudp_due_t> ltoudp_due;
         uint8_t tx_shift[SCC_CHANNEL_COUNT] = { 0, 0 };
         uint64_t rx_poll_id[SCC_CHANNEL_COUNT];
         bool rx_poll_scheduled[SCC_CHANNEL_COUNT] = { false, false };
@@ -357,15 +450,25 @@ class Z85C30 {
                 bits += 1;
             }
 
-            // Stop bits (1, 1.5, or 2)
+            // Stop bits (1, 1.5, or 2). FORK: WR4 bits 3-2 = 00 is sync/SDLC; those
+            // frames have no async start/stop bits (Z8530 WR4, Sync Modes Enable).
+            if (registers[channel].r4_stop_bits == 0b00) {
+                bits -= 1;   // drop the async start bit added above
+                return bits;
+            }
             switch (registers[channel].r4_stop_bits) {
-                case 0b00: bits += 1; break;      // 1 stop bit
-                case 0b01: bits += 1; break;      // 1 stop bit (sync mode, but treat as async)
+                case 0b01: bits += 1; break;      // 1 stop bit
                 case 0b10: bits += 2; break;      // 1.5 stop bits (round up to 2)
                 case 0b11: bits += 2; break;      // 2 stop bits
             }
 
             return bits;
+        }
+
+        // FORK: WR4 bits 5-4 = 10 and bits 3-2 = 00 is SDLC (Z8530 WR4).
+        inline bool is_sdlc(scc_channel_t channel) const {
+            return registers[channel].r4_sync_char_mode == 0b10 &&
+                   registers[channel].r4_stop_bits == 0b00;
         }
 
         // FORK: the clock for one direction: its source frequency and the divider in front of
@@ -556,10 +659,16 @@ class Z85C30 {
             return -1;
         }
 
-        // Special receive condition: overrun, framing, or parity when WR1 D2 makes it one.
+        // Special receive condition (Z8530: overrun, CRC/framing, end of frame,
+        // and parity when WR1 D2 makes it one). First-character mode (WR1 01)
+        // still interrupts on a special condition after the first char; it is
+        // re-armed for the *next* frame only by WR0 cmd 100 ($20), not by EOF.
+        // EOF is visible when the last FCS byte is at the FIFO head.
         inline bool rx_special(scc_channel_t channel) {
             const auto &r = registers[channel];
-            return r.r1_rx_overrun_err || r.r1_crc_framing_err || (r.r1_parity_err && r.r1_partity_spcond);
+            const bool eof = rx_fifo[channel].count > 0 && rx_fifo[channel].eof[0];
+            return r.r1_rx_overrun_err || r.r1_crc_framing_err || eof
+                || (r.r1_parity_err && r.r1_partity_spcond);
         }
 
         // "If the IE bit is not set ... the IP for that source is never set."
@@ -641,7 +750,7 @@ class Z85C30 {
                 switch (registers[channel].r0_cmd) {
                     case 0b001: new_register += 8; break;                          // point high
                     case 0b010: ext_reset(channel); break;                         // reset Ext/Status interrupts (this channel)
-                    case 0b011: break;                                             // send abort (SDLC)
+                    case 0b011: sdlc_tx[channel].clear(); break;                   // send abort (SDLC)
                     case 0b100: rx_first_armed[channel] = true; break;             // enable int on next Rx character
                     case 0b101: tx_ip_latch[channel] = false; break;               // reset Tx int pending
                     case 0b110:                                                    // error reset
@@ -663,7 +772,9 @@ class Z85C30 {
                 } else if (registers[channel].r0_reset_cmd == 0b10) { // reset Tx CRC Generator
                     // this is for SDLC etc mode
                 } else if (registers[channel].r0_reset_cmd == 0b11) { // reset Tx Underrun/EOM Latch
-                    registers[channel].r0_tx_underrun_eom = 0; // ??? and we never set it anywhere. that's fine.
+                    // FORK: WR0 bits 7-6 = 11 (ResetUnd $C0). XmitBegin/XmitEnd clear this
+                    // before the last bytes; tx_complete sets it when the shifter underruns.
+                    registers[channel].r0_tx_underrun_eom = 0;
                 }
 
                 /* else {
@@ -691,7 +802,29 @@ class Z85C30 {
         inline void write_register_3(scc_channel_t channel, uint8_t data) {
             print_write_register(channel, WR3, data);
             registers[channel].w_regs[WR3] = data;
+            // FORK: WR3 D4 Enter Hunt Mode sets RR0 D4 Sync/Hunt (Z8530 WR3/RR0).
+            // The bit stays set until a flag is found; writing D4=0 does not leave hunt.
+            if (registers[channel].r3_hunt_mode) {
+                registers[channel].r0_sync_hunt = 1;
+            }
             push_line_params(channel);
+            // FORK: do not inject at the RX-enable edge. That host-time patch
+            // landed held ATPs during RecvInit (Path S). Solicited replies are
+            // already on the due queue from tx_complete, at TX EOF + IFG.
+            if (ltoudp_enabled()) {
+                ltoudp_trace("wr3 data=$%02X rxen=%d due=%zu inbox=%zu",
+                    (unsigned)data,
+                    registers[channel].r3_rx_enable ? 1 : 0,
+                    ltoudp_due.size(), ltoudp_inbox.size());
+                ltoudp_note_atp1("wr3");
+                if (ltoudp_after_data) {
+                    ltoudp_peek_lap("wr3");
+                    ltoudp_after_data = false;
+                }
+                ltoudp_collect(0);
+                ltoudp_schedule_unsolicited();
+                ltoudp_deliver_due();
+            }
         }
 
         inline void write_register_4(scc_channel_t channel, uint8_t data) {
@@ -772,6 +905,8 @@ class Z85C30 {
 
         /* Reads */
         inline uint8_t read_register_0(scc_channel_t channel) {
+            if (ltoudp_enabled() && ltoudp_trace_on() && ltoudp_after_cts)
+                ltoudp_note_rr0_tifgap();
             //printf("SCC: READ  register 0: Ch %d\n", channel);
             //registers[channel].r0_tx_buffer_empty = 1; // duh, don't override this.
             // FORK: a read no longer writes DCD and CTS; they are set at construction and
@@ -787,6 +922,10 @@ class Z85C30 {
         inline uint8_t read_register_1(scc_channel_t channel) {
             // FORK: All Sent is the shift register, not a copy of Tx Buffer Empty.
             registers[channel].r1_all_sent = !registers[channel].tx_in_progress && registers[channel].r0_tx_buffer_empty;
+            // FORK: RR1 D7 End of Frame is visible when the last FCS byte is the
+            // next FIFO character (RecvBytes tests RR1 before reading sccDat).
+            if (rx_fifo[channel].count > 0 && rx_fifo[channel].eof[0])
+                registers[channel].r1_end_of_frame = 1;
             uint8_t retval = registers[channel].r_reg_1;
             print_read_register(channel, RR1, retval);
             return retval; // TODO: this is reasonable, we won't have errors.. what is residue code?
@@ -853,6 +992,10 @@ class Z85C30 {
             rx_poll_id[SCC_CHANNEL_B] = base_instance_id + 5;
             zc_timer_id[SCC_CHANNEL_A] = base_instance_id + 6;
             zc_timer_id[SCC_CHANNEL_B] = base_instance_id + 7;
+            ltoudp_ifg_id = base_instance_id + 8;
+            ltoudp_rx_byte_id[SCC_CHANNEL_A] = base_instance_id + 9;
+            ltoudp_rx_byte_id[SCC_CHANNEL_B] = base_instance_id + 10;
+            ltoudp_beacon_id = base_instance_id + 11;
 
             // clear the data structures on boot.
             memset(reg_select, 0, sizeof(reg_select));
@@ -860,9 +1003,10 @@ class Z85C30 {
             registers[SCC_CHANNEL_A].r0_dcd = 1; registers[SCC_CHANNEL_A].r0_cts = 1;
             registers[SCC_CHANNEL_B].r0_dcd = 1; registers[SCC_CHANNEL_B].r0_cts = 1;
             reset();
+            ltoudp_lockstep_bind();
         };
 
-        ~Z85C30() {}
+        ~Z85C30() { ltoudp_lockstep_unbind(); }
 
        /*  void set_data_file(scc_channel_t channel, FILE *data_file) {
             this->data_files[channel] = data_file;
@@ -890,6 +1034,20 @@ class Z85C30 {
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
             rx_fifo[channel].count = 0;   // FORK: RR0 D0 resets to 0 -- nothing is available
+            rx_fifo[channel].eof[0] = rx_fifo[channel].eof[1] = rx_fifo[channel].eof[2] = 0;
+            sdlc_tx[channel].clear();
+            rx_pending[channel].clear();
+            ltoudp_inbox.clear();
+            ltoudp_due.clear();
+            if (event_timer) event_timer->cancelEvents(ltoudp_ifg_id);
+            ltoudp_ifg_scheduled = false;
+            if (event_timer) event_timer->cancelEvents(ltoudp_beacon_id);
+            ltoudp_beacon_scheduled = false;
+            if (event_timer) event_timer->cancelEvents(ltoudp_rx_byte_id[channel]);
+            ltoudp_rx_byte_scheduled[channel] = false;
+            ltoudp_rx_due_14m[channel] = 0;
+            ltoudp_rx_frame_n[channel] = 0;
+            ltoudp_rx_frame_i[channel] = 0;
             tx_stalled[channel] = false; rx_stalled[channel] = false;   // FORK: clocks and Ext/Status
             ext_latched[channel] = false; zero_count[channel] = false;
             if (event_timer) event_timer->cancelEvents(zc_timer_id[channel]);
@@ -931,6 +1089,20 @@ class Z85C30 {
             registers[channel].tx_in_progress = false;
             registers[channel].rx_in_progress = false;
             rx_fifo[channel].count = 0;   // FORK: RR0 D0 resets to 0 -- nothing is available
+            rx_fifo[channel].eof[0] = rx_fifo[channel].eof[1] = rx_fifo[channel].eof[2] = 0;
+            sdlc_tx[channel].clear();
+            rx_pending[channel].clear();
+            ltoudp_inbox.clear();
+            ltoudp_due.clear();
+            if (event_timer) event_timer->cancelEvents(ltoudp_ifg_id);
+            ltoudp_ifg_scheduled = false;
+            if (event_timer) event_timer->cancelEvents(ltoudp_beacon_id);
+            ltoudp_beacon_scheduled = false;
+            if (event_timer) event_timer->cancelEvents(ltoudp_rx_byte_id[channel]);
+            ltoudp_rx_byte_scheduled[channel] = false;
+            ltoudp_rx_due_14m[channel] = 0;
+            ltoudp_rx_frame_n[channel] = 0;
+            ltoudp_rx_frame_i[channel] = 0;
             tx_stalled[channel] = false; rx_stalled[channel] = false;   // FORK: clocks and Ext/Status
             ext_latched[channel] = false; zero_count[channel] = false;
             if (event_timer) event_timer->cancelEvents(zc_timer_id[channel]);
@@ -1071,8 +1243,17 @@ class Z85C30 {
         // this should be called before reads or writes; and also based on baud timer.
         // this used to rely on the IP flag but that's not right! now uses rx_char_available
         void update_queues() {
+            // FORK: pull the socket without stalling; deliver only frames
+            // whose guest-time IFG has already elapsed.
+            if (ltoudp_enabled()) {
+                ltoudp_collect(0);
+                ltoudp_schedule_unsolicited();
+                ltoudp_deliver_due();
+            }
+            if (ltoudp_enabled()) ltoudp_pace_rx();
             for (int channel = 0; channel < SCC_CHANNEL_COUNT; channel++) {
                 rx_try_start((scc_channel_t)channel);
+                if (ltoudp_enabled()) rx_poll_arm((scc_channel_t)channel);
             }
         }
 
@@ -1090,7 +1271,14 @@ class Z85C30 {
             for (;;) {
                 SerialMessage msg = serial_devices[channel]->q_dev.get();
                 if (msg.type == MESSAGE_NONE) return;
-                if (msg.type == MESSAGE_DATA) { schedule_rx_char(channel, (uint8_t)msg.data); return; }
+                // FORK: an SDLC channel does not shift async host UART bytes into the
+                // Rx FIFO. Those are not FM0/SDLC flags; delivering them would look like
+                // a live cable. Layer 2 (LToUDP) will inject frames itself.
+                if (msg.type == MESSAGE_DATA) {
+                    if (is_sdlc(channel)) continue;
+                    schedule_rx_char(channel, (uint8_t)msg.data);
+                    return;
+                }
                 if (msg.type == MESSAGE_MODEM_STATUS) {
                     dcd_in[channel] = (msg.data & 1) != 0;
                     cts_in[channel] = (msg.data & 2) != 0;
@@ -1113,9 +1301,11 @@ class Z85C30 {
         void rx_push(scc_channel_t channel, uint8_t data) {
             auto &f = rx_fifo[channel];
             if (f.count < 3) {
+                f.eof[f.count] = 0;
                 f.data[f.count++] = data;
             } else {
                 f.data[2] = data;
+                f.eof[2] = 0;
                 registers[channel].r1_rx_overrun_err = 1;
                 if (SCDEBUG) printf("SCC: Ch %c RX overrun - FIFO full\n", ch_name(channel));
             }
@@ -1123,15 +1313,21 @@ class Z85C30 {
         }
 
         void rx_poll_arm(scc_channel_t channel) {
-            if (!event_timer || !clock || serial_devices[channel] == nullptr || rx_poll_scheduled[channel]) return;
+            if (!event_timer || !clock || rx_poll_scheduled[channel]) return;
+            if (serial_devices[channel] == nullptr && !ltoudp_enabled()) return;
             rx_poll_scheduled[channel] = true;
             event_timer->scheduleEvent(clock->get_c14m() + RX_POLL_14M, rx_poll_callback, rx_poll_id[channel], this, "scc8530.rx_poll_callback", "src/devices/scc8530/Z85C30.hpp");
         }
 
         void rx_poll(scc_channel_t channel) {
             rx_poll_scheduled[channel] = false;
-            if (serial_devices[channel] == nullptr) return;
-            rx_try_start(channel);
+            if (ltoudp_enabled()) {
+                ltoudp_collect(0);
+                ltoudp_schedule_unsolicited();
+                ltoudp_deliver_due();
+            }
+            if (ltoudp_enabled()) ltoudp_pace_rx();
+            if (serial_devices[channel] != nullptr) rx_try_start(channel);
             rx_poll_arm(channel);
         }
 
@@ -1147,8 +1343,13 @@ class Z85C30 {
                 retval = f.data[0];
                 f.data[0] = f.data[1];
                 f.data[1] = f.data[2];
+                f.eof[0] = f.eof[1];
+                f.eof[1] = f.eof[2];
+                f.eof[2] = 0;
                 f.count--;
+                if (ltoudp_enabled()) ltoudp_pace_rx();
                 registers[channel].r0_rx_char_available = f.count > 0;
+                if (f.count > 0 && f.eof[0]) registers[channel].r1_end_of_frame = 1;
                 if (registers[channel].r1_rx_int_mode == 0b01) rx_first_armed[channel] = false;
 
                 // do this instead in update_interrupts()
@@ -1305,6 +1506,928 @@ class Z85C30 {
             }
         }
 
+
+        // Pending LToUDP bytes enter the 3-byte FIFO only via
+        // ltoudp_pace_rx, one character every LTOUDP_BYTE_14M (230.4 kbps FM0).
+        // Instantly topping up the FIFO made a 39-byte frame available at CPU
+        // speed and let PacketIRQ/RecvInit see the header during RecvInit.
+        void rx_feed_pending(scc_channel_t channel) {
+            (void)channel;
+        }
+
+
+        // FORK: A2GSPU_LTOUDP_TRACE=<path> logs LToUDP drain/inject (channel, WR6
+        // address, FIFO/pending, first-char armed, RR3 IP/IUS, MIE). Empty drains
+        // are silent. A pure diagnostic; no guest-visible change when unset.
+        bool ltoudp_trace_on() const {
+            static int st = -1;
+            if (st < 0) {
+                const char *e = std::getenv("A2GSPU_LTOUDP_TRACE");
+                st = (e && e[0]) ? 1 : 0;
+            }
+            return st != 0;
+        }
+        uint32_t ltoudp_guest_pc() const {
+            return z85c30_query_guest_pc_safe();
+        }
+        uint64_t ltoudp_guest_cycles() const {
+            return clock ? clock->get_cycles() : 0;
+        }
+        void ltoudp_trace(const char *fmt, ...) {
+            static FILE *fp = (FILE *)-1;
+            if (fp == (FILE *)-1) {
+                const char *e = std::getenv("A2GSPU_LTOUDP_TRACE");
+                fp = (e && e[0]) ? std::fopen(e, "w") : nullptr;
+            }
+            if (!fp) return;
+            std::fprintf(fp, "c14m=%llu cyc=%llu pc=%06X ",
+                (unsigned long long)ltoudp_now_14m(),
+                (unsigned long long)ltoudp_guest_cycles(),
+                (unsigned)ltoudp_guest_pc());
+            std::va_list ap;
+            va_start(ap, fmt);
+            std::vfprintf(fp, fmt, ap);
+            va_end(ap);
+            std::fputc('\n', fp);
+            std::fflush(fp);
+        }
+        void ltoudp_trace_ch(const char *tag, scc_channel_t channel,
+                             uint8_t dest, size_t n, const char *why) {
+            static FILE *probe = (FILE *)-1;
+            if (probe == (FILE *)-1) {
+                const char *e = std::getenv("A2GSPU_LTOUDP_TRACE");
+                probe = (e && e[0]) ? (FILE *)1 : nullptr;
+            }
+            if (!probe) return;
+            const auto &r = registers[channel];
+            const bool mie = registers[SCC_CHANNEL_A].r9_mie != 0;
+            if (why)
+                ltoudp_trace("%s ch=%c dest=$%02X n=%zu why=%s wr6=$%02X wr3=$%02X wr1=$%02X rxen=%d sdlc=%d hunt=%d avail=%d fifo=%u pend=%zu armed=%d ip=$%02X ius=$%02X mie=%d i=%d",
+                    tag, ch_name(channel), dest, n, why,
+                    (unsigned)r.r6, (unsigned)r.w_regs[WR3], (unsigned)r.w_regs[WR1],
+                    r.r3_rx_enable ? 1 : 0, is_sdlc(channel) ? 1 : 0,
+                    r.r0_sync_hunt ? 1 : 0, r.r0_rx_char_available ? 1 : 0,
+                    (unsigned)rx_fifo[channel].count, rx_pending[channel].size(),
+                    rx_first_armed[channel] ? 1 : 0,
+                    (unsigned)ip_bits, (unsigned)ius_bits, mie ? 1 : 0,
+                    (z85c30_query_guest_p_safe() & 0x04) ? 1 : 0);
+            else
+                ltoudp_trace("%s ch=%c dest=$%02X n=%zu wr6=$%02X wr3=$%02X wr1=$%02X rxen=%d sdlc=%d hunt=%d avail=%d fifo=%u pend=%zu armed=%d ip=$%02X ius=$%02X mie=%d i=%d",
+                    tag, ch_name(channel), dest, n,
+                    (unsigned)r.r6, (unsigned)r.w_regs[WR3], (unsigned)r.w_regs[WR1],
+                    r.r3_rx_enable ? 1 : 0, is_sdlc(channel) ? 1 : 0,
+                    r.r0_sync_hunt ? 1 : 0, r.r0_rx_char_available ? 1 : 0,
+                    (unsigned)rx_fifo[channel].count, rx_pending[channel].size(),
+                    rx_first_armed[channel] ? 1 : 0,
+                    (unsigned)ip_bits, (unsigned)ius_bits, mie ? 1 : 0,
+                    (z85c30_query_guest_p_safe() & 0x04) ? 1 : 0);
+        }
+
+        // FORK: accept a raw LLAP frame if this SDLC channel is addressed, append
+        // CRC-16/X.25, leave hunt, and pulse $C044/$C045. RR1 EOF is set on the
+        // last CRC byte (visible when that byte is next in the FIFO).
+        bool ltoudp_try_inject(scc_channel_t channel, const uint8_t *llap, size_t n) {
+            const uint8_t dest = (n >= 1) ? llap[0] : 0;
+            if (!is_sdlc(channel) || !registers[channel].r3_rx_enable) {
+                return false;
+            }
+            if (n < 3 || n > 603) {
+                return false;
+            }
+            // LTG1 time controls are not LLAP; never inject dest=0 type=$C0.
+            if (dest == 0 && llap[1] == 0 && llap[2] == LTOUDP_LAP_TIME) {
+                return false;
+            }
+            if (registers[channel].r3_address_search_mode) {
+                if (dest != 0xFF && dest != registers[channel].r6) {
+                    return false;
+                }
+            }
+            // RecvBytes LastByte does not consume the last FCS byte. A leftover
+            // EOF byte at the FIFO head would otherwise prefix the next frame.
+            auto &f = rx_fifo[channel];
+            if (f.count == 1 && f.eof[0]) {
+                f.count = 0;
+                f.eof[0] = 0;
+                if (rx_pending[channel].empty())
+                    registers[channel].r0_rx_char_available = 0;
+            }
+            uint16_t crc = ltoudp_crc16_x25(llap, n);
+            for (size_t i = 0; i < n; i++)
+                rx_pending[channel].push_back(rx_pend_t{ llap[i], 0 });
+            rx_pending[channel].push_back(rx_pend_t{ (uint8_t)(crc & 0xFF), 0 });
+            rx_pending[channel].push_back(rx_pend_t{ (uint8_t)(crc >> 8), 1 });
+            registers[channel].r0_sync_hunt = 0;
+            iigs_line_activity_pulse(channel == SCC_CHANNEL_A);
+            // First data bit-cell starts now; the first FIFO byte is due
+            // one LocalTalk character later (~34.7 us).
+            const size_t wire_n = rx_pending[channel].size();
+            ltoudp_rx_frame_n[channel] = wire_n;
+            ltoudp_rx_frame_i[channel] = 0;
+            ltoudp_rx_due_14m[channel] = ltoudp_now_14m() + LTOUDP_BYTE_14M;
+            ltoudp_arm_rx_byte_timer(channel);
+            ltoudp_pace_rx();
+            update_interrupts(channel);
+            ltoudp_trace_ch("inject-ok", channel, dest, n, nullptr);
+            return true;
+        }
+
+        // FORK: recv LToUDP frames and inject into every addressed SDLC channel.
+        // timeout_ms > 0 stalls the host (guest clock frozen) to catch a peer reply.
+        // ltoudp_rx_ready is the half-duplex gate: the next datagram is injected
+        // only after the previous frame has left rx_pending / the FIFO.
+        bool ltoudp_rx_ready(scc_channel_t channel) const {
+            if (!is_sdlc(channel) || !registers[channel].r3_rx_enable) return false;
+            if (!rx_pending[channel].empty()) return false;
+            const auto &f = rx_fifo[channel];
+            return f.count == 0 || (f.count == 1 && f.eof[0]);
+        }
+
+
+        // Learn ATP1's loaded bank from the first post-CTS WR3 whose
+        // 16-bit offset sits in RecvInit ($1A5B-$1A6C in atrom.map).
+        const char *ltoudp_atp1_name(uint32_t pc) const {
+            if (!ltoudp_atp1_bank_known) return nullptr;
+            if ((pc & 0xFF0000) != ltoudp_atp1_bank) return nullptr;
+            const uint32_t off = pc & 0xFFFF;
+            if (off >= 0x16B0 && off <= 0x1755) return "RecvPacket/TIFGap";
+            if (off >= 0x1A5B && off <= 0x1A6C) return "RecvInit";
+            if (off >= 0x18F5 && off <= 0x192B) return "fXmitLAP";
+            if (off >= 0x1442 && off <= 0x1580) return "PacketIRQ";
+            return nullptr;
+        }
+        void ltoudp_note_atp1(const char *site) {
+            if (!ltoudp_trace_on()) return;
+            const uint32_t pc = ltoudp_guest_pc();
+            const uint32_t off = pc & 0xFFFF;
+            if (ltoudp_after_cts && !ltoudp_atp1_bank_known &&
+                off >= 0x1A5B && off <= 0x1A6C) {
+                ltoudp_atp1_bank = pc & 0xFF0000;
+                ltoudp_atp1_bank_known = true;
+                ltoudp_trace("atp1-base bank=$%02X0000 site=%s",
+                    (unsigned)(ltoudp_atp1_bank >> 16), site);
+            }
+            const char *reg = ltoudp_atp1_name(pc);
+            if (reg != ltoudp_atp1_reg) {
+                if (ltoudp_atp1_reg)
+                    ltoudp_trace("atp1-end %s start_c14m=%llu start_pc=%06X site=%s",
+                        ltoudp_atp1_reg,
+                        (unsigned long long)ltoudp_atp1_reg_14m,
+                        (unsigned)ltoudp_atp1_reg_pc, site);
+                ltoudp_atp1_reg = reg;
+                ltoudp_atp1_reg_14m = ltoudp_now_14m();
+                ltoudp_atp1_reg_pc = pc;
+                if (reg)
+                    ltoudp_trace("atp1-start %s site=%s", reg, site);
+            }
+        }
+        // One RR0 sample at TIFGap start and one at end. Not per-poll.
+        void ltoudp_note_rr0_tifgap() {
+            if (!ltoudp_trace_on() || !ltoudp_after_cts) return;
+            const uint32_t pc = ltoudp_guest_pc();
+            const char *reg = ltoudp_atp1_name(pc);
+            if (!ltoudp_tifgap_open && reg && std::strcmp(reg, "RecvPacket/TIFGap") == 0) {
+                ltoudp_tifgap_open = true;
+                ltoudp_trace("tifgap-start");
+                ltoudp_note_atp1("rr0");
+            } else if (ltoudp_tifgap_open && (!reg || std::strcmp(reg, "RecvPacket/TIFGap") != 0)) {
+                ltoudp_trace("tifgap-end site=rr0");
+                ltoudp_tifgap_open = false;
+                ltoudp_after_cts = false;
+                ltoudp_note_atp1("rr0-end");
+            }
+        }
+
+        uint64_t ltoudp_now_14m() const {
+            return clock ? clock->get_c14m() : ltoudp_test_now;
+        }
+
+        void ltoudp_push_rx_byte(scc_channel_t channel) {
+            auto &p = rx_pending[channel];
+            if (p.empty()) return;
+            rx_pend_t b = p.front();
+            p.erase(p.begin());
+            auto &f = rx_fifo[channel];
+            const size_t i = ltoudp_rx_frame_i[channel]++;
+            const size_t n = ltoudp_rx_frame_n[channel];
+            int overrun = 0;
+            if (f.count < 3) {
+                f.data[f.count] = b.data;
+                f.eof[f.count] = b.eof;
+                f.count++;
+            } else {
+                // Z8530: a fourth character with the FIFO full overwrites
+                // the newest entry and sets Rx Overrun (latched until Error Reset).
+                f.data[2] = b.data;
+                f.eof[2] = b.eof;
+                registers[channel].r1_rx_overrun_err = 1;
+                overrun = 1;
+            }
+            registers[channel].r0_rx_char_available = 1;
+            if (f.count > 0 && f.eof[0]) registers[channel].r1_end_of_frame = 1;
+            if (b.eof) {
+                ltoudp_rx_eof_14m = ltoudp_now_14m();
+                // Last-byte RX tick of a peer frame: tell the LTG1 peer so
+                // its CTS window is rts_delivered_end, not the beacon clock.
+                ltoudp_send_delivered(ltoudp_rx_eof_14m);
+            }
+            if (ltoudp_trace_on() && (i == 0 || b.eof || overrun))
+                ltoudp_trace("rx-byte i=%zu/%zu data=$%02X fifo=%u pend=%zu eof=%d overrun=%d rr1_eof=%d crc=%d avail=%d fc_arm=%d i=%d pc=%06X",
+                    i, n, (unsigned)b.data, (unsigned)f.count, p.size(),
+                    b.eof ? 1 : 0, overrun,
+                    (f.count > 0 && f.eof[0]) ? 1 : 0,
+                    registers[channel].r1_crc_framing_err ? 1 : 0,
+                    1,
+                    rx_first_armed[channel] ? 1 : 0,
+                    (z85c30_query_guest_p_safe() & 0x04) ? 1 : 0,
+                    (unsigned)ltoudp_guest_pc());
+            update_interrupts(channel);
+        }
+
+        static void ltoudp_rx_byte_callback(uint64_t instanceID, void* userData) {
+            Z85C30* scc = static_cast<Z85C30*>(userData);
+            if (instanceID == scc->ltoudp_rx_byte_id[SCC_CHANNEL_A])
+                scc->ltoudp_rx_byte_scheduled[SCC_CHANNEL_A] = false;
+            else if (instanceID == scc->ltoudp_rx_byte_id[SCC_CHANNEL_B])
+                scc->ltoudp_rx_byte_scheduled[SCC_CHANNEL_B] = false;
+            scc->ltoudp_pace_rx();
+        }
+
+        void ltoudp_arm_rx_byte_timer(scc_channel_t channel) {
+            if (!event_timer || !clock) return;
+            if (rx_pending[channel].empty()) {
+                if (ltoudp_rx_byte_scheduled[channel]) {
+                    event_timer->cancelEvents(ltoudp_rx_byte_id[channel]);
+                    ltoudp_rx_byte_scheduled[channel] = false;
+                }
+                return;
+            }
+            if (ltoudp_rx_byte_scheduled[channel])
+                event_timer->cancelEvents(ltoudp_rx_byte_id[channel]);
+            event_timer->scheduleEvent(ltoudp_rx_due_14m[channel],
+                ltoudp_rx_byte_callback, ltoudp_rx_byte_id[channel], this,
+                "scc8530.ltoudp_rx_byte_callback", "src/devices/scc8530/Z85C30.hpp");
+            ltoudp_rx_byte_scheduled[channel] = true;
+        }
+
+        void ltoudp_pace_rx() {
+            const uint64_t now = ltoudp_now_14m();
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                auto ch = (scc_channel_t)c;
+                while (!rx_pending[ch].empty() && now >= ltoudp_rx_due_14m[ch]) {
+                    ltoudp_push_rx_byte(ch);
+                    if (!rx_pending[ch].empty())
+                        ltoudp_rx_due_14m[ch] += LTOUDP_BYTE_14M;
+                }
+                ltoudp_arm_rx_byte_timer(ch);
+            }
+        }
+
+
+        uint64_t ltoudp_horizon_limit() const {
+            if (!ltoudp_lockstep || !ltoudp_peer_ltg1) return ~uint64_t(0);
+            const uint64_t now = ltoudp_now_14m();
+            // A grant already behind the guest is stale (a tight due of a
+            // frame that has been sent, or a late beacon). Do not freeze
+            // C14M on a past tick. A grant equal to now is a live horizon.
+            if (ltoudp_grant_14m < now) return ~uint64_t(0);
+            return ltoudp_grant_14m;
+        }
+
+        void ltoudp_apply_grant(const ltoudp_pkt &pkt) {
+            if (!pkt.has_guest) return;
+            uint64_t g = pkt.grant_14m;
+            // An in-hand LLAP has already left the peer. The next earliest
+            // new origin is after this frame leaves the wire plus one IDG.
+            // If the frame expects a guest reply, the horizon also covers
+            // the reply deadline so the guest can ACK/CTS/TResp (spec:
+            // Docs/LToUDP.md grant semantics).
+            if (pkt.kind == LTOUDP_RECV_LLAP && pkt.due_14m && pkt.n >= 3) {
+                const uint64_t eof = pkt.due_14m
+                    + (pkt.n + 2) * LTOUDP_BYTE_14M;
+                uint64_t implicit = eof + LTOUDP_IDG_14M;
+                if (ltoudp_expects_reply(pkt.llap, pkt.n)) {
+                    const uint64_t deadline = (pkt.llap[2] == 0x85)
+                        ? eof + LTOUDP_IFG_14M
+                        : eof + LTOUDP_TIFGAP1_14M + 5ull * LTOUDP_BYTE_14M;
+                    if (deadline > implicit) implicit = deadline;
+                }
+                if (g < implicit) g = implicit;
+            }
+            if (g == 0) return;
+            const uint64_t now = ltoudp_now_14m();
+            // A stale grant (behind the guest) must be ignored, not
+            // installed as 'now'. Capping at now freezes the guest to
+            // one cycle per heartbeat and makes rail 'run N' miss its
+            // host deadline (seen in a harness run: run 2100 never acked,
+            // zero horizon-peer-faults, ENQs every 2 s of host time).
+            if (g < now) return;
+            // Null-message rule: a grant that does not account for the
+            // latest guest TX is not trusted past the post-TX clamp.
+            // Older 4-word controls have accounted=0 and cannot lift it.
+            // An in-hand peer LLAP is a frame (the obligation is met)
+            // and may extend past the clamp.
+            if (ltoudp_clamp_14m && ltoudp_tx_eof_14m
+                && pkt.kind != LTOUDP_RECV_LLAP
+                && pkt.accounted_14m < ltoudp_tx_eof_14m
+                && g > ltoudp_clamp_14m) {
+                g = ltoudp_clamp_14m;
+            } else if (ltoudp_clamp_14m && ltoudp_tx_eof_14m
+                       && (pkt.kind == LTOUDP_RECV_LLAP
+                           || pkt.accounted_14m >= ltoudp_tx_eof_14m)) {
+                ltoudp_clamp_14m = 0;
+            }
+            ltoudp_peer_ltg1 = true;
+            ltoudp_lockstep = true;
+            ltoudp_grant_14m = g;
+        }
+
+        void ltoudp_horizon_wait(uint64_t want) {
+            if (ltoudp_in_horizon_wait) return;
+            if (!ltoudp_lockstep || !ltoudp_peer_ltg1) return;
+            ltoudp_in_horizon_wait = true;
+            const auto wall0 = std::chrono::steady_clock::now();
+            while (ltoudp_lockstep && ltoudp_grant_14m < want) {
+                const auto used = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - wall0).count();
+                if (used >= LTOUDP_LTG1_SAFETY_MS) {
+                    ltoudp_horizon_faults++;
+                    ltoudp_trace("horizon-peer-fault want=%llu grant=%llu wall_ms=%lld faults=%llu (safety bound, lift cap)",
+                        (unsigned long long)want,
+                        (unsigned long long)ltoudp_grant_14m,
+                        (long long)used,
+                        (unsigned long long)ltoudp_horizon_faults);
+                    ltoudp_grant_14m = ~uint64_t(0);
+                    break;
+                }
+                int wait = 5;
+                const auto rem = (long long)LTOUDP_LTG1_SAFETY_MS - used;
+                if (rem < wait) wait = rem > 1 ? (int)rem : 1;
+                ltoudp_collect(wait);
+            }
+            ltoudp_schedule_unsolicited();
+            ltoudp_deliver_due();
+            ltoudp_in_horizon_wait = false;
+        }
+
+        void ltoudp_lockstep_bind() {
+            ltoudp_hook_scc = this;
+            nclock_hooks::c14m_limit = []() -> uint64_t {
+                return ltoudp_hook_scc ? ltoudp_hook_scc->ltoudp_horizon_limit() : ~uint64_t(0);
+            };
+            nclock_hooks::c14m_wait = [](uint64_t want) {
+                if (ltoudp_hook_scc) ltoudp_hook_scc->ltoudp_horizon_wait(want);
+            };
+        }
+
+        void ltoudp_lockstep_unbind() {
+            if (ltoudp_hook_scc == this) {
+                nclock_hooks::c14m_limit = nullptr;
+                nclock_hooks::c14m_wait = nullptr;
+                ltoudp_hook_scc = nullptr;
+            }
+        }
+
+        void ltoudp_advance_14m(uint64_t ticks) {
+            if (ltoudp_lockstep && ltoudp_peer_ltg1) {
+                const uint64_t now0 = ltoudp_now_14m();
+                uint64_t target = now0 + ticks;
+                if (target > ltoudp_grant_14m) {
+                    ltoudp_horizon_wait(target);
+                    const uint64_t now1 = ltoudp_now_14m();
+                    uint64_t allow = ltoudp_grant_14m;
+                    if (target > allow) target = allow;
+                    ticks = (target > now1) ? (target - now1) : 0;
+                }
+            }
+            if (!clock) ltoudp_test_now += ticks;
+            ltoudp_deliver_due();
+            ltoudp_pace_rx();
+        }
+
+        static uint8_t ltoudp_llap_type(const uint8_t *llap, size_t n) {
+            return (n >= 3) ? llap[2] : 0;
+        }
+
+        static bool ltoudp_is_data_llap(const uint8_t *llap, size_t n) {
+            if (n < 3) return false;
+            const uint8_t t = llap[2];
+            return t == 0x01 || t == 0x02;
+        }
+
+        // ATP function in bits 7-6 of the control byte (1=TReq, 2=TResp, 3=TRel).
+        // Short DDP (LLAP $01): sockets + DDP type at offset 5, ATP at 6.
+        // Extended DDP (LLAP $02): DDP type at offset 13, ATP at 14.
+        static int ltoudp_atp_fn(const uint8_t *llap, size_t n) {
+            size_t off;
+            if (n >= 7 && llap[2] == 0x01) {
+                if (llap[5] != 3) return -1;
+                off = 6;
+            } else if (n >= 15 && llap[2] == 0x02) {
+                if (llap[13] != 3) return -1;
+                off = 14;
+            } else {
+                return -1;
+            }
+            if (n <= off) return -1;
+            return (int)((llap[off] >> 6) & 0x3);
+        }
+
+        static bool ltoudp_expects_reply(const uint8_t *llap, size_t n) {
+            if (n < 3) return false;
+            const uint8_t t = llap[2];
+            if (t == 0x81 || t == 0x84 || t == 0x85) return true; // ENQ, RTS, CTS
+            return ltoudp_atp_fn(llap, n) == 1;                 // ATP TReq
+        }
+
+        uint64_t ltoudp_line_idle_14m(uint64_t gap = LTOUDP_IFG_14M) const {
+            uint64_t idle = ltoudp_now_14m();
+            if (ltoudp_tx_eof_14m && ltoudp_tx_eof_14m + gap > idle)
+                idle = ltoudp_tx_eof_14m + gap;
+            if (ltoudp_rx_eof_14m && ltoudp_rx_eof_14m + gap > idle)
+                idle = ltoudp_rx_eof_14m + gap;
+            for (const auto &d : ltoudp_due) {
+                const uint64_t nch = d.llap.size() + 2; // data + FCS
+                const uint64_t end = d.due_14m + nch * LTOUDP_BYTE_14M + gap;
+                if (end > idle) idle = end;
+            }
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                auto ch = (scc_channel_t)c;
+                if (rx_pending[ch].empty()) continue;
+                const size_t left = rx_pending[ch].size();
+                uint64_t end = ltoudp_rx_due_14m[ch] + left * LTOUDP_BYTE_14M + gap;
+                if (end > idle) idle = end;
+            }
+            return idle;
+        }
+
+        bool ltoudp_on_wire() const {
+            if (!ltoudp_due.empty() || !ltoudp_inbox.empty()) return true;
+            for (int c = 0; c < SCC_CHANNEL_COUNT; c++) {
+                if (!rx_pending[c].empty()) return true;
+                if (ltoudp_rx_frame_n[c] && ltoudp_rx_frame_i[c] < ltoudp_rx_frame_n[c])
+                    return true;
+            }
+            return false;
+        }
+
+        void ltoudp_send_beacon() {
+            if (!ltoudp_enabled()) return;
+            const uint64_t now = ltoudp_now_14m();
+            ltoudp_send_time(LTOUDP_TIME_BEACON, now, ltoudp_line_idle_14m(),
+                             ltoudp_rx_eof_14m);
+            ltoudp_last_beacon_14m = now;
+        }
+
+        void ltoudp_send_delivered(uint64_t eof_14m) {
+            if (!ltoudp_enabled() || !ltoudp_peer_ltg1) return;
+            ltoudp_send_time(LTOUDP_TIME_DELIVERED, eof_14m,
+                             ltoudp_line_idle_14m(), eof_14m);
+            ltoudp_trace("delivered-at eof=%llu idle=%llu type_last=rx",
+                (unsigned long long)eof_14m,
+                (unsigned long long)ltoudp_line_idle_14m());
+        }
+
+        void ltoudp_arm_beacon_timer() {
+            if (!event_timer || !clock || !ltoudp_enabled()) return;
+            const uint64_t due = ltoudp_now_14m() + LTOUDP_BEACON_14M;
+            if (ltoudp_beacon_scheduled) event_timer->cancelEvents(ltoudp_beacon_id);
+            event_timer->scheduleEvent(due, ltoudp_beacon_callback, ltoudp_beacon_id, this,
+                "scc8530.ltoudp_beacon_callback", "src/devices/scc8530/Z85C30.hpp");
+            ltoudp_beacon_scheduled = true;
+        }
+
+        static void ltoudp_beacon_callback(uint64_t instanceID, void* userData) {
+            (void)instanceID;
+            Z85C30* scc = static_cast<Z85C30*>(userData);
+            scc->ltoudp_beacon_scheduled = false;
+            scc->ltoudp_send_beacon();
+            scc->ltoudp_arm_beacon_timer();
+            scc->ltoudp_drain(0);
+        }
+
+
+        // Pull socket datagrams into the inbox. timeout_ms > 0 freezes the
+        // guest until one datagram arrives or the host timeout expires.
+        uint64_t ltoudp_reply_deadline_14m(const uint8_t *tx, size_t n) const {
+            const uint64_t eof = ltoudp_tx_eof_14m ? ltoudp_tx_eof_14m : ltoudp_now_14m();
+            if (tx && n >= 3 && tx[2] == 0x85)
+                return eof + LTOUDP_IFG_14M;
+            return eof + LTOUDP_TIFGAP1_14M + 5ull * LTOUDP_BYTE_14M;
+        }
+
+        // Bank $E1 AppleTalk LAP vars (lap_includes.aii E1Start=$1000).
+        void ltoudp_peek_lap(const char *site) {
+            if (!ltoudp_trace_on()) return;
+            const char *off = std::getenv("A2GSPU_LTOUDP_PEEK");
+            if (off && (off[0] == '0' || off[0] == 'n' || off[0] == 'N' || off[0] == 'f' || off[0] == 'F'))
+                return;
+            uint8_t flags[4] = {0, 0, 0, 0};
+            uint8_t got[2] = {0, 0};
+            uint8_t grq[4] = {0, 0, 0, 0};
+            const int a = z85c30_query_guest_peek_safe(0xE11051, flags, 4);
+            const int b = z85c30_query_guest_peek_safe(0xE11092, got, 2);
+            const int c = z85c30_query_guest_peek_safe(0xE1DE56, grq, 4);
+            if (a != 0 && b != 0 && c != 0) {
+                ltoudp_trace("peek-lap site=%s pc=%06X (guest peek unavailable)",
+                    site, (unsigned)ltoudp_guest_pc());
+                return;
+            }
+            const uint32_t grqhead = (uint32_t)grq[0] | ((uint32_t)grq[1] << 8)
+                | ((uint32_t)grq[2] << 16) | ((uint32_t)grq[3] << 24);
+            int have81 = 0, ngrq = 0;
+            uint32_t node = grqhead;
+            for (int i = 0; i < 8 && node; i++) {
+                uint8_t skt = 0, link[4] = {0, 0, 0, 0};
+                if (z85c30_query_guest_peek_safe(node + 8, &skt, 1) != 0) break;
+                ngrq++;
+                if (skt == 0x81) have81 = 1;
+                if (z85c30_query_guest_peek_safe(node + 29, link, 4) != 0) break;
+                uint32_t next = (uint32_t)link[0] | ((uint32_t)link[1] << 8)
+                    | ((uint32_t)link[2] << 16) | ((uint32_t)link[3] << 24);
+                if (next == node) break;
+                node = next;
+            }
+            ltoudp_trace("peek-lap site=%s pc=%06X needData=$%02X addrValid=$%02X busyFlag=$%02X pktError=$%02X gotCTS=$%02X gotData=$%02X grqhead=$%08X ngrq=%d skt81=%d",
+                site, (unsigned)ltoudp_guest_pc(),
+                (unsigned)flags[0], (unsigned)flags[1], (unsigned)flags[2], (unsigned)flags[3],
+                (unsigned)got[0], (unsigned)got[1],
+                (unsigned)grqhead, ngrq, have81);
+        }
+
+        // Pull socket datagrams into the inbox. timeout_ms > 0 freezes the
+        // guest until one datagram arrives or the host timeout expires.
+        // LTG1 solicited collects (ltg1_reply) end on guest-time evidence:
+        // a reply stamped for this TX, or a peer beacon/no-reply whose
+        // now is past the CTS/IFG window. The host bound is a safety
+        // valve logged as a peer fault, never a silent collision.
+        // Plain peers keep the documented 5 ms host-time collect.
+        void ltoudp_collect(int timeout_ms, const uint8_t *expect_tx = nullptr,
+                            size_t expect_n = 0, bool ltg1_reply = false) {
+            if (!ltoudp_enabled()) return;
+            const uint64_t c0 = ltoudp_now_14m();
+            const uint64_t y0 = ltoudp_guest_cycles();
+            const auto wall0 = std::chrono::steady_clock::now();
+            ltoudp_last_collect_reason = (timeout_ms > 0) ? "timeout" : "none";
+            ltoudp_last_reply_host_us = -1;
+            const uint64_t deadline = (expect_tx && expect_n >= 3)
+                ? ltoudp_reply_deadline_14m(expect_tx, expect_n) : 0;
+            if (timeout_ms > 0)
+                ltoudp_trace("collect-start timeout=%d ltg1=%d c14m=%llu cyc=%llu deadline=%llu",
+                    timeout_ms, ltg1_reply ? 1 : 0,
+                    (unsigned long long)c0, (unsigned long long)y0,
+                    (unsigned long long)deadline);
+            size_t recvd = 0;
+            // Sequenced keepalives while C14M is frozen so a lost last frame
+            // is visible as a gap (Docs/LToUDP.md Reliability). grant=0 so
+            // apply_grant will not move the horizon.
+            const bool start_ka = timeout_ms > 0 && (ltg1_reply || ltoudp_peer_ltg1);
+            if (start_ka) ltoudp_send_beacon();
+            for (;;) {
+                int wait = 0;
+                if (timeout_ms > 0) {
+                    const auto used = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - wall0).count();
+                    if (used >= timeout_ms) break;
+                    wait = (int)(timeout_ms - used);
+                    if ((ltg1_reply || ltoudp_peer_ltg1) && wait > 50)
+                        wait = 50;
+                }
+                ltoudp_pkt pkt {};
+                int kind = ltoudp_recv_pkt(&pkt, wait);
+                if (kind == LTOUDP_RECV_NONE) {
+                    if (timeout_ms > 0 && (ltg1_reply || ltoudp_peer_ltg1)) {
+                        const auto used = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - wall0).count();
+                        if (used < timeout_ms) {
+                            ltoudp_send_beacon();
+                            continue;
+                        }
+                    }
+                    break;
+                }
+                if (kind == LTOUDP_RECV_TIME) {
+                    if (pkt.has_guest) { ltoudp_peer_ltg1 = true; ltoudp_apply_grant(pkt); }
+                    if (pkt.time_cmd == 0) ltoudp_send_beacon();
+                    if (ltg1_reply && pkt.has_guest) {
+                        // The guest is frozen, so clock.now cannot walk
+                        // past the window. An idle-lookahead grant (500 ms)
+                        // is always past the ~622 us deadline and must not
+                        // end collect by itself (it would drop a CTS/ACK
+                        // already on the wire). Only TIME_NOREPLY means
+                        // the peer will not reply.
+                        if (pkt.time_cmd == LTOUDP_TIME_NOREPLY) {
+                            ltoudp_last_collect_reason = "noreply";
+                            ltoudp_trace("collect-noreply cmd=%u now=%llu grant=%llu deadline=%llu",
+                                (unsigned)pkt.time_cmd,
+                                (unsigned long long)pkt.now_14m,
+                                (unsigned long long)pkt.grant_14m,
+                                (unsigned long long)deadline);
+                            break;
+                        }
+                    }
+                    if (timeout_ms > 0) {
+                        const auto used = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - wall0).count();
+                        wait = (used < timeout_ms) ? (int)(timeout_ms - used) : 0;
+                        if (wait > 0) continue;
+                    }
+                    continue;
+                }
+                if (kind != LTOUDP_RECV_LLAP || pkt.n < 3) {
+                    if (timeout_ms > 0) {
+                        const auto used = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - wall0).count();
+                        wait = (used < timeout_ms) ? (int)(timeout_ms - used) : 0;
+                        if (wait > 0) continue;
+                    }
+                    break;
+                }
+                if (pkt.has_guest) { ltoudp_peer_ltg1 = true; ltoudp_apply_grant(pkt); }
+                ltoudp_in_t evicted;
+                bool park = false;
+                if (!ltoudp_inbox.empty()) {
+                    if (timeout_ms > 0) {
+                        ltoudp_trace("collect-evict n=%zu type=$%02X inbox=%zu due=%zu (solicited owns the line)",
+                            pkt.n, (unsigned)pkt.llap[2],
+                            ltoudp_inbox.size(), ltoudp_due.size());
+                        evicted = std::move(ltoudp_inbox.front());
+                        ltoudp_inbox.erase(ltoudp_inbox.begin());
+                        park = true;
+                    } else {
+                        ltoudp_trace("drop-pile n=%zu type=$%02X inbox=%zu due=%zu",
+                            pkt.n, (unsigned)pkt.llap[2],
+                            ltoudp_inbox.size(), ltoudp_due.size());
+                        break;
+                    }
+                }
+                ltoudp_in_t fr(pkt.llap, pkt.llap + pkt.n);
+                if (pkt.has_guest && pkt.due_14m) {
+                    fr.due_14m = pkt.due_14m;
+                    fr.has_due = true;
+                }
+                ltoudp_inbox.push_back(std::move(fr));
+                if (park) ltoudp_inbox.push_back(std::move(evicted));
+                recvd++;
+                if (timeout_ms > 0 && expect_tx && expect_n >= 3
+                    && ltoudp_inbox_pick_reply(expect_tx, expect_n) >= 0) {
+                    ltoudp_last_collect_reason = "reply";
+                    ltoudp_last_reply_host_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - wall0).count();
+                    break;
+                }
+                if (timeout_ms <= 0) break;
+                if (ltg1_reply) {
+                    const auto used = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - wall0).count();
+                    wait = (used < timeout_ms) ? (int)(timeout_ms - used) : 0;
+                    if (wait > 0) continue;
+                    break;
+                }
+            }
+            const uint64_t c1 = ltoudp_now_14m();
+            const uint64_t y1 = ltoudp_guest_cycles();
+            const auto wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - wall0).count();
+            if (timeout_ms > 0 && ltg1_reply
+                && strcmp(ltoudp_last_collect_reason, "timeout") == 0)
+                ltoudp_last_collect_reason = "peer-fault";
+            if (timeout_ms > 0 || recvd)
+                ltoudp_trace("collect-end recvd=%zu inbox=%zu timeout=%d reason=%s reply_host_us=%lld c14m=%llu cyc=%llu dc14m=%lld dcyc=%lld wall_us=%lld frozen=%d",
+                    recvd, ltoudp_inbox.size(), timeout_ms,
+                    ltoudp_last_collect_reason,
+                    (long long)ltoudp_last_reply_host_us,
+                    (unsigned long long)c1, (unsigned long long)y1,
+                    (long long)(c1 - c0), (long long)(y1 - y0),
+                    (long long)wall_us,
+                    (c1 == c0 && y1 == y0) ? 1 : 0);
+            if (timeout_ms > 0 && ltg1_reply
+                && strcmp(ltoudp_last_collect_reason, "peer-fault") == 0)
+                ltoudp_trace("collect-peer-fault type=$%02X n=%zu wall_us=%lld (safety bound, not a collision)",
+                    expect_tx && expect_n >= 3 ? (unsigned)expect_tx[2] : 0,
+                    expect_n, (long long)wall_us);
+            if (timeout_ms > 0) ltoudp_arm_beacon_timer();
+        }
+
+        // Index of the inbox frame that answers a just-transmitted LLAP, or -1.
+        int ltoudp_inbox_pick_reply(const uint8_t *tx, size_t n) const {
+            const uint8_t t = ltoudp_llap_type(tx, n);
+            for (size_t i = 0; i < ltoudp_inbox.size(); i++) {
+                const auto &f = ltoudp_inbox[i];
+                if (f.size() < 3) continue;
+                const uint8_t rt = f[2];
+                if (t == 0x81 && rt == 0x82) return (int)i;                 // ACK
+                if (t == 0x84 && rt == 0x85) return (int)i;                 // CTS
+                if (t == 0x85 && ltoudp_is_data_llap(f.data(), f.size()))
+                    return (int)i;                                          // data
+                if (ltoudp_atp_fn(tx, n) == 1 && ltoudp_atp_fn(f.data(), f.size()) == 2)
+                    return (int)i;                                          // TResp
+            }
+            return -1;
+        }
+
+        bool ltoudp_any_rx_on() const {
+            for (int ch = 0; ch < SCC_CHANNEL_COUNT; ch++) {
+                auto c = (scc_channel_t)ch;
+                if (is_sdlc(c) && registers[c].r3_rx_enable) return true;
+            }
+            return false;
+        }
+
+        bool ltoudp_any_ready() const {
+            for (int ch = 0; ch < SCC_CHANNEL_COUNT; ch++) {
+                if (ltoudp_rx_ready((scc_channel_t)ch)) return true;
+            }
+            return false;
+        }
+
+        void ltoudp_arm_ifg_timer() {
+            if (!event_timer || !clock || ltoudp_due.empty()) return;
+            uint64_t soonest = ltoudp_due[0].due_14m;
+            for (const auto &d : ltoudp_due)
+                if (d.due_14m < soonest) soonest = d.due_14m;
+            if (ltoudp_ifg_scheduled) event_timer->cancelEvents(ltoudp_ifg_id);
+            event_timer->scheduleEvent(soonest, ltoudp_ifg_callback, ltoudp_ifg_id, this,
+                "scc8530.ltoudp_ifg_callback", "src/devices/scc8530/Z85C30.hpp");
+            ltoudp_ifg_scheduled = true;
+        }
+
+        bool ltoudp_schedule_due(const uint8_t *llap, size_t n, uint64_t due_14m,
+                                bool solicited = false) {
+            if (!llap || n < 3) return false;
+            if (!ltoudp_due.empty()) {
+                if (!solicited) {
+                    ltoudp_trace("schedule-busy n=%zu type=$%02X due=%llu (one frame on the cable)",
+                        n, (unsigned)llap[2], (unsigned long long)due_14m);
+                    return false;
+                }
+                // Solicited reply owns the line during the dialog. Park the
+                // unsolicited occupant back at the inbox; it runs after.
+                for (auto &d : ltoudp_due) {
+                    ltoudp_in_t ev(d.llap.data(), d.llap.data() + d.llap.size());
+                    ev.due_14m = d.due_14m;
+                    ev.has_due = true;
+                    ltoudp_inbox.push_back(std::move(ev));
+                }
+                ltoudp_trace("schedule-preempt n=%zu type=$%02X due=%llu parked=%zu (solicited owns the line)",
+                    n, (unsigned)llap[2], (unsigned long long)due_14m,
+                    ltoudp_inbox.size());
+                ltoudp_due.clear();
+            }
+            // A new dialog (RTS/ENQ) waits the inter-dialog gap after the
+            // previous frame, not just IFG. Piling an RTS on a just-finished
+            // Tickle TResp at eof+IFG overruns PacketIRQ (needData still set).
+            const uint64_t gap = (!solicited && (llap[2] == 0x84 || llap[2] == 0x81))
+                ? LTOUDP_IDG_14M : LTOUDP_IFG_14M;
+            const uint64_t idle = ltoudp_line_idle_14m(gap);
+            if (!solicited && due_14m < idle) due_14m = idle;
+            else if (solicited && due_14m < ltoudp_now_14m()) due_14m = ltoudp_now_14m();
+            ltoudp_due.push_back(ltoudp_due_t{ std::vector<uint8_t>(llap, llap + n), due_14m });
+            ltoudp_trace("schedule-due n=%zu type=$%02X due=%llu now=%llu eof=%llu",
+                n, (unsigned)llap[2], (unsigned long long)due_14m,
+                (unsigned long long)ltoudp_now_14m(),
+                (unsigned long long)ltoudp_tx_eof_14m);
+            ltoudp_arm_ifg_timer();
+            return true;
+        }
+
+        // Move a solicited inbox reply onto the due queue at now + IFG.
+        // Leftover RTS heads of an RTS+data burst after we sent CTS are dropped.
+        bool ltoudp_take_solicited_reply(const uint8_t *tx, size_t n) {
+            int idx = ltoudp_inbox_pick_reply(tx, n);
+            if (idx < 0) return false;
+            if (ltoudp_llap_type(tx, n) == 0x85) {
+                // CTS is answered by data; discard leftover RTS in front of it.
+                while (idx > 0 && ltoudp_inbox[0].size() >= 3 && ltoudp_inbox[0][2] == 0x84) {
+                    ltoudp_inbox.erase(ltoudp_inbox.begin());
+                    idx--;
+                }
+            }
+            const auto &f = ltoudp_inbox[(size_t)idx];
+            const uint64_t eof = ltoudp_tx_eof_14m ? ltoudp_tx_eof_14m : ltoudp_now_14m();
+            // Solicited replies are due at eof+IFG. A later stamp on the
+            // datagram (peer line-idle / queued SendData) must not delay them.
+            const uint64_t due = eof + LTOUDP_IFG_14M;
+            if (!ltoudp_schedule_due(f.data(), f.size(), due, /*solicited=*/true))
+                return false;
+            ltoudp_inbox.erase(ltoudp_inbox.begin() + idx);
+            return true;
+        }
+
+        // Unsolicited inbox frames wait for an idle, RX-on line, then one IFG.
+        // A datagram that arrives while every SDLC receiver is off is lost.
+        void ltoudp_schedule_unsolicited() {
+            if (ltoudp_inbox.empty()) return;
+            // Do not drop the inbox just because RX is off: a solicited
+            // reply may already be here, collected during fXmitLAP DisRx,
+            // waiting for take_solicited_reply. Unsolicited wait until RX
+            // is on and the line is idle, then one IDG (RTS/ENQ) or IFG.
+            if (!ltoudp_any_rx_on()) return;
+            if (!ltoudp_due.empty()) return;          // one frame on the wire
+            if (!ltoudp_any_ready()) return;          // wait for a frame boundary
+            auto f = std::move(ltoudp_inbox.front());
+            ltoudp_inbox.erase(ltoudp_inbox.begin());
+            uint64_t due = f.has_due ? f.due_14m : ltoudp_now_14m();
+            ltoudp_schedule_due(f.data(), f.size(), due);
+        }
+
+        bool ltoudp_try_inject_any(const uint8_t *llap, size_t n) {
+            for (int ch = 0; ch < SCC_CHANNEL_COUNT; ch++) {
+                auto c = (scc_channel_t)ch;
+                if (!ltoudp_rx_ready(c)) continue;
+                if (ltoudp_try_inject(c, llap, n)) return true;
+            }
+            return false;
+        }
+
+        // Deliver every due frame whose guest time has arrived. RX-off at fire
+        // loses the frame (as on the real cable). A busy line defers to a later
+        // call once ltoudp_rx_ready (still one IFG from when it was scheduled).
+        void ltoudp_deliver_due() {
+            const uint64_t now = ltoudp_now_14m();
+            for (size_t i = 0; i < ltoudp_due.size(); ) {
+                if (ltoudp_due[i].due_14m > now) { ++i; continue; }
+                const auto &f = ltoudp_due[i].llap;
+                if (ltoudp_try_inject_any(f.data(), f.size())) {
+                    ltoudp_trace("fire-inject n=%zu type=$%02X dest=$%02X due=%llu eof=%llu rxen=%d",
+                        f.size(), f.size() >= 3 ? (unsigned)f[2] : 0,
+                        f.size() >= 1 ? (unsigned)f[0] : 0,
+                        (unsigned long long)ltoudp_due[i].due_14m,
+                        (unsigned long long)ltoudp_tx_eof_14m,
+                        ltoudp_any_rx_on() ? 1 : 0);
+                    ltoudp_note_atp1("fire-inject");
+                    if (f.size() >= 3 && ltoudp_is_data_llap(f.data(), f.size())) {
+                        ltoudp_after_data = true;
+                        ltoudp_peek_lap("fire-inject");
+                    }
+                    ltoudp_due.erase(ltoudp_due.begin() + i);
+                    continue;
+                }
+                if (!ltoudp_any_rx_on()) {
+                    ltoudp_trace("fire-lost-rxoff n=%zu type=$%02X dest=$%02X due=%llu eof=%llu rxen=0",
+                        f.size(), f.size() >= 3 ? (unsigned)f[2] : 0,
+                        f.size() >= 1 ? (unsigned)f[0] : 0,
+                        (unsigned long long)ltoudp_due[i].due_14m,
+                        (unsigned long long)ltoudp_tx_eof_14m);
+                    ltoudp_note_atp1("fire-lost-rxoff");
+                    ltoudp_due.erase(ltoudp_due.begin() + i);
+                    continue;
+                }
+                ++i; // line busy, try again when the FIFO is idle
+            }
+            if (ltoudp_due.empty() && !ltoudp_inbox.empty())
+                ltoudp_schedule_unsolicited();
+        }
+
+
+        // Send one completed LLAP frame and, if it expects a reply, collect
+        // that reply (guest frozen) and schedule it at now + IFG.
+        void ltoudp_on_tx_llap(const uint8_t *tx, size_t n) {
+            if (!tx || n < 3 || !ltoudp_enabled()) return;
+            ltoudp_tx_eof_14m = ltoudp_now_14m();
+            if (ltoudp_lockstep && ltoudp_peer_ltg1) {
+                // Every guest TX invalidates leftover lookahead. Clamp
+                // to eof+IFG when a solicited reply is possible, otherwise
+                // eof+IDG (the peer's minimum reaction time).
+                const uint64_t cap = ltoudp_tx_eof_14m
+                    + (ltoudp_expects_reply(tx, n) ? LTOUDP_IFG_14M
+                                                   : LTOUDP_IDG_14M);
+                ltoudp_clamp_14m = cap;
+                if (cap < ltoudp_grant_14m) ltoudp_grant_14m = cap;
+            }
+            ltoudp_trace("tx-eof type=$%02X n=%zu dest=$%02X src=$%02X eof=%llu expect=%d",
+                (unsigned)tx[2], n,
+                (unsigned)tx[0], (unsigned)tx[1],
+                (unsigned long long)ltoudp_tx_eof_14m,
+                ltoudp_expects_reply(tx, n) ? 1 : 0);
+            if (tx[2] == 0x85) ltoudp_after_cts = true;
+            ltoudp_send_llap_guest(tx, n, ltoudp_tx_eof_14m, 0, ltoudp_peer_ltg1);
+            if (ltoudp_now_14m() - ltoudp_last_beacon_14m >= LTOUDP_BEACON_14M)
+                ltoudp_send_beacon();
+            ltoudp_arm_beacon_timer();
+            if (ltoudp_expects_reply(tx, n)) {
+                if (ltoudp_inbox_pick_reply(tx, n) < 0) {
+                    if (ltoudp_peer_ltg1)
+                        ltoudp_collect(LTOUDP_LTG1_SAFETY_MS, tx, n, /*ltg1_reply=*/true);
+                    else
+                        ltoudp_collect(LTOUDP_REPLY_MS, tx, n, /*ltg1_reply=*/false);
+                }
+                if (!ltoudp_take_solicited_reply(tx, n))
+                    ltoudp_trace("no-answer type=$%02X n=%zu reason=%s",
+                        (unsigned)tx[2], n, ltoudp_last_collect_reason);
+            } else {
+                ltoudp_collect(0);
+                ltoudp_schedule_unsolicited();
+            }
+        }
+
+        // Kept as a name for older call sites: collect, then honour guest-time due.
+        void ltoudp_drain(int timeout_ms) {
+            ltoudp_collect(timeout_ms);
+            ltoudp_schedule_unsolicited();
+            ltoudp_deliver_due();
+        }
+
         // TX completion - called when character transmission is complete
         void tx_complete(scc_channel_t channel) {
             if (SCDEBUG) printf("SCC: Ch %c TX complete, char=%02X, loopback=%d\n",
@@ -1330,6 +2453,9 @@ class Z85C30 {
                 } else {
                     if (SCDEBUG) printf("SCC: Ch %c RX disabled, dropping loopback char\n", ch_name(channel));
                 }
+            } else if (is_sdlc(channel)) {
+                // FORK: SDLC bytes are a LocalTalk frame, not an async host UART stream.
+                if (sdlc_tx[channel].size() < 605) sdlc_tx[channel].push_back(data);
             } else {
                 if (g_scc_capture[channel].enabled) g_scc_capture[channel].byte(data);
                 a2events::byte(channel==SCC_CHANNEL_A?"scc-a":"scc-b",data);
@@ -1338,7 +2464,22 @@ class Z85C30 {
             }
 
             // FORK: a character waiting in the buffer moves into the now-idle shift register.
-            if (!registers[channel].r0_tx_buffer_empty) tx_load_shift(channel);
+            if (!registers[channel].r0_tx_buffer_empty) {
+                tx_load_shift(channel);
+            } else {
+                // FORK: the transmitter underran. RR0 D6 (Tx Underrun/EOM) is set when the
+                // shift register empties with no character waiting (Z8530 RR0). ATP1
+                // XmitEnd UndWait polls this after ResetUnd (lap_includes.aii:2812-2815).
+                registers[channel].r0_tx_underrun_eom = 1;
+                // FORK: a complete SDLC/LLAP frame is one LToUDP datagram.
+                // If the protocol answers this frame, freeze the guest only
+                // to collect the peer's datagram, then deliver it at TX EOF
+                // + IFG (~200 us) in guest time, inside TIFGap. Do not inject
+                // here. A host timeout with no datagram is a quiet line.
+                if (is_sdlc(channel) && sdlc_tx[channel].size() >= 3 && ltoudp_enabled())
+                    ltoudp_on_tx_llap(sdlc_tx[channel].data(), sdlc_tx[channel].size());
+                sdlc_tx[channel].clear();
+            }
 
             update_interrupts(channel);
         }
@@ -1398,6 +2539,14 @@ class Z85C30 {
             } else if (instanceID == scc->rx_timer_id[SCC_CHANNEL_B]) {
                 scc->rx_complete(SCC_CHANNEL_B);
             }
+        }
+
+        static void ltoudp_ifg_callback(uint64_t instanceID, void* userData) {
+            (void)instanceID;
+            Z85C30* scc = static_cast<Z85C30*>(userData);
+            scc->ltoudp_ifg_scheduled = false;
+            scc->ltoudp_deliver_due();
+            scc->ltoudp_arm_ifg_timer();
         }
 
 };

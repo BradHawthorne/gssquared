@@ -420,8 +420,11 @@ add_library(gs2_devices_iiememory src/devices/iiememory/iiememory.cpp)
 
 add_library(gs2_devices_ensoniq src/devices/es5503/ensoniq.cpp src/devices/es5503/soundglu.cpp)
 
-add_library(gs2_devices_scc8530 src/devices/scc8530/scc8530.cpp)
+add_library(gs2_devices_scc8530 src/devices/scc8530/scc8530.cpp src/devices/scc8530/ltoudp.cpp)
 target_link_libraries(gs2_devices_scc8530 PUBLIC gs2_serial_devices)
+if(WIN32)
+    target_link_libraries(gs2_devices_scc8530 PUBLIC ws2_32)
+endif()
 
 add_library(gs2_devices_ssc src/devices/ssc/ssc.cpp)
 target_link_libraries(gs2_devices_ssc PUBLIC gs2_serial_devices)

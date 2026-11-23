@@ -13,6 +13,7 @@
 #include "mmu_state_trace.hpp"
 #include "devices/slot_bus/slot_bus.hpp"
 #include "devices/languagecard/LanguageCardLogic.hpp"
+#include "iigs_line_activity.hpp"
 
 class MMU_IIgs : public MMU {
     protected:
@@ -76,6 +77,8 @@ class MMU_IIgs : public MMU {
         bool is_rom03 = false;
 
         uint8_t dma_bank_register = 0;
+        uint8_t mm_delta_x = 0;   // FORK: $C044 MMDELTAX / MouseA, clear-on-read
+        uint8_t mm_delta_y = 0;   // FORK: $C045 MMDELTAY / MouseB, clear-on-read
 
         //cpu_state *cpu = nullptr;
         NClock *clock = nullptr;
@@ -97,7 +100,7 @@ class MMU_IIgs : public MMU {
             reset(true); // power-on: ROM03 CYAREG bit 6 set when cold_start
         };
 
-        virtual ~MMU_IIgs() { delete[] main_ram; /* main_rom is owned by caller */ }
+        virtual ~MMU_IIgs() { iigs_line_activity_unbind(this); delete[] main_ram; /* main_rom is owned by caller */ }
 
         virtual uint8_t read(uint32_t address) override {
             if (address >= ROM_SPACE_BASE) set_next_cycle_type(CYCLE_TYPE_FAST_ROM); // rom access is fast.
@@ -363,6 +366,17 @@ class MMU_IIgs : public MMU {
 
         inline void set_dma_bank_register(uint8_t value) { dma_bank_register = value; }
         inline uint8_t get_dma_bank_register() { return dma_bank_register; }
+        // FORK: $C044/$C045 line-activity counters. A read returns and clears.
+        inline void pulse_line_activity(bool port_a) {
+            uint8_t &c = port_a ? mm_delta_x : mm_delta_y;
+            if (c < 0xFF) c++;
+        }
+        inline uint8_t read_clear_line_activity(bool port_a) {
+            uint8_t &c = port_a ? mm_delta_x : mm_delta_y;
+            uint8_t v = c;
+            c = 0;
+            return v;
+        }
 
         void bsr_map_memory();
         virtual uint8_t vp_read(uint32_t address) override;
